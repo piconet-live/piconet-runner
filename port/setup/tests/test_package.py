@@ -46,13 +46,16 @@ class Parts(unittest.TestCase):
             write(self.at("emulator", "Data", "Sys", name), data)
             write(self.at("parts", "Sys", name), data)
         self.emulator = self.commit("emulator", "the emulator")
-        # the checkout: the commit the runner is built from, then a later commit the launcher is published from
+        # this checkout: the commit the runner is built from, then a later one checked out
         write(self.at("repo", FORKS, "README.md"), "as the runner was built\n")
         write(self.at("repo", *IMAGE.split("/"), "same-race.json"), '{"version": 1, "rows": [], "released": []}\n')
         self.runner_commit = self.commit("repo", "the runner's commit")
         write(self.at("repo", FORKS, "README.md"), "changed after the runner was built\n")
-        self.head = self.commit("repo", "the launcher's commit")
-        self.build = self.git("repo", "rev-parse", "--short", "HEAD")
+        self.runner_head = self.commit("repo", "a later commit of the runner's")
+        # the launcher's own checkout (a repository of its own since the split): the commit it is published from
+        write(self.at("launcher-repo", "README.md"), "the launcher\n")
+        self.head = self.commit("launcher-repo", "the launcher's commit")
+        self.build = self.git("launcher-repo", "rev-parse", "--short", "HEAD")
         # the image bundle, the module built from it, the runner
         mod = write(self.at("parts", "bundle", "mod.bin"), b"image words")
         write(self.at("parts", "bundle", "patches.json"), "[]\n")
@@ -104,7 +107,8 @@ class Parts(unittest.TestCase):
         self.manifest(name, m)
 
     def package(self, *more, **named):
-        a = {"name": "Testnet", "stack": "T1", "repository": self.at("repo"), "work": self.at("work"),
+        a = {"name": "Testnet", "stack": "T1", "repository": self.at("repo"), "launcher-repository": self.at("launcher-repo"),
+             "work": self.at("work"),
              "runner": self.at("parts", "runner", "moderngekko-run.exe"), "runner-commit": self.runner_commit[:8],
              "module": self.at("parts", "module", "gGFZE01_recomp.dll"), "bundle": self.at("parts", "bundle"),
              "sys": self.at("parts", "Sys"), "sys-source": self.at("emulator"), "vcrt": self.at("parts", "vcrt"),
@@ -396,6 +400,27 @@ class PartsThatBelongTogether(Parts):
     def test_a_checkout_that_is_not_clean(self):
         write(self.at("repo", "new.txt"), "not committed\n")
         self.refused("the checkout is not clean", "new.txt")
+        os.remove(self.at("repo", "new.txt"))
+        write(self.at("launcher-repo", "other.txt"), "not committed\n")
+        self.refused("the checkout is not clean", "other.txt")
+
+    def test_the_launcher_and_the_runner_are_at_two_different_commits(self):
+        """Since the split the launcher's checkout is not the runner's: the copy is the launcher's commit's (its name,
+        record and stamp check), and the runner's is the one its manifest names."""
+        runner_build = self.git("repo", "rev-parse", "--short", "HEAD")
+        self.assertNotEqual(runner_build, self.build)
+        done = self.package()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        with open(self.at("work", "dist", self.name, "source", "package-manifest.json")) as f:
+            record = json.load(f)
+        self.assertEqual((record["name"], record["build"], record["launcher_commit"]), (self.name, self.build, self.head))
+        self.assertEqual(record["parts"]["source"]["runner_commit"], self.runner_commit)
+
+    def test_a_launcher_stamped_with_the_runners_commit_is_refused(self):
+        """It was not published from the launcher's checkout."""
+        runner_build = self.git("repo", "rev-parse", "--short", "HEAD")
+        write(self.at("launcher", "Launcher.App.dll"), b"MZ ..\x00 0.9.0+" + runner_build.encode() + b"\x00 ..")
+        self.refused(f"was not published from the commit checked out ({self.build}); it says 0.9.0+{runner_build}", self.at("launcher"))
 
     def test_a_vc_runtime_file_that_is_missing(self):
         os.remove(self.at("parts", "vcrt", "vcruntime140_1.dll"))

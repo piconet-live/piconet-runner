@@ -20,8 +20,9 @@ N=$1; B=$2; SW=$3; ONLY=$4; G=$W/work/cg-$N; E=$W/work/cg-${N}e; EW="$DW\\work\\
 case "$N" in spx*) ;; *) echo "hybrid-module: the name must begin with spx" >&2; exit 1;; esac
 [ -f "$W/work/cg-$B/generated/generated.c" ] || { echo "hybrid-module: no build $B in $W/work" >&2; exit 1; }
 [ -f "$SW" ] || { echo "hybrid-module: no switches file $SW" >&2; exit 1; }
-"${BUSY_CHECK:-$W/port/scratch/rp/chk.sh}" > /dev/null || { echo "hybrid-module: the busy check says wait" >&2; exit 3; }
-. "$root/port/setup/lib.sh"; pc_sharing   # this PC's locks, where it has them (pins.tsv PC_SCRIPTS_DEFAULT)
+. "$root/port/setup/lib.sh"; BUSY=$(busy_check "$W")   # none: no busy check
+[ "$BUSY" = none ] || "$BUSY" > /dev/null || { echo "hybrid-module: the busy check says wait" >&2; exit 3; }
+pc_sharing "$BUSY"   # this PC's locks, where it has them (pins.tsv PC_SCRIPTS_DEFAULT)
 pc_take native-build-lock.sh "hybrid test module $N (3 min)" 6
 pc_take cpu-window.sh "hybrid test module $N (3 min)" 6
 rm -rf "$G" "$G-mod.log" "$W/work/mod-cg-$N" "$E" "$E.log"; mkdir -p "$E" "$G/generated/chunks"
