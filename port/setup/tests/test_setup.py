@@ -116,7 +116,9 @@ class Pins(unittest.TestCase):
 
     def test_every_path_of_the_table_is_there(self):
         for key, value in self.pins.items():
-            if key.startswith("REPO_") and (key != "REPO_GATES" or os.path.exists(os.path.join(root, value))):   # optional
+            # optional: the gates (private), and the service's checkout (private; read only for a launcher made for
+            # one of our online stacks, README.md)
+            if key.startswith("REPO_") and (key not in ("REPO_GATES", "REPO_SERVICE") or os.path.exists(os.path.join(root, value))):
                 self.assertTrue(os.path.exists(os.path.join(root, value)), f"{key}={value}")
 
     def test_pins_are_whole_hashes(self):
