@@ -13,7 +13,7 @@
 #   5. --profile FILE   the module's training profile, a build input handed out beside the repository (never
 #                   committed): copied to WORK/input/module.profdata, where port/build/build.sh looks for it.
 #                   Without one, the gates' runs/profile.sh trains one after the runner is built, or
-#                   PROFILE=none port/build/build.sh NAME builds a module without one.
+#                   PORT_PROFILE=none port/build/build.sh NAME builds a module without one.
 # setup.sh --check WORK   writes nothing: is every installed file of WORK the tracked one (install.sh --check)?
 # Then it prints the next command. It never writes outside WORK, and it refuses the shared work folder
 # (work-folder.env names it), which every build and game on the PC use.

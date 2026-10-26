@@ -12,6 +12,8 @@ function(mirror from to)
   file(GLOB_RECURSE have LIST_DIRECTORIES false RELATIVE "${from}" "${from}/*")
   list(FILTER have EXCLUDE REGEX "(^|/)(__pycache__|tests|patches)(/|$)")
   foreach(f IN LISTS have)
+    get_filename_component(dir "${to}/${f}" DIRECTORY)
+    file(MAKE_DIRECTORY "${dir}")   # COPY_FILE makes no folders: a fresh work folder has none
     file(COPY_FILE "${from}/${f}" "${to}/${f}" ONLY_IF_DIFFERENT)
   endforeach()
   if(EXISTS "${to}")

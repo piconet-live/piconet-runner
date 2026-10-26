@@ -198,6 +198,18 @@ def flat(value, path=""):
     return {path: value}
 
 
+def earlier_digest(path, tool_sha1):
+    """The digest an earlier manifest recorded for this very dolrecomp.exe (same SHA-1), or None."""
+    try:
+        with open(path) as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if m.get("outputs", {}).get("dolrecomp.exe", {}).get("sha1") != tool_sha1:
+        return None
+    return m.get("codegen_source_digest")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("what", choices=["recompiler", "runner", "module-begin", "module-finish", "compare", "show", "check"])
@@ -235,6 +247,8 @@ def main():
         digest = re.search(r"Codegen source digest: ([0-9a-f]+)", open(log, errors="replace").read()) if os.path.isfile(log) else None
         m["codegen_source_digest"] = digest.group(1) if digest else None      # the recompiler's own hash of its sources: part of every cache key
         m["outputs"] = {"dolrecomp.exe": {"sha1": sha1(os.path.join(out, "dolrecomp.exe"))}}
+        if not digest:   # up to date: no configure, so no digest in the log; the last manifest's holds for the same tool
+            m["codegen_source_digest"] = earlier_digest(os.path.join(out, "build-manifest.json"), m["outputs"]["dolrecomp.exe"]["sha1"])
         return finish(m, os.path.join(out, "build-manifest.json"))
     if a.what == "runner":
         out = os.path.join(work, "ModernGekko", "build")

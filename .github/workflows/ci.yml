@@ -28,9 +28,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Keystone for the image's checks
+        working-directory: piconet-runner
+        run: python -m venv .venv && .venv/bin/pip install keystone-engine
       - name: Check
         working-directory: piconet-runner
         run: port/check.sh
+      - name: The port's sources mirrored into a new work folder, twice
+        working-directory: piconet-runner
+        run: |
+          mirror() { cmake -DROOT="$PWD" -DDEST="$RUNNER_TEMP/src" -DPROTOCOL="$PWD/external/protocol/protocol/generated" -DICON="$PWD/../piconet-launcher/net/src/Launcher.App/Assets/Icon/app.ico" -P port/build/cmake/PortSources.cmake; }
+          mirror && sleep 1 && touch "$RUNNER_TEMP/stamp" && mirror
+          test -f "$RUNNER_TEMP/src/core/include/fzgx/art.h" && test -f "$RUNNER_TEMP/src/app/app.ico"
+          test -z "$(find "$RUNNER_TEMP/src" -type f -newer "$RUNNER_TEMP/stamp")"   # the second run wrote nothing
       - name: Scripts parse
         working-directory: piconet-runner
         run: git ls-files -z '*.sh' | xargs -0 -n1 bash -n

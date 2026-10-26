@@ -34,5 +34,5 @@ if ((have)); then
     limit 900 "the image's tests" "$py" -W error $unittest discover -s port/image/tests -q \
         2>"$tmp/err" >"$tmp/out" || { cat "$tmp/err" >&2; exit 1; }
 else
-    echo "check: skipped the code builds (no .venv with keystone in $main; see README)"
+    echo "check: skipped the image's code builds and tests: no .venv with keystone in $main. To run them: sudo apt install python3-venv; python3 -m venv .venv; .venv/bin/pip install keystone-engine (in $main)"
 fi

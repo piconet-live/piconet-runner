@@ -29,47 +29,105 @@ repository: they are optional, checked out at `REPO_GATES` (`port/gates`) where 
 
 ## Requirements
 
-A Windows PC, and a clone on a Windows drive (no spaces in its path):
+A Windows PC with WSL (Ubuntu). On Windows:
 
-- Visual Studio 2022 Build Tools (17.x) with the C++ workload
-- LLVM 20.1.8 for Windows with `lib/cmake` (`clang+llvm-20.1.8-x86_64-pc-windows-msvc`)
-- cmake 4.1.1 and ninja 1.11.1 (on `PATH`; `pip install cmake ninja` into Python's `Scripts` is fine), Git for Windows
-- Python 3.10 for Windows; the module's image also needs the module `keystone` (`pip install keystone-engine`)
-- WSL, for the work folder's setup and the port's scripts: git, Python 3.11 or later, rsync, g++ with C++20 (for the
-  core's tests), the .NET SDK 10 (for the staged launcher)
+- Visual Studio 2022 Build Tools (17.x) with the C++ workload: `winget install Microsoft.VisualStudio.2022.BuildTools
+  --override "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive"`
+- LLVM 20.1.8 for Windows with `lib/cmake`: `clang+llvm-20.1.8-x86_64-pc-windows-msvc.tar.xz` from
+  github.com/llvm/llvm-project releases, unpacked. It is not on `PATH` by itself: put its `bin` on `PATH`, or name its
+  folder as `TOOL_LLVM_WIN` in your settings (below)
+- Python 3.10 for Windows: `winget install Python.Python.3.10`
+- cmake 4.1.1 and ninja 1.11.1 on `PATH`: `py -3 -m pip install cmake==4.1.1 ninja==1.11.1`
+- Git for Windows (`forks/check.sh` reads the work folder's trees with it): `winget install Git.Git`
 - your own disc image of F-Zero GX (USA), as an ISO
 
+In WSL:
+
+- git, Python 3.11 or later, rsync, g++ with C++20 (for the core's tests): `sudo apt install build-essential python3
+  python3-venv rsync git`
+- the .NET SDK 10 (for the staged launcher). Ubuntu's package is older than the 10.0.401 that
+  piconet-launcher's `global.json` needs, so install it with Microsoft's script:
+
+      curl -sSLO https://dot.net/v1/dotnet-install.sh && bash dotnet-install.sh --channel 10.0
+      export DOTNET_ROOT=$HOME/.dotnet PATH=$HOME/.dotnet:$PATH    # in ~/.bashrc too
+
+  In WSL, Windows' `dotnet.exe` can come first on `PATH`; `command -v dotnet` should name `~/.dotnet/dotnet`.
+
 `port/setup/pins.tsv` pins each tool's version, never its place; `port/setup/tools.py --say` shows what is found
-where. Your own settings live outside every clone, in `~/.config/piconet/` ([port/setup/README.md](port/setup/README.md)).
+where (Visual Studio's `vcvars64.bat`, LLVM, Python, cmake, ninja). Your own settings live outside every clone, in
+`~/.config/piconet/` ([port/setup/README.md](port/setup/README.md)): `TOOL_LLVM_WIN` and the other tools' places, and
+`DISC_DEFAULT`, your disc image.
+
+The clone below is about 1.1 GB (a `--recurse-submodules` clone, about 5.3 GB, is not needed) and the work folder
+about 5 GB; with the build's outputs, plan for about 25 GB. A first build takes about 40 minutes (the module about
+12, the runner about 10).
 
 ## Building
 
-    git clone --recurse-submodules https://github.com/piconet-live/piconet-runner.git
-    port/setup/setup.sh [--profile FILE]     # in WSL: the work folder (build/work in the clone): trees, tools, disc
+Clone with git inside WSL, not Git for Windows: its `core.autocrlf` would give the `.sh` files Windows line ends.
+The Windows compilers need the work folder on a Windows drive (no spaces in its path). The clone can be in either
+place:
 
-The build is one CMake project with a preset per platform (`CMakePresets.json`; Windows today). From a Developer
-PowerShell or Command Prompt for Visual Studio, with LLVM's `bin`, Python and ninja on `PATH`:
+- **In WSL's own file system, with the work folder on a Windows drive (preferred).** Git is much faster there than
+  under `/mnt/<drive>` (a `--recurse-submodules` clone took about 6 minutes there, against 24). You build with
+  `port/build/build.sh`.
+- On a Windows drive (under `/mnt/c/`, say; no spaces in its path), with the work folder in the clone
+  (`build/work`). You can also build with CMake from a Developer prompt.
 
-    cmake --preset windows
-    cmake --build --preset windows                    # the recompiler and the runner
-    cmake --build --preset windows --target module    # the native module, from your disc's files in the work folder
+The module's image needs a Windows Python with keystone. A venv anywhere on a Windows drive, from a Windows prompt:
 
-The native module needs a training profile, the one handed out with a release (`setup.sh --profile FILE` puts it where
-the build looks) or another (`-DPORT_PROFILE=FILE`), or `-DPORT_PROFILE=none` for a module built without one (the same
-game, slower), and a Python with keystone for its image (`-DPORT_PYTHON=...\python.exe`). Settings of your own (another
-work folder, your tools' places) go in a `CMakeUserPresets.json` beside `CMakePresets.json`, which git ignores.
+    py -3 -m venv C:\piconet-venv
+    C:\piconet-venv\Scripts\python.exe -m pip install keystone-engine
 
-In WSL, `port/build/build.sh NAME` runs the same targets in order and adds the game folder and a staged launcher
-(`PORT_PYTHON=/mnt/c/.../python.exe`). The settings, the targets and the steps: [port/build/README.md](port/build/README.md).
+and that `python.exe` is `PORT_PYTHON` (`/mnt/c/piconet-venv/Scripts/python.exe` from WSL).
+
+The native module is built with a training profile, `PORT_PROFILE=FILE`. No release carries one yet, so for now build
+with `PORT_PROFILE=none` (the same game, slower); a release will carry the profile (`setup.sh --profile FILE` puts it
+where the build looks).
+
+In WSL, for the preferred place:
+
+    git clone https://github.com/piconet-live/piconet-runner.git
+    git clone --recurse-submodules https://github.com/piconet-live/piconet-launcher.git    # beside it
+    cd piconet-runner
+    git submodule update --init                     # the protocol and the forks; not Dolphin's bundled libraries
+    port/setup/setup.sh /mnt/c/piconet-work         # the work folder: trees, tools, disc (a WSL clone names one)
+    PORT_WORK=/mnt/c/piconet-work PORT_PROFILE=none PORT_PYTHON=/mnt/c/piconet-venv/Scripts/python.exe \
+        port/build/build.sh NAME
+
+`setup.sh` fetches the libraries the runner needs (RecompCore's Externals) into the work folder itself, so a
+`--recurse-submodules` clone is not needed. With the clone on a Windows drive, leave out the folder:
+`port/setup/setup.sh` uses `build/work`, and `build.sh` needs no `PORT_WORK`.
+
+The build is one CMake project with a preset per platform (`CMakePresets.json`; Windows today), which `build.sh`
+runs through Visual Studio's environment, and adds the game folder and a staged launcher. With the clone on a Windows
+drive you can run CMake yourself, from a Developer prompt: a batch file such as
+
+    @echo off
+    call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
+    set "PATH=C:\llvm-20.1.8\bin;%PATH%"
+    cd /d C:\piconet-runner
+    cmake --preset windows -DPORT_PROFILE=none -DPORT_PYTHON=C:\piconet-venv\Scripts\python.exe
+    cmake --build --preset windows
+    cmake --build --preset windows --target module
+
+builds the recompiler and the runner, then the native module from your disc's files in the work folder.
+`port/setup/tools.py --say` prints where your `vcvars64.bat` is. Settings of your own (another work folder, your
+tools' places) can go in a `CMakeUserPresets.json` beside `CMakePresets.json`, which git ignores. The settings, the
+targets and the steps: [port/build/README.md](port/build/README.md).
 
 ## Check
 
+    sudo apt install python3-venv
+    python3 -m venv .venv && .venv/bin/pip install keystone-engine    # in the checkout's root, for the image's checks
     port/check.sh
     git ls-files -z '*.sh' | xargs -0 -n1 bash -n     # the scripts parse
 
 The plain check: the facts table's, the image's, the core's (built with g++) and the setup's checks. It needs no
-work folder and no disc; without the gates' checkout it says that their checks are left out. CI runs both on Linux
-(`.github/workflows/ci.yml`); the Windows build above is a workflow run by hand (`windows-build.yml`).
+work folder and no disc. Without `.venv` (with keystone) the image's code builds and tests are skipped, and said;
+without the gates' checkout it says that their checks are left out. CI runs the same on Linux
+(`.github/workflows/ci.yml`) once the repositories are public; the Windows build above is a workflow run by hand
+(`windows-build.yml`).
 
 ## Contributing
 

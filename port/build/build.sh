@@ -19,8 +19,8 @@
 #   7. a first boot        the gates' runs/launcher-run.sh (pins.tsv REPO_GATES), scene boot-first: the game makes its
 #                          save file, kept as port/user-pristine for every later test game (1 min; needs the gates
 #                          and kit-win, port/setup/install.sh). Left out, and said, when they are not there
-#   PROFILE=<file>     the module's training profile (default PORT_WORK/input/module.profdata, where setup.sh
-#                      --profile puts it: the one handed out with a release). PROFILE=none: a module built without
+#   PORT_PROFILE=<file>  the module's training profile (PROFILE=<file> is the same; default
+#                      PORT_WORK/input/module.profdata, where setup.sh --profile puts it: the one handed out with a release). PORT_PROFILE=none: a module built without
 #                      one (the same game, slower), said. Without either the script stops before step 5 and says so.
 #   PORT_PYTHON=<python.exe>  a Windows Python with the module keystone, for step 2 (pip install keystone-engine; a
 #                      venv in the work folder is fine). Given once, the build folder keeps it; by default CMake's
@@ -43,7 +43,7 @@ W=${PORT_WORK:-$PORT_WORK_DEFAULT}
 W=$(cd "$W" && pwd)
 export PORT_WORK=$W PORT_WORK_WIN; PORT_WORK_WIN=$(wslpath -w "$W")
 export BUSY_CHECK=${BUSY_CHECK:-$W/port/scratch/rp/chk.sh}
-PROFILE=${PROFILE:-$W/input/module.profdata}
+PROFILE=${PORT_PROFILE:-${PROFILE:-$W/input/module.profdata}}   # PORT_PROFILE, as CMake names it; PROFILE still works
 B=$W/port/bundle-$N; G=$W/port/game-$N; L=$W/port/launcher-$N
 RUNNER=$W/port/runner-$N/moderngekko-run.exe; MODULE=$W/work/mod-cg-$N/gGFZE01_recomp.dll
 step() { sleep "${PORT_PAUSE:-0}"; echo "== $(date +%T) $*"; }
@@ -72,8 +72,8 @@ step "4. the runner"; wait_while_busy "$BUSY_CHECK"
   pc_take cpu-window.sh "build $N: the runner" 14; OUT=$N port/moderngekko/build.sh "build-mg-$N" )
 if [ ! -f "$MODULE" ]; then
   step "5. the module"
-  [ "$PROFILE" = none ] || [ -f "$PROFILE" ] || { echo "build: no profile at $PROFILE. Either the one handed out with the release (setup.sh --profile FILE, or PROFILE=FILE), or PROFILE=none for a module built without one (the same game, slower); a profile is trained by the gates (runs/profile.sh)" >&2; exit 1; }
-  [ "$PROFILE" != none ] || echo "build: PROFILE=none: the module is built without a training profile (the same game, slower)"
+  [ "$PROFILE" = none ] || [ -f "$PROFILE" ] || { echo "build: no profile at $PROFILE. Either the one handed out with the release (setup.sh --profile FILE, or PORT_PROFILE=FILE), or PORT_PROFILE=none for a module built without one (the same game, slower); a profile is trained by the gates (runs/profile.sh)" >&2; exit 1; }
+  [ "$PROFILE" != none ] || echo "build: PORT_PROFILE=none: the module is built without a training profile (the same game, slower)"
   wait_while_busy "$BUSY_CHECK"
   SWITCHES=$root/$REPO_SWITCHES PROFILE=$PROFILE BUNDLE=$B port/build/build-module.sh "$N"
 fi

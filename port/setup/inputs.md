@@ -22,7 +22,7 @@ module's training profile; it is never committed.
 | `work\dolrecomp-port\dolrecomp.exe` | `port/build/build.sh`, step 1 | See "Built twice" |
 | The bundle, the game folder | Steps 2 and 3 (`port/image/build.py`, which needs the Python module `keystone`; `native-game.sh`) | Yes; the bundle's `manifest.json` holds the repository's commit |
 | The runner | Step 4 | See "Built twice" |
-| The profile | Handed out with a release (`setup.sh --profile FILE` puts it in `N\input`), or trained by the gates' `runs/profile.sh NAME`: an instrumented module and two test games (needs the gates and their harness); `PROFILE=none` builds a module without one | **No**: its counts come from real runs. A module's manifest records its SHA-1 |
+| The profile | Handed out with a release (`setup.sh --profile FILE` puts it in `N\input`), or trained by the gates' `runs/profile.sh NAME`: an instrumented module and two test games (needs the gates and their harness); `PORT_PROFILE=none` builds a module without one | **No**: its counts come from real runs. A module's manifest records its SHA-1 |
 | The module | Step 5 | See "Built twice" |
 | A save file for boots (`port\user-pristine`) | Step 7 (`FIRST_BOOT=1 port/build/build.sh NAME`): a first boot of the game through the staged launcher creates it | No (a memory card holds times); not a build input |
 | The gate scenes' saved states | **Kept** (`kept.tsv`): no recipe makes one the gates can use. See "The gate scenes' saved states" | No. Gate inputs, not build inputs |
