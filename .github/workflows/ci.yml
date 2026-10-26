@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build and test
+    # The submodules (piconet-protocol, the forks) are private repos until the repos go public; then this job runs.
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      # The plain check needs external/protocol only (the forks are for the Windows build) and the launcher's
+      # checkout beside this one (pins.tsv REPO_LAUNCHER ../piconet-launcher).
+      - uses: actions/checkout@v4
+        with:
+          path: piconet-runner
+      - name: Protocol submodule
+        working-directory: piconet-runner
+        run: git submodule update --init --depth 1 external/protocol
+      - uses: actions/checkout@v4
+        with:
+          repository: piconet-live/piconet-launcher
+          path: piconet-launcher
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check
+        working-directory: piconet-runner
+        run: port/check.sh
+      - name: Scripts parse
+        working-directory: piconet-runner
+        run: git ls-files -z '*.sh' | xargs -0 -n1 bash -n

@@ -1,5 +1,7 @@
 # piconet-runner
 
+[![CI](https://github.com/piconet-live/piconet-runner/actions/workflows/ci.yml/badge.svg)](https://github.com/piconet-live/piconet-runner/actions/workflows/ci.yml)
+
 F-Zero GX recompiled to native code, as Piconet's races run it: the game's port (`port/`), the recompiler's
 machine files (`recomp/`), and the pins of the upstream trees it is built from (`forks/`). The launcher
 ([piconet-launcher](https://github.com/piconet-live/piconet-launcher)) starts it for offline play, replays and
@@ -63,9 +65,11 @@ In WSL, `port/build/build.sh NAME` runs the same targets in order and adds the g
 ## Check
 
     port/check.sh
+    git ls-files -z '*.sh' | xargs -0 -n1 bash -n     # the scripts parse
 
 The plain check: the facts table's, the image's, the core's (built with g++) and the setup's checks. It needs no
-work folder and no disc; without the gates' checkout it says that their checks are left out.
+work folder and no disc; without the gates' checkout it says that their checks are left out. CI runs both on Linux
+(`.github/workflows/ci.yml`); the Windows build above is a workflow run by hand (`windows-build.yml`).
 
 ## Contributing
 
