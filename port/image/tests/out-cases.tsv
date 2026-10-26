@@ -1,0 +1,34 @@
+flags	contact	speed	rules	race type	verdict	what
+00000000	00000000	00000000	00000000	6	racing	racing, even at rest
+08000000	00000000	42480000	00000000	6	out	retired
+00000800	00000000	42480000	00000000	6	out	destroyed
+00000000	00000010	42480000	00000000	6	out	a fall: out of contact
+00000000	00000080	00000000	00000000	6	racing	the CPU-at-rest bit of +0x58C alone (it comes with 0x08000000)
+00000080	00000000	42480000	00000000	6	racing	a breakdown coasts on
+00000080	00000000	3F800000	00000000	6	racing	a breakdown at 1.0: not below
+00000080	00000000	3F7FFFFF	00000000	6	out	a breakdown just below 1.0: at rest
+00000080	00000000	00000000	00000000	6	out	a breakdown at 0
+00000080	00000000	00000001	00000000	6	out	a breakdown at the smallest denormal
+00000080	00000000	C0400000	00000000	6	out	a breakdown at -3.0
+00000080	00000000	80000000	00000000	6	out	a breakdown at -0
+00000080	00000000	FF800000	00000000	6	out	a breakdown at minus infinity: below
+00000080	00000000	7F800000	00000000	6	racing	a breakdown at infinity
+00000080	00000000	7FC00000	00000000	6	racing	a breakdown at a NaN: fcmpo and bge, not below
+00000080	00000000	FFC00000	00000000	6	racing	a breakdown at a negative NaN: not below either
+00000080	00000000	FF800001	00000000	6	racing	a breakdown at the negative NaN nearest minus infinity
+00000280	00000000	42480000	00000000	6	out	a CPU's breakdown, moving
+00000080	00000000	42480000	00000000	5	out	a breakdown in race type 5, moving
+00000200	00000000	00000000	00000000	6	racing	a CPU at rest, not broken down
+00010000	00000000	42480000	00000000	6	racing	finished
+08010800	00000010	00000000	00000000	6	racing	finished: never asked, whatever else it has
+18010880	00000010	00000000	00000000	6	racing	finished with the time-over flag too
+00010080	00000000	42480000	00000000	6	racing	crossed the line out of energy, coasting: a finish
+00010080	00000000	00000000	00000000	6	racing	out of energy after the line, at rest: still a finish
+00010880	00000010	00000000	00000000	6	racing	wrecked on the cool-down lap: still a finish
+08000800	00000010	00000000	00008000	6	racing	Restore: put back, never out
+00000280	00000000	00000000	04008000	5	racing	Restore over a CPU's breakdown at rest in race type 5
+00000080	00000000	00000000	00008000	6	racing	Restore over a breakdown at rest
+10000000	00000000	42480000	00000000	6	out	the game's time-over flag
+10000000	00000000	42480000	00008000	6	out	the game's time-over flag under Restore too
+00000000	00000000	00000000	04000000	6	racing	the no-time-limit rule alone
+00000080	00000000	00000000	00200000	6	out	rule 0x200000 is not read here: a breakdown at rest is out

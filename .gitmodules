@@ -1,0 +1,21 @@
+[submodule "external/protocol"]
+	path = external/protocol
+	url = https://github.com/piconet-live/piconet-protocol.git
+[submodule "forks/dolrecomp"]
+	path = forks/dolrecomp
+	url = https://github.com/piconet-live/dolrecomp.git
+	branch = piconet
+[submodule "forks/dolrecomp-vendored"]
+	path = forks/dolrecomp-vendored
+	url = https://github.com/piconet-live/dolrecomp.git
+[submodule "forks/moderngekko"]
+	path = forks/moderngekko
+	url = https://github.com/piconet-live/moderngekko.git
+	branch = piconet
+[submodule "forks/recompcore"]
+	path = forks/recompcore
+	url = https://github.com/piconet-live/recompcore.git
+	branch = piconet
+[submodule "forks/module-template"]
+	path = forks/module-template
+	url = https://github.com/piconet-live/recompcore.git

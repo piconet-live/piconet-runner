@@ -1,0 +1,847 @@
+region,offset,type,name,category,confidence,changes_in_race,net,mask_7200
+block,0x000,u32 bits,"flags (spin 0x8, boost req 0x40, broken 0x80, CPU 0x200, contact 0x400/0x02000000, finished 0x10000, side attack 0x20000, AI-driven 0x04000000, ...)",STATE,code,yes,SEND,0x03654076
+block,0x004,s16 | s16,+4 racer index (bit in +0x514 masks) | +6 machine id (>=0x29 custom),SETUP,code,no,ONCE,0x00000000
+block,0x008,f32,weight W,SETUP,code,no,ONCE,0x00000000
+block,0x00C,f32,stat: grip 1,SETUP,code,no,ONCE,0x00000000
+block,0x010,f32,stat: turn tension,SETUP,code,no,ONCE,0x00000000
+block,0x014,f32,stat: turn movement,SETUP,code,no,ONCE,0x00000000
+block,0x018,f32,stat: strafe turn,SETUP,code,no,ONCE,0x00000000
+block,0x01C,f32,stat: strafe,SETUP,code,no,ONCE,0x00000000
+block,0x020,f32,stat: turn reaction,SETUP,code,no,ONCE,0x00000000
+block,0x024,f32,stat: grip 2,SETUP,code,no,ONCE,0x00000000
+block,0x028,f32,stat: grip 3,SETUP,code,no,ONCE,0x00000000
+block,0x02C,f32,stat: drift acceleration,SETUP,code,no,ONCE,0x00000000
+block,0x030,f32,stat: body (damage multiplier),SETUP,code,no,ONCE,0x00000000
+block,0x034,f32,stat: camera reorienting,SETUP,code,no,ONCE,0x00000000
+block,0x038,f32,stat: camera repositioning,SETUP,code,no,ONCE,0x00000000
+block,0x03C,char[64],machine name (strncpy)[0],SETUP,code,no,ONCE,0x00000000
+block,0x040,char[64],machine name (strncpy)[1],SETUP,code,no,ONCE,0x00000000
+block,0x044,char[64],machine name (strncpy)[2],SETUP,code,no,ONCE,0x00000000
+block,0x048,char[64],machine name (strncpy)[3],SETUP,code,no,ONCE,0x00000000
+block,0x04C,char[64],machine name (strncpy)[4],SETUP,code,no,ONCE,0x00000000
+block,0x050,char[64],machine name (strncpy)[5],SETUP,code,no,ONCE,0x00000000
+block,0x054,char[64],machine name (strncpy)[6],SETUP,code,no,ONCE,0x00000000
+block,0x058,char[64],machine name (strncpy)[7],SETUP,code,no,ONCE,0x00000000
+block,0x05C,char[64],machine name (strncpy)[8],SETUP,code,no,ONCE,0x00000000
+block,0x060,char[64],machine name (strncpy)[9],SETUP,code,no,ONCE,0x00000000
+block,0x064,char[64],machine name (strncpy)[10],SETUP,code,no,ONCE,0x00000000
+block,0x068,char[64],machine name (strncpy)[11],SETUP,code,no,ONCE,0x00000000
+block,0x06C,char[64],machine name (strncpy)[12],SETUP,code,no,ONCE,0x00000000
+block,0x070,char[64],machine name (strncpy)[13],SETUP,code,no,ONCE,0x00000000
+block,0x074,char[64],machine name (strncpy)[14],SETUP,code,no,ONCE,0x00000000
+block,0x078,char[64],machine name (strncpy)[15],SETUP,code,no,ONCE,0x00000000
+block,0x07C,vec3 f32,position.x,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x080,vec3 f32,position.y,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x084,vec3 f32,position.z,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x088,vec3 f32,position at start of frame (previous).x,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x08C,vec3 f32,position at start of frame (previous).y,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x090,vec3 f32,position at start of frame (previous).z,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x094,vec3 f32,momentum P (velocity = P/W).x,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x098,vec3 f32,momentum P (velocity = P/W).y,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x09C,vec3 f32,momentum P (velocity = P/W).z,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x0A0,vec3 f32,angular momentum (machine frame).x,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x0A4,vec3 f32,angular momentum (machine frame).y,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x0A8,vec3 f32,angular momentum (machine frame).z,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x0AC,vec3 f32,"moment of inertia = W x (3.25, 2.8125, 3.25).x",SETUP,code,no,ONCE,0x00000000
+block,0x0B0,vec3 f32,"moment of inertia = W x (3.25, 2.8125, 3.25).y",SETUP,code,no,ONCE,0x00000000
+block,0x0B4,vec3 f32,"moment of inertia = W x (3.25, 2.8125, 3.25).z",SETUP,code,no,ONCE,0x00000000
+block,0x0B8,vec3 f32,momentum in the machine frame (R^T P at step start).x,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x0BC,vec3 f32,momentum in the machine frame (R^T P at step start).y,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x0C0,vec3 f32,momentum in the machine frame (R^T P at step start).z,DERIVED,code,yes,RECOMPUTE,0x03FFFFFF
+block,0x0C4,f32,yaw kick from impacts,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x0C8,f32,pitch kick from impacts,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x0CC,vec3 f32,machine-frame momentum with the vertical part zeroed.x,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
+block,0x0D0,vec3 f32,machine-frame momentum with the vertical part zeroed.y,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x0D4,vec3 f32,machine-frame momentum with the vertical part zeroed.z,DERIVED,inferred,yes,RECOMPUTE,0x03FFFFFF
+block,0x0D8,f32,top speed reached (km/h),EVENT,inferred,yes,SEND-EV,0x07FFFFFF
+block,0x0DC,f32,boost-related float (start/restore),EVENT,guess,no,SEND-EV,0x00000000
+block,0x0E0,f32 x3,unused (zeroed by reset only)[0],CONSTANT,code,no,LOCAL,0x00000000
+block,0x0E4,f32 x3,unused (zeroed by reset only)[1],CONSTANT,code,no,LOCAL,0x00000000
+block,0x0E8,f32 x3,unused (zeroed by reset only)[2],CONSTANT,code,no,LOCAL,0x00000000
+block,0x0EC,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[0][0],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x0F0,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[0][1],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x0F4,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[0][2],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x0F8,mtx3x4 f32,"orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[0][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x0FC,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[1][0],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x100,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[1][1],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x104,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[1][2],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x108,mtx3x4 f32,"orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[1][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x10C,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[2][0],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x110,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[2][1],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x114,mtx3x4 f32,orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[2][2],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x118,mtx3x4 f32,"orientation (rotation; translation column +0xF8/+0x108/+0x118 always 0)[2][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x11C,mtx3x4 f32,orientation at start of frame (previous)[0][0],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x120,mtx3x4 f32,orientation at start of frame (previous)[0][1],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x124,mtx3x4 f32,orientation at start of frame (previous)[0][2],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x128,mtx3x4 f32,"orientation at start of frame (previous)[0][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x12C,mtx3x4 f32,orientation at start of frame (previous)[1][0],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x130,mtx3x4 f32,orientation at start of frame (previous)[1][1],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x134,mtx3x4 f32,orientation at start of frame (previous)[1][2],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x138,mtx3x4 f32,"orientation at start of frame (previous)[1][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x13C,mtx3x4 f32,orientation at start of frame (previous)[2][0],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x140,mtx3x4 f32,orientation at start of frame (previous)[2][1],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x144,mtx3x4 f32,orientation at start of frame (previous)[2][2],STATE,code,yes,SEND,0x8FFFFFFF
+block,0x148,mtx3x4 f32,"orientation at start of frame (previous)[2][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x14C,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[0][0],DERIVED,inferred,yes,VISUAL,0x8FFFFFFF
+block,0x150,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[0][1],DERIVED,inferred,yes,VISUAL,0x8FFFFFFF
+block,0x154,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[0][2],DERIVED,inferred,yes,VISUAL,0x8FFFFFFF
+block,0x158,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[0][3],DERIVED,inferred,yes,VISUAL,0xFFFFFFFF
+block,0x15C,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[1][0],DERIVED,inferred,yes,VISUAL,0x8FFFFFFF
+block,0x160,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[1][1],DERIVED,inferred,yes,VISUAL,0x87FFFFFF
+block,0x164,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[1][2],DERIVED,inferred,yes,VISUAL,0x8FFFFFFF
+block,0x168,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[1][3],DERIVED,inferred,yes,VISUAL,0xFFFFFFFF
+block,0x16C,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[2][0],DERIVED,inferred,yes,VISUAL,0x8FFFFFFF
+block,0x170,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[2][1],DERIVED,inferred,yes,VISUAL,0x8FFFFFFF
+block,0x174,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[2][2],DERIVED,inferred,yes,VISUAL,0x8FFFFFFF
+block,0x178,mtx3x4 f32,drawn (visual) transform; translation +0x158/+0x168/+0x178 = position with hover bob[2][3],DERIVED,inferred,yes,VISUAL,0xFFFFFFFF
+block,0x17C,f32,speed km/h = 216 |P| / W,DERIVED,code,yes,RECOMPUTE,0x07FFFFFF
+block,0x180,f32,aerial nose tilt,STATE,code,yes,SEND,0xFFFFFFFF
+block,0x184,f32,energy,STATE,code,yes,SEND,0x00FFFFFF
+block,0x188,s16 | u8 | u8,+188 boost-related counter (lha) | +18A boost countdown (dash plates and boosts) | +18B boost countdown (energy boosts only),EVENT,inferred,yes,SEND-EV,0x00007F7F
+block,0x18C,f32,boost camera/visual effect,STATE,code,yes,VISUAL,0x3FFFFFFF
+block,0x190,u32,spin attack: rotation remaining (0x40000 at start),EVENT,code,no,SEND-EV,0x00000000
+block,0x194,u16 | u8 | u8,"+194 spin attack: rotation speed (0x1000, -0x41/frame, min 0x50) | +196 spin attack direction | +197 brake-held frames (to 30)",EVENT,inferred,no,SEND-EV,0x00000000
+block,0x198,vec3 f32 x3,wall / out-of-bounds plane contact vectors[0],STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x19C,vec3 f32 x3,wall / out-of-bounds plane contact vectors[1],STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x1A0,vec3 f32 x3,wall / out-of-bounds plane contact vectors[2],STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x1A4,vec3 f32 x3,wall / out-of-bounds plane contact vectors[3],STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x1A8,vec3 f32 x3,wall / out-of-bounds plane contact vectors[4],STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x1AC,vec3 f32 x3,wall / out-of-bounds plane contact vectors[5],STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x1B0,vec3 f32 x3,wall / out-of-bounds plane contact vectors[6],STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x1B4,vec3 f32 x3,wall / out-of-bounds plane contact vectors[7],STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x1B8,vec3 f32 x3,wall / out-of-bounds plane contact vectors[8],STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x1BC,vec3 f32,up vector (track normal / gravity).x,STATE,code,yes,SEND,0xBFFFFFFF
+block,0x1C0,vec3 f32,up vector (track normal / gravity).y,STATE,code,yes,SEND,0x87FFFFFF
+block,0x1C4,vec3 f32,up vector (track normal / gravity).z,STATE,code,yes,SEND,0xBFFFFFFF
+block,0x1C8,f32,ground-query scalar (19.1-19.9),STATE,guess,yes,CACHE,0x7FFFFFC0
+block,0x1CC,s32,checkpoint index under the machine (ground query),STATE,code,yes,CACHE,0x000000FF
+block,0x1D0,f32,fraction to next checkpoint (ground query),STATE,code,yes,CACHE,0x0FFFFFFF
+block,0x1D4,vec3 f32,"position, bottom (contact point).x",DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
+block,0x1D8,vec3 f32,"position, bottom (contact point).y",DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
+block,0x1DC,vec3 f32,"position, bottom (contact point).z",DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
+block,0x1E0,vec3 f32,position at start of frame (third copy).x,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x1E4,vec3 f32,position at start of frame (third copy).y,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x1E8,vec3 f32,position at start of frame (third copy).z,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x1EC,f32,strafe state (+-32),STATE,code,yes,SEND,0xFFFFFFFF
+block,0x1F0,f32,strafe value (+-1.6),DERIVED,inferred,yes,RECOMPUTE,0xBFFFFFFF
+block,0x1F4,f32,pitch input,INPUT,code,yes,INPUT,0xBFFFE000
+block,0x1F8,f32,strafe input,INPUT,code,yes,INPUT,0xBFFFFFFF
+block,0x1FC,f32,"steer input (squared, sign kept)",INPUT,code,yes,INPUT,0xBFFFFFFF
+block,0x200,f32,accelerator input (CPUs may exceed 1),INPUT,code,yes,INPUT,0x3FFFFFFF
+block,0x204,f32,air brake input,INPUT,code,no,INPUT,0x00000000
+block,0x208,f32,constant 200 (rewritten every step),CONSTANT,code,no,LOCAL,0x00000000
+block,0x20C,f32,steer of this frame (previous steer for flick tests),INPUT,code,yes,INPUT,0xBFFFFFFF
+block,0x210,u16 | u8 | u8,+210 score | +212 KOs during the current attack | +213 wall / out-of-bounds hit count (max 180),EVENT,code,yes,SEND-EV,0x00FF0000
+block,0x214,u16 | u8 | u8,+214 restore countdown (physics frozen while != 0) | +216 collision/knockback byte | +217 boosts used,EVENT,guess,yes,SEND-EV,0x00000007
+block,0x218,u32 bits,"terrain flags (0x02000000 damage strip, ...)",STATE,code,yes,SEND,0x18000000
+block,0x21C,u32,split-path indicator,EVENT,inferred,no,SEND-EV,0x00000000
+block,0x220,f32,stat: acceleration,SETUP,code,no,ONCE,0x00000000
+block,0x224,f32,"""base speed"" (impacts add, KO zeroes)",STATE,code,yes,SEND,0x7FFFFFFF
+block,0x228,f32,boost effect value,STATE,code,yes,SEND,0x7FFFFFFF
+block,0x22C,f32,stat: max speed,SETUP,code,no,ONCE,0x00000000
+block,0x230,f32,stat: boost strength,SETUP,code,no,ONCE,0x00000000
+block,0x234,f32,stat: boost duration,SETUP,code,no,ONCE,0x00000000
+block,0x238,f32,stat: turn deceleration,SETUP,code,no,ONCE,0x00000000
+block,0x23C,f32,stat: drag,SETUP,code,no,ONCE,0x00000000
+block,0x240,u8 x2 | pad,+240 boost-state bytes | +242 padding,EVENT,code,no,SEND-EV,0x00000000
+block,0x244,u32 bits,hover corner flags: ground/air state (front right),STATE,code,yes,SEND,0x0000003E
+block,0x248,f32,hover corner: unused (0) (front right),CONSTANT,code,no,LOCAL,0x00000000
+block,0x24C,vec3 f32,hover corner: local offset (tilt stat width/height/length) (front right).x,SETUP,code,no,ONCE,0x00000000
+block,0x250,vec3 f32,hover corner: local offset (tilt stat width/height/length) (front right).y,SETUP,code,no,ONCE,0x00000000
+block,0x254,vec3 f32,hover corner: local offset (tilt stat width/height/length) (front right).z,SETUP,code,no,ONCE,0x00000000
+block,0x258,vec3 f32,"hover corner: world position, previous transform (front right).x",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x25C,vec3 f32,"hover corner: world position, previous transform (front right).y",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x260,vec3 f32,"hover corner: world position, previous transform (front right).z",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x264,vec3 f32,"hover corner: world position, current (B) (front right).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x268,vec3 f32,"hover corner: world position, current (B) (front right).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x26C,vec3 f32,"hover corner: world position, current (B) (front right).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x270,vec3 f32,hover corner: track normal 1 (front right).x,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x274,vec3 f32,hover corner: track normal 1 (front right).y,STATE,inferred,yes,SEND,0x87FFFFFF
+block,0x278,vec3 f32,hover corner: track normal 1 (front right).z,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x27C,vec3 f32,hover corner: track normal 2 (front right).x,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x280,vec3 f32,hover corner: track normal 2 (front right).y,STATE,inferred,yes,SEND,0x87FFFFFF
+block,0x284,vec3 f32,hover corner: track normal 2 (front right).z,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x288,f32,hover corner: slope / compression (front right),STATE,inferred,yes,SEND,0x3FFFFFFE
+block,0x28C,f32,hover corner: constant 1.7 (front right),CONSTANT,code,no,LOCAL,0x00000000
+block,0x290,vec3 f32,hover corner: suspension force/velocity (machine frame) (front right).x,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x294,vec3 f32,hover corner: suspension force/velocity (machine frame) (front right).y,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x298,vec3 f32,hover corner: suspension force/velocity (machine frame) (front right).z,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x29C,f32,hover corner: suspension magnitude (front right),STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x2A0,u32 bits,hover corner flags: ground/air state (front left),STATE,code,yes,SEND,0x0000003E
+block,0x2A4,f32,hover corner: unused (0) (front left),CONSTANT,code,no,LOCAL,0x00000000
+block,0x2A8,vec3 f32,hover corner: local offset (tilt stat width/height/length) (front left).x,SETUP,code,no,ONCE,0x00000000
+block,0x2AC,vec3 f32,hover corner: local offset (tilt stat width/height/length) (front left).y,SETUP,code,no,ONCE,0x00000000
+block,0x2B0,vec3 f32,hover corner: local offset (tilt stat width/height/length) (front left).z,SETUP,code,no,ONCE,0x00000000
+block,0x2B4,vec3 f32,"hover corner: world position, previous transform (front left).x",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x2B8,vec3 f32,"hover corner: world position, previous transform (front left).y",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x2BC,vec3 f32,"hover corner: world position, previous transform (front left).z",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x2C0,vec3 f32,"hover corner: world position, current (B) (front left).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x2C4,vec3 f32,"hover corner: world position, current (B) (front left).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x2C8,vec3 f32,"hover corner: world position, current (B) (front left).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x2CC,vec3 f32,hover corner: track normal 1 (front left).x,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x2D0,vec3 f32,hover corner: track normal 1 (front left).y,STATE,inferred,yes,SEND,0x87FFFFFF
+block,0x2D4,vec3 f32,hover corner: track normal 1 (front left).z,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x2D8,vec3 f32,hover corner: track normal 2 (front left).x,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x2DC,vec3 f32,hover corner: track normal 2 (front left).y,STATE,inferred,yes,SEND,0x87FFFFFF
+block,0x2E0,vec3 f32,hover corner: track normal 2 (front left).z,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x2E4,f32,hover corner: slope / compression (front left),STATE,inferred,yes,SEND,0x3FFFFFFE
+block,0x2E8,f32,hover corner: constant 1.7 (front left),CONSTANT,code,no,LOCAL,0x00000000
+block,0x2EC,vec3 f32,hover corner: suspension force/velocity (machine frame) (front left).x,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x2F0,vec3 f32,hover corner: suspension force/velocity (machine frame) (front left).y,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x2F4,vec3 f32,hover corner: suspension force/velocity (machine frame) (front left).z,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x2F8,f32,hover corner: suspension magnitude (front left),STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x2FC,u32 bits,hover corner flags: ground/air state (back right),STATE,code,yes,SEND,0x0000003E
+block,0x300,f32,hover corner: unused (0) (back right),CONSTANT,code,no,LOCAL,0x00000000
+block,0x304,vec3 f32,hover corner: local offset (tilt stat width/height/length) (back right).x,SETUP,code,no,ONCE,0x00000000
+block,0x308,vec3 f32,hover corner: local offset (tilt stat width/height/length) (back right).y,SETUP,code,no,ONCE,0x00000000
+block,0x30C,vec3 f32,hover corner: local offset (tilt stat width/height/length) (back right).z,SETUP,code,no,ONCE,0x00000000
+block,0x310,vec3 f32,"hover corner: world position, previous transform (back right).x",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x314,vec3 f32,"hover corner: world position, previous transform (back right).y",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x318,vec3 f32,"hover corner: world position, previous transform (back right).z",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x31C,vec3 f32,"hover corner: world position, current (B) (back right).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x320,vec3 f32,"hover corner: world position, current (B) (back right).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x324,vec3 f32,"hover corner: world position, current (B) (back right).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x328,vec3 f32,hover corner: track normal 1 (back right).x,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x32C,vec3 f32,hover corner: track normal 1 (back right).y,STATE,inferred,yes,SEND,0x87FFFFFF
+block,0x330,vec3 f32,hover corner: track normal 1 (back right).z,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x334,vec3 f32,hover corner: track normal 2 (back right).x,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x338,vec3 f32,hover corner: track normal 2 (back right).y,STATE,inferred,yes,SEND,0x87FFFFFF
+block,0x33C,vec3 f32,hover corner: track normal 2 (back right).z,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x340,f32,hover corner: slope / compression (back right),STATE,inferred,yes,SEND,0x3FFFFFFE
+block,0x344,f32,hover corner: constant 1.7 (back right),CONSTANT,code,no,LOCAL,0x00000000
+block,0x348,vec3 f32,hover corner: suspension force/velocity (machine frame) (back right).x,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x34C,vec3 f32,hover corner: suspension force/velocity (machine frame) (back right).y,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x350,vec3 f32,hover corner: suspension force/velocity (machine frame) (back right).z,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x354,f32,hover corner: suspension magnitude (back right),STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x358,u32 bits,hover corner flags: ground/air state (back left),STATE,code,yes,SEND,0x0000003E
+block,0x35C,f32,hover corner: unused (0) (back left),CONSTANT,code,no,LOCAL,0x00000000
+block,0x360,vec3 f32,hover corner: local offset (tilt stat width/height/length) (back left).x,SETUP,code,no,ONCE,0x00000000
+block,0x364,vec3 f32,hover corner: local offset (tilt stat width/height/length) (back left).y,SETUP,code,no,ONCE,0x00000000
+block,0x368,vec3 f32,hover corner: local offset (tilt stat width/height/length) (back left).z,SETUP,code,no,ONCE,0x00000000
+block,0x36C,vec3 f32,"hover corner: world position, previous transform (back left).x",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x370,vec3 f32,"hover corner: world position, previous transform (back left).y",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x374,vec3 f32,"hover corner: world position, previous transform (back left).z",DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x378,vec3 f32,"hover corner: world position, current (B) (back left).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x37C,vec3 f32,"hover corner: world position, current (B) (back left).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x380,vec3 f32,"hover corner: world position, current (B) (back left).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x384,vec3 f32,hover corner: track normal 1 (back left).x,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x388,vec3 f32,hover corner: track normal 1 (back left).y,STATE,inferred,yes,SEND,0x87FFFFFF
+block,0x38C,vec3 f32,hover corner: track normal 1 (back left).z,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x390,vec3 f32,hover corner: track normal 2 (back left).x,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x394,vec3 f32,hover corner: track normal 2 (back left).y,STATE,inferred,yes,SEND,0x87FFFFFF
+block,0x398,vec3 f32,hover corner: track normal 2 (back left).z,STATE,inferred,yes,SEND,0xBFFFFFFF
+block,0x39C,f32,hover corner: slope / compression (back left),STATE,inferred,yes,SEND,0x3FFFFFFE
+block,0x3A0,f32,hover corner: constant 1.7 (back left),CONSTANT,code,no,LOCAL,0x00000000
+block,0x3A4,vec3 f32,hover corner: suspension force/velocity (machine frame) (back left).x,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3A8,vec3 f32,hover corner: suspension force/velocity (machine frame) (back left).y,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3AC,vec3 f32,hover corner: suspension force/velocity (machine frame) (back left).z,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3B0,f32,hover corner: suspension magnitude (back left),STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3B4,vec3 f32,wall corner: local offset (wall collision stat) (front right).x,SETUP,code,no,ONCE,0x00000000
+block,0x3B8,vec3 f32,wall corner: local offset (wall collision stat) (front right).y,SETUP,code,no,ONCE,0x00000000
+block,0x3BC,vec3 f32,wall corner: local offset (wall collision stat) (front right).z,SETUP,code,no,ONCE,0x00000000
+block,0x3C0,vec3 f32,"wall corner: world position, start of step (C) (front right).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3C4,vec3 f32,"wall corner: world position, start of step (C) (front right).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3C8,vec3 f32,"wall corner: world position, start of step (C) (front right).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3CC,vec3 f32,"wall corner: world position, resolved (D) (front right).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3D0,vec3 f32,"wall corner: world position, resolved (D) (front right).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3D4,vec3 f32,"wall corner: world position, resolved (D) (front right).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3D8,vec3 f32,wall corner: collision vector (front right).x,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x3DC,vec3 f32,wall corner: collision vector (front right).y,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x3E0,vec3 f32,wall corner: collision vector (front right).z,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x3E4,vec3 f32,wall corner: local offset (wall collision stat) (front left).x,SETUP,code,no,ONCE,0x00000000
+block,0x3E8,vec3 f32,wall corner: local offset (wall collision stat) (front left).y,SETUP,code,no,ONCE,0x00000000
+block,0x3EC,vec3 f32,wall corner: local offset (wall collision stat) (front left).z,SETUP,code,no,ONCE,0x00000000
+block,0x3F0,vec3 f32,"wall corner: world position, start of step (C) (front left).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3F4,vec3 f32,"wall corner: world position, start of step (C) (front left).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3F8,vec3 f32,"wall corner: world position, start of step (C) (front left).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x3FC,vec3 f32,"wall corner: world position, resolved (D) (front left).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x400,vec3 f32,"wall corner: world position, resolved (D) (front left).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x404,vec3 f32,"wall corner: world position, resolved (D) (front left).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x408,vec3 f32,wall corner: collision vector (front left).x,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x40C,vec3 f32,wall corner: collision vector (front left).y,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x410,vec3 f32,wall corner: collision vector (front left).z,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x414,vec3 f32,wall corner: local offset (wall collision stat) (back right).x,SETUP,code,no,ONCE,0x00000000
+block,0x418,vec3 f32,wall corner: local offset (wall collision stat) (back right).y,SETUP,code,no,ONCE,0x00000000
+block,0x41C,vec3 f32,wall corner: local offset (wall collision stat) (back right).z,SETUP,code,no,ONCE,0x00000000
+block,0x420,vec3 f32,"wall corner: world position, start of step (C) (back right).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x424,vec3 f32,"wall corner: world position, start of step (C) (back right).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x428,vec3 f32,"wall corner: world position, start of step (C) (back right).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x42C,vec3 f32,"wall corner: world position, resolved (D) (back right).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x430,vec3 f32,"wall corner: world position, resolved (D) (back right).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x434,vec3 f32,"wall corner: world position, resolved (D) (back right).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x438,vec3 f32,wall corner: collision vector (back right).x,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x43C,vec3 f32,wall corner: collision vector (back right).y,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x440,vec3 f32,wall corner: collision vector (back right).z,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x444,vec3 f32,wall corner: local offset (wall collision stat) (back left).x,SETUP,code,no,ONCE,0x00000000
+block,0x448,vec3 f32,wall corner: local offset (wall collision stat) (back left).y,SETUP,code,no,ONCE,0x00000000
+block,0x44C,vec3 f32,wall corner: local offset (wall collision stat) (back left).z,SETUP,code,no,ONCE,0x00000000
+block,0x450,vec3 f32,"wall corner: world position, start of step (C) (back left).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x454,vec3 f32,"wall corner: world position, start of step (C) (back left).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x458,vec3 f32,"wall corner: world position, start of step (C) (back left).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x45C,vec3 f32,"wall corner: world position, resolved (D) (back left).x",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x460,vec3 f32,"wall corner: world position, resolved (D) (back left).y",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x464,vec3 f32,"wall corner: world position, resolved (D) (back left).z",STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x468,vec3 f32,wall corner: collision vector (back left).x,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x46C,vec3 f32,wall corner: collision vector (back left).y,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x470,vec3 f32,wall corner: collision vector (back left).z,DERIVED,inferred,no,RECOMPUTE,0x00000000
+block,0x474,s8 | s8 | u8 | u8,+474 pad port (-1 none) | +475 player (viewport) slot (-1 none) | +476 flag (A mashing / low-speed dash plate) | +477 machine stat byte (stat block +0x48),EVENT,guess,no,SEND-EV,0x00000000
+block,0x478,f32,speed-related visual value,STATE,inferred,yes,VISUAL,0x07FFFFFF
+block,0x47C,u32,frames since start or restore,STATE,code,yes,SEND,0x00001FFF
+block,0x480,u8 | u8 | u8 | u8,+480 side-attack countdown (6 frames) | +481 frames since start or restore (saturating; spin needs > 60) | +482 skull (KO) count | +483 air-time frames,EVENT,inferred,yes,SEND-EV,0x00FF003F
+block,0x484,ptr,"CPU block (0x88), 0 for humans",POINTER,code,no,LOCAL,0x00000000
+block,0x488,ptr,track-query record of wall corner 0 (0xC0),POINTER,code,no,LOCAL,0x00000000
+block,0x48C,ptr,track-query record of wall corner 1 (0xC0),POINTER,code,no,LOCAL,0x00000000
+block,0x490,ptr,track-query record of wall corner 2 (0xC0),POINTER,code,no,LOCAL,0x00000000
+block,0x494,ptr,track-query record of wall corner 3 (0xC0),POINTER,code,no,LOCAL,0x00000000
+block,0x498,ptr,track-segment path record (0x194),POINTER,code,no,LOCAL,0x00000000
+block,0x49C,ptr,progress record (0x1FC),POINTER,code,no,LOCAL,0x00000000
+block,0x4A0,vec3 f32,point behind and above the machine.x,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x4A4,vec3 f32,point behind and above the machine.y,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x4A8,vec3 f32,point behind and above the machine.z,STATE,inferred,yes,SEND,0xFFFFFFFF
+block,0x4AC,f32,energy lost on the last hit,EVENT,code,yes,SEND-EV,0x7FFFFFFF
+block,0x4B0,s16 | u8 | u8,+4B0 strafe effect | +4B2 dash-plate hit count | +4B3 machine crash bit,STATE,inferred,yes,SEND,0xFFFF1F00
+block,0x4B4,vec3 f32,nearest machine approached (offset in this machine frame; 1e4 = none).x,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x4B8,vec3 f32,nearest machine approached (offset in this machine frame; 1e4 = none).y,DERIVED,code,yes,RECOMPUTE,0xBFFFFFFF
+block,0x4BC,vec3 f32,nearest machine approached (offset in this machine frame; 1e4 = none).z,DERIVED,code,yes,RECOMPUTE,0xBFFFFFFF
+block,0x4C0,u8 | u8 | u8 | u8,+4C0 approach countdown | +4C1 last machine approached (index) | +4C2 restore count | +4C3 double-tap state (alternative input scheme),EVENT,inferred,yes,SEND-EV,0x3FFF0000
+block,0x4C4,u8 | u8 | u16,+4C4 countdown after machine collision | +4C5 no-bump-damage flag | +4C6 boost delay timer,EVENT,inferred,yes,SEND-EV,0x00070005
+block,0x4C8,vec3 f32,position at start of frame (swept contact start).x,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x4CC,vec3 f32,position at start of frame (swept contact start).y,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x4D0,vec3 f32,position at start of frame (swept contact start).z,DERIVED,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x4D4,f32,turn reaction input,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
+block,0x4D8,f32,turn reaction effect (smoothed),STATE,code,yes,VISUAL,0xFFFFFFFF
+block,0x4DC,f32,boost energy usage factor (1.0),SETUP,code,no,ONCE,0x00000000
+block,0x4E0,u16 | pad,+4E0 breakdown immobiliser timer | +4E2 padding,EVENT,code,no,SEND-EV,0x00000000
+block,0x4E4,vec3 f32,breakdown shake vector 1.x,EVENT,code,no,SEND-EV,0x00000000
+block,0x4E8,vec3 f32,breakdown shake vector 1.y,EVENT,code,no,SEND-EV,0x00000000
+block,0x4EC,vec3 f32,breakdown shake vector 1.z,EVENT,code,no,SEND-EV,0x00000000
+block,0x4F0,vec3 f32,breakdown shake vector 2.x,EVENT,code,no,SEND-EV,0x00000000
+block,0x4F4,vec3 f32,breakdown shake vector 2.y,EVENT,code,no,SEND-EV,0x00000000
+block,0x4F8,vec3 f32,breakdown shake vector 2.z,EVENT,code,no,SEND-EV,0x00000000
+block,0x4FC,u32 bits,terrain state 2,STATE,inferred,yes,SEND,0x00100000
+block,0x500,vec3 f32,last collision impulse.x,EVENT,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x504,vec3 f32,last collision impulse.y,EVENT,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x508,vec3 f32,last collision impulse.z,EVENT,code,yes,RECOMPUTE,0xFFFFFFFF
+block,0x50C,u8 | u8 | u8 | u8,+50C split-path indicator 2 | +50D model detail level | +50E human handed to CPU flag | +50F per-frame byte (zeroed every frame),EVENT,guess,yes,SEND-EV,0x04000000
+block,0x510,f32,contact radius (2.0),CONSTANT,code,no,LOCAL,0x00000000
+block,0x514,u32 bits,contact immunity mask (bit 0x80000000>>j),STATE,code,no,SEND,0x00000000
+block,0x518,f32,restore distance progress,EVENT,code,no,SEND-EV,0x00000000
+block,0x51C,f32,restore-related float,EVENT,code,no,SEND-EV,0x00000000
+block,0x520,mtx3x4 f32,restore pose A (start pose until the first restore)[0][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x524,mtx3x4 f32,restore pose A (start pose until the first restore)[0][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x528,mtx3x4 f32,restore pose A (start pose until the first restore)[0][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x52C,mtx3x4 f32,restore pose A (start pose until the first restore)[0][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x530,mtx3x4 f32,restore pose A (start pose until the first restore)[1][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x534,mtx3x4 f32,restore pose A (start pose until the first restore)[1][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x538,mtx3x4 f32,restore pose A (start pose until the first restore)[1][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x53C,mtx3x4 f32,restore pose A (start pose until the first restore)[1][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x540,mtx3x4 f32,restore pose A (start pose until the first restore)[2][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x544,mtx3x4 f32,restore pose A (start pose until the first restore)[2][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x548,mtx3x4 f32,restore pose A (start pose until the first restore)[2][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x54C,mtx3x4 f32,restore pose A (start pose until the first restore)[2][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x550,mtx3x4 f32,restore pose B[0][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x554,mtx3x4 f32,restore pose B[0][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x558,mtx3x4 f32,restore pose B[0][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x55C,mtx3x4 f32,restore pose B[0][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x560,mtx3x4 f32,restore pose B[1][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x564,mtx3x4 f32,restore pose B[1][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x568,mtx3x4 f32,restore pose B[1][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x56C,mtx3x4 f32,restore pose B[1][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x570,mtx3x4 f32,restore pose B[2][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x574,mtx3x4 f32,restore pose B[2][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x578,mtx3x4 f32,restore pose B[2][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x57C,mtx3x4 f32,restore pose B[2][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x580,f32,turning value,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
+block,0x584,f32,stat: obstacle collision,SETUP,code,no,ONCE,0x00000000
+block,0x588,f32,stat: track collision,SETUP,code,no,ONCE,0x00000000
+block,0x58C,u32 bits,"flags 2 (0x8 stepped this frame, 0x10 out of contact, 0x4 alt input scheme, 0x20 ...)",STATE,code,yes,SEND,0x00000001
+block,0x590,u8 | u8 | u8 | u8,+590 control mode / restore completion | +591 byte (reset) | +592 set on the first KO | +593 breakdown countdown (60),EVENT,guess,no,SEND-EV,0x00000000
+block,0x594,mtx3x4 f32,restore pose C[0][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x598,mtx3x4 f32,restore pose C[0][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x59C,mtx3x4 f32,restore pose C[0][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5A0,mtx3x4 f32,restore pose C[0][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5A4,mtx3x4 f32,restore pose C[1][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5A8,mtx3x4 f32,restore pose C[1][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5AC,mtx3x4 f32,restore pose C[1][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5B0,mtx3x4 f32,restore pose C[1][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5B4,mtx3x4 f32,restore pose C[2][0],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5B8,mtx3x4 f32,restore pose C[2][1],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5BC,mtx3x4 f32,restore pose C[2][2],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5C0,mtx3x4 f32,restore pose C[2][3],EVENT,inferred,no,SEND-EV,0x00000000
+block,0x5C4,quat f32,visual orientation quaternion (sway).x,STATE,code,yes,VISUAL,0x8FFFFFFF
+block,0x5C8,quat f32,visual orientation quaternion (sway).y,STATE,code,yes,VISUAL,0x9FFFFFFF
+block,0x5CC,quat f32,visual orientation quaternion (sway).z,STATE,code,yes,VISUAL,0x9FFFFFFF
+block,0x5D0,quat f32,visual orientation quaternion (sway).w,STATE,code,yes,VISUAL,0x000FFFFF
+block,0x5D4,f32,visual oscillation value,STATE,code,yes,VISUAL,0x3FFFFFFF
+block,0x5D8,u8 | u8 | u16,+5D8 post-restore immunity countdown | +5D9 byte | +5DA maximum energy,EVENT,guess,no,SEND-EV,0x00000000
+block,0x5DC,u32,unused,CONSTANT,code,no,LOCAL,0x00000000
+block,0x5E0,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[0][0],DERIVED,code,yes,VISUAL,0x8FFFFFFF
+block,0x5E4,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[0][1],DERIVED,code,yes,VISUAL,0x8FFFFFFF
+block,0x5E8,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[0][2],DERIVED,code,yes,VISUAL,0x8FFFFFFF
+block,0x5EC,mtx3x4 f32,"presentation orientation (translation 0; first column = +0xEC first column)[0][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x5F0,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[1][0],DERIVED,code,yes,VISUAL,0x8FFFFFFF
+block,0x5F4,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[1][1],DERIVED,code,yes,VISUAL,0x87FFFFFF
+block,0x5F8,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[1][2],DERIVED,code,yes,VISUAL,0x8FFFFFFF
+block,0x5FC,mtx3x4 f32,"presentation orientation (translation 0; first column = +0xEC first column)[1][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x600,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[2][0],DERIVED,code,yes,VISUAL,0x8FFFFFFF
+block,0x604,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[2][1],DERIVED,code,yes,VISUAL,0x8FFFFFFF
+block,0x608,mtx3x4 f32,presentation orientation (translation 0; first column = +0xEC first column)[2][2],DERIVED,code,yes,VISUAL,0x8FFFFFFF
+block,0x60C,mtx3x4 f32,"presentation orientation (translation 0; first column = +0xEC first column)[2][3] (translation, always 0)",CONSTANT,code,no,LOCAL,0x00000000
+block,0x610,f32,side-attack strength (steer x 0.4),INPUT,code,no,INPUT,0x00000000
+block,0x614,s8 | pad,+614 side-attack direction | +615 padding,INPUT,code,no,INPUT,0x00000000
+block,0x618,u32,unused,CONSTANT,code,no,LOCAL,0x00000000
+block,0x61C,u32 bits,ground/air flags,STATE,code,yes,SEND,0x02000000
++0x484 CPU,0x000,u32 bits,"CPU flags (bit31 boost, bit30 0x1000, bit20 spin; state bits)",STATE,code,yes,SEND,0x1A0E0000
++0x484 CPU,0x004,f32,AI steer output,INPUT,code,yes,INPUT,0xBFFFFFFF
++0x484 CPU,0x008,f32,AI pitch output,INPUT,code,yes,INPUT,0xBFFFE000
++0x484 CPU,0x00C,f32,AI accelerator output (rubber-banded),INPUT,code,yes,INPUT,0x3FFFFFFF
++0x484 CPU,0x010,f32,AI brake output,INPUT,code,no,INPUT,0x00000000
++0x484 CPU,0x014,f32,AI strafe output,INPUT,code,yes,INPUT,0xBFFFFFFF
++0x484 CPU,0x018,f32 x3,lateral target and its smoothing[0],STATE,code,yes,SEND,0x8FFFFFFF
++0x484 CPU,0x01C,f32 x3,lateral target and its smoothing[1],STATE,code,yes,SEND,0x8FFFFFFF
++0x484 CPU,0x020,f32 x3,lateral target and its smoothing[2],STATE,code,yes,SEND,0x8FFFFFFF
++0x484 CPU,0x024,f32,per-CPU constant (8.1 here; personality),SETUP,inferred,no,ONCE,0x00000000
++0x484 CPU,0x028,u8 x4,"behaviour state, next state, target machine (0x63 none), byte",STATE,code,yes,SEND,0x05007FFF
++0x484 CPU,0x02C,u8 x4,AI timers,STATE,code,yes,SEND,0x3F007F3F
++0x484 CPU,0x030,u8 x4,route (racing line) choice and pending change,STATE,code,yes,SEND,0x0F000000
++0x484 CPU,0x034,u8 x4,AI bytes incl. random hold timer (+0x37),STATE,code,yes,SEND,0x0000FE00
++0x484 CPU,0x038,u8 x4,"personality index (+0x38), cooldown (+0x3A)",STATE,code,yes,SEND,0x0000FF00
++0x484 CPU,0x03C,s32,cached checkpoint (fn_1_214C4),STATE,code,yes,SEND,0x000000FF
++0x484 CPU,0x040,u32,heap id (3),CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x044,f32,last lap distance,STATE,code,yes,SEND,0x7FFFFFFF
++0x484 CPU,0x048,u32 x16,unused tail[0],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x04C,u32 x16,unused tail[1],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x050,u32 x16,unused tail[2],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x054,u32 x16,unused tail[3],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x058,u32 x16,unused tail[4],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x05C,u32 x16,unused tail[5],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x060,u32 x16,unused tail[6],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x064,u32 x16,unused tail[7],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x068,u32 x16,unused tail[8],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x06C,u32 x16,unused tail[9],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x070,u32 x16,unused tail[10],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x074,u32 x16,unused tail[11],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x078,u32 x16,unused tail[12],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x07C,u32 x16,unused tail[13],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x080,u32 x16,unused tail[14],CONSTANT,code,no,LOCAL,0x00000000
++0x484 CPU,0x084,u32 x16,unused tail[15],CONSTANT,code,no,LOCAL,0x00000000
++0x488[0],0x000,ptr,pointer to the previous result (half at +0x08 or +0x64),STATE,code,yes,CACHE,0x000003EC
++0x488[0],0x004,ptr,pointer to the latest result,STATE,code,yes,CACHE,0x000003EC
++0x488[0],0x008,u32,result A: hit count (1 off branches),STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x00C,u32 bits,result A: flags,STATE,inferred,yes,CACHE,0xF2000C00
++0x488[0],0x010,u32,result A: word (0),STATE,guess,no,CACHE,0x00000000
++0x488[0],0x014,u32 x4,result A: per-branch words [4] (0)[0],STATE,guess,no,CACHE,0x00000000
++0x488[0],0x018,u32 x4,result A: per-branch words [4] (0)[1],STATE,guess,no,CACHE,0x00000000
++0x488[0],0x01C,u32 x4,result A: per-branch words [4] (0)[2],STATE,guess,no,CACHE,0x00000000
++0x488[0],0x020,u32 x4,result A: per-branch words [4] (0)[3],STATE,guess,no,CACHE,0x00000000
++0x488[0],0x024,ptr x4,result A: track segment per branch [4][0],STATE,inferred,yes,CACHE,0x80707FFC
++0x488[0],0x028,ptr x4,result A: track segment per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x02C,ptr x4,result A: track segment per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x030,ptr x4,result A: track segment per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x034,f32 x4,result A: distance along the segment per branch [4] (counts down)[0],STATE,inferred,yes,CACHE,0x7DFFFFFF
++0x488[0],0x038,f32 x4,result A: distance along the segment per branch [4] (counts down)[1],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x03C,f32 x4,result A: distance along the segment per branch [4] (counts down)[2],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x040,f32 x4,result A: distance along the segment per branch [4] (counts down)[3],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x044,u32 x4,result A: segment flags per branch [4][0],STATE,inferred,yes,CACHE,0xF2000C00
++0x488[0],0x048,u32 x4,result A: segment flags per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x04C,u32 x4,result A: segment flags per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x050,u32 x4,result A: segment flags per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x054,s32 x4,result A: checkpoint index per branch [4][0],STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x488[0],0x058,s32 x4,result A: checkpoint index per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x05C,s32 x4,result A: checkpoint index per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x060,s32 x4,result A: checkpoint index per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x064,u32,result B: hit count (1 off branches),STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x068,u32 bits,result B: flags,STATE,inferred,yes,CACHE,0xF2000C00
++0x488[0],0x06C,u32,result B: word (0),STATE,guess,no,CACHE,0x00000000
++0x488[0],0x070,u32 x4,result B: per-branch words [4] (0)[0],STATE,guess,no,CACHE,0x00000000
++0x488[0],0x074,u32 x4,result B: per-branch words [4] (0)[1],STATE,guess,no,CACHE,0x00000000
++0x488[0],0x078,u32 x4,result B: per-branch words [4] (0)[2],STATE,guess,no,CACHE,0x00000000
++0x488[0],0x07C,u32 x4,result B: per-branch words [4] (0)[3],STATE,guess,no,CACHE,0x00000000
++0x488[0],0x080,ptr x4,result B: track segment per branch [4][0],STATE,inferred,yes,CACHE,0x80707FFC
++0x488[0],0x084,ptr x4,result B: track segment per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x088,ptr x4,result B: track segment per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x08C,ptr x4,result B: track segment per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x090,f32 x4,result B: distance along the segment per branch [4] (counts down)[0],STATE,inferred,yes,CACHE,0x7DFFFFFF
++0x488[0],0x094,f32 x4,result B: distance along the segment per branch [4] (counts down)[1],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x098,f32 x4,result B: distance along the segment per branch [4] (counts down)[2],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x09C,f32 x4,result B: distance along the segment per branch [4] (counts down)[3],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x0A0,u32 x4,result B: segment flags per branch [4][0],STATE,inferred,yes,CACHE,0xF2000C00
++0x488[0],0x0A4,u32 x4,result B: segment flags per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x0A8,u32 x4,result B: segment flags per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x0AC,u32 x4,result B: segment flags per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x0B0,s32 x4,result B: checkpoint index per branch [4][0],STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x488[0],0x0B4,s32 x4,result B: checkpoint index per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x0B8,s32 x4,result B: checkpoint index per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[0],0x0BC,s32 x4,result B: checkpoint index per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x000,ptr,pointer to the previous result (half at +0x08 or +0x64),STATE,code,yes,CACHE,0x00007FEC
++0x488[1],0x004,ptr,pointer to the latest result,STATE,code,yes,CACHE,0x00007FEC
++0x488[1],0x008,u32,result A: hit count (1 off branches),STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x00C,u32 bits,result A: flags,STATE,inferred,yes,CACHE,0xF2000C00
++0x488[1],0x010,u32,result A: word (0),STATE,guess,no,CACHE,0x00000000
++0x488[1],0x014,u32 x4,result A: per-branch words [4] (0)[0],STATE,guess,no,CACHE,0x00000000
++0x488[1],0x018,u32 x4,result A: per-branch words [4] (0)[1],STATE,guess,no,CACHE,0x00000000
++0x488[1],0x01C,u32 x4,result A: per-branch words [4] (0)[2],STATE,guess,no,CACHE,0x00000000
++0x488[1],0x020,u32 x4,result A: per-branch words [4] (0)[3],STATE,guess,no,CACHE,0x00000000
++0x488[1],0x024,ptr x4,result A: track segment per branch [4][0],STATE,inferred,yes,CACHE,0x80707FFC
++0x488[1],0x028,ptr x4,result A: track segment per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x02C,ptr x4,result A: track segment per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x030,ptr x4,result A: track segment per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x034,f32 x4,result A: distance along the segment per branch [4] (counts down)[0],STATE,inferred,yes,CACHE,0x7DFFFFFF
++0x488[1],0x038,f32 x4,result A: distance along the segment per branch [4] (counts down)[1],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x03C,f32 x4,result A: distance along the segment per branch [4] (counts down)[2],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x040,f32 x4,result A: distance along the segment per branch [4] (counts down)[3],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x044,u32 x4,result A: segment flags per branch [4][0],STATE,inferred,yes,CACHE,0xF2000C00
++0x488[1],0x048,u32 x4,result A: segment flags per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x04C,u32 x4,result A: segment flags per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x050,u32 x4,result A: segment flags per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x054,s32 x4,result A: checkpoint index per branch [4][0],STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x488[1],0x058,s32 x4,result A: checkpoint index per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x05C,s32 x4,result A: checkpoint index per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x060,s32 x4,result A: checkpoint index per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x064,u32,result B: hit count (1 off branches),STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x068,u32 bits,result B: flags,STATE,inferred,yes,CACHE,0xF2000C00
++0x488[1],0x06C,u32,result B: word (0),STATE,guess,no,CACHE,0x00000000
++0x488[1],0x070,u32 x4,result B: per-branch words [4] (0)[0],STATE,guess,no,CACHE,0x00000000
++0x488[1],0x074,u32 x4,result B: per-branch words [4] (0)[1],STATE,guess,no,CACHE,0x00000000
++0x488[1],0x078,u32 x4,result B: per-branch words [4] (0)[2],STATE,guess,no,CACHE,0x00000000
++0x488[1],0x07C,u32 x4,result B: per-branch words [4] (0)[3],STATE,guess,no,CACHE,0x00000000
++0x488[1],0x080,ptr x4,result B: track segment per branch [4][0],STATE,inferred,yes,CACHE,0x80707FFC
++0x488[1],0x084,ptr x4,result B: track segment per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x088,ptr x4,result B: track segment per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x08C,ptr x4,result B: track segment per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x090,f32 x4,result B: distance along the segment per branch [4] (counts down)[0],STATE,inferred,yes,CACHE,0x7DFFFFFF
++0x488[1],0x094,f32 x4,result B: distance along the segment per branch [4] (counts down)[1],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x098,f32 x4,result B: distance along the segment per branch [4] (counts down)[2],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x09C,f32 x4,result B: distance along the segment per branch [4] (counts down)[3],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x0A0,u32 x4,result B: segment flags per branch [4][0],STATE,inferred,yes,CACHE,0xF2000C00
++0x488[1],0x0A4,u32 x4,result B: segment flags per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x0A8,u32 x4,result B: segment flags per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x0AC,u32 x4,result B: segment flags per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x0B0,s32 x4,result B: checkpoint index per branch [4][0],STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x488[1],0x0B4,s32 x4,result B: checkpoint index per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x0B8,s32 x4,result B: checkpoint index per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[1],0x0BC,s32 x4,result B: checkpoint index per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x000,ptr,pointer to the previous result (half at +0x08 or +0x64),STATE,code,yes,CACHE,0x00001FEC
++0x488[2],0x004,ptr,pointer to the latest result,STATE,code,yes,CACHE,0x00001FEC
++0x488[2],0x008,u32,result A: hit count (1 off branches),STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x00C,u32 bits,result A: flags,STATE,inferred,yes,CACHE,0xF2000C00
++0x488[2],0x010,u32,result A: word (0),STATE,guess,no,CACHE,0x00000000
++0x488[2],0x014,u32 x4,result A: per-branch words [4] (0)[0],STATE,guess,no,CACHE,0x00000000
++0x488[2],0x018,u32 x4,result A: per-branch words [4] (0)[1],STATE,guess,no,CACHE,0x00000000
++0x488[2],0x01C,u32 x4,result A: per-branch words [4] (0)[2],STATE,guess,no,CACHE,0x00000000
++0x488[2],0x020,u32 x4,result A: per-branch words [4] (0)[3],STATE,guess,no,CACHE,0x00000000
++0x488[2],0x024,ptr x4,result A: track segment per branch [4][0],STATE,inferred,yes,CACHE,0x80707FFC
++0x488[2],0x028,ptr x4,result A: track segment per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x02C,ptr x4,result A: track segment per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x030,ptr x4,result A: track segment per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x034,f32 x4,result A: distance along the segment per branch [4] (counts down)[0],STATE,inferred,yes,CACHE,0x7DFFFFFF
++0x488[2],0x038,f32 x4,result A: distance along the segment per branch [4] (counts down)[1],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x03C,f32 x4,result A: distance along the segment per branch [4] (counts down)[2],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x040,f32 x4,result A: distance along the segment per branch [4] (counts down)[3],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x044,u32 x4,result A: segment flags per branch [4][0],STATE,inferred,yes,CACHE,0xF2000C00
++0x488[2],0x048,u32 x4,result A: segment flags per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x04C,u32 x4,result A: segment flags per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x050,u32 x4,result A: segment flags per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x054,s32 x4,result A: checkpoint index per branch [4][0],STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x488[2],0x058,s32 x4,result A: checkpoint index per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x05C,s32 x4,result A: checkpoint index per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x060,s32 x4,result A: checkpoint index per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x064,u32,result B: hit count (1 off branches),STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x068,u32 bits,result B: flags,STATE,inferred,yes,CACHE,0xF2000C00
++0x488[2],0x06C,u32,result B: word (0),STATE,guess,no,CACHE,0x00000000
++0x488[2],0x070,u32 x4,result B: per-branch words [4] (0)[0],STATE,guess,no,CACHE,0x00000000
++0x488[2],0x074,u32 x4,result B: per-branch words [4] (0)[1],STATE,guess,no,CACHE,0x00000000
++0x488[2],0x078,u32 x4,result B: per-branch words [4] (0)[2],STATE,guess,no,CACHE,0x00000000
++0x488[2],0x07C,u32 x4,result B: per-branch words [4] (0)[3],STATE,guess,no,CACHE,0x00000000
++0x488[2],0x080,ptr x4,result B: track segment per branch [4][0],STATE,inferred,yes,CACHE,0x80707FFC
++0x488[2],0x084,ptr x4,result B: track segment per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x088,ptr x4,result B: track segment per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x08C,ptr x4,result B: track segment per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x090,f32 x4,result B: distance along the segment per branch [4] (counts down)[0],STATE,inferred,yes,CACHE,0x7DFFFFFF
++0x488[2],0x094,f32 x4,result B: distance along the segment per branch [4] (counts down)[1],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x098,f32 x4,result B: distance along the segment per branch [4] (counts down)[2],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x09C,f32 x4,result B: distance along the segment per branch [4] (counts down)[3],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x0A0,u32 x4,result B: segment flags per branch [4][0],STATE,inferred,yes,CACHE,0xF2000C00
++0x488[2],0x0A4,u32 x4,result B: segment flags per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x0A8,u32 x4,result B: segment flags per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x0AC,u32 x4,result B: segment flags per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x0B0,s32 x4,result B: checkpoint index per branch [4][0],STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x488[2],0x0B4,s32 x4,result B: checkpoint index per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x0B8,s32 x4,result B: checkpoint index per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[2],0x0BC,s32 x4,result B: checkpoint index per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x000,ptr,pointer to the previous result (half at +0x08 or +0x64),STATE,code,yes,CACHE,0x00003FEC
++0x488[3],0x004,ptr,pointer to the latest result,STATE,code,yes,CACHE,0x00003FEC
++0x488[3],0x008,u32,result A: hit count (1 off branches),STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x00C,u32 bits,result A: flags,STATE,inferred,yes,CACHE,0xF2000C00
++0x488[3],0x010,u32,result A: word (0),STATE,guess,no,CACHE,0x00000000
++0x488[3],0x014,u32 x4,result A: per-branch words [4] (0)[0],STATE,guess,no,CACHE,0x00000000
++0x488[3],0x018,u32 x4,result A: per-branch words [4] (0)[1],STATE,guess,no,CACHE,0x00000000
++0x488[3],0x01C,u32 x4,result A: per-branch words [4] (0)[2],STATE,guess,no,CACHE,0x00000000
++0x488[3],0x020,u32 x4,result A: per-branch words [4] (0)[3],STATE,guess,no,CACHE,0x00000000
++0x488[3],0x024,ptr x4,result A: track segment per branch [4][0],STATE,inferred,yes,CACHE,0x80707FFC
++0x488[3],0x028,ptr x4,result A: track segment per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x02C,ptr x4,result A: track segment per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x030,ptr x4,result A: track segment per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x034,f32 x4,result A: distance along the segment per branch [4] (counts down)[0],STATE,inferred,yes,CACHE,0x7DFFFFFF
++0x488[3],0x038,f32 x4,result A: distance along the segment per branch [4] (counts down)[1],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x03C,f32 x4,result A: distance along the segment per branch [4] (counts down)[2],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x040,f32 x4,result A: distance along the segment per branch [4] (counts down)[3],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x044,u32 x4,result A: segment flags per branch [4][0],STATE,inferred,yes,CACHE,0xF2000C00
++0x488[3],0x048,u32 x4,result A: segment flags per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x04C,u32 x4,result A: segment flags per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x050,u32 x4,result A: segment flags per branch [4][3],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x054,s32 x4,result A: checkpoint index per branch [4][0],STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x488[3],0x058,s32 x4,result A: checkpoint index per branch [4][1],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x05C,s32 x4,result A: checkpoint index per branch [4][2],STATE,inferred,no,CACHE,0x00000000
++0x488[3],0x060,s32 x4,result A: checkpoint index per branch [4][3],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x064,u32,result B: hit count (1 off branches),STATE,inferred,no(dumps),CACHE,
++0x488[3],0x068,u32 bits,result B: flags,STATE,inferred,no(dumps),CACHE,
++0x488[3],0x06C,u32,result B: word (0),STATE,guess,no(dumps),CACHE,
++0x488[3],0x070,u32 x4,result B: per-branch words [4] (0)[0],STATE,guess,no(dumps),CACHE,
++0x488[3],0x074,u32 x4,result B: per-branch words [4] (0)[1],STATE,guess,no(dumps),CACHE,
++0x488[3],0x078,u32 x4,result B: per-branch words [4] (0)[2],STATE,guess,no(dumps),CACHE,
++0x488[3],0x07C,u32 x4,result B: per-branch words [4] (0)[3],STATE,guess,no(dumps),CACHE,
++0x488[3],0x080,ptr x4,result B: track segment per branch [4][0],STATE,inferred,yes(dumps),CACHE,
++0x488[3],0x084,ptr x4,result B: track segment per branch [4][1],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x088,ptr x4,result B: track segment per branch [4][2],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x08C,ptr x4,result B: track segment per branch [4][3],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x090,f32 x4,result B: distance along the segment per branch [4] (counts down)[0],STATE,inferred,yes(dumps),CACHE,
++0x488[3],0x094,f32 x4,result B: distance along the segment per branch [4] (counts down)[1],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x098,f32 x4,result B: distance along the segment per branch [4] (counts down)[2],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x09C,f32 x4,result B: distance along the segment per branch [4] (counts down)[3],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x0A0,u32 x4,result B: segment flags per branch [4][0],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x0A4,u32 x4,result B: segment flags per branch [4][1],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x0A8,u32 x4,result B: segment flags per branch [4][2],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x0AC,u32 x4,result B: segment flags per branch [4][3],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x0B0,s32 x4,result B: checkpoint index per branch [4][0],STATE,inferred,yes(dumps),CACHE,
++0x488[3],0x0B4,s32 x4,result B: checkpoint index per branch [4][1],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x0B8,s32 x4,result B: checkpoint index per branch [4][2],STATE,inferred,no(dumps),CACHE,
++0x488[3],0x0BC,s32 x4,result B: checkpoint index per branch [4][3],STATE,inferred,no(dumps),CACHE,
++0x498,0x000,u32,path depth / node count (3),STATE,inferred,yes,CACHE,0x00000003
++0x498,0x004,ptr x10,track-segment node path (5 used here)[0],STATE,inferred,yes,CACHE,0x00003FFC
++0x498,0x008,ptr x10,track-segment node path (5 used here)[1],STATE,inferred,yes,CACHE,0x0000198C
++0x498,0x00C,ptr x10,track-segment node path (5 used here)[2],STATE,inferred,yes,CACHE,0x0000198C
++0x498,0x010,ptr x10,track-segment node path (5 used here)[3],STATE,inferred,yes,CACHE,0x80706EB8
++0x498,0x014,ptr x10,track-segment node path (5 used here)[4],STATE,inferred,yes,CACHE,0x80706F08
++0x498,0x018,ptr x10,track-segment node path (5 used here)[5],STATE,inferred,no,CACHE,0x00000000
++0x498,0x01C,ptr x10,track-segment node path (5 used here)[6],STATE,inferred,no,CACHE,0x00000000
++0x498,0x020,ptr x10,track-segment node path (5 used here)[7],STATE,inferred,no,CACHE,0x00000000
++0x498,0x024,ptr x10,track-segment node path (5 used here)[8],STATE,inferred,no,CACHE,0x00000000
++0x498,0x028,ptr x10,track-segment node path (5 used here)[9],STATE,inferred,no,CACHE,0x00000000
++0x498,0x02C,s32 x14,child indices along the path (5 used here)[0],STATE,guess,yes,CACHE,0x0000001F
++0x498,0x030,s32 x14,child indices along the path (5 used here)[1],STATE,guess,yes,CACHE,0x0000001F
++0x498,0x034,s32 x14,child indices along the path (5 used here)[2],STATE,guess,yes,CACHE,0x0000001F
++0x498,0x038,s32 x14,child indices along the path (5 used here)[3],STATE,guess,yes,CACHE,0x0000001F
++0x498,0x03C,s32 x14,child indices along the path (5 used here)[4],STATE,guess,yes,CACHE,0x0000001F
++0x498,0x040,s32 x14,child indices along the path (5 used here)[5],STATE,guess,yes,CACHE,0x0000000F
++0x498,0x044,s32 x14,child indices along the path (5 used here)[6],STATE,guess,yes,CACHE,0x0000000F
++0x498,0x048,s32 x14,child indices along the path (5 used here)[7],STATE,guess,no,CACHE,0x00000000
++0x498,0x04C,s32 x14,child indices along the path (5 used here)[8],STATE,guess,no,CACHE,0x00000000
++0x498,0x050,s32 x14,child indices along the path (5 used here)[9],STATE,guess,no,CACHE,0x00000000
++0x498,0x054,s32 x14,child indices along the path (5 used here)[10],STATE,guess,no,CACHE,0x00000000
++0x498,0x058,s32 x14,child indices along the path (5 used here)[11],STATE,guess,no,CACHE,0x00000000
++0x498,0x05C,s32 x14,child indices along the path (5 used here)[12],STATE,guess,no,CACHE,0x00000000
++0x498,0x060,s32 x14,child indices along the path (5 used here)[13],STATE,guess,no,CACHE,0x00000000
++0x498,0x064,u32,second count (3),STATE,guess,yes,CACHE,0x00000007
++0x498,0x068,u32 x75,rest of the record (0 throughout)[0],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x06C,u32 x75,rest of the record (0 throughout)[1],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x070,u32 x75,rest of the record (0 throughout)[2],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x074,u32 x75,rest of the record (0 throughout)[3],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x078,u32 x75,rest of the record (0 throughout)[4],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x07C,u32 x75,rest of the record (0 throughout)[5],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x080,u32 x75,rest of the record (0 throughout)[6],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x084,u32 x75,rest of the record (0 throughout)[7],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x088,u32 x75,rest of the record (0 throughout)[8],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x08C,u32 x75,rest of the record (0 throughout)[9],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x090,u32 x75,rest of the record (0 throughout)[10],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x094,u32 x75,rest of the record (0 throughout)[11],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x098,u32 x75,rest of the record (0 throughout)[12],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x09C,u32 x75,rest of the record (0 throughout)[13],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0A0,u32 x75,rest of the record (0 throughout)[14],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0A4,u32 x75,rest of the record (0 throughout)[15],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0A8,u32 x75,rest of the record (0 throughout)[16],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0AC,u32 x75,rest of the record (0 throughout)[17],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0B0,u32 x75,rest of the record (0 throughout)[18],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0B4,u32 x75,rest of the record (0 throughout)[19],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0B8,u32 x75,rest of the record (0 throughout)[20],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0BC,u32 x75,rest of the record (0 throughout)[21],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0C0,u32 x75,rest of the record (0 throughout)[22],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0C4,u32 x75,rest of the record (0 throughout)[23],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0C8,u32 x75,rest of the record (0 throughout)[24],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0CC,u32 x75,rest of the record (0 throughout)[25],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0D0,u32 x75,rest of the record (0 throughout)[26],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0D4,u32 x75,rest of the record (0 throughout)[27],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0D8,u32 x75,rest of the record (0 throughout)[28],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0DC,u32 x75,rest of the record (0 throughout)[29],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0E0,u32 x75,rest of the record (0 throughout)[30],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0E4,u32 x75,rest of the record (0 throughout)[31],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0E8,u32 x75,rest of the record (0 throughout)[32],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0EC,u32 x75,rest of the record (0 throughout)[33],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0F0,u32 x75,rest of the record (0 throughout)[34],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0F4,u32 x75,rest of the record (0 throughout)[35],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0F8,u32 x75,rest of the record (0 throughout)[36],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x0FC,u32 x75,rest of the record (0 throughout)[37],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x100,u32 x75,rest of the record (0 throughout)[38],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x104,u32 x75,rest of the record (0 throughout)[39],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x108,u32 x75,rest of the record (0 throughout)[40],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x10C,u32 x75,rest of the record (0 throughout)[41],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x110,u32 x75,rest of the record (0 throughout)[42],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x114,u32 x75,rest of the record (0 throughout)[43],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x118,u32 x75,rest of the record (0 throughout)[44],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x11C,u32 x75,rest of the record (0 throughout)[45],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x120,u32 x75,rest of the record (0 throughout)[46],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x124,u32 x75,rest of the record (0 throughout)[47],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x128,u32 x75,rest of the record (0 throughout)[48],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x12C,u32 x75,rest of the record (0 throughout)[49],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x130,u32 x75,rest of the record (0 throughout)[50],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x134,u32 x75,rest of the record (0 throughout)[51],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x138,u32 x75,rest of the record (0 throughout)[52],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x13C,u32 x75,rest of the record (0 throughout)[53],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x140,u32 x75,rest of the record (0 throughout)[54],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x144,u32 x75,rest of the record (0 throughout)[55],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x148,u32 x75,rest of the record (0 throughout)[56],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x14C,u32 x75,rest of the record (0 throughout)[57],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x150,u32 x75,rest of the record (0 throughout)[58],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x154,u32 x75,rest of the record (0 throughout)[59],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x158,u32 x75,rest of the record (0 throughout)[60],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x15C,u32 x75,rest of the record (0 throughout)[61],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x160,u32 x75,rest of the record (0 throughout)[62],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x164,u32 x75,rest of the record (0 throughout)[63],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x168,u32 x75,rest of the record (0 throughout)[64],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x16C,u32 x75,rest of the record (0 throughout)[65],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x170,u32 x75,rest of the record (0 throughout)[66],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x174,u32 x75,rest of the record (0 throughout)[67],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x178,u32 x75,rest of the record (0 throughout)[68],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x17C,u32 x75,rest of the record (0 throughout)[69],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x180,u32 x75,rest of the record (0 throughout)[70],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x184,u32 x75,rest of the record (0 throughout)[71],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x188,u32 x75,rest of the record (0 throughout)[72],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x18C,u32 x75,rest of the record (0 throughout)[73],UNKNOWN,guess,no,CACHE,0x00000000
++0x498,0x190,u32 x75,rest of the record (0 throughout)[74],UNKNOWN,guess,no,CACHE,0x00000000
++0x49C,0x000,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[0][0]",STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x004,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[0][1]",STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x008,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[0][2]",STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x00C,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[0][3]",STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x010,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[1][0]",STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x014,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[1][1]",STATE,inferred,yes,CACHE,0x87FFFFFF
++0x49C,0x018,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[1][2]",STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x01C,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[1][3]",STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x020,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[2][0]",STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x024,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[2][1]",STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x028,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[2][2]",STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x02C,mtx3x4 f32,"track frame at the machine (columns right, up, back, centre of track)[2][3]",STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x030,f32,segment parameter (tracks the corner distance; community: track width),STATE,guess,yes,CACHE,0x01FFFFFF
++0x49C,0x034,f32 x2,half widths / limits (60 here; 200-400 in BBO)[0],STATE,guess,yes,CACHE,0x7DF00000
++0x49C,0x038,f32 x2,half widths / limits (60 here; 200-400 in BBO)[1],STATE,guess,yes,CACHE,0x7DF00000
++0x49C,0x03C,f32 x2,floats (0)[0],STATE,guess,no,CACHE,0x00000000
++0x49C,0x040,f32 x2,floats (0)[1],STATE,guess,no,CACHE,0x00000000
++0x49C,0x044,vec3 f32,centre of track (copy).x,STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x048,vec3 f32,centre of track (copy).y,STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x04C,vec3 f32,centre of track (copy).z,STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x050,vec3 f32,forward vector at the centre of track.x,STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x054,vec3 f32,forward vector at the centre of track.y,STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x058,vec3 f32,forward vector at the centre of track.z,STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x05C,vec3 f32,up vector at the centre of track.x,STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x060,vec3 f32,up vector at the centre of track.y,STATE,inferred,yes,CACHE,0x87FFFFFF
++0x49C,0x064,vec3 f32,up vector at the centre of track.z,STATE,inferred,yes,CACHE,0xBFFFFFFF
++0x49C,0x068,f32,segment parameter (copy of +0x30),STATE,guess,yes,CACHE,0x01FFFFFF
++0x49C,0x06C,f32,1.0,CONSTANT,inferred,no,LOCAL,0x00000000
++0x49C,0x070,vec3 f32,centre of track (copy 2).x,STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x074,vec3 f32,centre of track (copy 2).y,STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x078,vec3 f32,centre of track (copy 2).z,STATE,inferred,yes,CACHE,0xFFFFFFFF
++0x49C,0x07C,u32 bits,intersection / segment flags,STATE,inferred,no,CACHE,0x00000000
++0x49C,0x080,u32,word (0),STATE,guess,no,CACHE,0x00000000
++0x49C,0x084,f32,segment parameter (copy kept by ranking),STATE,inferred,yes,CACHE,0x01FFFFFF
++0x49C,0x088,u32 x2,"words (1, 0)[0]",STATE,guess,no,CACHE,0x00000000
++0x49C,0x08C,u32 x2,"words (1, 0)[1]",STATE,guess,no,CACHE,0x00000000
++0x49C,0x090,ptr,pointer to the active checkpoint slot (+0xB8/+0xBC/+0xC0),STATE,code,yes,CACHE,0x000007E0
++0x49C,0x094,ptr,pointer to the active fraction slot (+0xC8/+0xCC/+0xD0),STATE,code,yes,CACHE,0x000007E0
++0x49C,0x098,u32,branch count (1),STATE,inferred,no,CACHE,0x00000000
++0x49C,0x09C,s32,checkpoint index (ground),STATE,code,yes,CACHE,0xFFFFFFFF
++0x49C,0x0A0,u32 x3,words (0)[0],STATE,guess,no,CACHE,0x00000000
++0x49C,0x0A4,u32 x3,words (0)[1],STATE,guess,no,CACHE,0x00000000
++0x49C,0x0A8,u32 x3,words (0)[2],STATE,guess,no,CACHE,0x00000000
++0x49C,0x0AC,vec3 f32,position at the progress pass (= +0x7C).x,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
++0x49C,0x0B0,vec3 f32,position at the progress pass (= +0x7C).y,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
++0x49C,0x0B4,vec3 f32,position at the progress pass (= +0x7C).z,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
++0x49C,0x0B8,s32 x3,checkpoint index per branch[0],STATE,code,yes,CACHE,0x000000FF
++0x49C,0x0BC,s32 x3,checkpoint index per branch[1],STATE,code,no,CACHE,0x00000000
++0x49C,0x0C0,s32 x3,checkpoint index per branch[2],STATE,code,no,CACHE,0x00000000
++0x49C,0x0C4,u32,word (0),STATE,guess,no,CACHE,0x00000000
++0x49C,0x0C8,f32 x3,checkpoint fraction per branch[0],STATE,code,yes,CACHE,0x0FFFFFFF
++0x49C,0x0CC,f32 x3,checkpoint fraction per branch[1],STATE,code,no,CACHE,0x00000000
++0x49C,0x0D0,f32 x3,checkpoint fraction per branch[2],STATE,code,no,CACHE,0x00000000
++0x49C,0x0D4,u32,word (0),STATE,guess,no,CACHE,0x00000000
++0x49C,0x0D8,s32,"checkpoint, airborne only (-1 on ground)",STATE,code,yes,CACHE,0xFFFFFFDF
++0x49C,0x0DC,u32 x3,unused (0)[0],CONSTANT,code,no,LOCAL,0x00000000
++0x49C,0x0E0,u32 x3,unused (0)[1],CONSTANT,code,no,LOCAL,0x00000000
++0x49C,0x0E4,u32 x3,unused (0)[2],CONSTANT,code,no,LOCAL,0x00000000
++0x49C,0x0E8,f32,checkpoint fraction (copy of machine +0x1D0),STATE,code,yes,CACHE,0x0FFFFFFF
++0x49C,0x0EC,u32 x3,unused (0)[0],CONSTANT,code,no,LOCAL,0x00000000
++0x49C,0x0F0,u32 x3,unused (0)[1],CONSTANT,code,no,LOCAL,0x00000000
++0x49C,0x0F4,u32 x3,unused (0)[2],CONSTANT,code,no,LOCAL,0x00000000
++0x49C,0x0F8,f32,distance covered over all laps,STATE,code,yes,SEND,0xFFFFFFFF
++0x49C,0x0FC,f32,lap length (7959 m on Twist Road),CONSTANT,code,no,LOCAL,0x00000000
++0x49C,0x100,f32,lap distance (track-relative position),STATE,code,yes,SEND,0x7FFFFFFF
++0x49C,0x104,s16 | pad,+104 yaw relative to the track | +106 padding,DERIVED,inferred,yes,RECOMPUTE,0xFFFF0000
++0x49C,0x108,f32,lateral offset from the track centre,STATE,inferred,yes,SEND,0xFFFFFFFF
++0x49C,0x10C,u32,reverse status (byte +0x10F),EVENT,inferred,no,SEND-EV,0x00000000
++0x49C,0x110,u32,out-of-reverse bit (byte +0x113),EVENT,inferred,no,SEND-EV,0x00000000
++0x49C,0x114,u8 | u8 | u8 x2,+114 reverse indicator timer | +115 rank | +116 ranking bytes,EVENT,inferred,yes,SEND-EV,0x001F0003
++0x49C,0x118,s32,laps completed (latest),EVENT,code,yes,SEND-EV,0x00000003
++0x49C,0x11C,s32,lap number at the current position (-1 before the line),EVENT,code,yes,SEND-EV,0xFFFFFFFF
++0x49C,0x120,s32 x3,"checkpoint index, ground, per branch[0]",STATE,code,yes,CACHE,0x000000FF
++0x49C,0x124,s32 x3,"checkpoint index, ground, per branch[1]",STATE,code,no,CACHE,0x00000000
++0x49C,0x128,s32 x3,"checkpoint index, ground, per branch[2]",STATE,code,no,CACHE,0x00000000
++0x49C,0x12C,u32,word (0),STATE,guess,no,CACHE,0x00000000
++0x49C,0x130,f32 x3,"checkpoint fraction, ground, per branch[0]",STATE,code,yes,CACHE,0x0FFFFFFF
++0x49C,0x134,f32 x3,"checkpoint fraction, ground, per branch[1]",STATE,code,no,CACHE,0x00000000
++0x49C,0x138,f32 x3,"checkpoint fraction, ground, per branch[2]",STATE,code,no,CACHE,0x00000000
++0x49C,0x13C,u32,word (0),STATE,guess,no,CACHE,0x00000000
++0x49C,0x140,s32,"checkpoint index, ground",STATE,code,yes,CACHE,0x000000FF
++0x49C,0x144,f32,"checkpoint fraction, ground",STATE,code,yes,CACHE,0x0FFFFFFF
++0x49C,0x148,vec3 f32,"position, updated only on the ground.x",STATE,code,yes,SEND,0xFFFFFFFF
++0x49C,0x14C,vec3 f32,"position, updated only on the ground.y",STATE,code,yes,SEND,0xFFFFFFFF
++0x49C,0x150,vec3 f32,"position, updated only on the ground.z",STATE,code,yes,SEND,0xFFFFFFFF
++0x49C,0x154,s32,"laps completed, ground",EVENT,code,yes,SEND-EV,0x00000003
++0x49C,0x158,s32,"lap number at the position, ground",EVENT,code,yes,SEND-EV,0xFFFFFFFF
++0x49C,0x15C,s32,-1 marker,EVENT,guess,no,SEND-EV,0x00000000
++0x49C,0x160,time,"current lap time (frames u32, fraction f32, min u8, s u8, ms u16).frames",STATE,code,yes,SEND,0x00000FFF
++0x49C,0x164,time,"current lap time (frames u32, fraction f32, min u8, s u8, ms u16).fraction",STATE,code,yes,SEND,0x3FFFFFFF
++0x49C,0x168,time,"current lap time (frames u32, fraction f32, min u8, s u8, ms u16).min/s/ms",STATE,code,yes,SEND,0x003F03FF
++0x49C,0x16C,time,lap time 1 lap ago.frames,EVENT,code,yes,SEND-EV,0x00000FFF
++0x49C,0x170,time,lap time 1 lap ago.fraction,EVENT,code,yes,SEND-EV,0x3FFFFFFF
++0x49C,0x174,time,lap time 1 lap ago.min/s/ms,EVENT,code,yes,SEND-EV,0x003F03FF
++0x49C,0x178,time,lap time 2 laps ago.frames,EVENT,code,yes,SEND-EV,0x00000FFF
++0x49C,0x17C,time,lap time 2 laps ago.fraction,EVENT,code,yes,SEND-EV,0x3FFFFFFF
++0x49C,0x180,time,lap time 2 laps ago.min/s/ms,EVENT,code,yes,SEND-EV,0x003F03FF
++0x49C,0x184,time,lap time 3 laps ago.frames,EVENT,code,yes,SEND-EV,0x00000FFF
++0x49C,0x188,time,lap time 3 laps ago.fraction,EVENT,code,yes,SEND-EV,0x3FFFFFFF
++0x49C,0x18C,time,lap time 3 laps ago.min/s/ms,EVENT,code,yes,SEND-EV,0x003F03FF
++0x49C,0x190,time,lap time 4 laps ago.frames,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x194,time,lap time 4 laps ago.fraction,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x198,time,lap time 4 laps ago.min/s/ms,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x19C,time,lap time 5 laps ago.frames,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1A0,time,lap time 5 laps ago.fraction,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1A4,time,lap time 5 laps ago.min/s/ms,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1A8,time,lap time 6 laps ago.frames,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1AC,time,lap time 6 laps ago.fraction,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1B0,time,lap time 6 laps ago.min/s/ms,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1B4,time,lap time 7 laps ago.frames,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1B8,time,lap time 7 laps ago.fraction,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1BC,time,lap time 7 laps ago.min/s/ms,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1C0,time,lap time 8 laps ago.frames,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1C4,time,lap time 8 laps ago.fraction,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1C8,time,lap time 8 laps ago.min/s/ms,EVENT,code,no,SEND-EV,0x00000000
++0x49C,0x1CC,time,best lap time.frames,EVENT,code,yes,SEND-EV,0x00000FFF
++0x49C,0x1D0,time,best lap time.fraction,EVENT,code,yes,SEND-EV,0x3FFFFFFF
++0x49C,0x1D4,time,best lap time.min/s/ms,EVENT,code,yes,SEND-EV,0x003F03FF
++0x49C,0x1D8,time,sum of completed laps.frames,EVENT,code,yes,SEND-EV,0x00001FFF
++0x49C,0x1DC,time,sum of completed laps.fraction,EVENT,code,yes,SEND-EV,0x3FFFFFFF
++0x49C,0x1E0,time,sum of completed laps.min/s/ms,EVENT,code,yes,SEND-EV,0x013F03FF
++0x49C,0x1E4,time,total race time.frames,STATE,code,yes,SEND,0x00001FFF
++0x49C,0x1E8,time,total race time.fraction,STATE,code,yes,SEND,0x3FFFFFFF
++0x49C,0x1EC,time,total race time.min/s/ms,STATE,code,yes,SEND,0x013F03FF
++0x49C,0x1F0,vec3 f32,position copy (= +0x7C at the snapshot).x,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
++0x49C,0x1F4,vec3 f32,position copy (= +0x7C at the snapshot).y,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
++0x49C,0x1F8,vec3 f32,position copy (= +0x7C at the snapshot).z,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF

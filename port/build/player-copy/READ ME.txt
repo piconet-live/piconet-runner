@@ -1,0 +1,36 @@
+@NAME@@BUILD_KIND@, @DATE@
+@VERSION_TEXT@
+Game build @IMAGE@ / @MODULE@ / @RUNNER@ (image / module / runner)
+Server: stack @STACK@ (address: @STACK_ADDRESS@)
+
+You need
+  - Windows 10 or 11, 64-bit, a processor from about 2015 or later (AVX2), a graphics card with Vulkan.
+  - Your own F-Zero GX, USA version, as a plain .iso file. Nothing of the game is in this folder.
+
+Steps
+  1. Unzip the whole folder somewhere with 2 GB free. No install.
+  2. Start "@PROGRAM@", the program in this folder. On the first screen choose your .iso and press
+     CONTINUE: the game is prepared from it, once only (about 1.5 GB, a minute or so).
+  3. Controller: plug it in before you start. A gamepad or a GameCube adapter is picked up by itself the first
+     time. To check or change it: Settings, Controller. The picture there shows what the game sees.
+  4. Play F-Zero GX for offline play, or RACE for Quick Play.
+
+If you have an earlier copy
+  - Unzip this copy into a new folder of its own, never over the old one.
+  - Your name, settings, replays and the prepared game are in the old copy's "data" folder: move that folder, and
+    nothing else, into this one to keep them. The first screen asks for your .iso again only if the game has to be
+    prepared again.
+
+Everything it writes stays in the "data" folder here. Delete the folder to remove it all.
+Windows may warn about an unknown program the first time: More info, Run anyway.
+
+@TEST_BUILD@Players are put in the same lobby only when their game build is the same: the three
+numbers above.
+
+Credits: the GX Unleashed stats, which a session's server may switch on, are by AKC12, used with permission.
+
+Source: the runner (recomp\moderngekko-run.exe) is built from ModernGekko (GPL-3.0) and Dolphin (GPL-2.0-or-later).
+The source of this version is in the public repositories at github.com/piconet-live, at the tag v@VERSION@:
+piconet-runner (with its submodules: our forks of DolRecomp, RecompCore and ModernGekko, and piconet-protocol)
+and piconet-launcher. The records in "source" name the commit and tree of every source tree the runner and the
+module were built from.

@@ -1,0 +1,56 @@
+# Every repository the monorepo is cut into takes this file; what only one
+# part writes is in that part's own .gitignore (port/, net/src/Launcher.App/).
+
+# --- Game data: never commit (no file of the game is ever in a repository) ---
+*.iso
+*.gcm
+*.rvz
+*.ciso
+*.nkit.*
+*.wbfs
+*.dol
+*.rel
+*.lz
+*.gma
+*.tpl
+*.gci
+*.raw
+*.sav
+*.dtm
+
+# --- Captures from the running game (RAM dumps, saved machine states, input tapes) ---
+*.state
+*.tape
+*-ram.bin
+*.bss
+
+# --- The build folder in a checkout: the port's default work folder, build/work (port/setup/work-folder.env) ---
+/build/
+
+# --- A contributor's own CMake presets (their folders and tools), beside CMakePresets.json ---
+CMakeUserPresets.json
+
+# --- .NET build output (net/, and protocol/'s test projects) ---
+bin/
+obj/
+TestResults/
+
+# --- Local tooling and third-party trees ---
+.venv/
+decomp/
+scratch/
+__pycache__/
+*.pyc
+.env.local
+*.local.*
+.cache/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- The gates (piconet-gates, private): checked out here at port/setup/pins.tsv REPO_GATES, never part of this repository ---
+/port/gates/

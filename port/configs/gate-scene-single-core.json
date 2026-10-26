@@ -1,0 +1,5 @@
+{
+  "about": "A gate scene from a saved state on the native module, the picture on the CPU thread (gate-native.sh; row batch, the single-core pairs)",
+  "bundle": "{bundle}",
+  "debug": {"forcePatches": true, "singleCore": true}
+}

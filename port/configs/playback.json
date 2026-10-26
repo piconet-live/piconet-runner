@@ -1,0 +1,6 @@
+{
+  "about": "A recording played back as the race, every step compared with the recorded checksum (replay-check.sh, its default; rows roundtrip, fork, pair, quickplay, thirty)",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "replay": {"file": "{replay}", "scrubber": false}
+}

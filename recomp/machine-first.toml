@@ -1,0 +1,31 @@
+# The port's machine file for recomp-kit's harness on the build PC (pattern: fzgx-multiplayer
+# recomp/machine-n.toml). Runs use the port's own user folder and run folder.
+schema = 1
+host = "wsl-windows"
+work = "@WORK@"
+work_win = "@WORK_WIN@"
+jobs = 16
+
+runner = "ModernGekko/build/moderngekko-run.exe"
+recompiler = "work/dolrecomp-port/dolrecomp.exe"
+module_template = "work/module-template"
+runtime_source = "ModernGekko/vendor/dolphin"
+
+llvm_bin = "@LLVM@/bin"
+llvm_bin_win = "@LLVM_WIN@/bin"
+vcvars = "@VCVARS_WIN@"
+path_win = []
+
+game = "extracted/GFZE01"
+user = "port/user-first"
+user_pristine = "port/user-first-pristine"
+config = "port/user-first/Config/Dolphin.ini"
+config_pristine = "port/Dolphin.ini.pristine"
+
+build_dir = "work/cg-{name}"
+module_dir = "work/mod-cg-{name}"
+run_dir = "port/runs/{run}"
+shot_file = "port-{run}.png"
+
+post_emit = [["python3", "@WORK@/scripts/fastlookup.py", "{generated}/generated.h"]]
+run_seconds_per_field = 0.02

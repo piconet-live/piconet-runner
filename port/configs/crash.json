@@ -1,0 +1,7 @@
+{
+  "about": "A recording played back as the race, a rollback forced every 12 displayed frame(s), 5 step(s) deep in turn (replay-check.sh; row crash: the 30-player crash of 2026-10-06, the port-recomp notes 5.18), with the undo log's guard checked at every step against every page compared (undoLog both)",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "replay": {"file": "{replay}"},
+  "debug": {"forceRollback": {"every": 12, "depths": [5]}, "undoLog": "both"}
+}

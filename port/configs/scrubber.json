@@ -1,0 +1,7 @@
+{
+  "about": "A recording played back as the race with the scrubber, as a player watches it, stopping at the replay's end: every step at the front edge and every step shown compared with the recorded checksum (replay-check.sh; the scrubber's checks, a script given with SET)",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "replay": {"file": "{replay}"},
+  "debug": {"replayEndQuits": true}
+}

@@ -1,0 +1,354 @@
+name	group	value	of	type	manifest	source	meaning
+# ---- limit
+SEATS	limit	30		int		port/core/src/rollback.cpp:81	racers in a race at most: the game has 30 machines, and every per-seat table has 30 places
+RACERS_MIN	limit	1		int		port/core/src/files_match.cpp:232	the fewest racers of a race: one seat (the core refuses a race of none, and gives the game the racers beside the first)
+NAME_SIZE	limit	32		u32		memmap.py:8	bytes of one player name's place in the window, the ending zero included
+NAME_SHOWN	limit	16		int		net/src/Online.Protocol/PlayerNames.cs:11	characters of a player name the results screens show: longer names are cut
+RECORD	limit	6		int		port/core/src/net_internal.h:65	bytes of the game's control record: one seat's input for one step
+INPUT_SLOT	limit	8		u32		port/core/src/rollback.cpp:81	bytes one seat's record takes in the input buffer (a 6-byte record in an 8-byte place)
+RING_STEPS	limit	1024		u32		memmap.py:25	steps the input buffer and the checksum ring keep: step s is at s & 1023
+LAPS_MIN	limit	0		int		port/core/src/files_match.cpp:174	the fewest laps the game takes: 0 is a free run, with no lap count
+LAPS_MAX	limit	99		int		port/core/src/files.h:39	the most laps the game takes: two digits, as its lap counter shows
+CPU_LEVEL_MAX	limit	3		int		port/core/src/files_match.cpp:245	the highest CPU level: 0 Novice, 1 Standard, 2 Expert, 3 Master
+SETTING_MAX	limit	100		int		port/core/src/files_match.cpp:204	the highest machine setting: 0 is all acceleration, 100 all top speed
+FINISH_LIMIT_MAX	limit	600		int		port/core/src/files.h:36	the longest a host may set between the first finish and the race's end for everyone, in seconds (0: no such end)
+MINE_REGEN_MAX	limit	5000		int		port/core/src/files.h:50	the longest a host may set between a mine going off and its coming back, in milliseconds (0: a mine stays gone, the game's own way)
+MINE_REGEN_STEP	limit	50		int		port/core/src/files.h:51	the host's mine rule moves in steps of this many milliseconds: 50 ms is 3 steps of the game exactly
+INPUT_DELAY	limit	2		u32		port/core/src/net_internal.h:141	steps between a player's input and the step it is used in (decided: 2, never more)
+MAX_UNTRACKED	limit	32		u32		port/core/src/rollback.h:29	memory ranges never rolled back, at most (the list at UNTRACKED)
+# ---- window
+IMAGE	window	0x81800000		u32		memmap.py:3	the mod image's bytes: its routines run as native code, the bytes serve the words they read
+CONTROL	window	0x81810000		u32		memmap.py:4	the frame routine's control block: the words of group control
+CHECKSUMS	window	0x81811000		u32		memmap.py:5	the checksum ring: one word for each of the last 1024 steps
+SMOOTH	window	0x81812000		u32		memmap.py:6	the rivals' drawn offsets, which keep them steady through rollbacks
+SMOOTH_GLOBALS	window	0x600	SMOOTH	u32		port/core/src/playback.cpp:169	the smoothing's own counters, after the 30 rivals' places
+NAMES	window	0x81813000		u32		memmap.py:7	the player names: 30 places of NAME_SIZE bytes, seat order; an empty one shows the pilot's name
+MONITORS	window	0x81813600		u32		memmap.py:21	the rejoin hand-back monitors' state (monitors.py), the picture's only: +0 the step control comes back, +4 the pictures (0 not tried, 1 trying, 2 read, 3 not read), +36 the picture in the texture plus 1 (0 none)
+MINES	window	0x81813700		u32		memmap.py:31	mines that come back (sites_mines.py): +0 the state of the countdowns' block (0 not tried, 1 taken, 3 none), +4 its address in the main heap (0 none)
+ICONS	window	0x81813710		u32		memmap.py:82	tests: the rank icons' exclusion (rankicons.py): a word a racer, the drawn frames its icon was held back (the racer the HUD follows), then a word a racer at +120, the frames it was let through; counted only with IMAGE_LOGS
+RACE	window	0x81814000		u32		memmap.py:18	the race block: what race to start (group race)
+INPUTS	window	0x81820000		u32		memmap.py:24	the input buffer: 1024 steps of 30 seats, INPUT_SLOT bytes each
+INPUTS_END	window	=INPUTS + RING_STEPS * SEATS * INPUT_SLOT		u32		memmap.py:25	the first address after the input buffer
+SEAT_BLOCK	window	=INPUTS_END		u32		memmap.py:87	each seat's own stats and constants (a stat pack a seat): a byte a seat (its row is on), the seats' constants, the seats' rows
+SEAT_BLOCK_SIZE	window	0x4000		u32		memmap.py:91	bytes of the seats' block
+SEAT_CONSTANTS	window	0x2000	SEAT_BLOCK	u32		memmap.py:88	the seats' constants: SEAT_CONSTANT bytes a seat, seat order
+SEAT_CONSTANT	window	0x100		u32		memmap.py:89	bytes of one seat's constants: +0 the dash plate's A, +4 its B, +8 a boost frame's energy use, +12 the boost length's base (floats), +16 the speed cap (a double), +24 the boost length's scale, +28 the machine setting's curve (SEAT_CURVE)
+SEAT_DASH_BASE	window	0		u32		memmap.py:89	in a seat's constants: the dash plate's A (a float)
+SEAT_DASH_SCALE	window	4		u32		memmap.py:90	in a seat's constants: the dash plate's B (a float)
+SEAT_ENERGY_USE	window	8		u32		memmap.py:91	in a seat's constants: a boost frame's energy use (a float)
+SEAT_SPEED_CAP	window	16		u32		memmap.py:92	in a seat's constants: the speed cap (a double)
+SEAT_BOOST_BASE	window	12		u32		memmap.py:93	in a seat's constants: the boost length's base (a float): an energy boost lasts int(base + scale x boost duration) frames
+SEAT_BOOST_SCALE	window	24		u32		memmap.py:94	in a seat's constants: the boost length's scale (a float)
+SEAT_CURVE	window	28		u32		memmap.py:95	in a seat's constants: the machine setting's curve (sites_curve.py), a float a slot in slot order from here, its one double (AccelGain) at SEAT_CURVE_DOUBLE
+SEAT_CURVE_DOUBLE	window	0xF0		u32		memmap.py:96	in a seat's constants: the machine setting's acceleration gain (a double)
+SEAT_SETTING	window	0x20	SEAT_BLOCK	u32		memmap.py:97	the constants of the seat whose machine setting runs (fn_1_22B10 called by fn_1_331EC, sites_curve.py), 0 at every other time: written before that call and cleared after it
+SEAT_ROWS	window	0x300	SEAT_BLOCK	u32		memmap.py:90	the seats' rows: a car data block a seat, seat order, read in place of the table's when the seat's byte is not 0
+IMAGE_LIMIT	window	=CONTROL		u32		port/core/src/files_bundle.cpp:112	the mod image ends before this address
+WINDOW	window	=IMAGE		u32		port/core/include/fzgx/guest.h:31	the mod's data window begins here: no guest memory is behind it
+WINDOW_END	window	=SEAT_BLOCK + SEAT_BLOCK_SIZE		u32		port/core/include/fzgx/guest.h:31	the first address after the mod's data window
+IMAGE_HOOK	window	0x0C	IMAGE	u32		port/moderngekko/src/adapter_internal.h:49	the image's word that is the network hook where the image is in real memory (the JIT reference): a blr the emulator's hook stands on
+MODE	window	=CONTROL + 0xF00		u32		memmap.py:31	what the game was started for: 0 a plain start, 1 a race (a match file, or a replay played as the race)
+PRELOAD	window	=CONTROL + 0xF10		u32		memmap.py:34	the results screen's pictures read before the race: +0 state (2 read, 3 not read), three pairs (bitmap group, the packed file's address), +28 loads served from memory, +32 the main heap's largest free block when it was tried
+END_OFFICIAL	window	=CONTROL + 0xF40		u32		memmap.py:41	the race's end, held until it is official: set by the core, every step below this one ran, or runs in this frame, with the official inputs (0: never said)
+END_ASKED	window	=CONTROL + 0xF44		u32		memmap.py:43	set by the image: 1, the race looks over on steps not yet official; the core's next frame checks them, runs no new step, and clears it
+END_OVER	window	=CONTROL + 0xF48		u32		memmap.py:46	set by the image: 1, its race-over test said the race is over: the core predicts no step from here
+HANDBACK	window	=CONTROL + 0xF4C		u32		memmap.py:61	set by the core, for the picture only: steps left until a returning seat's player drives it again, down to 0 at that step (0: no hand-back)
+FINISH_KIND	window	=CONTROL + 0xF50		u32		memmap.py:50	set by the image, for the picture only: what the local machine is at the last step boundary looked at, 0 racing, 1 finished, 2 out
+FINISH_END	window	=CONTROL + 0xF54		u32		memmap.py:52	set by the image, for the picture only: the step at which the local racer's finish countdown reaches 0
+FINISH_COUNT	window	=CONTROL + 0xF58		u32		memmap.py:54	set by the image: what the picture reads in place of the game's finish countdown, the local racer's (the game's own while the local machine races)
+RESULTS_KEEP	window	=CONTROL + 0xF5C		u32		memmap.py:88	set by the core, for the picture only: not 0, the results' cameras follow the local seat whatever it is (a spectator's game)
+RESULTS_CAMERA	window	=CONTROL + 0xF60		u32		memmap.py:90	set by the image at the results' start and when it moves the results' cameras during them (follow.py results_watch), for the log only: 0x80000000, why the racer (follow.py RC_*) << 8, the racer the results' cameras follow; the core logs it and writes 0
+DRAW_ASK	window	=CONTROL + 0xF64		u32		memmap.py:117	set by the image: 1 when a race frame's drawing is about to begin, 2 when it has ended; each store is a call to the core, which times the drawing and answers in DRAW_SKIP
+DRAW_SKIP	window	=CONTROL + 0xF68		u32		memmap.py:119	set by the core when the image asks: not 0, this frame draws nothing and the next frame's begin copies no picture (the last one shown again); cleared at the next frame tick
+TRUE_ASPECT	window	=CONTROL + 0xF6C		u32		memmap.py:116	set by the core, for the picture only: 0, the game's own Wide Screen; a float's bits, true widescreen at that aspect (the race view keeps the whole vertical view; the aspect getter gives it)
+SPEC_MODE	window	=CONTROL + 0x3A0		u32		memmap.py:61	set by the image, for the picture only: what the spectator follows with, 0 automatic shots, 1 the course's cameras, 2 to 5 a manual shot, 6 the chase camera behind the watched racer
+SPEC_HEIGHT	window	=CONTROL + 0x3A4		u32		memmap.py:63	set by the image, for the picture only: the spectator's camera height, a manual shot's variant or the chase camera's view less 1
+SPEC_CHANGE	window	=CONTROL + 0x3A8		u32		memmap.py:64	set by the image, for the picture only: the step, plus 1, in which the spectator's last choice sets its shot up, run for the first time or again
+SPEC_PENDING	window	=CONTROL + 0x3AC		u32		memmap.py:67	set by the image: 1 from a spectator's choice on a frame's entry until that frame's first step takes it
+SPEC_LOGGED	window	=CONTROL + 0x3B0		u32		memmap.py:68	tests: where the spectator's log at SPEC_LOG takes its next entry
+VIEW_SCRATCH	window	=CONTROL + 0x3B4		u32		memmap.py:70	two words the racing view's helper keeps two registers in while it reads the input rows
+SPEC_ASKED	window	=CONTROL + 0x3C0		u32		memmap.py:71	set by the image, for the picture only: the mode the spectator's D-pad down last asked for; the next press takes the one after it
+IMAGE_LOGS	window	=CONTROL + 0x3C4		u32		memmap.py:73	tests: set by the core in a game whose launch file asks for a dump; not 0, the image keeps its three logs (SPEC_LOG, GENERATOR_LOG, SMOOTH_LOG); a players' game writes none of them
+SPEC_STEP	window	=CONTROL + 0x3C8		u32		memmap.py:76	set by the image, for the picture only: 1 from the spectator's routine of a step until the task manager's pass of that step reaches the cameras' list, where the image looks again at who is out
+HFR_DRAWING	window	=CONTROL + 0x3CC		u32		memmap.py:92	reserved, 0: nothing writes or reads it (the emulator draws the pictures between two steps, not the game)
+SPEC_LOG	window	0x81815000		u32		memmap.py:82	tests: the spectator's log, SPEC_LOG_ENTRIES entries of 8 bytes, round when full, one a displayed frame while spectating (the step, the racer and mode chosen, what the cameras hold)
+SPEC_LOG_ENTRIES	window	3584		u32		memmap.py:83	tests: entries of 8 bytes the spectator's log at SPEC_LOG holds before it goes round
+GENERATOR_LOG	window	0x8181C000		u32		memmap.py:84	tests: the race's two generator words after every step, 8 bytes at step & (GENERATOR_LOG_STEPS - 1): the executable's, then the effects'
+GENERATOR_LOG_STEPS	window	2048		u32		memmap.py:85	tests: steps the generator log holds
+SMOOTH_LOG	window	0x8180C000		u32		memmap.py:93	tests: the rivals' smoothing log, 8 bytes at frame & (SMOOTH_LOG_FRAMES - 1): the step, the seat, the frame's flags, the part of the offset that was cut and the square of a body's distance to its shadow (a float's upper half each)
+SMOOTH_LOG_FRAMES	window	2048		u32		memmap.py:94	tests: displayed race frames the smoothing log holds
+SMOOTH_FRAMES	window	0x608	SMOOTH	u32		smooth.py:62	the smoothing's count of displayed race frames: the log's place of the last frame
+EFFECTS	window	0x640	SMOOTH	u32		memmap.py:7	tests: the effects' counters (sites_effects.py): how far a rival's effects were drawn from its body before and after they were moved with it
+HOSTCALLS	window	0x81860000		u32		memmap.py:38	host calls: a call to one of these addresses leaves the game's code for the host program
+HOST_NET	window	=HOSTCALLS		u32		memmap.py:39	host call: the network hook, before every step and in every pass of the start gate
+HOST_TICK	window	=HOSTCALLS + 4		u32		memmap.py:40	host call: every game frame of a race or replay start
+HOST_LINKED	window	=HOSTCALLS + 8		u32		memmap.py:41	host call: main.rel is linked and none of its code has run
+HOST_HFR	window	=HOSTCALLS + 12		u32		memmap.py:42	host call: the drawn frames between two steps (high refresh rate), from fn_1_37AA8's draw half
+HOSTCALLS_END	window	=HOST_HFR + 4		u32		port/moderngekko/src/adapter_internal.h:50	the first address after the four host calls
+# ---- control
+EXTRA_STEPS	control	8	CONTROL	u32		port/core/src/rollback.cpp:18	steps the frame routine runs in this displayed frame after the first; counts down
+RESIMULATING	control	12	CONTROL	u32		port/core/src/rollback.cpp:19	1 while the extra steps run
+RESIM_TICKS	control	28	CONTROL	u32		port/core/src/net_internal.h:57	set by the image: time base ticks the last frame's extra steps took
+SOUND_DROPPED	control	32	CONTROL	u32		port/core/src/frame_report.cpp:92	counter: sound commands dropped because their step had been simulated before
+SOUND_COMMANDS	control	36	CONTROL	u32		port/core/src/frame_report.cpp:92	counter: sound commands of the whole run
+GO	control	40	CONTROL	u32		port/core/src/net_internal.h:30	the relay's go: 1 releases the race-start gate
+READY	control	44	CONTROL	u32		port/core/src/net_internal.h:31	set by the game when it holds at the race-start gate
+GATE_ON	control	48	CONTROL	u32		port/core/src/net_internal.h:32	1: the game holds at the race start until GO
+SESSION	control	116	CONTROL	u32		port/core/src/net_internal.h:33	1 in a network session
+RUNNING	control	120	CONTROL	u32		port/core/src/net_internal.h:34	1 once the race runs by steps (from the relay's go)
+STEP	control	124	CONTROL	u32		port/core/src/rollback.h:27	the step about to run, counted from the relay's go
+DESYNCS	control	128	CONTROL	u32		port/core/src/net_internal.h:44	counter: steps whose checksum differed from another game's
+FAILED	control	132	CONTROL	u32		port/core/src/net_internal.h:45	1 when the session failed
+ROLLBACKS	control	136	CONTROL	u32		port/core/src/net_internal.h:46	counter: rollbacks
+MAX_DEPTH	control	140	CONTROL	u32		port/core/src/net_internal.h:47	the deepest rollback so far, in steps
+RESIM_STEPS	control	144	CONTROL	u32		port/core/src/net_internal.h:48	counter: steps simulated again after a rollback
+RTT_TENTHS	control	148	CONTROL	u32		port/core/src/net_internal.h:49	the round trip to the relay, in tenths of a millisecond
+CATCH_UPS	control	152	CONTROL	u32		port/core/src/net_internal.h:50	counter: steps added to catch up with the relay's clock
+WATCHED_PAGES	control	156	CONTROL	u32		port/core/src/net_internal.h:51	memory pages the undo log compares at every step
+LATE_PAGES	control	160	CONTROL	u32		port/core/src/net_internal.h:52	pages first seen changing after the learning steps
+DISPLAYED_FRAMES	control	164	CONTROL	u32		port/core/src/net_internal.h:53	counter: displayed race frames
+TIME_FRAME	control	200	CONTROL	u32		port/core/src/net_internal.h:56	timing: microseconds in the network hook per displayed frame, averaged
+TIME_TRACK	control	204	CONTROL	u32		port/core/src/net_internal.h:59	timing: microseconds comparing memory per displayed frame, averaged
+TIME_RESTORE	control	208	CONTROL	u32		port/core/src/net_internal.h:60	timing: microseconds putting memory back per displayed frame, averaged
+BLOCKS_PER_FRAME	control	212	CONTROL	u32		port/core/src/net_internal.h:61	32-byte blocks the undo log kept per displayed frame, averaged
+VERIFY_CHECKSUMS	control	216	CONTROL	u32		port/core/src/net_internal.h:54	tests: 1 makes the image compute the checksum too
+CHECKSUM_DIFFERENCES	control	220	CONTROL	u32		port/core/src/net_internal.h:55	tests: steps where the image's checksum and the host's differed
+TICKS_PER_EXTRA_STEP	control	224	CONTROL	u32		port/core/src/net_internal.h:58	time base ticks an extra step took, averaged
+FINAL_STEPS	control	232	CONTROL	u32		port/core/src/net_internal.h:38	steps below this ran with the official inputs: they are final
+SPECTATE_FRAMES	control	248	CONTROL	u32		port/core/src/playback.cpp:80	displayed frames the local racer has been out: at 180 the camera goes to the leader
+FORCE_ROLLBACK	control	292	CONTROL	u32		port/core/src/net_internal.h:39	tests: every N displayed race frames, roll back D steps (N << 16 | D)
+BOOST_FROM_START	control	520	CONTROL	u32		port/core/src/boot.cpp:14	1: boosting is allowed on the first lap
+PAINT_REPORT	control	536	CONTROL	u32		port/core/src/paint.cpp:29	tests: machines repainted, then skipped, then the last one skipped and why
+OTHER_SOUNDS	control	548	CONTROL	u32		port/core/src/boot.cpp:16	the loudness of other racers' own sounds, of 256, plus 1
+UNTRACKED	control	0x700	CONTROL	u32		port/core/src/rollback.h:28	set by the image: the count of memory ranges never rolled back, then their start and end
+EXIT_REQUEST	control	0xA30	CONTROL	u32		port/core/src/net_internal.h:37	1: the player is done with the results and the game is to stop
+WATCH_AS_RACE	control	0xA38	CONTROL	u32		port/core/src/session.cpp:145	1 while a replay is watched as the race: the D-pad moves the seat the camera follows
+# ---- slot
+SLOT	slot	=IMAGE + 0x10		u32		port/core/src/files.h:22	the seat routines' slot in the image: this game's seat and what goes with it
+SLOT_SEAT	slot	4	SLOT	u32		port/core/src/files_bundle.cpp:167	this game's seat
+SLOT_OFF	slot	32	SLOT	u32		port/core/src/files_bundle.cpp:168	1 turns the seat routines off
+SLOT_UNIFORM	slot	36	SLOT	u32		port/core/src/files_bundle.cpp:169	1: every seat is treated alike
+SLOT_PLAYERS	slot	40	SLOT	u32		port/core/src/files_bundle.cpp:170	the seats players hold: bit i is seat i
+SLOT_DELAY	slot	44	SLOT	u32		port/core/src/files_bundle.cpp:171	the input delay of this race, in steps
+# ---- race
+RACE_COURSE	race	4	RACE	u32		memmap.py:19	the course's number
+RACE_MACHINE0	race	8	RACE	u32		memmap.py:19	seat 0's machine
+RACE_OPPONENTS	race	12	RACE	u32		memmap.py:19	the racers less one
+RACE_LAPS	race	16	RACE	u32		memmap.py:19	the laps
+RACE_TYPE	race	20	RACE	u32		memmap.py:19	the race type: 6 a race by laps, 3 a free run
+RACE_SHUFFLE	race	24	RACE	u32		memmap.py:19	the value of the executable's generator up to the race: it deals the CPUs their machines
+RACE_CPUSEED	race	28	RACE	u32		memmap.py:19	the CPUs' seed for this race
+RACE_MACHINES	race	32	RACE	u32		memmap.py:19	the 30 seats' machines, a byte each, seat 0 first
+RACE_GRID_ON	race	64	RACE	u32		memmap.py:55	the start grid's word: 1, the race names its grid (RACE_GRID); 0, the game's own sort, every race and recording without one
+RACE_GRID	race	68	RACE	u32		memmap.py:55	the start grid: the seat of each of the 30 slots, a byte each, pole first
+RACE_CPULEVEL	race	256	RACE	u32		memmap.py:22	the host's rule: the CPU level, 0 to 3
+RACE_BOOST	race	260	RACE	u32		memmap.py:22	the host's rule: boosting from the start
+RACE_RESTORE	race	264	RACE	u32		memmap.py:22	the host's rule: a machine that falls or is wrecked is put back
+RACE_SETTINGS	race	268	RACE	u32		memmap.py:22	every seat's machine setting, a byte each
+RACE_FINISH_LIMIT	race	300	RACE	u32		memmap.py:24	the host's rule: the steps after the first finish at which the race ends for everyone (0: no such end)
+RACE_FLOW	race	304	RACE	u32		memmap.py:28	the race's flow: 1, out by the game's own verdict and the race waits for player seats only; 0, a recording made before
+RACE_MINE_REGEN	race	308	RACE	u32		memmap.py:56	the host's rule: the steps after which a mine that went off comes back (0: it stays gone, the game's own way)
+RACE_RUBBER_BAND_ON	race	100	RACE	u32		memmap.py:54	the rubber band: 1, the CPU drivers pace against the player seats (the game's own way, every recording made before 0.4.0); 0, every driver at its own pace (every race and practice from 0.4.0; the core writes it, a future lobby rule could set it from the server)
+RACE_CUSTOM	race	320	RACE	u32		memmap.py:48	the seats' custom machines: 30 entries of 32 bytes (a used word, three part entries, the pilot)
+RACE_SIZE	race	1280		u32		memmap.py:52	bytes of the race block
+# ---- rel
+MAIN_REL	rel	0x801BA660		u32	module[name=main.rel].load_address ; memory.region[name=DOL (after .bss)].end	memmap.py:42	where main.rel's header is in every boot (the pin makes it so)
+MAIN_REL_ID	rel	1		u32		port/core/src/core.cpp:97	main.rel's module number, the first word of its header
+REL_TEXT	rel	0xDC	MAIN_REL	u32	module[name=main.rel].sections.text.offset	port/image/gameinput.py:23	main.rel's code (.text)
+REL_TEXT_SIZE	rel	0x15F62C		u32	module[name=main.rel].sections.text.size	port/image/gameinput.py:23	bytes of main.rel's code
+REL_DATA	rel	0x16D600	MAIN_REL	u32	module[name=main.rel].sections.data.offset	port/core/src/rollback.h:34	main.rel's data (.data)
+REL_RODATA	rel	0x15F710	MAIN_REL	u32		port/core/src/const_ranges.h:84	main.rel's constants (.rodata), which no step writes
+REL_BSS	rel	0x1BA040	MAIN_REL	u32	module[name=main.rel].sections.bss.offset	port/core/src/rollback.h:31	main.rel's zeroed data (.bss), where the race's state is
+# ---- game
+RAM	game	0x80000000		u32	memory.region[name=low OS globals].start	port/core/src/paint.cpp:25	main memory's first guest address
+RETAIL_RAM_SIZE	game	0x01800000		u32	game.mem1_size	port/core/src/paint.cpp:26	bytes of main memory: the console's 24 MiB
+MODULE_LIST	game	0x800030C8		ptr	module[name=main.rel].base_pointer ; probe.value[name=module].at	port/core/src/boot.cpp:21	the system's list of linked modules: its first entry is main.rel
+LOCKED_CACHE	game	0xE0000000		u32		port/moderngekko/src/lanes_internal.h:35	the locked cache's first guest address (the console's 16 KiB scratch the game locks in its data cache; the native module's second window): the collision work area and the maths area live there
+DOL_RNG	game	0x801A63C0		u32		port/core/src/rollback.h:36	the executable's random generator: it deals the CPUs their machines, and a rollback puts it back
+EFFECTS_RNG	game	=REL_DATA + 0x1D628	MAIN_REL	u32		memmap.py:87	the effects' random generator, in main.rel's data: the effects and the TV cameras' type pick draw from it, and a rollback puts it back
+BOOST_ENERGY_USE	game	=REL_RODATA + 0xAA0	MAIN_REL	u32		port/core/src/const_ranges.h:84	the energy a boost costs a frame, times the usage factor (a float, the game's 1/6): read by fn_1_26F34 only; a stat pack's constant
+SPEED_CAP	game	=REL_RODATA + 0xB20	MAIN_REL	u32		port/core/src/const_ranges.h:84	the speed above which the momentum is cut to a near stop (a double, the game's 9990 km/h): read by fn_1_294D0 only; a stat pack's constant
+STATE_END	game	0x8155B000		u32	memory.region[name=heap].end ; memory.region[name=display buffers].start	port/core/src/rollback.h:35	the simulation's memory ends here; the display buffers follow
+SOUND_QUEUE	game	0x801A6C80		ptr		port/core/src/hits.cpp:30	the address of the game's sound command queue (main.dol r13 - 0x7740; every sound start goes through fn_80067898): +0x240 64 commands, +0x441 the waiting, +0x443 the next place
+BOOT_TIME	game	0x800030D8		u32		port/core/src/session.cpp:153	the system time the game's OS took from the real-time clock when it booted: 64 bits (two words), in ticks of the time base
+IDLE_GPU_SYNC	game	0x8006FE18		u32	fact.wait_loop[name=gpu-sync].idle_pc ; setting[key=FZGX_IDLE_PCS].value#0	port/moderngekko/src/host.cpp:137	a wait the game spins in, counted as idle time: for the picture to be drawn
+IDLE_DISC_READ	game	0x80006388		u32	fact.wait_loop[name=disc-read].idle_pc ; setting[key=FZGX_IDLE_PCS].value#1	port/moderngekko/src/host.cpp:137	a wait counted as idle time: the executable's disc read
+IDLE_LOAD_QUEUE	game	0x802C1008		u32	fact.wait_loop[name=load-queue].idle_pc ; setting[key=FZGX_IDLE_PCS].value#2	port/moderngekko/src/host.cpp:137	a wait counted as idle time: main.rel's wait for its load queue
+IDLE_OS	game	0x8001071C		u32	fact.wait_loop[name=os-idle].idle_pc ; setting[key=Core.StaticRecompIdlePC].value#0	port/moderngekko/src/pins.cpp:68	the operating system's idle loop: native code spins in it unless the emulator is told (its own compiler skips the loop by itself)
+REFERENCE_RAM_SIZE	game	0x02000000		u32		port/moderngekko/src/host.cpp:191	bytes of emulated main memory in the reference configuration (the fork's 32 MiB): the image is in real memory above the retail 24 MiB
+DOL_FILE_OFFSETS	game	0		u32		port/moderngekko/src/adapter.cpp:104	the executable file's header: where its 18 sections' file offsets begin (7 text, then 11 data; a word each)
+DOL_FILE_ADDRESSES	game	0x48		u32		port/image/dol.py:9	the executable file's header: where the sections' guest addresses begin
+DOL_FILE_SIZES	game	0x90		u32		port/image/dol.py:9	the executable file's header: where the sections' sizes begin
+DOL_FILE_SECTIONS	game	18		u32		port/image/dol.py:9	sections an executable file has room for: 7 of code and 11 of data
+DOL_FILE_HEADER_SIZE	game	0x100		u32		port/moderngekko/src/adapter.cpp:91	bytes of the executable file's header: a file shorter than this is none
+GAME_MODE	game	=REL_BSS + 0x960	MAIN_REL	u32		port/core/src/options_screen.cpp:73	the game's mode word (16 bits)
+GAME_SUBMODE	game	=REL_BSS + 0x962	MAIN_REL	u32		port/core/src/options_screen.cpp:72	the game's sub-mode word (16 bits): which screen of the mode it is in
+MODE_REQUEST	game	=REL_BSS + 0x968	MAIN_REL	u32		port/core/src/options_screen.cpp:73	the mode the game goes to at its next frame (16 bits; MODE_NONE: none asked for): its mode machine, main.rel fn_1_ECC, leaves the old mode and enters this one
+SUBMODE_REQUEST	game	=REL_BSS + 0x96A	MAIN_REL	u32		port/core/src/options_screen.cpp:73	the sub-mode the game goes to at its next frame (16 bits; MODE_NONE: none asked for)
+MODE_NONE	game	0xFFFF		u16		port/core/src/options_screen.cpp:71	a mode or sub-mode word that names none: no screen entered yet, nothing asked for
+MODE_OPTION	game	3		u16		port/core/src/options_screen.cpp:77	the game's mode word in its Options (MD_OPTION)
+MODE_TITLE	game	0xA		u16		port/core/src/options_screen.cpp:87	the game's mode word at the title (MD_TITLE)
+SUBMODE_TITLE_DEMO	game	0x9C		u16		port/core/src/options_screen.cpp:87	the title's sub-mode a boot stands in once its memory card sequence is over: Press Start over the demonstration race (SMD_TITLE_DEMO)
+SUBMODE_OPTION_MENU	game	0x4B		u16		port/core/src/options_screen.cpp:95	Options' first menu: Controller, Memory Card, Screen Mode (SMD_OPTION_MENU); the Options module's start asks for it
+SUBMODE_OPTION_SAVE	game	0x4C		u16		port/core/src/options_screen.cpp:109	Options writing the save to the memory card after a changed screen (SMD_OPTION_SAVE_WAIT)
+SUBMODE_OPTION_CONTROLLER	game	0x4D		u16		port/core/src/options_screen.cpp:97	Options' controller menu: Calibration, Customize, Controller Rumble (SMD_OPTION_CTRL_MENU); B asks for SUBMODE_OPTION_MENU
+SAVE_DEFAULTS_SET	game	0x801A66B9		u32		port/core/src/options_screen.cpp:87	the executable's byte the title sets once it has put the save's defaults in memory (before its memory card sequence); while it is 0 the title's exit puts them there, over what was loaded
+GAME_PASSES	game	0x801A66A0		u32		port/core/src/hfr.cpp:1	the executable's count of unpaused passes of the main loop: the drawn frames between two steps blend only from one pass to the next
+PHASE	game	=REL_BSS + 0x3C2A	MAIN_REL	u32		port/core/src/net_internal.h:63	the phase of the game's race mode (16 bits)
+PHASE_RACE	game	0x29		u16		port/core/src/frame.cpp:198	the phase word while the race runs
+INTRO_COUNTDOWN	game	=REL_BSS + 0x26C28	MAIN_REL	u32		port/core/src/core.cpp:183	the course intro's countdown (phase 0x27, fn_1_391F0): fields left, counted down to 0; at 1 the closing fade is done and the start gate holds
+INTRO_CUT	game	30		u32		port/core/src/core.cpp:183	what the game's own skip of the course intro (player 1's A or START) cuts its countdown to when it is above: the closing fade's fields
+INTRO_FADE	game	0x8032A93F		u32		port/core/src/core.cpp:183	main.rel's fade's state byte (fn_1_4C10 reads it); its bit 0: a fade runs, and the course intro's skip is not taken (read in the linked code of a dump, run cam4g-dual-core-race300-on-1)
+HUD_PARTS	game	=REL_DATA + 0x3D544	MAIN_REL	u32		port/core/src/minimap_frame.cpp:131	the HUD part mask, a word a viewport (viewport 0 first): read by drawing only; bit 0x00800000 is the game's map picture (fn_1_79654), which our course map replaces
+MAP_CAMERAS	game	=REL_DATA + 0x1DFB0	MAIN_REL	u32		port/core/src/minimap_frame.cpp:74	the game's map cameras, 0x1C bytes a course (field of view, eye, the point it looks at), 46 courses: the game's map picture and its markers are drawn through them (fn_1_7926C)
+INTRO_SKIP_ON	game	=REL_BSS + 0x7B188	MAIN_REL	u32		port/core/src/core.cpp:183	fn_1_EB200's first word: 0 lets the course intro's skip be taken whatever INTRO_SKIP_STATE says
+INTRO_SKIP_STATE	game	0x8036618C		u32		port/core/src/core.cpp:183	fn_1_EB200's state word: 0xE, 0xF or 0x10 refuse the course intro's skip while INTRO_SKIP_ON is not 0 (what the states are is not known)
+MODE_GAME	game	2		u16		port/core/src/core.cpp:184	the game's mode word in a race (MD_GAME)
+LOAD_QUEUED	game	=REL_BSS + 0x384C0	MAIN_REL	u32		port/core/src/core.cpp:184	the game's queue of file preloads: how many entries were queued so far (the ring's next free place)
+LOAD_DONE	game	=REL_BSS + 0x384C4	MAIN_REL	u32		port/core/src/core.cpp:185	the game's queue of file preloads: how many entries are done (the one in progress)
+LOAD_QUEUE	game	=REL_BSS + 0x3C4D8	MAIN_REL	u32		port/core/src/core.cpp:167	the game's queue of file preloads: a ring of 512 entries of 12 bytes (kind, the file's number in the disc's file table, an argument)
+DISC_TABLE	game	0x80000038		u32		port/core/src/core.cpp:158	the system's word that points at the disc's file table in memory: entries of 12 bytes, the first holding their count at +8, a file's entry its length at +8 (its first byte 0)
+RACE_CLOCK	game	=REL_BSS + 0x50A4	MAIN_REL	u32		port/core/src/net_internal.h:76	the game's race clock: 0 through the intro and the countdown, then one more after every step of the race and the results; rolled back with the race, not in the checksum
+PAD_RECORD	game	=REL_BSS + 0xA88	MAIN_REL	u32		port/core/src/net_internal.h:64	port 0's control record, as the game's input layer made it
+SCREEN_OPTION	game	0x229630	MAIN_REL	u32		port/core/src/boot.cpp:22	the game's screen option: 0 normal, 1 or 2 wide screen
+OPTION_BINDINGS	game	=REL_BSS + 0xAA0	MAIN_REL	u32		port/core/src/boot.cpp:73	the player's button settings, as the game's input layer reads them: 4 ports of 0x54 bytes, each three sets (a set for a kind of controller) of nine bindings
+OPTION_STICK_GATE	game	=REL_DATA + 0x2AC0	MAIN_REL	u32		port/core/src/boot.cpp:74	the player's stick calibration: 4 ports of 8 corner points, each x and y as signed bytes
+OPTION_DEAD_ZONES	game	=REL_DATA + 0x2B40	MAIN_REL	u32		port/core/src/boot.cpp:75	the player's stick dead zones: 4 ports of 2 bytes (across, up), 0 to 50; the input layer divides by 100 less the dead zone
+OPTION_WHEEL_RANGE	game	=REL_DATA + 0x2B50	MAIN_REL	u32		port/core/src/boot.cpp:76	the player's steering wheel range: 4 ports of 2 bytes (to the right, to the left)
+OPTION_WHEEL_PLAY	game	=REL_DATA + 0x2B58	MAIN_REL	u32		port/core/src/boot.cpp:77	the player's steering wheel play: 4 ports of 2 bytes, 0 to 20
+OPTION_SCHEME	game	=REL_DATA + 0x2B60	MAIN_REL	u32		port/core/src/boot.cpp:78	the player's control scheme: a byte a port, 0 or 1; the machine's task reads it only for a steering wheel
+GAME_ID	game	'GFZE01'		str	game.id	port/core/src/files.h:31	the disc this is for: F-Zero GX, NTSC-U
+CAR_DATA	game	0x81554000		u32		port/core/src/stat_pack.cpp:27	the car data as the game holds it while it runs: its loader (main.rel fn_1_95C, before the first frame) takes CAR_DATA_SIZE bytes below the top of the arena, the same place in every boot (read in a JIT race's saved state and a native playback's memory dump)
+CAR_DATA_SIZE	game	0x6000		u32		port/core/src/stat_pack.cpp:43	bytes of the loaded car data: the file's 21,658 and what the loader leaves after them
+CAR_DATA_MAPPED	game	0x23800000		u32		port/core/src/stat_pack.cpp:45	the address the game maps the loaded car data at and reads it by (fn_1_82EDC: addis 0x2380); a block's word 0 holds its name's address there, which is how the core knows the table stands
+# ---- machine
+MACHINES	machine	=REL_BSS + 0x6D838	MAIN_REL	ptr		port/core/src/rollback.h:32	the pointer to the machines' blocks, MACHINE_SIZE bytes each, racer order
+MACHINE_COUNT	machine	=REL_BSS + 0x6D84A	MAIN_REL	u32		port/core/src/rollback.h:33	the number of machines in the race (a byte)
+MACHINE_SIZE	machine	0x620		u32		port/core/src/checksum.cpp:43	bytes of one machine's block
+MACHINE_PROGRESS	machine	0x49C	MACHINES	ptr		port/core/src/checksum.cpp:57	in a machine's block: the pointer to its progress record
+PROGRESS_SIZE	machine	0x1FC		u32		port/core/src/checksum.cpp:42	bytes of a progress record
+PROGRESS_RANK	machine	0x115	MACHINE_PROGRESS	u32		port/core/src/replay.cpp:77	in a progress record: the racer's place (a byte)
+PROGRESS_LAPS	machine	0x118	MACHINE_PROGRESS	u32		port/core/src/replay.cpp:78	in a progress record: laps completed
+PROGRESS_BEST_LAP	machine	0x1CC	MACHINE_PROGRESS	u32		port/core/src/replay.cpp:79	in a progress record: the best lap's time
+PROGRESS_LAP_SUM	machine	0x1D8	MACHINE_PROGRESS	u32		port/core/src/replay.cpp:79	in a progress record: the sum of the completed laps, the finish time once finished
+CARS	machine	=REL_BSS + 0x6D83C	MAIN_REL	ptr		port/core/src/paint.cpp:23	the pointer to the car objects, CAR_SIZE bytes each, racer order
+CAR_SIZE	machine	0x440		u32		port/core/src/paint.cpp:24	bytes of one car object
+MACHINE_ID	machine	0x6	MACHINES	u32		port/core/src/stat_pack.cpp:130	in a machine's block: the machine it is (16 bits; 0 to 40 a stock machine, 41 or more a custom one)
+MACHINE_WEIGHT	machine	0x8	MACHINES	u32		port/core/src/stat_pack.cpp:133	in a machine's block: its weight, the car data's own value (block + 4) stored again every step
+MACHINE_DRAWN_X	machine	0x158	MACHINES	u32		port/core/src/minimap_frame.cpp:110	in a machine's block: the translation of its drawn matrix (+0x14C), x: where the body is drawn, rollback smoothing included (a float; y at +0x168, z at +0x178)
+MACHINE_DRAWN_Y	machine	0x168	MACHINES	u32		port/core/src/minimap_frame.cpp:110	in a machine's block: the drawn matrix's translation, y (a float)
+MACHINE_DRAWN_Z	machine	0x178	MACHINES	u32		port/core/src/minimap_frame.cpp:110	in a machine's block: the drawn matrix's translation, z (a float)
+# ---- site
+DOL_PIN	site	0x80005940		u32	pin[name=sample-alloc-pad].writes[0].address	port/image/build.py:44	patched site in the executable: the call that made main.rel's address vary
+DOL_PIN_STOCK	site	0x4800BAE5		u32		port/image/build.py:44	the game's instruction at DOL_PIN (a call of the tick reader)
+DOL_PIN_NEW	site	0x38600000		u32		port/image/build.py:44	the instruction written at DOL_PIN (the value 0)
+DOL_LINKED	site	0x800059A8		u32		port/image/build.py:45	patched site in the executable: right after main.rel is linked
+DOL_LINKED_STOCK	site	0x819E0034		u32		port/image/build.py:45	the game's instruction at DOL_LINKED
+DOL_SOUND	site	0x80067898		u32		port/image/build.py:46	patched site in the executable: the sound command queue's first instruction
+DOL_SOUND_STOCK	site	0x9421FFF0		u32		port/image/build.py:46	the game's instruction at DOL_SOUND
+VIEW_PORT_SITE	site	0xABF8	REL_TEXT	u32		raceview.py:34	patched site in main.rel's fn_1_ABAC (the view change): the call for the followed machine's pad port, which no machine of a race of ours has
+VIEW_PORT_STOCK	site	0x4807BA81		u32		raceview.py:37	the game's instruction at VIEW_PORT_SITE (a call of fn_1_86678)
+VIEW_BITS_SITE_1	site	0xAD10	REL_TEXT	u32		raceview.py:35	patched site in fn_1_ABAC: the port's newly set control bits read for the next view; the helper gives the followed seat's from the input rows
+VIEW_BITS_SITE_2	site	0xAD24	REL_TEXT	u32		raceview.py:35	patched site in fn_1_ABAC: the same bits read for the view before
+VIEW_BITS_STOCK	site	0x7C0320AE		u32		raceview.py:38	the game's instruction at both VIEW_BITS sites (lbzx r0, r3, r4)
+VIEW_LOW_SITE	site	0xAD3C	REL_TEXT	u32		raceview.py:36	patched site in fn_1_ABAC: the lowest view, 0 in the game and 1 in a race of ours
+VIEW_LOW_STOCK	site	0x3BE00000		u32		raceview.py:39	the game's instruction at VIEW_LOW_SITE (li r31, 0)
+CAMERA_INDEX_VIEW	site	0x725C	REL_TEXT	u32		port/image/build.py:55	patched site: fn_1_725C (a camera record's view) takes its index; in a race it is 0 unless it is one of the four records
+CAMERA_INDEX_STATE	site	0x6F14	REL_TEXT	u32		port/image/build.py:55	patched site: fn_1_6EC0 (a camera record's state) takes its index, likewise
+CAMERA_INDEX_PLACE	site	0x686C	REL_TEXT	u32		port/image/build.py:55	patched site: fn_1_681C (a camera record's position) takes its index, likewise
+CAMERA_INDEX_STOCK	site	0x5460063E		u32		port/image/build.py:56	the game's instruction at the three CAMERA_INDEX sites (clrlwi r0, r3, 0x18)
+SHADOW_PLACED_SITE	site	0x57174	REL_TEXT	u32		port/image/build.py:57	patched site: fn_1_56D4C (the shadows' task) has written a shadow's place; a rival's then moves with its drawn body
+SHADOW_PLACED_STOCK	site	0xC01F008C		u32		port/image/build.py:57	the game's instruction at SHADOW_PLACED_SITE (lfs f0, 0x8c(r31))
+EFFECT_DRAW_SITE_1	site	0x58A60	REL_TEXT	u32		port/image/build.py:58	patched site: fn_1_58994 (the effects' draw) calls an effect's draw, first pool; a rival's effect is then drawn with its body
+EFFECT_DRAW_SITE_2	site	0x58AB4	REL_TEXT	u32		port/image/build.py:58	patched site: the same call, second pool
+EFFECT_DRAW_SITE_3	site	0x58B70	REL_TEXT	u32		port/image/build.py:58	patched site: the same call in fn_1_58994's other branch, first pool
+EFFECT_DRAW_SITE_4	site	0x58C28	REL_TEXT	u32		port/image/build.py:58	patched site: the same call in the other branch, second pool
+EFFECT_DRAW_STOCK	site	0x4E800421		u32		port/image/build.py:59	the game's instruction at the four EFFECT_DRAW sites (bctrl)
+# ---- build
+ONDEMAND_HEAP	build	0x80596000		u32		port/gates/judge_game.py:16	where the game loads its on-demand modules: the first of a mode is at this address
+MOVIE_TEXT	build	0x805960D4		u32		port/build/build-module.sh:28	the code of the movie module (fze.movie.rel) as compiled into the native module
+MOVIE_MODULE_TEXT	build	0x8059EF6C		u32		port/build/build-module.sh:28	the code of the movie player (fze.movie_module.rel) as compiled into the native module
+# ---- wire
+RELAY_VERSION	wire	=relay_version		u8		protocol/relay.toml:28	the relay protocol's version: a packet of another version is ignored
+WIRE_MARK	wire	=relay_mark		mark		protocol/relay.toml:29	the first two bytes of every relay packet
+HEADER_SIZE	wire	=relay_header_size		int		protocol/relay.toml:31	bytes of a relay packet's header: the mark, the version, the type
+PACKET_PING	wire	=relay_type_ping		u8		protocol/relay.toml:45	packet type: the game asks for the relay's clock
+PACKET_PONG	wire	=relay_type_pong		u8		protocol/relay.toml:56	packet type: the relay's answer to a ping
+PACKET_JOIN	wire	=relay_type_join		u8		protocol/relay.toml:69	packet type: the game takes its seat with its token
+PACKET_JOINED	wire	=relay_type_joined		u8		protocol/relay.toml:75	packet type: the relay names the seat and the player seats
+PACKET_READY	wire	=relay_type_ready		u8		protocol/relay.toml:92	packet type: the game holds at the race-start gate
+PACKET_GO	wire	=relay_type_go		u8		protocol/relay.toml:98	packet type: the relay starts the race
+PACKET_INPUT	wire	=relay_type_input		u8		protocol/relay.toml:110	packet type: a seat's records for a run of steps
+PACKET_OFFICIAL	wire	=relay_type_official		u8		protocol/relay.toml:126	packet type: the records every game uses for a run of steps
+PACKET_CHECKSUM	wire	=relay_type_checksum		u8		protocol/relay.toml:140	packet type: a game's state checksum for a step
+PACKET_DESYNC	wire	=relay_type_desync		u8		protocol/relay.toml:153	packet type: the relay saw two games' checksums differ
+PACKET_SEAT_LEFT	wire	=relay_type_seat_left		u8		protocol/relay.toml:160	packet type: a seat's player is gone: the CPU drives it
+PACKET_SEAT_BACK	wire	=relay_type_seat_back		u8		protocol/relay.toml:167	packet type: a seat that came back is its player's again from a frame on
+PACKET_OVER	wire	=relay_type_over		u8		protocol/relay.toml:175	packet type: a game's race is over on official steps: no seat comes back from here
+LEN_PING	wire	=relay_len_ping		int		protocol/relay.toml:45	bytes after the header: a ping
+LEN_PONG	wire	=relay_len_pong		int		protocol/relay.toml:56	bytes after the header and the seat's key: a pong
+LEN_PONG_TIMED	wire	=relay_len_pong_optional		int		protocol/relay.toml:56	bytes after the header and the seat's key: a pong that carries the relay's clock
+LEN_JOIN	wire	=relay_len_join		int		protocol/relay.toml:69	bytes after the header: a join
+LEN_JOINED	wire	=relay_len_joined		int		protocol/relay.toml:75	bytes after the header and the seat's key: a joined
+LEN_READY	wire	=relay_len_ready		int		protocol/relay.toml:92	bytes after the header: a ready
+LEN_GO	wire	=relay_len_go		int		protocol/relay.toml:98	bytes after the header and the seat's key: a go
+LEN_INPUT_HEAD	wire	=relay_len_input		int		protocol/relay.toml:110	bytes after the header: an input packet before its records
+LEN_OFFICIAL_HEAD	wire	=relay_len_official		int		protocol/relay.toml:126	bytes after the header and the seat's key: an official packet before its records
+LEN_CHECKSUM	wire	=relay_len_checksum		int		protocol/relay.toml:140	bytes after the header: a checksum
+LEN_DESYNC	wire	=relay_len_desync		int		protocol/relay.toml:153	bytes after the header and the seat's key: a desync
+LEN_SEAT_LEFT	wire	=relay_len_seat_left		int		protocol/relay.toml:160	bytes after the header and the seat's key: a seat left
+LEN_SEAT_BACK	wire	=relay_len_seat_back		int		protocol/relay.toml:167	bytes after the header and the seat's key: a seat back
+LEN_OVER	wire	=relay_len_over		int		protocol/relay.toml:175	bytes after the header: an over
+MAX_FRAMES	wire	=relay_max_frames_per_packet		u32		protocol/relay.toml:34	steps one packet carries at most
+MAX_PAYLOAD	wire	=relay_max_payload		int		protocol/relay.toml:35	bytes of records an official packet carries at most, so it is not split on the way
+AI_STEER	wire	=relay_ai_drives_1		u8		protocol/relay.toml:33	the second byte of the record that means the CPU drives this seat: a steering no stick gives
+JOINED_RETURNING	wire	=relay_joined_flags_returning		u8		protocol/relay.toml:192	Joined's flag: the race runs and this seat was away: its game catches up
+JOINED_OVER	wire	=relay_joined_flags_over		u8		protocol/relay.toml:195	Joined's flag: the seat has no race to come back to (the race is over, or it left for good): its game leaves
+EXIT_RACE_OVER	wire	3		int		port/core/include/fzgx/core.h:336	the game's exit code when it was started again into a race the relay said is over: nothing to rejoin, no error
+EXIT_LEFT_RACING	wire	4		int		port/core/include/fzgx/core.h:341	the game's exit code when it stopped by no stop of its own (its window closed, Escape) while its seat raced: the launcher keeps the race for Rejoin
+# ---- file
+REPLAY_MARK	file	=replay_mark		mark		protocol/replay.toml:32	a replay file begins with this
+REPLAY_VERSION	file	=replay_version_plain		u16		protocol/replay.toml:48	the replay file's version, after its mark
+REPLAY_VERSION_STATS	file	=replay_version_stats		u16		protocol/replay.toml:53	the replay file's version when its race ran on a stat pack (the header's match.setup.stats): a program from before stat packs refuses it
+REPLAY_VERSION_CUSTOM	file	=replay_version_custom		u16		protocol/replay.toml:59	the replay file's version when a seat of its race raced a custom machine (a seat's match.setup.seats[].custom): a program from before custom machines refuses it
+REPLAY_VERSION_MINES	file	=replay_version_mines		u16		protocol/replay.toml:65	the replay file's version when its race ran with mines that come back (the header's match.setup.rules.mineRegenMs not 0): a program from before the rule refuses it
+REPLAY_VERSION_SEATS	file	=replay_version_seats		u16		protocol/replay.toml:71	the replay file's version when a seat of its race raced a pack of its own (the header's match.setup.packs and a seat's pack): a program from before packs a seat refuses it
+REPLAY_VERSION_GRID	file	=replay_version_grid		u16		protocol/replay.toml:77	the replay file's version when its race is 0.4.0's set-up: it started on the coordinator's grid (the header's match.setup.grid) or raced with no rubber band (the header's rubberBand false: every race and practice from 0.4.0), whatever else it holds: a program from before refuses it
+REPLAY_FRAMES_MARK	file	=replay_frames_mark		mark		protocol/replay.toml:90	in a replay file: the player seats and the recorder's seat follow
+REPLAY_LINEUP_MARK	file	=replay_lineup_mark		mark		protocol/replay.toml:97	in a replay file: the lineup at go follows
+REPLAY_LINEUP_SIZE	file	=replay_lineup_size		u32		protocol/replay.toml:96	bytes of a replay's lineup: 30 machines, 30 ranks, 30 settings of 2 bytes, 2 bytes, 2 unused
+REPLAY_RESULTS_MARK	file	=replay_results_mark		mark		protocol/replay.toml:113	a replay file with results ends with this
+IMAGE_MARK	file	'FZMD'		mark		port/core/src/boot.cpp:114	the mod image begins with this
+IMAGE_VERSION	file	2		u32		port/image/build.py:216	the mod image's version, after its mark: 2 is the native form
+PATCHES_MARK	file	'FZPT'		mark		port/image/build.py:215	in the mod image: the routines of the patched sites follow
+SLOT_MARK	file	'FZSI'		mark		port/core/src/files_bundle.cpp:110	the seat routines' slot begins with this
+RACE_MARK	file	'FZRC'		mark		port/core/src/boot.cpp:115	the race block begins with this
+STATE_DUMP_MARK	file	'FZST'		mark		port/core/src/instruments.cpp:79	tests: a dump of the machines' state begins with this
+BUNDLE_VERSION	file	2		u32		port/image/build.py:252	the version in the mod bundle's manifest.json
+PATCH_LIST_VERSION	file	1		u32		port/image/build.py:249	the version in the mod bundle's patches.json
+CAR_BLOCK	file	0xB4		u32		port/core/src/stat_ranges.h:23	bytes of one block of the car data, a machine's or a custom part's: word 0 the name's place, then 44 words
+CAR_MACHINES	file	41		u32		port/core/src/stat_ranges.h:24	the car data's machine blocks, by id, from its first byte
+CAR_NAMES_AT	file	0x1CE0		u32		port/core/src/stat_pack.cpp:49	in the car data: the machines' names, last id first
+CAR_PARTS_AT	file	0x1F04		u32		port/core/src/stat_ranges.h:36	in the car data: the custom parts' blocks: 25 bodies, 25 cockpits, 25 boosters
+PART_PAINT_SLOT	file	1		u32		port/core/src/files_match.cpp:176	a part colour word's low byte: the paint slot of the meshes it paints (a part model's mesh header +0x15); every part's is this one
+PARTS_COLORS_AT	file	0x16C758		u32		net/src/Launcher.Core/Files/PartColours.cs:20	in the unpacked main module: the custom parts' stock colours, 0xD048 into main.rel's .rodata (0x15F710 into the module): 75 parts, PARTS_COLORS colour words each, high byte first
+PARTS_COLORS	file	4		u32		net/src/Launcher.Core/Files/PartColours.cs:23	stock colours of a custom part, stock colour 0 its own
+CAR_PARTS	file	75		u32		port/core/src/stat_ranges.h:25	the car data's custom part blocks
+CAR_PART_NAMES_AT	file	0x53C0		u32		port/core/src/stat_pack.cpp:57	in the car data: the parts' names; every part's word 0 holds this place once loaded
+CAR_BYTES_AT	file	0x48		u32		port/core/src/stat_ranges.h:87	in a block of the car data: the one word that is four bytes and no number (the file's other words are low byte first, the loaded table's high byte first; these four stand as they are)
+STAT_ENTRY	file	6		u32		port/core/src/files_stats.cpp:130	bytes of one value of a stat pack as it travels: the block, the offset in the block, the word's 32 bits high byte first
+STAT_FORMAT	file	1		u8		port/core/src/files_stats.cpp:165	the byte a stat pack's fingerprint begins with: SHA-1 of this byte and the pack's values in order
+CONST_BLOCK	file	240		u8		port/core/src/const_ranges.h:80	a stat pack's entry with this block is one of the game's code constants, the offset its slot in the allowed list (const_ranges.h)
+MODULE_BOOST_ENERGY_USE	file	=BOOST_ENERGY_USE		u32		port/core/src/const_ranges.h:85	in main.rel's file, decrypted and unpacked: the constant BOOST_ENERGY_USE (a module's sections lie where its header puts them in memory)
+MODULE_SPEED_CAP	file	=SPEED_CAP		u32		port/core/src/const_ranges.h:85	in main.rel's file: the constant SPEED_CAP
+MODULE_DASH_PLATE	file	=REL_TEXT + 0x271A8		u32		port/core/src/const_ranges.h:86	in main.rel's file: the dash plate's formula, fn_1_26F34 0x271A8 (lfs f1, 0x258(r31)), +8 (lfs f2, 0x1C(r31)), +0x1C (fmuls f0, f2, f0): the words a mod rewrites to change it (sites_dash.py)
+MODULE_DASH_POOL	file	=REL_RODATA + 0x840		u32		port/core/src/const_ranges.h:86	in main.rel's file: the pool the dash plate's loads read through r31 (lbl_1_rodata_840)
+MODULE_SETTING_CURVE	file	=REL_TEXT + 0x22B10		u32		port/core/src/const_ranges.h:152	in main.rel's file: the machine setting, fn_1_22B10, whose loads through r4 (lbl_1_rodata_840, MODULE_DASH_POOL) a mod points at other words of the pool to change its curve (sites_curve.py)
+MODULE_BOOST_LENGTH	file	=REL_TEXT + 0x272C4		u32		port/core/src/const_ranges.h:152	in main.rel's file: the energy boost's length, fn_1_26F34 0x272C4 (lfs f2, 0x258(r31): 60.0), the load a mod points at another word of the pool to change int(60 x D) (sites_dash.py)
+COLI_NODES	file	0x08		u32		port/core/src/minimap_start.cpp:86	in a course file (stage/COLI_COURSEnn, unpacked, big-endian): the track nodes' count, in lap order; at +4 the first one's offset (as the course file lays it out)
+COLI_NODE_SIZE	file	0x0C		u32		port/core/src/minimap_start.cpp:87	bytes of one track node of a course file: its checkpoints' count, their offset, its root segment's offset
+COLI_CHECKPOINT_SIZE	file	0x50		u32		port/core/src/minimap_start.cpp:94	bytes of one checkpoint of a course file: curve times, the start plane, the end plane, lap distances, the road's width
+COLI_CHECKPOINT_NORMAL	file	0x0C		u32		port/core/src/minimap_start.cpp:101	in a course file's checkpoint: the start plane's normal (three floats), pointing the way the race runs
+COLI_CHECKPOINT_ORIGIN	file	0x18		u32		port/core/src/minimap_start.cpp:100	in a course file's checkpoint: the start plane's point, the road's middle where the checkpoint begins (the first node's first: the start/finish line, on every course of the disc the origin, facing -z)
+COLI_CHECKPOINT_WIDTH	file	0x48		u32		port/core/src/minimap_start.cpp:111	in a course file's checkpoint: the road's width (a float, metres)
+MAP_START_COLOUR	file	0xFFFB00		u32		port/core/src/minimap_start.cpp:215	the start mark's yellow on the game's map pictures (stNN.tpl, C??_MAP's colour picture, CMPR; Mute City's 255, 251, 0), as 0xRRGGBB

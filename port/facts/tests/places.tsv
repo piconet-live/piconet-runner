@@ -1,0 +1,399 @@
+fact	file	how	what	count
+SEATS	port/core/src/rollback.cpp	re	\(t & \d+\) \* (\d+) \+	2
+SEATS	port/core/src/files.h	re	std::array<[\w:<> ]+, (30)\b	6
+SEATS	port/core/src/files_match.cpp	re	std::array<[\w:<> ]+, (30)\b	1
+SEATS	port/core/src/files.h	cxx	MAX_SEATS	
+SEATS	port/core/src/files_replay.cpp	re	\+ 1, 1, (\d+)\)	1
+SEATS	port/core/src/replay.cpp	re	std::min<u32>\([^;]*?, (\d+)\)	1
+SEATS	port/core/src/playback.cpp	re	std::min<u32>\([^;]*?, (\d+)\)	1
+SEATS	port/core/src/instruments.cpp	re	std::min<u32>\([^;]*?, (\d+)\)	1
+SEATS	port/core/src/paint.cpp	re	std::array<[\w:<> ]+, (30)\b	11
+SEATS	port/core/src/paint.cpp	re	racer < (\d+)\b	4
+SEATS	port/core/src/internal.h	re	std::array<[\w:<> ]+, (30)\b	2
+SEATS	memmap.py	re	INPUTS \+ \d+ \* (\d+) \* \d+	1
+RACERS_MIN	port/core/src/files_match.cpp	re	Put32\(r \+ 12, racers - (\d+)\)	1
+NAME_SIZE	memmap.py	py	NAME_SIZE	
+NAME_SIZE	port/core/src/files.h	cxx	NAME_SIZE	
+NAME_SHOWN	net/src/Online.Protocol/PlayerNames.cs	cs	MaxLength	
+NAME_SHOWN	port/core/src/files_match.cpp	cxx	MAX_NAME	
+RECORD	port/core/src/net_internal.h	cxx	RECORD	
+RECORD	port/core/src/rollback.cpp	cxx	RECORD	
+INPUT_SLOT	port/core/src/rollback.cpp	re	\) \* (\d+), (?:records|RECORD)	2
+INPUT_SLOT	memmap.py	re	INPUTS \+ \d+ \* \d+ \* (\d+)	1
+RING_STEPS	memmap.py	re	INPUTS \+ (\d+) \* \d+ \* \d+	1
+RING_STEPS - 1	port/core/src/rollback.cpp	re	\((?:t|step) & (\d+)\)	4
+LAPS_MIN	port/core/src/files_match.cpp	re	"laps", \d+, (\d+), MAX_LAPS\)	1
+LAPS_MAX	port/core/src/files.h	cxx	MAX_LAPS	
+CPU_LEVEL_MAX	port/core/src/files_match.cpp	re	"cpuLevel", \d+\) : [\d.]+, 0\.0, (\d+)\.0\)	1
+SETTING_MAX	port/core/src/files_match.cpp	re	"setting", default_setting\), 0\.0, (\d+)\.0\)	1
+FINISH_LIMIT_MAX	port/core/src/files.h	cxx	MAX_FINISH_LIMIT	
+MINE_REGEN_MAX	port/core/src/files.h	cxx	MAX_MINE_REGEN_MS	
+MINE_REGEN_STEP	port/core/src/files.h	cxx	MINE_REGEN_STEP_MS	
+INPUT_DELAY	port/core/src/net_internal.h	re	u32 delay = (\d+);	1
+INPUT_DELAY	port/core/src/files.h	re	u32 delay = (\d+);	1
+INPUT_DELAY	port/core/include/fzgx/core.h	re	u32 delay = (\d+);	1
+INPUT_DELAY	net/src/Launcher.Core/Files/MatchFile.cs	re	int Delay = (\d+),	1
+MAX_UNTRACKED	port/core/src/rollback.h	cxx	MAX_UNTRACKED	
+IMAGE	memmap.py	py	IMAGE	
+IMAGE	port/core/src/files.h	use	table::IMAGE	1
+CONTROL	memmap.py	py	CONTROL	
+CHECKSUMS	memmap.py	py	CHECKSUMS	
+SMOOTH	memmap.py	py	SMOOTH	
+SMOOTH_GLOBALS_AT	port/core/src/playback.cpp	cxx	SMOOTH_GLOBALS	
+SMOOTH_GLOBALS	port/core/src/frame_report.cpp	re	layout::SMOOTH \+ (0x[0-9A-F]+) \+	3
+NAMES	memmap.py	py	NAMES	
+MONITORS	memmap.py	py	MONITORS	
+MINES	memmap.py	py	MINES	
+ICONS	memmap.py	py	ICONS	
+NAMES	port/core/src/files.h	use	table::NAMES	1
+RACE	memmap.py	py	RACE	
+RACE	port/core/src/files.h	use	table::RACE	1
+INPUTS	memmap.py	py	INPUTS	
+INPUTS_END	memmap.py	py	INPUTS_END	
+MODE	memmap.py	py	MODE	
+MODE - CONTROL	port/image/build.py	py	MODE	
+PRELOAD	memmap.py	py	PRELOAD	
+END_OFFICIAL	memmap.py	py	END_OFFICIAL	
+END_OFFICIAL	port/core/src/net_internal.h	cxx	END_OFFICIAL	
+END_ASKED	memmap.py	py	END_ASKED	
+END_ASKED	port/core/src/net_internal.h	cxx	END_ASKED	
+END_OVER	memmap.py	py	END_OVER	
+END_OVER	port/core/src/net_internal.h	cxx	END_OVER	
+HANDBACK	memmap.py	py	HANDBACK	
+FINISH_KIND	memmap.py	py	FINISH_KIND	
+FINISH_END	memmap.py	py	FINISH_END	
+FINISH_COUNT	memmap.py	py	FINISH_COUNT	
+RESULTS_KEEP	memmap.py	py	RESULTS_KEEP	
+RESULTS_CAMERA	memmap.py	py	RESULTS_CAMERA	
+DRAW_ASK	memmap.py	py	DRAW_ASK	
+DRAW_ASK	port/core/src/present.cpp	cxx	DRAW_ASK	
+DRAW_SKIP	memmap.py	py	DRAW_SKIP	
+DRAW_SKIP	port/core/src/present.cpp	cxx	DRAW_SKIP	
+TRUE_ASPECT	memmap.py	py	TRUE_ASPECT	
+SPEC_MODE	memmap.py	py	SPEC_MODE	
+SPEC_HEIGHT	memmap.py	py	SPEC_HEIGHT	
+SPEC_CHANGE	memmap.py	py	SPEC_CHANGE	
+SPEC_PENDING	memmap.py	py	SPEC_PENDING	
+SPEC_LOGGED	memmap.py	py	SPEC_LOGGED	
+VIEW_SCRATCH	memmap.py	py	VIEW_SCRATCH	
+SPEC_ASKED	memmap.py	py	SPEC_ASKED	
+IMAGE_LOGS	memmap.py	py	IMAGE_LOGS	
+IMAGE_LOGS	port/core/src/net_internal.h	cxx	IMAGE_LOGS	
+SPEC_STEP	memmap.py	py	SPEC_STEP	
+HFR_DRAWING	memmap.py	py	HFR_DRAWING	
+SPEC_LOG	memmap.py	py	SPEC_LOG	
+SPEC_LOG_ENTRIES	memmap.py	py	SPEC_LOG_ENTRIES	
+GENERATOR_LOG	memmap.py	py	GENERATOR_LOG	
+GENERATOR_LOG_STEPS	memmap.py	py	GENERATOR_LOG_STEPS	
+SMOOTH_LOG	memmap.py	py	SMOOTH_LOG	
+SMOOTH_LOG_FRAMES	memmap.py	py	SMOOTH_LOG_FRAMES	
+SMOOTH_FRAMES	smooth.py	py	FRAMES	
+EFFECTS_AT	memmap.py	py	EFFECTS	
+HOSTCALLS	memmap.py	py	HOSTCALLS	
+HOST_NET	memmap.py	py	HOST_NET	
+HOST_TICK	memmap.py	py	HOST_TICK	
+HOST_LINKED	memmap.py	py	HOST_LINKED	
+HOST_HFR	memmap.py	py	HOST_HFR	
+EXTRA_STEPS_AT	port/core/src/rollback.cpp	cxx	EXTRA_STEPS	
+EXTRA_STEPS	port/core/src/session.cpp	re	g\.Read32\(CONTROL \+ (8)\)	1
+RESIMULATING_AT	port/core/src/rollback.cpp	cxx	RESIMULATING	
+RESIM_TICKS_AT	port/core/src/net_internal.h	cxx	RESIM_TICKS	
+SOUND_DROPPED	port/core/src/frame_report.cpp	re	g\.Read32\(CONTROL \+ (32)\)	1
+SOUND_DROPPED	port/core/src/playback.cpp	re	g\.Read32\(CONTROL \+ (32)\)	2
+SOUND_COMMANDS	port/core/src/frame_report.cpp	re	g\.Read32\(CONTROL \+ (36)\)	1
+SOUND_COMMANDS	port/core/src/playback.cpp	re	g\.Read32\(CONTROL \+ (36)\)	2
+GO_AT	port/core/src/net_internal.h	cxx	GO	
+READY_AT	port/core/src/net_internal.h	cxx	READY	
+GATE_ON_AT	port/core/src/net_internal.h	cxx	GATE_ON	
+SESSION_AT	port/core/src/net_internal.h	cxx	SESSION	
+RUNNING_AT	port/core/src/net_internal.h	cxx	RUNNING	
+STEP_AT	port/core/src/rollback.h	cxx	STEP	
+DESYNCS_AT	port/core/src/net_internal.h	cxx	DESYNCS	
+FAILED_AT	port/core/src/net_internal.h	cxx	FAILED	
+ROLLBACKS_AT	port/core/src/net_internal.h	cxx	ROLLBACKS	
+MAX_DEPTH_AT	port/core/src/net_internal.h	cxx	MAX_DEPTH	
+RESIM_STEPS_AT	port/core/src/net_internal.h	cxx	RESIM_STEPS	
+RTT_TENTHS_AT	port/core/src/net_internal.h	cxx	RTT_TENTHS	
+CATCH_UPS_AT	port/core/src/net_internal.h	cxx	CATCH_UPS	
+WATCHED_PAGES_AT	port/core/src/net_internal.h	cxx	WATCHED_PAGES	
+LATE_PAGES_AT	port/core/src/net_internal.h	cxx	LATE_PAGES	
+DISPLAYED_FRAMES_AT	port/core/src/net_internal.h	cxx	DISPLAYED_FRAMES	
+TIME_FRAME_AT	port/core/src/net_internal.h	cxx	TIME_FRAME	
+TIME_TRACK_AT	port/core/src/net_internal.h	cxx	TIME_TRACK	
+TIME_RESTORE_AT	port/core/src/net_internal.h	cxx	TIME_RESTORE	
+BLOCKS_PER_FRAME_AT	port/core/src/net_internal.h	cxx	BLOCKS_PER_FRAME	
+VERIFY_CHECKSUMS_AT	port/core/src/net_internal.h	cxx	VERIFY_CHECKSUMS	
+CHECKSUM_DIFFERENCES_AT	port/core/src/net_internal.h	cxx	CHECKSUM_DIFFERENCES	
+TICKS_PER_EXTRA_STEP_AT	port/core/src/net_internal.h	cxx	TICKS_PER_EXTRA_STEP	
+FINAL_STEPS_AT	port/core/src/net_internal.h	cxx	FINAL_STEPS	
+SPECTATE_FRAMES	port/core/src/playback.cpp	re	g\.Write32\(CONTROL \+ (248), 0\)	1
+FORCE_ROLLBACK_AT	port/core/src/net_internal.h	cxx	FORCE_ROLLBACK	
+BOOST_FROM_START_AT	port/core/src/boot.cpp	use	table::BOOST_FROM_START_AT	1
+PAINT_REPORT_AT	port/core/src/paint.cpp	use	table::PAINT_REPORT_AT	1
+OTHER_SOUNDS_AT	port/core/src/boot.cpp	use	table::OTHER_SOUNDS_AT	1
+UNTRACKED_AT	port/core/src/rollback.h	cxx	UNTRACKED	
+EXIT_REQUEST_AT	port/core/src/net_internal.h	cxx	EXIT_REQUEST	
+WATCH_AS_RACE	port/core/src/session.cpp	re	g\.Write32\(CONTROL \+ (0xA38), 1\)	1
+SLOT	port/core/src/files.h	use	table::SLOT	1
+SLOT	port/core/src/net_internal.h	use	table::SLOT	1
+SLOT - IMAGE	port/core/src/files_bundle.cpp	re	b\.image\.data\(\) \+ (0x[0-9A-F]+), "FZSI"	1
+SLOT_SEAT	port/core/src/files_bundle.cpp	re	Put32\(slot \+ (4),	1
+SLOT_SEAT	port/core/src/playback.cpp	re	SEAT_SLOT \+ (4)\)	1
+SLOT_OFF	port/core/src/files_bundle.cpp	re	Put32\(slot \+ (32),	1
+SLOT_UNIFORM	port/core/src/files_bundle.cpp	re	Put32\(slot \+ (36),	1
+SLOT_PLAYERS	port/core/src/files_bundle.cpp	re	Put32\(slot \+ (40),	1
+SLOT_DELAY	port/core/src/files_bundle.cpp	re	Put32\(slot \+ (44),	1
+SLOT_DELAY	port/core/src/session.cpp	re	SEAT_SLOT \+ (44)\)	1
+SLOT_DELAY	port/core/src/playback.cpp	re	SEAT_SLOT \+ (44)\)	1
+RACE_COURSE	memmap.py	py	RACE_COURSE	
+RACE_COURSE	port/core/src/files_match.cpp	re	Put32\(r \+ (4),	1
+RACE_MACHINE0	memmap.py	py	RACE_MACHINE0	
+RACE_MACHINE0	port/core/src/files_match.cpp	re	Put32\(r \+ (8),	1
+RACE_MACHINE0	port/core/src/files_replay.cpp	re	Put32\(r \+ (8),	1
+RACE_OPPONENTS	memmap.py	py	RACE_OPPONENTS	
+RACE_OPPONENTS	port/core/src/files_match.cpp	re	Put32\(r \+ (12),	1
+RACE_OPPONENTS	port/core/src/files_replay.cpp	re	m\.race\.data\(\) \+ (\d+)\)	1
+RACE_LAPS	memmap.py	py	RACE_LAPS	
+RACE_LAPS	port/core/src/files_match.cpp	re	Put32\(r \+ (16),	1
+RACE_TYPE	memmap.py	py	RACE_TYPE	
+RACE_TYPE	port/core/src/files_match.cpp	re	Put32\(r \+ (20),	1
+RACE_SHUFFLE	memmap.py	py	RACE_SHUFFLE	
+RACE_SHUFFLE	port/core/src/files_match.cpp	re	Put32\(r \+ (24),	1
+RACE_CPUSEED	memmap.py	py	RACE_CPUSEED	
+RACE_CPUSEED	port/core/src/files_match.cpp	re	Put32\(r \+ (28),	1
+RACE_MACHINES	memmap.py	py	RACE_MACHINES	
+RACE_MACHINES	port/core/src/files_match.cpp	re	std::memcpy\(r \+ (\d+), machines	1
+RACE_MACHINES	port/core/src/files_replay.cpp	re	r\[(\d+) \+ i\]	1
+RACE_FINISH_LIMIT	memmap.py	py	RACE_FINISH_LIMIT	
+RACE_FINISH_LIMIT	port/core/src/files.h	cxx	RACE_FINISH_LIMIT	
+RACE_GRID_ON	memmap.py	py	RACE_GRID_ON	
+RACE_GRID_ON	port/core/src/files.h	cxx	RACE_GRID_ON	
+RACE_GRID	memmap.py	py	RACE_GRID	
+RACE_GRID	port/core/src/files.h	cxx	RACE_GRID	
+RACE_FLOW	memmap.py	py	RACE_FLOW	
+RACE_FLOW	port/core/src/files.h	cxx	RACE_FLOW	
+RACE_MINE_REGEN	memmap.py	py	RACE_MINE_REGEN	
+RACE_MINE_REGEN	port/core/src/files.h	cxx	RACE_MINE_REGEN	
+RACE_RUBBER_BAND_ON	memmap.py	py	RACE_RUBBER_BAND_ON	
+RACE_RUBBER_BAND_ON	port/core/src/files.h	cxx	RACE_RUBBER_BAND_ON	
+RACE_CPULEVEL	memmap.py	py	RACE_CPULEVEL	
+RACE_CPULEVEL	port/core/src/files.h	cxx	RACE_CPULEVEL	
+RACE_BOOST	memmap.py	py	RACE_BOOST	
+RACE_BOOST	port/core/src/files.h	cxx	RACE_BOOST	
+RACE_RESTORE	memmap.py	py	RACE_RESTORE	
+RACE_RESTORE	port/core/src/files.h	cxx	RACE_RESTORE	
+RACE_SETTINGS	memmap.py	py	RACE_SETTINGS	
+RACE_SETTINGS	port/core/src/files.h	cxx	RACE_SETTINGS	
+RACE_CUSTOM	memmap.py	py	RACE_CUSTOM	
+RACE_CUSTOM	port/core/src/files.h	cxx	RACE_CUSTOM	
+RACE_SIZE	memmap.py	py	RACE_SIZE	
+RACE_SIZE	port/core/src/files.h	cxx	RACE_SIZE	
+MAIN_REL	memmap.py	py	REL	
+MAIN_REL	port/image/relink.py	hex	BASE ([0-9A-F]{8}),	1
+MAIN_REL_ID	port/core/src/core.cpp	cxx	MAIN_REL_ID	
+MAIN_REL_ID	port/core/src/boot.cpp	use	game::MAIN_REL_ID	1
+REL_TEXT	port/image/gameinput.py	py	TEXT_OFFSET	
+REL_TEXT_AT	memmap.py	py	REL_TEXT	
+REL_TEXT_AT	port/image/build.py	py	TEXT	
+REL_TEXT_SIZE	port/image/gameinput.py	py	TEXT_SIZE	
+REL_TEXT_SIZE	port/image/build.py	re	memmap\.REL_TEXT \+ (0x[0-9A-F]+)	1
+REL_DATA	port/core/src/rollback.h	cxx	DATA	
+REL_BSS	port/core/src/rollback.h	cxx	BSS	
+REL_BSS	port/core/src/paint.cpp	cxx	BSS	
+REL_BSS_AT	memmap.py	py	REL_BSS	
+REL_BSS_AT	port/image/relink.py	hex	BSS ([0-9A-F]{8})\)	1
+RAM	port/core/src/paint.cpp	use	game::RAM	1
+RAM	port/image/build.py	re	memmap\.REL if kind == 0x[0-9A-F]+ else (0x[0-9A-F]{8})\)	2
+RETAIL_RAM_SIZE	port/core/src/paint.cpp	cxx	RAM_SIZE	
+MODULE_LIST	port/core/src/boot.cpp	use	game::MODULE_LIST	1
+MODULE_LIST	port/core/src/rollback.h	use	game::MODULE_LIST	1
+MODULE_LIST	port/core/src/paint.cpp	use	game::MODULE_LIST	1
+DOL_RNG	port/core/src/rollback.h	use	game::DOL_RNG	1
+DOL_RNG	memmap.py	py	EXECUTABLE_GENERATOR	
+EFFECTS_RNG - REL_DATA	memmap.py	py	EFFECTS_GENERATOR_DATA	
+BOOT_TIME	port/core/src/session.cpp	use	game::BOOT_TIME	2
+DOL_RNG	port/image/build.py	py	SHUFFLE_WORD	
+DOL_RNG	recomp/manifest.toml	re	generator at (0x[0-9A-F]{8}),	1
+STATE_END	port/core/src/rollback.h	use	game::STATE_END	1
+GAME_MODE_AT	port/core/src/options_screen.cpp	use	game::GAME_MODE_AT	1
+GAME_SUBMODE_AT	port/core/src/options_screen.cpp	use	game::GAME_SUBMODE_AT	1
+MODE_REQUEST_AT	port/core/src/options_screen.cpp	use	game::MODE_REQUEST_AT	2
+SUBMODE_REQUEST_AT	port/core/src/options_screen.cpp	use	game::SUBMODE_REQUEST_AT	2
+MODE_NONE	port/core/src/options_screen.cpp	use	game::MODE_NONE	1
+MODE_OPTION	port/core/src/options_screen.cpp	use	game::MODE_OPTION	5
+MODE_TITLE	port/core/src/options_screen.cpp	use	game::MODE_TITLE	1
+SUBMODE_TITLE_DEMO	port/core/src/options_screen.cpp	use	game::SUBMODE_TITLE_DEMO	1
+SUBMODE_OPTION_MENU	port/core/src/options_screen.cpp	use	game::SUBMODE_OPTION_MENU	3
+SUBMODE_OPTION_SAVE	port/core/src/options_screen.cpp	use	game::SUBMODE_OPTION_SAVE	2
+SUBMODE_OPTION_CONTROLLER	port/core/src/options_screen.cpp	use	game::SUBMODE_OPTION_CONTROLLER	2
+SAVE_DEFAULTS_SET	port/core/src/options_screen.cpp	use	game::SAVE_DEFAULTS_SET	1
+GAME_PASSES	port/core/src/hfr.cpp	use	game::GAME_PASSES	1
+PHASE	port/core/src/net_internal.h	cxx	PHASE	
+RACE_CLOCK	port/core/src/net_internal.h	cxx	RACE_CLOCK	
+PHASE_RACE	port/core/src/frame.cpp	re	module \+ PHASE\) [!=]= (0x[0-9A-F]+)	1
+MODE_GAME	port/core/src/core.cpp	use	game::MODE_GAME	1
+LOAD_QUEUED_AT	port/core/src/core.cpp	use	game::LOAD_QUEUED_AT	2
+LOAD_DONE_AT	port/core/src/core.cpp	use	game::LOAD_DONE_AT	2
+INTRO_COUNTDOWN_AT	port/core/src/core.cpp	use	game::INTRO_COUNTDOWN_AT	2
+INTRO_CUT	port/core/src/core.cpp	use	game::INTRO_CUT	3
+INTRO_FADE	port/core/src/core.cpp	use	game::INTRO_FADE	1
+INTRO_SKIP_ON_AT	port/core/src/core.cpp	use	game::INTRO_SKIP_ON_AT	1
+INTRO_SKIP_STATE	port/core/src/core.cpp	use	game::INTRO_SKIP_STATE	1
+LOAD_QUEUE_AT	port/core/src/core.cpp	use	game::LOAD_QUEUE_AT	1
+DISC_TABLE	port/core/src/core.cpp	use	game::DISC_TABLE	2
+PAD_RECORD	port/core/src/net_internal.h	cxx	PAD_RECORD	
+SCREEN_OPTION	port/core/src/boot.cpp	cxx	SCREEN_OPTION	
+OPTION_BINDINGS	port/core/src/boot.cpp	use	game::OPTION_BINDINGS	2
+OPTION_STICK_GATE	port/core/src/boot.cpp	use	game::OPTION_STICK_GATE	1
+OPTION_DEAD_ZONES	port/core/src/boot.cpp	use	game::OPTION_DEAD_ZONES	1
+OPTION_WHEEL_RANGE	port/core/src/boot.cpp	use	game::OPTION_WHEEL_RANGE	1
+OPTION_WHEEL_PLAY	port/core/src/boot.cpp	use	game::OPTION_WHEEL_PLAY	2
+OPTION_SCHEME	port/core/src/boot.cpp	use	game::OPTION_SCHEME	2
+GAME_ID	port/core/src/files.h	cxx	GAME_ID	
+MACHINES	port/core/src/rollback.h	cxx	MACHINES	
+MACHINE_COUNT	port/core/src/rollback.h	cxx	MACHINE_COUNT	
+MACHINE_SIZE	port/core/src/checksum.cpp	re	\b(0x620)\b	4
+MACHINE_SIZE	port/core/src/replay.cpp	use	game::MACHINE_SIZE	2
+MACHINE_SIZE	port/core/src/playback.cpp	re	\b(0x620)\b	2
+MACHINE_SIZE	port/core/src/instruments.cpp	re	\b(0x620)\b	11
+MACHINE_PROGRESS	port/core/src/checksum.cpp	re	\b(0x49C)\b	1
+MACHINE_PROGRESS	port/core/src/replay.cpp	use	game::MACHINE_PROGRESS	2
+MACHINE_PROGRESS	port/core/src/playback.cpp	re	\b(0x49C)\b	1
+MACHINE_PROGRESS	port/core/src/instruments.cpp	re	\b(0x49C)\b	1
+PROGRESS_SIZE	port/core/src/checksum.cpp	re	\b(0x1FC)\b	3
+PROGRESS_SIZE	port/core/src/instruments.cpp	re	\b(0x1FC)\b	5
+PROGRESS_RANK	port/core/src/replay.cpp	use	game::PROGRESS_RANK	2
+PROGRESS_RANK	port/core/src/playback.cpp	re	\b(0x115)\b	1
+PROGRESS_LAPS	port/core/src/replay.cpp	use	game::PROGRESS_LAPS	1
+PROGRESS_BEST_LAP	port/core/src/replay.cpp	use	game::PROGRESS_BEST_LAP	1
+PROGRESS_LAP_SUM	port/core/src/replay.cpp	use	game::PROGRESS_LAP_SUM	1
+CARS	port/core/src/paint.cpp	cxx	CARS	
+CAR_SIZE	port/core/src/paint.cpp	cxx	CAR_SIZE	
+DOL_PIN	port/image/build.py	py	DOL_PIN[0]	
+DOL_PIN_STOCK	port/image/build.py	py	DOL_PIN[1]	
+DOL_PIN_NEW	port/image/build.py	py	DOL_PIN[2]	
+DOL_LINKED	port/image/build.py	py	DOL_LINKED[0]	
+DOL_LINKED_STOCK	port/image/build.py	py	DOL_LINKED[1]	
+DOL_SOUND	port/image/build.py	py	DOL_SOUND[0]	
+DOL_SOUND_STOCK	port/image/build.py	py	DOL_SOUND[1]	
+VIEW_PORT_SITE	raceview.py	py	PORT_SITE	
+VIEW_PORT_STOCK	raceview.py	py	PORT_STOCK	
+VIEW_BITS_SITE_1	raceview.py	py	BITS_SITES[0]	
+VIEW_BITS_SITE_2	raceview.py	py	BITS_SITES[1]	
+VIEW_BITS_STOCK	raceview.py	py	BITS_STOCK	
+VIEW_LOW_SITE	raceview.py	py	LOW_SITE	
+VIEW_LOW_STOCK	raceview.py	py	LOW_STOCK	
+CAMERA_INDEX_VIEW	port/image/build.py	py	CAMERA_INDEXES[0]	
+CAMERA_INDEX_STATE	port/image/build.py	py	CAMERA_INDEXES[1]	
+CAMERA_INDEX_PLACE	port/image/build.py	py	CAMERA_INDEXES[2]	
+CAMERA_INDEX_STOCK	port/image/build.py	py	CAMERA_INDEX_WORD	
+SHADOW_PLACED_SITE	port/image/build.py	py	SHADOW_PLACED[0]	
+SHADOW_PLACED_STOCK	port/image/build.py	py	SHADOW_PLACED[1]	
+EFFECT_DRAW_SITE_1	port/image/build.py	py	EFFECT_DRAWS[0]	
+EFFECT_DRAW_SITE_2	port/image/build.py	py	EFFECT_DRAWS[1]	
+EFFECT_DRAW_SITE_3	port/image/build.py	py	EFFECT_DRAWS[2]	
+EFFECT_DRAW_SITE_4	port/image/build.py	py	EFFECT_DRAWS[3]	
+EFFECT_DRAW_STOCK	port/image/build.py	py	EFFECT_DRAW_WORD	
+ONDEMAND_HEAP	port/gates/judge_game.py	py	PIECES_FROM	
+MOVIE_TEXT	port/build/build-module.sh	hex	EXTRA:-"([0-9A-F]{8}):	1
+MOVIE_MODULE_TEXT	port/build/build-module.sh	hex	loaded-05-movie\.bin ([0-9A-F]{8}):	1
+MAX_FRAMES	port/core/src/net_internal.h	cxx	MAX_FRAMES	
+AI_STEER	port/core/src/frame.cpp	re	AI_DRIVES = \{0, (0x[0-9A-F]+), 0, 0, 0, 0\}	1
+EXIT_RACE_OVER	port/core/include/fzgx/core.h	cxx	EXIT_RACE_OVER	
+EXIT_RACE_OVER	net/src/Launcher.Core/RecompLaunch.cs	cs	RaceOverExitCode	
+EXIT_LEFT_RACING	port/core/include/fzgx/core.h	cxx	EXIT_LEFT_RACING	
+EXIT_LEFT_RACING	net/src/Launcher.Core/RecompLaunch.cs	cs	LeftRacingExitCode	
+IMAGE_MARK	port/core/src/files_bundle.cpp	text	"(FZMD)", 4\)	1
+IMAGE_MARK_WORD	port/core/src/boot.cpp	re	g\.Read32\(IMAGE\) == (0x[0-9A-F]{8})	1
+IMAGE_VERSION	port/image/build.py	re	struct\.pack_into\(">II", image, 4, (\d+), len\(image\)\)	1
+PATCHES_MARK	port/image/build.py	text	image \+= b"(\w{4})"	1
+SLOT_MARK	port/core/src/files_bundle.cpp	text	"(FZSI)", 4\)	1
+RACE_MARK	port/core/src/files_match.cpp	text	"(FZRC)", 4\)	1
+RACE_MARK_WORD	port/core/src/boot.cpp	re	g\.Read32\(RACE\) == (0x[0-9A-F]{8})	1
+STATE_DUMP_MARK_WORD	port/core/src/instruments.cpp	re	Swap32\((0x[0-9A-F]{8})\)	1
+BUNDLE_VERSION	port/image/build.py	re	\{"version": (\d+), "form": "native"	1
+PATCH_LIST_VERSION	port/image/build.py	re	\{"version": (\d+), "complete"	1
+IDLE_GPU_SYNC	port/moderngekko/src/host.cpp	use	game::IDLE_GPU_SYNC	1
+IDLE_DISC_READ	port/moderngekko/src/host.cpp	use	game::IDLE_DISC_READ	1
+IDLE_LOAD_QUEUE	port/moderngekko/src/host.cpp	use	game::IDLE_LOAD_QUEUE	1
+IDLE_OS	port/moderngekko/src/pins.cpp	use	game::IDLE_OS	1
+IDLE_OS	net/src/Launcher.Core/Files/RecompLaunch.UserFolder.cs	re	"StaticRecompIdlePC", "(0x[0-9A-F]+)"	1
+IDLE_OS	port/setup/Dolphin.ini.pristine	re	StaticRecompIdlePC = (0x[0-9A-F]+)	1
+IDLE_OS	port/setup/Dolphin.ini.single	re	StaticRecompIdlePC = (0x[0-9A-F]+)	1
+IDLE_OS	port/setup/Dolphin.ini.gate-nocheats	re	StaticRecompIdlePC = (0x[0-9A-F]+)	1
+REFERENCE_RAM_SIZE	port/moderngekko/src/host.cpp	use	game::REFERENCE_RAM_SIZE	1
+HOSTCALLS_END	port/moderngekko/src/adapter_internal.h	use	table::HOSTCALLS_END	1
+IMAGE_HOOK_AT	port/moderngekko/src/adapter_internal.h	use	table::IMAGE_HOOK_AT	1
+DOL_FILE_OFFSETS	port/moderngekko/src/adapter.cpp	use	game::DOL_FILE_OFFSETS	1
+DOL_FILE_ADDRESSES	port/moderngekko/src/adapter.cpp	use	game::DOL_FILE_ADDRESSES	1
+DOL_FILE_SIZES	port/moderngekko/src/adapter.cpp	use	game::DOL_FILE_SIZES	1
+DOL_FILE_SECTIONS	port/moderngekko/src/adapter.cpp	use	game::DOL_FILE_SECTIONS	1
+DOL_FILE_HEADER_SIZE	port/moderngekko/src/adapter.cpp	use	game::DOL_FILE_HEADER_SIZE	1
+DOL_FILE_ADDRESSES // 4	port/image/dol.py	re	\(h\[(\d+) \+ i\], h\[i\]	1
+DOL_FILE_SIZES // 4	port/image/dol.py	re	h\[i\], h\[(\d+) \+ i\]\)	1
+DOL_FILE_SECTIONS	port/image/dol.py	re	for i in range\((\d+)\)	1
+IMAGE_LIMIT	port/core/src/files_bundle.cpp	use	layout::IMAGE_LIMIT	1
+WINDOW	port/core/include/fzgx/guest.h	use	layout::WINDOW	4
+WINDOW_END	port/core/include/fzgx/guest.h	use	layout::WINDOW_END	2
+CAR_DATA	port/core/src/stat_pack.cpp	use	game::CAR_DATA	1
+CAR_DATA_SIZE	port/core/src/stat_pack.cpp	use	game::CAR_DATA_SIZE	1
+CAR_DATA_MAPPED	port/core/src/stat_pack.cpp	use	game::CAR_DATA_MAPPED	4
+MACHINE_ID	port/core/src/stat_pack.cpp	use	game::MACHINE_ID	1
+MACHINE_WEIGHT	port/core/src/stat_pack.cpp	use	game::MACHINE_WEIGHT	1
+CAR_BLOCK	port/core/src/stat_ranges.h	use	file::CAR_BLOCK	1
+CAR_BLOCK	net/src/Launcher.Core/Files/MachineStatFile.cs	cs	BlockSize	
+CAR_MACHINES	port/core/src/stat_ranges.h	use	file::CAR_MACHINES	2
+CAR_NAMES_AT	port/core/src/stat_pack.cpp	use	file::CAR_NAMES_AT	2
+CAR_PARTS_AT	port/core/src/stat_ranges.h	use	file::CAR_PARTS_AT	1
+CAR_PARTS_AT	port/core/src/stat_pack.cpp	use	file::CAR_PARTS_AT	1
+PART_PAINT_SLOT	port/core/src/files_match.cpp	use	file::PART_PAINT_SLOT	1
+PARTS_COLORS_AT	net/src/Launcher.Core/Files/PartColours.cs	cs	TableAt	
+PARTS_COLORS	net/src/Launcher.Core/Files/PartColours.cs	cs	PerPart	
+CAR_PARTS	port/core/src/stat_ranges.h	use	file::CAR_PARTS	1
+CAR_PART_NAMES_AT	port/core/src/stat_pack.cpp	use	file::CAR_PART_NAMES_AT	1
+CAR_BYTES_AT	port/core/src/stat_ranges.h	use	file::CAR_BYTES_AT	1
+STAT_ENTRY	port/core/src/files_stats.cpp	use	file::STAT_ENTRY	7
+STAT_FORMAT	port/core/src/files_stats.cpp	use	file::STAT_FORMAT	1
+SOUND_QUEUE	port/core/src/hits.cpp	use	game::SOUND_QUEUE	1
+HUD_PARTS	port/core/src/minimap_frame.cpp	use	game::HUD_PARTS	3
+MAP_CAMERAS	port/core/src/minimap_frame.cpp	use	game::MAP_CAMERAS	1
+MACHINE_DRAWN_X	port/core/src/minimap_frame.cpp	use	game::MACHINE_DRAWN_X	1
+MACHINE_DRAWN_Y	port/core/src/minimap_frame.cpp	use	game::MACHINE_DRAWN_Y	1
+MACHINE_DRAWN_Z	port/core/src/minimap_frame.cpp	use	game::MACHINE_DRAWN_Z	1
+COLI_NODES	port/core/src/minimap_start.cpp	use	file::COLI_NODES	3
+COLI_NODE_SIZE	port/core/src/minimap_start.cpp	use	file::COLI_NODE_SIZE	1
+COLI_CHECKPOINT_SIZE	port/core/src/minimap_start.cpp	use	file::COLI_CHECKPOINT_SIZE	2
+COLI_CHECKPOINT_NORMAL	port/core/src/minimap_start.cpp	use	file::COLI_CHECKPOINT_NORMAL	1
+COLI_CHECKPOINT_ORIGIN	port/core/src/minimap_start.cpp	use	file::COLI_CHECKPOINT_ORIGIN	1
+COLI_CHECKPOINT_WIDTH	port/core/src/minimap_start.cpp	use	file::COLI_CHECKPOINT_WIDTH	1
+MAP_START_COLOUR	port/core/src/minimap_start.cpp	use	file::MAP_START_COLOUR	1
+REL_RODATA	port/core/src/const_ranges.h	use	game::REL_RODATA	3
+BOOST_ENERGY_USE	port/core/src/const_ranges.h	use	game::BOOST_ENERGY_USE	2
+SPEED_CAP	port/core/src/const_ranges.h	use	game::SPEED_CAP	2
+CONST_BLOCK	port/core/src/const_ranges.h	use	file::CONST_BLOCK	1
+CONST_BLOCK	port/core/src/files_stats.cpp	use	file::CONST_BLOCK	1
+MODULE_BOOST_ENERGY_USE	port/core/src/const_ranges.h	use	file::MODULE_BOOST_ENERGY_USE	1
+MODULE_SPEED_CAP	port/core/src/const_ranges.h	use	file::MODULE_SPEED_CAP	1
+MODULE_DASH_PLATE	port/core/src/const_ranges.h	use	file::MODULE_DASH_PLATE	1
+MODULE_DASH_POOL	port/core/src/const_ranges.h	use	file::MODULE_DASH_POOL	1
+MODULE_SETTING_CURVE	port/core/src/const_ranges.h	use	file::MODULE_SETTING_CURVE	1
+MODULE_BOOST_LENGTH	port/core/src/const_ranges.h	use	file::MODULE_BOOST_LENGTH	1
+SEAT_BLOCK	memmap.py	py	SEAT_BLOCK	
+SEAT_BLOCK_SIZE	memmap.py	py	SEAT_BLOCK_SIZE	
+SEAT_CONSTANTS	memmap.py	py	SEAT_CONSTANTS	
+SEAT_CONSTANT	memmap.py	py	SEAT_CONSTANT	
+SEAT_ROWS	memmap.py	py	SEAT_ROWS	
+SEAT_DASH_BASE	memmap.py	py	SEAT_DASH_BASE	
+SEAT_DASH_BASE	port/core/src/const_ranges.h	use	table::SEAT_DASH_BASE	1
+SEAT_DASH_SCALE	memmap.py	py	SEAT_DASH_SCALE	
+SEAT_DASH_SCALE	port/core/src/const_ranges.h	use	table::SEAT_DASH_SCALE	1
+SEAT_ENERGY_USE	memmap.py	py	SEAT_ENERGY_USE	
+SEAT_ENERGY_USE	port/core/src/const_ranges.h	use	table::SEAT_ENERGY_USE	1
+SEAT_SPEED_CAP	memmap.py	py	SEAT_SPEED_CAP	
+SEAT_SPEED_CAP	port/core/src/const_ranges.h	use	table::SEAT_SPEED_CAP	2
+SEAT_BOOST_BASE	memmap.py	py	SEAT_BOOST_BASE	
+SEAT_BOOST_SCALE	memmap.py	py	SEAT_BOOST_SCALE	
+SEAT_CURVE	memmap.py	py	SEAT_CURVE	
+SEAT_CURVE_DOUBLE	memmap.py	py	SEAT_CURVE_DOUBLE	
+SEAT_SETTING	memmap.py	py	SEAT_SETTING	
+LOCKED_CACHE	port/moderngekko/src/lanes_internal.h	use	game::LOCKED_CACHE	1

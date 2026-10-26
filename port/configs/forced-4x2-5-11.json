@@ -1,0 +1,7 @@
+{
+  "about": "A recording played back as the race, a rollback forced every 4 displayed frame(s), 2, 5, 11 step(s) deep in turn (replay-check.sh; row forced)",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "replay": {"file": "{replay}"},
+  "debug": {"forceRollback": {"every": 4, "depths": [2, 5, 11]}}
+}

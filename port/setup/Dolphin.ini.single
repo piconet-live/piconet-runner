@@ -1,0 +1,35 @@
+[Core]
+EnableCheats = True
+StaticRecompIdlePC = 0x8001071C
+EnableCustomRTC = True
+CustomRTCValue = 0x386d4380
+EmulationSpeed = 0.0
+OverclockEnable = True
+Overclock = 6.0
+CPUCore = 6
+GFXBackend = Vulkan
+[Interface]
+UsePanicHandlers = False
+ConfirmStop = False
+OnScreenDisplayMessages = False
+[DSP]
+Volume = 0
+Backend = Cubeb
+DSPThread = True
+[Analytics]
+Enabled = False
+PermissionAsked = True
+ID = 00000000000000000000000000000000
+[AutoUpdate]
+UpdateTrack = 
+[Display]
+Fullscreen = False
+[Input]
+BackgroundInput = False
+[SDL_Hints]
+SDL_JOYSTICK_DIRECTINPUT = 1
+SDL_JOYSTICK_ENHANCED_REPORTS = 1
+SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS = 1
+SDL_JOYSTICK_HIDAPI_PS5_PLAYER_LED = 0
+SDL_JOYSTICK_HIDAPI_VERTICAL_JOY_CONS = 0
+SDL_JOYSTICK_WGI = 0

@@ -1,0 +1,22 @@
+[Core]
+EnableCheats = False
+StaticRecompIdlePC = 0x8001071C
+EmulationSpeed = 0.0
+EnableCustomRTC = True
+CustomRTCValue = 0x386d4380
+OverclockEnable = True
+Overclock = 6.0
+CPUCore = 6
+GFXBackend = Vulkan
+[Interface]
+UsePanicHandlers = False
+ConfirmStop = False
+OnScreenDisplayMessages = False
+[DSP]
+Backend = Cubeb
+DSPThread = True
+[Analytics]
+Enabled = False
+PermissionAsked = True
+[Input]
+BackgroundInput = False

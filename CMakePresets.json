@@ -1,0 +1,26 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {"major": 3, "minor": 25, "patch": 0},
+  "configurePresets": [
+    {
+      "name": "windows",
+      "displayName": "Windows (x64): MSVC for the recompiler and the runner, LLVM's clang for the module",
+      "description": "Run from a Developer environment (vcvars64.bat of Visual Studio 2022 Build Tools) with LLVM 20.1.8's bin, Python and ninja on PATH. Your own folders (PORT_WORK, default build/work in the checkout as port/setup/work-folder.env says; PORT_PROFILE, PORT_PYTHON, PORT_LLVM_ROOT) go in CMakeUserPresets.json or -D.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows",
+      "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows"},
+      "cacheVariables": {
+        "PORT_BUILD_NAME": "dev",
+        "PORT_HOST_TIMERS": "OFF",
+        "PORT_JOBS": "16"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows",
+      "configurePreset": "windows",
+      "displayName": "The recompiler and the runner (--target module: the native module; --target image: the image)"
+    }
+  ]
+}

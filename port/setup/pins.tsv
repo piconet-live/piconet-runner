@@ -1,0 +1,28 @@
+name	value	note
+# where today's pieces are in the repository: a folder that moves is one line here		
+REPO_IMAGE	port/image	build.py (the bundle), gameinput.py
+REPO_SWITCHES	port/build/lanes.switches.env	the released module's switches: n6's with the machines' lanes (0.3.0 on; review 037's 82b7241c)
+RELEASE_CODEGEN_REV	n6-lanes	the DOLRECOMP_CODEGEN_REV of the module the last review proved: scripts/release-build.sh refuses switches that give another
+REPO_BUILD	port/build	the step scripts, cmake/ (the superbuild's recipes; CMakeLists.txt and CMakePresets.json are at the root), win/tools.bat, manifest.py (fastlookup.py is the recompiler fork's: forks/dolrecomp, tools/)
+REPO_FORKS	forks	upstream.tsv is the one table of the source trees (our fork's URL, upstream base, our commit, tree id), each a submodule here; apply.sh checks a tree out in a work folder, check.sh --trees checks a work folder's
+REPO_MACHINE	recomp	the machine files in use
+# the other parts' checkouts, relative to this repository's root (port/setup/app.sh and parts.py read them): the protocol is this repository's submodule; the launcher and the service are checkouts beside this one, as they are cloned next to it		
+REPO_SERVICE	../piconet-service	the service: the test server and the simulated players, their build
+REPO_LAUNCHER	../piconet-launcher	the launcher: what a staged or packed launcher is published from, its fonts, icon and SDK
+REPO_PROTOCOL	external/protocol	the protocol: its schema and generated files
+REPO_GATES	port/gates	the gates (piconet-gates, private): a checkout of them here, where their own pins.tsv says REPO_RUNNER ../..; they hold the test harness (vendor/harness, copied from recomp-kit: its win/launch.ps1 starts every test game, install.sh copies win/ to kit-win; RECOMP_KIT=<a recomp-kit checkout> takes that one's tools/harness) and this PC's locks. Optional: a checkout without them builds and runs its core tests, and says what it leaves out
+PC_SCRIPTS_DEFAULT		the folder of a PC's own scripts (its locks, the busy check, the quiet check; no repository holds them), which port/setup/lib.sh pc_take sources where they are: empty here, a row of ~/.config/piconet/pins.tsv names it (PC_SCRIPTS in the environment over it). Without it a build and the gates run all the same, and say once what is left out
+# the tools: which version a build needs, never where it is. port/setup/tools.py finds each as its own documented way does (Visual Studio by vswhere, LLVM and Python on PATH or the py launcher, cmake and ninja on PATH); a PC that keeps one elsewhere names it in ~/.config/piconet/pins.tsv, a table of this form outside every checkout read over this one (port/setup/lib.sh): TOOL_VCVARS_WIN (the vcvars64.bat), TOOL_LLVM_WIN, TOOL_PYTHON_WIN (the folders)		
+VERSION_VS	[17.0,18.0)	Visual Studio 2022 Build Tools (17.x; vswhere's -version range) with the C++ workload; n6: MSVC 14.44.35207
+VERSION_LLVM	20.1.8	LLVM for Windows with lib/cmake (the recompiler links it): clang+llvm-20.1.8-x86_64-pc-windows-msvc, github.com/llvm/llvm-project releases
+VERSION_PYTHON	3.10	Python for Windows, python.org (the module's build runs it)
+VERSION_CMAKE	4.1.1	cmake on PATH: the version module n6 was built with (another is said, not refused)
+VERSION_NINJA	1.11.1	ninja on PATH (or in Python's Scripts: pip install ninja): the version module n6 was built with (another is said, not refused)
+TOOL_GIT	git.exe	Git for Windows on PATH: forks/check.sh reads a work folder's trees with it (the checkouts themselves are made by Linux git, forks/apply.sh); n6: 2.42.0
+# the disc and what is made from it: hashes only, the files stay in the work folder. Your own disc image is a setting with no default: a row DISC_DEFAULT<tab>/mnt/c/.../F-Zero GX (USA).iso in ~/.config/piconet/pins.tsv		
+DISC_DEFAULT		
+SHA1_MAIN_DOL	421c88106697d3275a3fc26fb7a01bf6d816b271	sys/main.dol as the disc has it
+SHA1_SAMPLE_REL	7679d58798cbd0e47563a6a307410623979efc97	files/fze.sample.rel as the disc has it
+SHA1_MAIN_REL	df989873851d161218ae283f71ed89ce0a979955	derived/main.rel
+SHA1_MOVIE	71716ce5444d62036b48742b2b233271a368a22c	derived/loaded-05-movie.bin
+SHA1_MOVIE_MODULE	31f33a33d822171a23d0eba34b7807084478ada5	derived/loaded-0c-movie_module.bin

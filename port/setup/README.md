@@ -1,0 +1,40 @@
+# port/setup: a work folder from a checkout and a disc
+
+A newcomer's first command, in WSL on a Windows PC, from the root of a clone on a Windows drive (under `/mnt/c/`, say;
+no spaces in its path). It works in `build/work` in the clone, ignored by git. Then the build: CMake's preset `windows`
+(`cmake --preset windows`, `cmake --build --preset windows`), or `port/build/build.sh NAME` in WSL, which builds the
+same targets and stages a launcher: [../build](../build/README.md).
+
+    port/setup/setup.sh [--profile FILE]
+
+The Windows compilers cannot work in WSL's own filesystem (`cmd.exe` refuses a `\\wsl.localhost` folder), so a clone
+there names a work folder on a Windows drive (`setup.sh WORK`, then `PORT_WORK=WORK`; or once, in your settings below).
+`setup.sh` looks for everything first and says in one line each what is missing and how to get it or point at it:
+
+| What | Where from |
+|---|---|
+| Your own disc image, F-Zero GX (USA), as an ISO | you: the setting `DISC_DEFAULT` (below), or `setup.sh WORK DISC` |
+| Visual Studio 2022 Build Tools, C++ workload | visualstudio.microsoft.com; found by `vswhere.exe`, the installer's own query |
+| LLVM 20.1.8 for Windows with `lib/cmake` (`clang+llvm-20.1.8-x86_64-pc-windows-msvc`) | github.com/llvm/llvm-project releases; found on `PATH` (`clang.exe`) |
+| Python 3.10 for Windows, `cmake`, `ninja`, Git for Windows | python.org (the `py` launcher or `PATH`); the others on `PATH` (cmake and ninja also by `pip` into that Python). The image needs a Python with `keystone` (`pip install keystone-engine`, a venv is fine): `PORT_PYTHON` |
+| In WSL: `git`, `python3` (3.11 or later), `rsync`; github.com. `--profile FILE`: the module's training profile | `apt`; the profile is handed out beside a release (or the gates' `runs/profile.sh` trains one; `PROFILE=none` builds without one) |
+
+`pins.tsv` pins each tool's version (the `VERSION_` rows), never its place; `tools.py --say` shows what is found where.
+Your settings, outside every clone: `~/.config/piconet/pins.tsv` (rows `DISC_DEFAULT`, your disc image, and for a tool
+kept off `PATH` `TOOL_LLVM_WIN`, `TOOL_PYTHON_WIN`: its folder as Windows spells it, `TOOL_VCVARS_WIN`: its
+`vcvars64.bat`) and `~/.config/piconet/work-folder.env` (`PORT_WORK_DEFAULT=/mnt/<drive>/...`: your own work folder).
+
+| File | What |
+|---|---|
+| `setup.sh` | Runs the three below; `--check WORK` says whether every installed file of a work folder is the tracked one |
+| `trees.sh` | The five source trees of `forks/upstream.tsv` checked out at the submodules' commits by `forks/apply.sh` (Linux git, LF line ends), RecompCore's Externals, then `forks/check.sh --trees` |
+| `linux-tools.sh` | The tools of a Linux build (LLVM 20.1.8's release, cmake 3.31.6, zlib, zstd and pkgconf unpacked from Ubuntu's packages), without root, into `~/linux-build/tools` |
+| `disc.sh` | The disc as a folder with its two pins (`extract-disc.py`), `main.rel` (`mainrel.py`), the movie player's two images (`ondemand.py`), each checked against its hash in `pins.tsv` |
+| `install.sh` | `fastlookup.py` (the recompiler's tree's) and machine files (`recomp/`), with the work folder and the tools (`tools.py`) written where they say `@WORK@`, `@WORK_WIN@`, `@LLVM@`, `@LLVM_WIN@`; emulator configuration; the busy check and the quiet check, from the PC's own scripts where it has them (`pins.tsv` PC_SCRIPTS_DEFAULT; never overwritten); the harness's Windows scripts (the gates' `vendor/harness/win`, where they are). `--check` compares; the shared folder is written only with `--shared` |
+| `work-folder.env`, `work_folder.py` | **The one place that says where the work folder and the PC's lock files are** (by default `build/work` in the clone; your own folders in `~/.config/piconet/work-folder.env`, read over it). Shell scripts source it, Python imports the reader; `PORT_WORK` and `PORT_LOCKS` decide first. No other file may write the path (`scripts/structure_check.py --explain 18`), but the CMake superbuild's `PORT_WORK` default, the same `build/work`, as CMake cannot read this file |
+| `pins.tsv`, `lib.sh`, `parts.py`, `tools.py` | `tools.py` finds the Windows tools (`--say` for a person, `--shell` for `lib.sh` `find_tools`, `find()` for `port/build/manifest.py`). Repository paths (the other parts' checkouts too, for `port/setup/app.sh` and, through `parts.py`, the runner's Python), the tools' versions, the hashes of what the disc gives. The trees' pins are in `forks/upstream.tsv` only |
+| `app.sh` | Sourced by the port's scripts (path lookup, so it is here and not with the gates): the application's side (the built test server and simulated players, what builds them, the launcher's project, a launcher's stack stamp (app_stamp), the protocol's folder), each in the checkout that `port/setup/pins.tsv`'s rows `REPO_SERVICE`, `REPO_LAUNCHER` and `REPO_PROTOCOL` name (`.` while all is one repository). The only file under `port/` that names `net/` |
+| `kept.tsv`, `kept.sh` | The gates' inputs no recipe makes again (recordings, the JIT reference's match race, the two saved states): `kept.sh WORK --from REFERENCE` copies and checks them |
+| `inputs.md` | Every input of a build: what makes it, and whether it comes out as the same bytes |
+
+No game data lives here: hashes, addresses and recipes only. Everything made from the disc stays in the work folder.

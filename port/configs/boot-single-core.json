@@ -1,0 +1,5 @@
+{
+  "about": "A boot from the game folder on the native form with the picture on the CPU's thread: the profile's training runs and the recording of a gate scene's saved state (the gates' runs/profile.sh, runs/state.sh)",
+  "bundle": "{bundle}",
+  "debug": {"singleCore": true}
+}

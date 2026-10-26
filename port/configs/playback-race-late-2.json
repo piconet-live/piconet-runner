@@ -1,0 +1,7 @@
+{
+  "about": "A recording played back as the race with its inputs known two steps late: the race runs on predictions and real rollbacks, as a live one (replay-check.sh; row pair)",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "replay": {"file": "{replay}", "scrubber": false},
+  "debug": {"lateSteps": 2}
+}

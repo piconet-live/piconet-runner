@@ -1,0 +1,4 @@
+{
+  "about": "A gate scene from a saved state on the emulator's own compiler, the reference a native run is compared with: no bundle, the saved state as it is (gate-native.sh; row batch)",
+  "debug": {"jit": true}
+}

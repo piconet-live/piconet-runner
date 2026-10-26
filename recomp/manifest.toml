@@ -1,0 +1,973 @@
+# F-Zero GX (GFZE01): the manifest for recomp-kit.
+#
+# Format: recomp-kit docs/manifest.md. Check with
+#   python3 <recomp-kit>/tools/manifest/validate.py recomp/manifest.toml --strict --questions
+#
+# Every value here comes from our notes or from the scripts and patches committed in this repository, and each
+# entry says which. Nothing here is game data: addresses, names, sizes, hashes and settings only.
+#
+# Sources, as abbreviated in `source`:
+#   SM       the spike-moderngekko notes
+#   SC       the spike-dolrecomp-codegen notes as on main (2232b71)
+#   SC+      the same note as on branch spike/dolrecomp-codegen (ffc0f0f), which is ahead of main: "The dual-core
+#            gate", "16", "17a", "18. Closed physics", "The race start in dual core", "19", "20", "Audio",
+#            "State at hand-over", "What a launcher needs to start this"
+#   PP       the plan-moderngekko-port notes
+#   SD       the spike-determinism notes
+#   SR       the spike-race-setup notes
+#   RO       the spike-rollback-online notes
+#   FI       the plan-frame-interpolation notes
+#   probe    forks/recompcore/1-base/0001-spike-the-codegen-spike-s-runtime-changes-at-its-han.patch, FzgxProbe.cpp
+#   scripts  the scripts of the two recompilation experiments; the file is named. The codegen experiment's are the
+#            speed work's (the cg-*.sh family and its helpers), still beside the experiments until that work lands;
+#            the first experiment's are archived (finished: nothing runs them)
+#   sha1     decomp/fzgx/config/GFZE01/build.sha1 (SM §2 and §3 say our files match it)
+# A value whose only source is "probe" or "scripts" is in no note: it is what the tools that produced the gate
+# results used. Values the notes do not settle are left out.
+
+schema = 1
+
+[game]
+id = "GFZE01"
+title = "F-Zero GX"
+region = "NTSC-U"
+platform = "gamecube"
+mem1_size = 0x1800000   # the retail 24 MiB: every gate ran with it, and it is the intended product configuration
+symbols = "rayanht/fzgx at 3a0542c9 (decompilation; fn_1_X is main.rel .text + X)"
+source = "FI header (NTSC-U, GFZE01); SD (24 MB of main RAM); SC+ 'The dual-core gate' (Memory size); PP header (the decompilation's commit)"
+
+[reference]
+emulator = "ModernGekko a2e4e2b, whose emulator core is Dolphin 2606"
+core = "Jit64"
+note = "Results compare native code with Dolphin 2606's Jit64, not with our 2512 fork: 2606 changed single-precision FMA rounding (upstream 58487f1633). The reference runs the game with FPRF on, from its game settings."
+source = "SM §1 (versions), §4 (caveat), §5 (FPRF = True)"
+
+# ---- tools -----------------------------------------------------------------------------------------------------------
+
+[[toolchain]]
+name = "ModernGekko"
+commit = "forks/upstream.tsv, row moderngekko"
+patches = "forks/moderngekko/"
+note = "Builds with MSVC (Visual Studio 2022 Build Tools, MSVC 14.44), CMake and Ninja; about 25 minutes cold."
+source = "SM §1"
+
+[[toolchain]]
+name = "RecompCore (ModernGekko's vendor/dolphin)"
+commit = "forks/upstream.tsv, row recompcore"
+patches = "forks/recompcore/"
+note = "The patch holds the probe, the fast paths, the idle-PC list, RecompCore PR #19 with its fix, and the gather-pipe hand-over. PP's header names 8b47e90bf6 for the same folder: which of the two commits the patch is against is not settled."
+source = "SM §1; SC Method; the codegen experiment's README (archived)"
+
+[[toolchain]]
+name = "DolRecomp"
+commit = "forks/upstream.tsv, rows dolrecomp and dolrecomp-vendored"
+branch = "fzgx/codegen"
+patches = "forks/dolrecomp/ (one patch per commit); forks/dolrecomp-vendored/ (the checkout inside RecompCore, which the runner's build reads)"
+note = "The DolRecomp that RecompCore cf8ceb8 pins. Head (c876e2b) cannot be loaded by this runtime."
+source = "SM §1; SC Method"
+
+[[toolchain]]
+name = "LLVM"
+commit = "clang+llvm-20.1.8-x86_64-pc-windows-msvc"
+note = "The official portable package, the same as DolRecomp's CI. Its LLVMExports.cmake must be pointed at the VS 2022 Build Tools DIA SDK."
+source = "SM §1"
+
+# ---- code modules ----------------------------------------------------------------------------------------------------
+
+[[module]]
+name = "main.dol"
+kind = "dol"
+obtain = "executable"
+disc_path = "sys/main.dol"
+sha1 = "421c88106697d3275a3fc26fb7a01bf6d816b271"
+compile = true
+note = "Recompiles in 1 s (C backend) or 2 min (LLVM). The copy the builds read carries the pin 'sample-alloc-pad'."
+source = "SM §2 (hash prefix, matches the decompilation); sha1 (full hash); PP §1.5 (sys/main.dol)"
+
+[[module]]
+name = "main.rel"
+kind = "rel"
+obtain = "memory-dump"
+disc_path = "files/enemy_line/line__.bin"   # encrypted and compressed; PP §2.1 writes bg/enemy_line, the disc tree has enemy_line
+sha1 = "df989873851d161218ae283f71ed89ce0a979955"   # of the unpacked file, 2,221,812 bytes
+compile = true
+load = "runtime"
+load_address = 0x801BA660
+base_pointer = 0x800030C8
+varies_with = "The game pads two allocations with 32 x ((OSGetTick() & 31) + 1): the address moves with the engine's cycle accounting, the boot code list, the clock and probably the overclock. Seen: 0x801BA640 + 32k for k from 1 to 32."
+pins = ["sample-alloc-pad", "mainrel-pad"]
+dump = { file = "mainrel-ram-801ba660.bin", covers = "text", when = "main.rel's relocated text, dumped from memory after the game's loader linked it, with the boot codes applied (so the Gecko insert at fn_1_ECC is in the image)" }
+unpack = { tool = "the decompilation's linecrypt and avlz (pure Python)", use = "checks the unpacked file's hash; the build uses the memory dump, whose relocations are exactly as the game applied them" }
+sections = { text = { offset = 0xDC, size = 0x15F62C }, data = { offset = 0x16D600, size = 0x4C9C1 }, bss = { offset = 0x1BA040, size = 0x8FEA4 } }
+note = "Appended to main.dol as a third text section (port/image/gameinput.py) so DolRecomp compiles both together. 127 bytes of padding lie between .data's end and .bss."
+source = "SM §3 (derivation, hash prefix, pinned address, how it is compiled); sha1; PP §1.3 ([0x800030C8]) and §2.1 (the address rule); PP §3.2 (.text = header + 0xDC); FI header (.bss at 0x803746A0); SC 'Calls from native code' (codes in the image); scripts cg-build.sh (text size 0x15F62C); probe (.data offset and size, .bss size)"
+
+[[module]]
+name = "fze.sample.rel"
+kind = "rel"
+obtain = "disc-file"
+disc_path = "files/fze.sample.rel"
+sha1 = "7679d58798cbd0e47563a6a307410623979efc97"
+compile = false
+sections = { text = { offset = 0xBC, size = 0x3FC } }   # here the offset is the file offset of .text
+note = "The loader stub: main.dol links it, its _prolog decrypts, unpacks and links main.rel, then it is unlinked and cleared. Runs once at boot, on the fallback core. The pin 'mainrel-pad' changes one word of it."
+source = "PP §2.1; sha1 (sample/sample.rel)"
+
+[[module]]
+name = "fze.menu-rels"
+kind = "rel"
+obtain = "disc-file"
+disc_path = "files/fze.*.rel"
+compile = false
+note = "The menu modules (car_colchg, customize, interview, movie, movie_module, option, pilotpoint, profile, replay, sel, story, title, winning). They load per mode from a heap and do not run in a race; they have no tick pad. Not compiled: they run on the fallback core. Their hashes are in the decompilation's build.sha1."
+source = "SM §3 (not compiled, in files/); PP §2.4 (how they load)"
+
+# ---- pins ------------------------------------------------------------------------------------------------------------
+
+[[pin]]
+name = "sample-alloc-pad"
+purpose = "fze.sample.rel and the decryption buffer land at fixed places, so memory after boot is identical"
+module = "main.dol"
+relies_on_sha1 = "421c88106697d3275a3fc26fb7a01bf6d816b271"
+applied = "extracted-copy"
+result = "The top-of-arena allocations no longer depend on the tick. It does not move main.rel; it makes whole-memory comparisons across engines meaningful."
+writes = [
+  { address = 0x80005940, file_offset = 0x2940, was = "bl OSGetTick", becomes = "li r3,0" },
+]
+note = "In fn_8000591C. The original is kept beside the patched file as *.orig."
+source = "SM §3 (pinning); PP §2.2 (file offset, effect)"
+
+[[pin]]
+name = "mainrel-pad"
+purpose = "main.rel loads at one address under every core and module"
+module = "fze.sample.rel"
+relies_on_sha1 = "7679d58798cbd0e47563a6a307410623979efc97"
+applied = "extracted-copy"
+result = "The pad is 32 bytes, so main.rel's first byte is at 0x801BA660 (text 0x801BA73C)."
+writes = [
+  { file_offset = 0x104, was = "and r5,r0,r3", becomes = "li r5,0" },   # .text + 0x48
+]
+note = "The tick call at .text + 0x3C is left alone because OSLink relocates it. For the product PP §2.3 plans a nine-word patch of main.dol alone, written to memory after the DOL loads, which makes the DOL write this word itself; it is not applied in any run so far."
+source = "SM §3 (pinning); PP §2.2 (file offset 0x104 = 0xBC + 0x48)"
+
+# ---- configurations --------------------------------------------------------------------------------------------------
+
+[[configuration]]
+name = "single-core"
+what = "The GPU's work runs on the emulated CPU's thread. This is what Dolphin's own settings for the game give."
+settings = { "Core.CPUThread" = false }
+note = "Every run up to build 15 was single core. Here the JIT reproduces its own memory to the word."
+source = "SC 'Dual core is what ships'; SC Method"
+
+[[configuration]]
+name = "dual-core"
+what = "The GPU has its own thread."
+ships = true
+primary = true
+env = { FZGX_DUALCORE = "1" }
+note = "What the shipping fork runs, and the configuration each step is judged in from build 15c on. No build reproduces its own memory here; see the noise set 'dual-core-timing'."
+source = "SC 'Dual core is what ships'; SC+ Status and 'The dual-core gate'; forks/moderngekko/1-base/0001-spike-the-codegen-spike-s-runner-changes-at-its-hand.patch (the variable)"
+
+# ---- emulator and runner settings ------------------------------------------------------------------------------------
+
+[[setting]]
+key = "Core.EnableCustomRTC"
+value = true
+where = "emulator-config"
+reason = "Turns on the fixed clock below."
+source = "SD Method"
+
+[[setting]]
+key = "Core.CustomRTCValue"
+value = "0x386d4380"
+where = "emulator-config"
+reason = "The clock seeds the OS time base. With another clock the race differs everywhere by frame 3600, the boot takes another number of frames and main.rel loads elsewhere."
+source = "SD Method and 'What the clock changes'; SM §1 (Runs)"
+
+[[setting]]
+key = "Core.Overclock"
+value = 6.0
+where = "emulator-config"
+reason = "With 30 machines a step plus re-simulated steps overruns the frame's budget of emulated time at 1x and the game drops to 30 fps; our matches default to 6. One game at 3x and one at 1x agreed on every checksum, so the clock does not touch the simulation."
+source = "SM §4 (Method: overclock 6); RO 'Emulated CPU clock' and 'Half the frame rate in the race'; PP §1.3"
+
+[[setting]]
+key = "Core.EmulationSpeed"
+value = 0.0
+where = "emulator-config"
+reason = "Unthrottled: the per-call figures are wall time and must not include the limiter. Emulation speed does not change the race."
+source = "SC header (unthrottled); SM §5; SR (speed and sound do not change the race)"
+
+[[setting]]
+key = "Interface.UsePanicHandlers"
+value = false
+where = "emulator-config"
+reason = "A panic dialog would hold an unattended run."
+source = "SM §1 (Runs: panic dialogs off)"
+
+[[setting]]
+key = "Core.EnableCheats"
+value = true
+where = "emulator-config"
+reason = "The boot-to-race and set-up codes are Gecko codes; the saved states were recorded with them and main.rel's image holds their hook."
+source = "SM §2; SC 'Calls from native code'"
+
+[[setting]]
+key = "Core.CPUThread"
+value = false
+where = "game-config"
+reason = "Not ours: Dolphin's settings for the game (GFZ.ini, and the user GFZE01.ini) set it, and that layer wins over the main configuration. Dual core therefore needs the current-run override FZGX_DUALCORE=1."
+source = "SC 'Dual core is what ships'"
+
+[[setting]]
+key = "Core.StaticRecompIdlePC"
+value = "0x8001071C"
+where = "emulator-config"
+applies = "native"
+reason = "Native code spins in the OS idle loop (SelectThread) unless it is told; Dolphin's JIT skips that loop by itself."
+source = "SM §2"
+
+[[setting]]
+key = "FZGX_L1_AS_MEM2"
+value = "1"
+where = "runner-env"
+applies = "native"
+reason = "The runtime points the second direct-memory window at the locked L1 cache (the game's scratchpad at 0xE0000000). It goes with the build switch DOLRECOMP_MEM2_BASE."
+source = "SM §5 (the locked L1 cache); scripts cg-run.sh (the variable)"
+
+[[setting]]
+key = "FZGX_IDLE_PCS"
+value = "8006FE18,80006388,802C1008"
+where = "runner-env"
+applies = "native"
+reason = "Three waits the game spins in, counted as idle time. 8006FE18: the GPU-sync wait loop in fn_8006FDEC polls OSGetTime; with overclock 6 the game spins there (40% of all dispatches); this is the return point after OSGetTime in the loop. 80006388 and 802C1008: the two waits for the disc (see the facts 'disc-read' and 'load-queue'); unidled, every load ran at 60 to 140 ms a field on native code."
+note = "In dual core, skipping this loop lets native reach the next VI while the GPU thread is still busy: the race start can slip by one field. See the difference 'dual-core-start-slip'."
+source = "SC §1 (the wait loop, StaticRecompIdlePCs); scripts cg-run.sh (the variable); SC+ 'The race start in dual core'"
+
+[[setting]]
+key = "--no-mods"
+value = true
+where = "runner-arg"
+reason = "The pinned module template only answers the mod-patch query as 'always available', and with no mod loaded no host call is installed, so no interception cost is measured. Nothing is proven with mods loaded."
+source = "SM §1 (the shim) and §5 (mod interception); SC 'Rule for hooks and mods'"
+
+# ---- scenes ----------------------------------------------------------------------------------------------------------
+
+[[scene]]
+name = "race300"
+exercises = "A 30-machine Practice race on Twist Road, from race frame about 300: the player holds the accelerator into walls, last and alone; 29 CPUs race. Steady-state physics load. No pack, no contact between machines in view, no start, no finish."
+reach = "savestate"
+state = "race300.sav"
+recorded_under = "ModernGekko's JIT, at race frame about 300 of the boot-race scene"
+input = "0:100"
+fields = 1800
+dump_steps = [600, 1200, 2000]
+screenshot_field = 260
+uses = ["timing", "gate", "training", "long"]
+note = "The timing scene. Its screenshot never shows another machine."
+source = "SM §4 (Method; dump frames); SC header and Method (1,800 fields); scripts cg-run.sh (input 0:100, screenshot field)"
+
+[[scene]]
+name = "racego"
+exercises = "The same race from 1.5 s before the green light, the player 30th on the grid with the accelerator held: the countdown, the start, the pack and its contacts."
+reach = "savestate"
+state = "racego.sav"
+recorded_under = "ModernGekko's JIT, 1.5 s before the green light"
+input = "0:100"
+fields = 1900
+dump_steps = [300, 900, 1500]
+compare_from_step = 1
+screenshot_field = 130
+uses = ["gate", "screenshot", "long"]
+note = "During the countdown 21 fields differ in every native build, the one before any FP change included: the probe hashes at the VI, where the main thread is caught at a different point of its frame. Racer hashes are equal from the green light on. Profile B of build 15b was trained here; the kept build trains on race300 only."
+source = "SC Method (the second savestate, screenshots); SC §15 (profiles A and B); scripts cg-run.sh (dump frames, screenshot field), cg-cycle.sh (1,900 fields)"
+
+[[scene]]
+name = "racego-audio"
+exercises = "The racego scene for a minute at normal speed with the audio dump on: the countdown, the start, 30 engine voices and the music stream. What the game sends to the mixer, and each AX voice's parameter block before every 5 ms audio frame."
+reach = "savestate"
+state = "racego.sav"
+recorded_under = "ModernGekko's JIT, 1.5 s before the green light"
+input = "0:100"
+fields = 3600
+uses = ["gate"]
+note = "Run with EmulationSpeed = 1.0 and DumpAudio = True in the work configuration, DSP HLE, output muted (scripts audio-run.sh). The voice log (FZGX_AXLOG) was taken unthrottled in single core over 1,800 fields. The dumps are game audio and are never committed."
+source = "SC+ 'Audio'; scripts audio-run.sh, audiocmp.py, axcmp.py"
+
+[[scene]]
+name = "boot-race"
+exercises = "Boot from the disc through the logos to the 30-machine Practice race on Twist Road: the loader, the pins, the boot path on native code."
+reach = "boot-codes"
+codes = ["port/image/routines/direct.py", "port/image/routines/setup.py"]
+note = "Both saved states were recorded from this boot. Another course needs a boot with other codes, and main.rel must still load at the pinned address; none is timed or gated yet."
+source = "SM §2; SC §15 (over-fitting: a second course is not timed)"
+
+[[scene]]
+name = "boot-first"
+exercises = "The first start a player makes: no saved state, no codes, no memory card. Creates the save file at the memory card prompt (field 600), accepts the default name at name entry and registers it (stick left to YES), acknowledges the save (A at field 2,200), reaches the title (field 2,212 on native build 19) and leaves it with Start twelve seconds later (the title ignores Start for its first seconds). Shows that a boot outside the saved states works and that the game writes its save into its own user folder. Not a gate."
+reach = "boot"
+input = "0:0,840:100,846:0,1320:100,1326:0,1440:0:0:128,1452:0,1500:100,1506:0,1680:0:0:128,1692:0,1740:100,1746:0,2200:100,2206:0,2940:1000,2946:0"
+fields = 3300
+screenshot_field = 2500
+screenshot_fields = [700, 1380, 1900, 3250]
+note = "Needs a user folder with no memory card (the port's machine-first file: its user folder is removed before the run), no codes, cheats off, the fixed clock. Runs unthrottled (emulation speed 0.0) since 2026-10-05; the fields are those of a run at 1.0."
+source = "the port-recomp notes, rung 1"
+
+[[scene]]
+name = "boot-menus"
+exercises = "A start with a save file on the memory card: the logos, the title (field 487), Start twelve seconds later, then A every three seconds through the menus with every default (Grand Prix, Mute City Twist Road, the Blue Falcon) and past the course screen, which wants a new press, and the accelerator held from field 3,400 on: the countdown, the start and the first seconds of a 30-machine race. For checking that a boot through the menus and the menu modules reaches a race on native code; not a gate."
+reach = "boot"
+input = "0:0,900:1000,906:0,1200:1000,1206:0,1500:100,1506:0,1680:100,1686:0,1860:100,1866:0,2040:100,2046:0,2220:100,2226:0,2400:100,2406:0,2580:100,2586:0,2760:100,2766:0,2940:100,2946:0,3120:100,3126:0,3400:100"
+fields = 5400
+screenshot_fields = [1000, 1300, 1670, 2030, 2390, 3000, 4650, 4680, 4710, 4740, 4800, 5200]
+note = "Needs the port's user folder with the save file boot-first makes (kept in its pristine copy), no codes, cheats off, the fixed clock. Runs unthrottled (emulation speed 0.0) since 2026-10-05: mode 1 at field 1,218 and mode 2 at 2,502 on native, 1,217 and 2,501 under the JIT, as at 1.0 (the port-recomp notes 5.9.1)."
+source = "the port-recomp notes, rung 1"
+
+[[scene]]
+name = "match-race"
+exercises = "A race booted from a match file (the gates' runs/match-file.sh: one player's seat driven by the game's AI among 29 CPU racers, one lap of Casino Palace: Split Oval), started through the launcher (the gates' runs/launcher-run.sh with MATCH): the boot straight into the race, the relay's go, the race, the finish and the results; A is tapped every two seconds from field 1,200 on, which leaves the results, and the game then stops by itself. For checking the course, seats, names, colours, seeds, the 16:9 picture and the leaving; two runs of one set-up are compared per race frame (port/gates/reports/run-summary.py)."
+reach = "boot"
+input = "0:0,1200:100,1206:0,1320:100,1326:0,1440:100,1446:0,1560:100,1566:0,1680:100,1686:0,1800:100,1806:0,1920:100,1926:0,2040:100,2046:0,2160:100,2166:0,2280:100,2286:0,2400:100,2406:0,2520:100,2526:0,2640:100,2646:0,2760:100,2766:0,2880:100,2886:0,3000:100,3006:0,3120:100,3126:0,3240:100,3246:0,3360:100,3366:0,3480:100,3486:0,3600:100,3606:0,3720:100,3726:0,3840:100,3846:0,3960:100,3966:0,4080:100,4086:0,4200:100,4206:0,4320:100,4326:0,4440:100,4446:0,4560:100,4566:0,4680:100,4686:0,4800:100,4806:0,4920:100,4926:0,5040:100,5046:0,5160:100,5166:0,5280:100,5286:0,5400:100,5406:0,5520:100,5526:0,5640:100,5646:0,5760:100,5766:0,5880:100,5886:0,6000:100,6006:0,6120:100,6126:0,6240:100,6246:0,6360:100,6366:0,6480:100,6486:0,6600:100,6606:0,6720:100,6726:0,6840:100,6846:0,6960:100,6966:0,7080:100,7086:0,7200:100,7206:0,7320:100,7326:0,7440:100,7446:0,7560:100,7566:0,7680:100,7686:0,7800:100,7806:0,7920:100,7926:0,8040:100,8046:0,8160:100,8166:0,8280:100,8286:0,8400:100,8406:0,8520:100,8526:0,8640:100,8646:0,8760:100,8766:0,8880:100,8886:0"
+fields = 9000
+screenshot_fields = [900, 1500, 2100, 2700, 3300, 3900]
+note = "Not a harness scene yet: the harness cannot give the runner a match file or start it through the launcher. Needs the port's user folder with a save file, a test server on this computer for the relay, and the mod bundle beside the staged launcher (the fork's, while the reference configuration stands)."
+source = "the port-recomp notes, step 2a"
+
+[[scene]]
+name = "replay-playback"
+exercises = "A replay file played back as the race (the game's replay mode, MD_REPLAY, is retired since 0.3.0): the boot straight into the file's race (course, laps, racers, seeds, machines, colours), the course intro, the countdown and the race with every player seat driven by its recorded inputs in lockstep, watched through the recorder's game camera, to the recording's end, and the game stopping by itself. Every step's state checksum is compared with the recorded one (the runner's lines 'the replay differs from the recording first at step N' and 'the replay ended; N steps differed'); the racers' hashes of a JIT run and a native run are compared per race frame."
+reach = "boot"
+input = "0:0"
+fields = 12000
+screenshot_fields = [1500, 3000, 4500]
+runner_args = ["--config", "{run}.json"]
+note = "The runner takes its settings from a launch file (protocol/formats.md section 2), written before each run beside the run's folder (<work>/port/runs/RUN.json): the gates' runs/launch-file.py playback <work>/port/runs/RUN.json bundle=<the mod bundle, a Windows path> replay=<the replay file> run=<the run's folder, a Windows path> --harness replay-playback (--harness adds what the harness needs of the game: the automation folder allowed, the probe's file, the pad script; the runner takes none of it from the environment in a start with a launch file). Needs the port's user folder, the mod bundle (port/image/fork_bundle.py; the reference configuration while its patches are Gecko codes) and a replay file in the work folder (game data, never committed; the one named was recorded on the Dolphin fork on 2026-10-04: 30 player seats, one lap of course 21, 6,349 steps, 0 steps differ under the JIT and on native build 19). No pad input: in a replay the D-pad changes the racer watched. Another file: write the launch file again with another replay=, or port/scripts/launcher-run.sh with REPLAY=FILE for the launcher's start. With 30 racers the hashes taken at the VI are comparable between cores; with two they are not, and the recorded checksums are the fixed guest point."
+source = "the port-recomp notes 5.10"
+
+[[scene]]
+name = "ta-multiplex"
+exercises = "A boot through the menus into Time Attack on Aeropolis Multiplex with the Blue Falcon, alone on the track: Start at the title, two steps right to Time Attack, Ruby Cup, four steps right in the course select, the machine select and the settings page with their defaults, the course's load and the start. The accelerator is held from field 4,300; with FZGX_POKE8_TASK=803E1EC0:1@5100,803750B4:04@5100,803E1EC0:0@5101-99999 the game's AI takes the machine and drives the three laps (the finish is near field 19,000). The load windows of a first play-test: course select 2,000-2,599, machine select 2,600-2,999, the load into Time Attack 3,200-3,599, the course load 4,200-4,399. Not a gate: a boot's race differs between cores by its random generator's history."
+reach = "boot"
+input = "0:0,900:1000,906:0,1200:1000,1206:0,1420:0:255:128,1426:0,1480:0:255:128,1486:0,1560:100,1566:0,1800:100,1806:0,2040:100,2046:0,2240:0:255:128,2246:0,2300:0:255:128,2306:0,2360:0:255:128,2366:0,2420:0:255:128,2426:0,2600:100,2606:0,2840:100,2846:0,3080:100,3086:0,4300:100"
+fields = 8000
+screenshot_fields = [2560, 5400, 7200]
+note = "Needs the port's user folder (save file, no codes, cheats off, fixed clock, unthrottled). Mode 2 on field 3,240, the green light on field 4,704, on native and under the JIT (3,239 for the mode)."
+source = "the port-recomp notes 5.9.2"
+
+[[scene]]
+name = "ta-multiplex-go"
+exercises = "Time Attack on Aeropolis Multiplex from a saved state 140 fields before the green light, the accelerator held; with FZGX_POKE8_TASK=803E1EC0:1@300,803750B4:04@300,803E1EC0:0@301-99999 and FZGX_POKE8_TASK_BY=frame the game's AI takes the machine on race frame 300 and laps the course. One machine, another course and another mode than the gate scenes."
+reach = "savestate"
+state = "mpxgo.sav"
+recorded_under = "ModernGekko's JIT, dual core, at field 4,562 of the ta-multiplex scene (no codes)"
+input = "0:100"
+fields = 5200
+dump_steps = [600, 2000, 4500]
+note = "Compare the racer blocks in the dumps (the first task call of a race frame). The hashes taken at the VI are not usable here: with one machine the main thread is caught mid-frame at a different point in each core. Needs the port's user folder (cheats off): with the gate scenes' folder the boot-to-race codes would be applied to a state that has none. Not marked for gates until the harness can give a scene its probe variables."
+source = "the port-recomp notes 5.9.2"
+
+[[scene]]
+name = "story-mission1"
+exercises = "Story mode from a save with nothing unlocked: the prologue (watching it unlocks the first mission), skipped with Start; one step right to Chapter 1; its movie skipped; the mission page, the machine settings page, and the mission with the accelerator held. With FZGX_AXLOG the voice starts show whether effects play: 14 music, 7 one-shot before the story pages; 4 music, 6 looped samples, 7 one-shot in them; 31 looped samples and about 620 one-shot in the mission, under the JIT and on native code. Also the place where the story's movies show their cost on native code (the fields in mode 8)."
+reach = "boot"
+input = "0:0,900:1000,906:0,1200:1000,1206:0,1420:0:128:0,1426:0,1480:0:255:128,1486:0,1560:100,1566:0,1800:100,1806:0,2400:1000,2406:0,2800:0:255:128,2812:0,2950:100,2956:0,3450:1000,3456:0,3850:100,3856:0,4200:100,4206:0,4550:100,4556:0,4900:100,4906:0,5250:100"
+fields = 7400
+screenshot_fields = [3750, 4100, 5600, 7300]
+runner_args = ["--config", "{run}.json"]
+note = "Needs the port's user folder (save file, no codes, cheats off, fixed clock, unthrottled). Started as the launcher starts offline play (a launch file with no race, written before each run beside the run's folder: the gates' runs/launch-file.py offline <work>/port/runs/RUN.json run=<the run's folder, a Windows path> --harness story-mission1, which adds what the harness needs of the game: the automation folder allowed, the probe's file, the pad script), so the picture's shape follows the game's screen option: with the machine file of the widescreen test save (port/machine-wide.toml: Options, Screen Mode, Wide Screen saved) every screenshot from field 520 on is 16:9, the machine settings page at field 4,100 included; that page was shown at 4:3 before (the port-recomp notes 5.9.8)."
+source = "the port-recomp notes 5.9.3, 5.9.8"
+
+[[scene]]
+name = "machine-preview-cstick"
+exercises = "The machine preview of Pilot Profiles (down, down, right, right on the mode grid; A; A on Captain Falcon; X for Machine Introductions) with the C-stick moved by script: up and down as a real stick reaches (200 and 56), L, R, up and right together, and the control stick. With FZGX_DUMP_FIELDS (every 30 fields from 2,590) the dumps hold what the game received for port 1 (main.rel .bss+0x998 after its clamp, +0x9C8 before, +0x9F8 its direction bits) and the camera's distance (.bss+0x8B62C: -11 at entry, -6 nearest, -30 farthest). C up zooms in, under the JIT and on native code alike."
+reach = "boot"
+input = "0:0,900:1000,906:0,1200:1000,1206:0,1420:0:128:0,1426:0,1480:0:128:0,1486:0,1540:0:255:128,1546:0,1600:0:255:128,1606:0,1660:100,1666:0,2140:100,2146:0,2400:400,2406:0,2600:0:128:128:128:200,2720:0,2780:0:128:128:128:56,2900:0,2960:40,3080:0,3140:20,3260:0,3320:0:128:128:200:200,3440:0,3500:0:128:255,3560:0"
+fields = 3640
+screenshot_fields = [2700, 2880]
+runner_args = ["--config", "{run}.json"]
+note = "The launch file its runner_args name is written before each run, as story-mission1's (the gates' runs/launch-file.py offline <work>/port/runs/RUN.json run=<the run's folder, a Windows path> --harness machine-preview-cstick). Needs the port's user folder (save file, no codes, cheats off, fixed clock, unthrottled). A step with button bit 2000 takes the pad's rest position from that step's sticks (the emulator's PAD_GET_ORIGIN): with the C-stick at 230 in it, the stick at rest then reads as held down and the camera runs to its far end (the port-recomp notes 5.9.7)."
+source = "the port-recomp notes 5.9.7"
+
+[[scene]]
+name = "ta-multiplex-replay-quit"
+exercises = "Time Attack on Aeropolis Multiplex from a saved state at the finish line of a race the game's AI drove (2'54\"227): the results, the record's name, the menu after the race, Replay, and Start, left, A while the replay plays (Quitting Replay. OK? YES). For the replay's camera (A and B change its kind, C up or down cuts to its next shot), for what the game asks of the mixer when a replay is left (FZGX_AXLOG, the audio dump) and for the cost of the loads at the replay's start (fields 1,380 to 1,560) and at the quit (2,040 to 2,160)."
+reach = "savestate"
+state = "mpxfin-c.sav"
+recorded_under = "ModernGekko's JIT, dual core, at field 10,530 of the ta-multiplex-go scene with its AI variables (race frame 10,419)"
+input = "0:100,200:0,650:100,656:0,850:100,856:0,1050:100,1056:0,1200:0:128:0,1206:0,1250:0:128:0,1256:0,1300:0:128:0,1306:0,1380:100,1386:0,1950:1000,1956:0,2000:0:0:128,2006:0,2040:100,2046:0"
+fields = 2400
+note = "Needs the port's user folder (cheats off) and FZGX_POKE8_TASK=803E1EC0:1@10427,803750B4:04@10427,803E1EC0:0@10428-99999 with FZGX_POKE8_TASK_BY=frame: the game's debug toggle hands the machine back from the AI eight race frames into the run, without which the game shows no results. The replay itself ends early (the recorded input was the accelerator alone; the AI's driving is not in it): the machine is lost about 700 fields in. Not a gate: the automatic camera's shots differ between cores by the random generator's history."
+source = "the port-recomp notes 5.9.7, 5.9.9"
+
+# ---- sources of difference between two runs --------------------------------------------------------------------------
+
+[[difference]]
+name = "clock"
+what = "The emulated clock seeds the OS time base, and through it the boot's timing, the load address and the random generators."
+pinned = "setting"
+by = "Core.CustomRTCValue"
+source = "SD 'What the clock changes'"
+
+[[difference]]
+name = "module-load-address"
+what = "main.rel's address comes from a tick-derived pad, and everything allocated after it follows."
+pinned = "pin"
+by = "mainrel-pad"
+source = "SM §3; PP §2.1"
+
+[[difference]]
+name = "boot-arena-contents"
+what = "The pad of fze.sample.rel's allocation moves stale data left in the top of the arena."
+pinned = "pin"
+by = "sample-alloc-pad"
+source = "PP §2.2"
+
+[[difference]]
+name = "race-setup-seeds"
+what = "Which machine each CPU seat drives is shuffled from the DOL's generator at 0x801A63C0, whose state depends on everything since boot; the CPUs also take a seed from the tick (fn_1_F47AC). A longer code list alone changed the race."
+pinned = "codes"
+by = "port/image/routines/setup.py"
+note = "setup.py holds the generator at a constant until the race and makes fn_1_F47AC return a constant. The saved states carry the result."
+source = "SR 'The cause', 'The fix, tested', 'In use'"
+
+[[difference]]
+name = "boot-history"
+what = "Everything else the boot leaves behind (code list length, boot frames)."
+pinned = "scene"
+by = "race300"
+note = "Both cores load the same saved state, recorded under the reference."
+source = "SM §4 (Method)"
+
+[[difference]]
+name = "input"
+what = "Controller input, and the field on which it lands."
+pinned = "scene"
+by = "race300"
+note = "The probe scripts port 0 per VI field, so inputs land on exact fields in every run."
+source = "SM §1 (Runs) and §4 (Method)"
+
+[[difference]]
+name = "memory-card"
+what = "The memory card's contents at the start of a run."
+pinned = "harness"
+note = "The launcher copies a pristine card into the user folder before every run. Only the script says so."
+source = "scripts launch.sh (the first experiment's)"
+
+[[difference]]
+name = "cycle-accounting"
+what = "The JIT and native code charge cycles differently, so timebase values and the points where interrupts are delivered differ between the two cores for the same guest code."
+pinned = "noise"
+by = "timebase-words"
+note = "Nothing reached from the simulation tasks reads the timebase; what the timing feeds ends up in profiling words, presentation and the heap's noise."
+source = "PP §1.3 'Timebase reads across engines'; SM §4"
+
+[[difference]]
+name = "audio-buffers"
+what = "Sound updates reach the mixer on the audio clock, 200 times a second. Native's emulated timeline is not the JIT's cycle for cycle, so now and then an engine voice's pitch or pan update lands one 5 ms audio frame later than under the JIT; from then on that voice's position and every buffer of mixed samples differ. Against the JIT that is 14-20 thousand words at the fixed guest points: the AX voice blocks (0x80164D60), the output buffers (0x8015E880), heap blocks at 0x80574C40 (about 53 KB) and 0x8058BA80 (about 21 KB)."
+pinned = "noise"
+by = "audio"
+note = "Shown with the voice log: every differing game-written field is the same value within one audio frame, no value occurs in one run only, and the music stream's voices never differ. Native is sample-identical to itself across core modes and builds at normal speed. Between two unthrottled dual-core runs of builds 18b and 19 the same shift occurs; it did not between two JIT runs. The 53 KB heap block is still identified by inference only."
+source = "SC+ 'Audio', 'The dual-core gate' (The audio regions)"
+
+[[difference]]
+name = "host-time"
+what = "Two runs of native code differ in a few words that hold host time."
+pinned = "noise"
+by = "host-time"
+source = "SC Method ('Native against native is the sharp gate')"
+
+[[difference]]
+name = "gpu-thread-timing"
+what = "In dual core, when GPU work and interrupts land differs from run to run, for the JIT and for native alike."
+pinned = "noise"
+by = "dual-core-timing"
+source = "SC+ 'The dual-core gate'"
+
+[[difference]]
+name = "dual-core-start-slip"
+what = "From the grid scene in dual core, race frame 1 falls on field 86 under the JIT and sometimes on field 87 under native code. The racer state is then identical for every race frame and offset by one field."
+pinned = "by-step"
+note = "Cause, tested: native skips the GPU-sync wait loop as idle and reaches the next VI while the GPU thread is still busy. In dual core the gate is by race frame. Not fixed in the emulator."
+source = "SC+ 'The race start in dual core'"
+
+# ---- memory map, for labelling differences ---------------------------------------------------------------------------
+
+[[memory.region]]
+name = "low OS globals"
+start = 0x80000000
+end = 0x80003100
+source = "scripts ramregions.py"
+
+[[memory.region]]
+name = "DOL text"
+start = 0x80003100
+end = 0x8008FF00
+source = "scripts ramregions.py"
+
+[[memory.region]]
+name = "DOL data"
+start = 0x8008FF00
+end = 0x8015B920
+source = "scripts ramregions.py"
+
+[[memory.region]]
+name = "DOL .bss/.sdata"
+start = 0x8015B920
+end = 0x801A7900
+source = "scripts ramregions.py"
+
+[[memory.region]]
+name = "DOL (after .bss)"
+start = 0x801A7900
+end = 0x801BA660
+note = "Holds the OS stacks and thread contexts."
+source = "scripts ramregions.py, dcnoise.py"
+
+[[memory.region]]
+name = "heap"
+start = 0x80404544   # the end of main.rel's .bss
+end = 0x8155B000
+source = "RO 'How it works' (the simulation's memory ends at 0x8155B000); scripts ramdiff.py"
+
+[[memory.region]]
+name = "display buffers"
+start = 0x8155B000
+end = 0x81800000
+note = "The command FIFO is 0x8155B000-0x8161AFE0."
+source = "RO 'Graphics FIFO errors'; scripts ramdiff.py"
+
+# ---- exactness -------------------------------------------------------------------------------------------------------
+
+[exactness]
+step_counter = "main.rel:bss+0x50A4"
+statement = "Covered: the 30 racer blocks at every field (single core) or race frame (dual core) against the JIT, on both scenes; main.rel's .data and .bss at three fixed guest points per scene; a build against itself and against the build before, over whole memory. Not covered: any other course, the menus and menu modules, a race finish or respawn, a recorded online replay, anything with mods loaded, and whole memory against the JIT (see the difference 'audio-buffers')."
+note = "The step counter is the race frame: it rises 60 a second during the race and runs before the start."
+source = "SD ('.bss+0x50A4'); SM §4 and §7; SC Method; SC+ 'The dual-core gate'"
+
+[[exactness.noise]]
+name = "timebase-words"
+what = "The game's own timebase-derived profiling words in main.rel's .bss: six words and a 64-bit timestamp ring."
+words = ["main.rel:bss+0x4", "main.rel:bss+0xD90", "main.rel:bss+0xDA0", "main.rel:bss+0x50D4", "main.rel:bss+0x6C854", "main.rel:bss+0x6C858"]
+ranges = [{ start = "main.rel:bss+0x6EA00", end = "main.rel:bss+0x6EC00" }]
+source = "SM §4 (Whole RAM at a fixed guest point)"
+
+[[exactness.noise]]
+name = "timebase-word-50c4"
+what = "One more time-derived word, which differs from the JIT in every grid run."
+scenes = ["racego"]
+words = ["main.rel:bss+0x50C4"]
+note = "dcnoise.py leaves it out on both scenes; the note names it for the grid scene only. Whether it is noise on race300 too is not settled."
+source = "SC §5b ('9a against 7b in RAM'); scripts dcnoise.py"
+
+[[exactness.noise]]
+name = "grid-bss"
+what = "About 170 words of main.rel's .bss, with a copy in the heap, that differ from the JIT in every grid run, single core included: a thread's saved FP context (lbl_1_bss_854B8), stale register values from wherever an interrupt caught the main thread."
+scenes = ["racego"]
+ranges = [{ start = "main.rel:bss+0x85B98", end = "main.rel:bss+0x86D74" }]
+source = "SC Method (whole RAM against the JIT from the grid); SC+ 'The dual-core gate'"
+
+[[exactness.noise]]
+name = "host-time"
+what = "Words that hold host time, which differ between any two native runs: two timestamps and counters in a heap block."
+configurations = ["single-core"]
+words = [0x80178A30, 0x80178AD8]
+ranges = [{ start = 0x80596870, end = 0x80598EBC }]
+note = "6-9 words in early builds, 4 DOL words between later ones."
+source = "SC Method ('Native against native is the sharp gate'); SC §10, §13, §15"
+
+[[exactness.noise]]
+name = "event-timing"
+what = "Where a change that moves event timing shows between two native builds: the heap block that also holds the host-time counters, four timestamps, and an OS stack."
+configurations = ["single-core"]
+ranges = [{ start = 0x80596534, end = 0x80599264 }, { start = 0x80178A30, end = 0x80178AE0 }, { start = 0x801B5D30, end = 0x801B5EFC }]
+note = "No gate ignores it. It is here so that the 200-570 words such a change shows (builds 9a, 11-14, 18b) can be read against it."
+source = "SC §5b ('9a against 7b in RAM'), §11-12, §14"
+
+[[exactness.noise]]
+name = "dual-core-timing"
+what = "The fixed set of regions that differ between two runs of one build when the GPU has its own thread: the main thread's saved context, timestamps, OS stacks and thread contexts, and the heap block that holds the host-time counters."
+configurations = ["dual-core"]
+ranges = [
+  { start = 0x8015C400, end = 0x8015C748 },   # the main thread's saved context
+  { start = 0x8015CB00, end = 0x8015CC00 },
+  { start = 0x80178A00, end = 0x80178B40 },   # timestamps
+  { start = 0x801A6780, end = 0x801A67C0 },
+  { start = 0x801A6C00, end = 0x801A6D00 },
+  { start = 0x801B5980, end = 0x801B7800 },   # OS stacks and thread contexts
+  { start = 0x80596500, end = 0x80599D00 },   # the heap block with the host-time counters
+]
+note = "The same set between two JIT runs and between two native runs: 61-201 words of whole memory differ JIT against JIT. Stack words down to 0x801B5980 were added with build 19. The audio regions are a set of their own, 'audio'."
+source = "SC+ 'The dual-core gate' and '19'; scripts dcnoise.py"
+
+[[exactness.noise]]
+name = "audio"
+what = "The regions that differ once a sound update has reached the mixer one audio frame apart: the AX voice parameter blocks, the audio output buffers, a heap block that changes with them (by its behaviour the effect delay lines), and a few words beside them."
+configurations = ["dual-core"]
+ranges = [
+  { start = 0x8015E880, end = 0x80160C80 },   # the audio output buffers
+  { start = 0x80164CC0, end = 0x80164D20 },   # six timestamps at the end of lbl_80160C80
+  { start = 0x80164D60, end = 0x80176160 },   # the AX voice parameter blocks (lbl_80164D60)
+  { start = 0x80180F00, end = 0x80181440 },   # words in lbl_8017E984, not identified
+  { start = 0x80195B00, end = 0x80195B80 },   # words in lbl_80193B48, not identified
+  { start = 0x80199640, end = 0x80199670 },
+  { start = 0x8058BA80, end = 0x80591000 },   # a 21.7 KB heap block
+]
+note = "Between two dual-core runs of one build: 0 words in 10 JIT pairs and in the pairs of 15c and 16; 590 to 6,958 words in every pair of 18b and 19 at race frames 900 and 1,500. Why those builds vary where the others did not is not established."
+source = "SC+ 'The dual-core gate' (The audio regions), 'Audio'; scripts dcnoise.py"
+
+[[exactness.noise]]
+name = "start-shift"
+what = "Words that follow a run that lost display fields (a race start shifted by one, or fields lost while racing): a field counter and its copy, and the part of the timestamp ring beyond the timebase mask. One apart or filled one slot on in a run that slipped one field (14 words); equal in a run that did not."
+configurations = ["dual-core"]
+scenes = ["race300", "racego"]
+words = ["main.rel:bss+0x50", "main.rel:bss+0x6F640"]
+ranges = [{ start = "main.rel:bss+0x6EC00", end = "main.rel:bss+0x6F1D8" }]
+reference_pairs = { race300 = "2026-10-05, port/runs: g1-dual-core-race300-ref (a JIT run that lost five fields between race frames 600 and 1,200) against g1b-dual-core-race300-ref and against g2-dual-core-race300-ref: 63 words at race frames 1,200 and 2,000, none at 600; every other differing word of the module's data is in 'timebase-words'. The two other JIT runs against each other: none.", racego = "2026-10-15, port/runs: gv022-214152-dual-core-racego-ref-1 against gv022-214152-dual-core-racego-ref-2, and the same pair of gv022rb1: two JIT runs of one scene differ in 154 words at steps 300, 900 and 1,500, every one of them in this set (.bss+0x50 and the timestamp ring); the native runs of those batches differ from them in 168 to 175 words, all in this set; the racers' hashes are equal at every step in all six pairs. Seen on every batch of runners 0e584cbf and b748eec2, 0.2.1's own module (efxv021) included; runner 8ecdb2c9 had none (gdn2wa)." }
+note = "The gate 'module-data' passes it by name where two JIT runs showed it against each other (the line says 'pass, noise: start-shift'): on race300 since 2026-10-05, and on racego since 2026-10-15, when two JIT runs of the 0.2.2 release batch differed in these words (before that no JIT run had lost a field on racego: 0 of 10 in the codegen spike, 0 of 9 on 2026-10-05; the port-recomp notes 5.9.14). What would remove the slip itself instead of naming it: the wait for the picture idling only until the GPU thread has caught up (the spike-dolrecomp-codegen notes, 'Remaining leads'; sized, not built)."
+source = "SC+ 'The dual-core gate' (Words that follow a shifted race start); scripts dcnoise.py; the port-recomp notes 5.6, 5.9.14"
+
+[[exactness.gate]]
+name = "racers-per-field"
+kind = "hash"
+hashes = ["seat0_hash", "racers_hash"]
+by = "field"
+against = "reference"
+configurations = ["single-core"]
+max_differing = 0
+note = "On racego the comparison starts at the green light (the scene's compare_from_step)."
+source = "SM §4 (Racers); SC Method; scripts cmp.py, cg-gate.sh"
+
+[[exactness.gate]]
+name = "racers-per-race-frame"
+kind = "hash"
+hashes = ["seat0_hash", "racers_hash"]
+by = "step"
+against = "reference"
+configurations = ["dual-core"]
+max_differing = 0
+note = "By race frame because the race start can slip a field in dual core; a shift is reported, not failed. All 30 seats: cmprf.py compared seats 1-29 only until build 18, and every saved dual-core run of 18b and 18d was re-evaluated with both hashes."
+source = "SC+ 'The race start in dual core' and 'The dual-core gate' (All 30 seats); scripts cmprf.py"
+
+[[exactness.gate]]
+name = "racers-run-to-run"
+kind = "hash"
+hashes = ["seat0_hash", "racers_hash"]
+by = "step"
+against = "self"
+configurations = ["dual-core"]
+max_differing = 0
+source = "SC+ 'The dual-core gate' (JIT against JIT, native against native: identical)"
+
+[[exactness.gate]]
+name = "module-data"
+kind = "memory"
+within = ["main.rel:data", "main.rel:bss"]
+ignore = ["timebase-words", "timebase-word-50c4", "grid-bss"]
+pass_named = ["start-shift"]
+dead_stacks = true
+against = "reference"
+configurations = ["single-core", "dual-core"]
+max_differing = 0
+note = "In dual core a run that lost a display field differs in the words of 'start-shift': they pass by name where a pair of JIT runs showed them (the line and a batch's tally say how often), and fail everywhere else. Words below a guest thread's saved stack pointer are left out in both dumps (dead_stacks, the kit's deadstack.py), and the line counts them: main.rel .bss+0x85B98 is an OSThread record that has ended (state 0, out of the active queue), its stack .bss+0x85EC0 to +0x86EC0 and its last r1 at +0x86E80; v030's batch (gv030-024218, racego pair 2) differed in 23 words of it, at +0x86D9C to +0x86E44, in one JIT run (a pad-read path's frames), and all six pairs are exact without them. The pointers at +0x86DDC, +0x86E1C, +0x86E58, read on 2026-10-05 as which of two drawing buffers is current (the port-recomp notes 5.9.14), lie in that dead stack too; .bss+0x85B88, just before the record, is still compared."
+source = "SM §4 (Whole RAM); SC+ 'The dual-core gate'; scripts dcnoise.py; the port-recomp notes 5.9.14"
+
+[[exactness.gate]]
+name = "run-to-run-single"
+kind = "memory"
+ignore = ["host-time"]
+against = "self"
+configurations = ["single-core"]
+max_differing = 0
+note = "The JIT reproduces its whole memory exactly from one session to the next; two native runs differ only in the host-time words."
+source = "SC Method"
+
+[[exactness.gate]]
+name = "previous-build"
+kind = "memory"
+ignore = ["host-time"]
+against = "previous"
+configurations = ["single-core"]
+scenes = ["racego"]
+max_differing = 0
+note = "The sharp gate, for a change that must be invisible to the guest. A change of semantics shows exactly its words; a change that moves event timing shows a few hundred words in the 'event-timing' regions and is then judged on those regions and on the racer hashes."
+source = "SC Method ('Native against native is the sharp gate'); scripts cg-cycle.sh"
+
+[[exactness.gate]]
+name = "run-to-run-dual"
+kind = "memory"
+ignore = ["timebase-words", "timebase-word-50c4", "grid-bss", "dual-core-timing"]
+against = "self"
+configurations = ["dual-core"]
+max_differing = 0
+note = "No word outside the noise regions. Build 18b against itself first showed 0-3 words outside; they were in the 70 KB buffer now in the set."
+source = "SC+ 'The dual-core gate' and 'Exactness of 18b'; scripts dcnoise.py"
+
+# ---- the probe -------------------------------------------------------------------------------------------------------
+
+[probe]
+select_value = "mode"
+select_equals = 2
+skip_fields = 60
+timer_call = "main.rel:text+0x411C"
+timer_return = "main.rel:text+0x4120"
+timer_call_word = 0x4E800421
+timer_return_word = 0x38600005
+dump_at = "first-timer-call-of-step"
+trace_calls = "fn_1_83858"        # the access trace tells the 30 per-machine calls of a frame apart
+trace_frame_end = "fn_1_850C4"    # the big task follows them
+dump_suffix = ".task{step}.ram"
+legacy_total_column = "tasks"
+note = "Tasks are timed between the task manager's bctrl and its return: HLE hooks under the JIT, the dispatch loop when native. The probe in use is FzgxProbe, with these addresses compiled in; `env` maps the contract's variables onto its own until it is replaced (recomp-kit docs/probe.md)."
+source = "SM §5 (the call site); probe (instruction words, mode == 2, the trace's two tasks); scripts tasks.py (mode 2, the first 60 fields skipped); SC 'Sizing the big levers' B (the access trace)"
+
+[probe.env]
+RECOMP_PROBE = "FZGX_PROBE"
+RECOMP_PROBE_CONFIG = ""                      # FzgxProbe takes no configuration file: its addresses are compiled in
+RECOMP_PROBE_INPUT = "FZGX_PAD"
+RECOMP_PROBE_TIMERS = "FZGX_TASKPROF"
+RECOMP_PROBE_DUMP_STEPS = "FZGX_TASKDUMP"
+RECOMP_PROBE_HASH = "FZGX_PROBE_HASH"
+RECOMP_PROBE_SAMPLE = "FZGX_SAMPLE"
+RECOMP_PROBE_SAMPLE_IN_TIMERS = "FZGX_SAMPLE_TASKS"
+RECOMP_PROBE_SAMPLE_NAMED_ONLY = "FZGX_SAMPLE_PHYSICS"
+RECOMP_PROBE_CENSUS = "FZGX_CENSUS"
+RECOMP_PROBE_TRACE = "FZGX_TRACE"
+
+[[probe.value]]
+name = "module"
+at = 0x800030C8
+width = 4
+note = "main.rel's base as the game recorded it."
+source = "probe; PP §1.3"
+
+[[probe.value]]
+name = "mode"
+at = "main.rel:bss+0x960"
+width = 2
+source = "probe"
+
+[[probe.value]]
+name = "submode"
+at = "main.rel:bss+0x962"
+width = 2
+source = "probe"
+
+[[probe.value]]
+name = "race_frame"
+at = "main.rel:bss+0x50A4"
+width = 4
+source = "SD; probe"
+
+[[probe.value]]
+name = "busy"
+at = "main.rel:data+0x2B64"
+width = 4
+note = "Non-zero while the main thread is mid-frame (cmpsim.py compares sim_hash only where it is 0)."
+source = "probe; scripts cmpsim.py (the first experiment's)"
+
+[[probe.hash]]
+name = "seat0_hash"
+ranges = [{ pointer = "main.rel:bss+0x6D838", size = 0x620 }]
+note = "The player's racer block."
+source = "SM §4 (the racer array: 30 x 0x620 through the pointer at .bss 0x6D838); probe"
+
+[[probe.hash]]
+name = "racers_hash"
+ranges = [{ pointer = "main.rel:bss+0x6D838", offset = 0x620, size = 0xB1A0 }]
+note = "The other 29 racer blocks."
+source = "SM §4; probe"
+
+[[probe.hash]]
+name = "rel_hash"
+ranges = [{ start = "main.rel:data+0x0", size = 0xDC8E4 }]
+note = "main.rel's .data and .bss as they are. Differs between cores because of the timebase words; not gated."
+source = "probe"
+
+[[probe.hash]]
+name = "sim_hash"
+ranges = [{ start = "main.rel:data+0x0", size = 0xDC8E4 }]
+zero = ["timebase-words"]
+note = "The same with the timebase words zeroed. Only comparable on fields where neither run is mid-frame."
+source = "probe; scripts cmpsim.py (the first experiment's)"
+
+[[probe.timer]]
+name = "fn_1_83858"
+entry = "main.rel:text+0x83858"
+per_step = 30
+legacy_column = "83858"
+source = "SM §5"
+
+[[probe.timer]]
+name = "fn_1_850C4"
+entry = "main.rel:text+0x850C4"
+per_step = 1
+legacy_column = "850C4"
+source = "SM §5"
+
+[[probe.timer]]
+name = "fn_1_C4ABC"
+entry = "main.rel:text+0xC4ABC"
+legacy_column = "C4ABC"
+note = "The AI driver, one task per machine."
+source = "SC 'Sizing the big levers' (the census table); RO 'Thirty players, every prediction missing'; probe"
+
+# ---- discovered facts ------------------------------------------------------------------------------------------------
+
+[[fact.hot_root]]
+name = "fn_1_83858"
+entry = "main.rel:text+0x83858"
+what = "The per-machine physics update: 30 calls a frame, 4.4K ticks a call at overclock 6 (about 20K guest instructions)."
+source = "SM §5"
+
+[[fact.hot_root]]
+name = "fn_1_850C4"
+entry = "main.rel:text+0x850C4"
+what = "The second physics task: one call a frame, 134.8K ticks at overclock 6."
+source = "SM §5"
+
+[[fact.hot_root]]
+name = "fn_1_C4ABC"
+entry = "main.rel:text+0xC4ABC"
+what = "The AI driver, one task per machine. The third of the three physics tasks the guest-code figure sums."
+source = "SC 'Sizing the big levers'; RO 'Thirty players, every prediction missing'"
+
+[[fact.wait_loop]]
+name = "os-idle"
+kind = "os-idle"
+idle_pc = 0x8001071C
+what = "The OS idle loop (SelectThread). Dolphin's JIT skips it by itself; native code spins in it."
+source = "SM §2"
+
+[[fact.wait_loop]]
+name = "gpu-sync"
+kind = "busy-wait"
+idle_pc = 0x8006FE18
+what = "fn_8006FDEC waits for the GPU's draw-done flag in a loop that calls OSGetTime (0x8006FE14-0x8006FEA8). Idling it took dispatches from 80,438 to 48,677 a field; physics unchanged. The analyser of RecompCore PR #19 does not find it, because the loop contains a call. In dual core it causes the race-start slip."
+source = "SC §1; SC+ 'The race start in dual core'"
+
+[[fact.wait_loop]]
+name = "disc-read"
+kind = "busy-wait"
+idle_pc = 0x80006388
+what = "The executable's synchronous disc read (fn_80006354): it starts a read whose callback clears a flag, then loops `while (flag) fn_8000659C()`. fn_8000659C polls the drive's status and switches on it through a jump table; that `bctr` leaves native code, so each turn is two trips through the run loop and two mtmsr through the instruction hook. With overclock 6 the loop turns about 170,000 times a field: 36 to 41 ms a field on native code, 6 to 12 under the JIT. This is the loop's head, where fn_8000659C returns to."
+source = "the port-recomp notes 5.9.2 (runs b1n, b2n, t5, t8)"
+
+[[fact.wait_loop]]
+name = "load-queue"
+kind = "busy-wait"
+idle_pc = 0x802C1008
+what = "main.rel's wait for its load queue (text+0x1068C0 to 0x1068D0): `do { fn_1_451E4(); fn_1_D3214(); } while (fn_1_467F4() != 0)`, where fn_1_467F4 calls fn_8000659C and returns what is still queued. Seven trips through the run loop a turn; 61 to 141 ms a field for the 19 fields of a course load on native code, 13 to 14 ms under the JIT. This is where fn_1_467F4 returns to. Needs main.rel at 0x801BA660 (the pins)."
+note = "With both disc waits idle a Time Attack start reaches every mode and the green light on the same field as without, and as the JIT (runs t5, t4, t8, t4j: mode 2 at 3,240, go at 4,704)."
+source = "the port-recomp notes 5.9.2"
+
+[[fact.closed_unit]]
+name = "physics"
+roots = [
+  "main.rel:text+0x83858",   # fn_1_83858, the per-machine task (the task runner calls it 30 times a field)
+  "main.rel:text+0x850C4",   # fn_1_850C4, the big task (1)
+  "main.rel:text+0xC4ABC",   # fn_1_C4ABC (29)
+  0x80080974,                # fn_80080974 in the DOL: a write callback of the C library's formatter
+  "main.rel:text+0x18FFC",   # called through a pointer by fn_1_18B40 and fn_1_17098 (160 each)
+  "main.rel:text+0x19AE0",
+  "main.rel:text+0x1B010",
+  "main.rel:text+0x32A40",   # by fn_1_850C4 (30)
+  "main.rel:text+0x331EC",   # the vanilla target of fn_1_83858's per-machine hook pointer (30)
+  "main.rel:text+0x59514",
+  "main.rel:text+0x59CC8",
+  "main.rel:text+0x5D88C",
+  "main.rel:text+0x5E3C4",
+  "main.rel:text+0x60F7C",
+  "main.rel:text+0x64098",
+  "main.rel:text+0x8B9B8",   # by fn_1_850C4 (1)
+]
+functions = 495
+deferral = true
+why_safe = "The three tasks' own direct closure reads no clock: no mftb and no mfspr of TBL or TBU in the 219 functions reachable by direct calls. (The whole set does hold OSGetTime's function, through the formatter and the low-rate roots.) Events land at most one task later (131K ticks), the kind of shift builds 11-14 made with racer state unchanged. Shown on runs of over 5,000 fields on both scenes, in both configurations."
+found_by = "closed-roots.sh: the three tasks plus every function that code of the set calls through a pointer at least 50 times in the training profile, to a fixpoint."
+note = "Each function has a byte that says whether its closed body may be entered, so a host with call hooks installed can still use closed bodies for everything it does not intercept (build 18d). A target of the per-machine hook pointer outside the module leaves through an escape."
+source = "SC+ '18. Closed physics' (the 16 roots, Hooks, the hook pointer); SC 'Sizing the big levers' (the closure reads no clock)"
+
+[[fact.closed_unit]]
+name = "tasks"
+roots = [0x8023DF94, 0x8023F800, 0x8027F1F8, 0x80080974, 0x801D3738, 0x801D421C, 0x801D574C, 0x801ED17C, 0x801ED928, 0x80213C50, 0x80214404, 0x80217FC8, 0x80218B00, 0x8021B6B8, 0x8021E7D4, 0x802460F4, 0x8023EF9C, 0x8023DF94, 0x80211488, 0x80211034, 0x8027F1F8, 0x802B1FE8, 0x80316AA8, 0x8030EED4, 0x80304764, 0x802E37B8, 0x802E3690, 0x802B2014, 0x802B1864, 0x802A3CF0, 0x8029F110, 0x8029E12C, 0x8029E010, 0x8028CEF4, 0x8028CB40, 0x8027EA30, 0x80254EF8, 0x80254D08, 0x80252A98, 0x8025296C, 0x80248490, 0x8023F800, 0x80239224, 0x80239100, 0x80236234, 0x802335F8, 0x80233124, 0x80213474, 0x802133A8, 0x802130D0, 0x80212DD0, 0x8020ECF4, 0x801FB024, 0x801FA028, 0x801EF8B4, 0x801EF860, 0x801E99D0, 0x801E7774, 0x801E6EA4, 0x801C381C, 0x801C0B10, 0x801C0AD0, 0x8000DD10, 0x802133C8, 0x80213418, 0x802BF11C, 0x801EF060, 0x802BF80C, 0x80011C74, 0x8001A55C, 0x8001D7D0, 0x8001E4FC, 0x8001EAF4, 0x80028FA0, 0x800307CC, 0x800343BC, 0x80034488, 0x8004EA94, 0x8004EB00, 0x80055768, 0x80058380, 0x801C298C, 0x802087E0, 0x80210384, 0x802105DC, 0x80211924, 0x80213B88, 0x80213BA8, 0x80213C08, 0x80213C28, 0x80213D68, 0x80213EAC, 0x802141AC, 0x80214490, 0x80214620, 0x80215008, 0x8021775C, 0x802178F4, 0x80218054, 0x80218058, 0x802186E0, 0x80218C14, 0x80219244, 0x802192D4, 0x80219D00, 0x8021B6BC, 0x8021B6C0, 0x8021B7AC, 0x8021E7E0, 0x8021EA24, 0x8021EAC4, 0x8021ED04, 0x8021F018, 0x8021F558, 0x80220298, 0x80220418, 0x80221DBC, 0x80222448, 0x8022265C, 0x80222790, 0x80222830, 0x80241E8C, 0x80248AE0, 0x80253018, 0x80253554, 0x80253664, 0x802BBB40, 0x802BBB64, 0x80012A74, 0x80013934, 0x80020464, 0x80021AB8, 0x80021B2C, 0x800700F4, 0x802225D0, 0x802634A0, 0x8001C704, 0x800243C4, 0x80025854, 0x8005ADBC, 0x8006AF94, 0x8025A694, 0x80058070]
+functions = 2195
+deferral = true
+why_safe = "Every task the runner calls at least once in 17 fields, with what they reach. Deferral here holds the end of a time slice and a pending interrupt until the next escape, the loop-head cap of 262,144 cycles (3.2% of a field) or the task's return; drawing code's gather-pipe flushes still charge the clock and run the FIFO. A clock read inside a closed body can be stale by the unit's cycles. The GPU wait (0x8006FDEC) and the OS idle loop (0x8001071C) are excluded (DOLRECOMP_CLOSED_EXCLUDE) so that the idle skip still sees their loops. Racer state, main.rel's data and the audio gate are unchanged on both scenes, long runs included; nothing else has been gated."
+found_by = "The probe's FZGX_TASKLIST list of the task runner's targets (52 with at least 100 calls in 1,700 fields), then closed-roots.sh as for 'physics'."
+note = "Build 20's set; it contains the 'physics' set. The roots are the list above, which DOLRECOMP_CLOSED_ROOTS of the build's switches repeats (the experiment's closed-roots-20.txt is the same list)."
+source = "SC+ '20. Closed, deferred bodies for every task'"
+
+[[fact.packed_load]]
+gqr = 0
+value = 0
+share = "6,200 of the 6,300 psq instructions in the DOL and main.rel go through GQR0, which holds 0: plain floats"
+source = "SC §6"
+
+[[fact.memory_window]]
+name = "locked-cache"
+guest_base = 0xE0000000
+what = "The locked L1 cache, the game's scratchpad: 168,000 reads and 106,000 writes a frame, each an indirect call into the MMU until the second direct window covered it."
+source = "SM §5 (Fixed during the spike)"
+
+[[fact.memory_window]]
+name = "gather-pipe"
+guest_base = 0xCC008000
+what = "The GX gather pipe: about 19,000 writes a field in dual core, each a call through the hardware-write hook until they were emitted inline (about 2,000 flush calls remain)."
+source = "SC 'Sizing the big levers' (Gather-pipe writes); SC+ '16'"
+
+[[fact.fallback]]
+name = "gecko-hook"
+at = "main.rel:text+0xECC"
+why = "fn_1_ECC's first instruction is the boot code's branch out of the module, so its 16 KB chunk stays on the fallback JIT. Not hot. One direct call reaches it (bl at 0x801BAB54); the native body leaves at once."
+source = "SM §3; SC 'Calls from native code and the runtime's verification'"
+
+# ---- the current best build ------------------------------------------------------------------------------------------
+
+[build]
+name = "20"
+backend = "llvm"
+args = ["--native-abi", "off"]
+platform_args = ["--cpu", "gekko", "--gamecube"]
+target = "Baseline x86-64. The module needs a CPU with FMA3 at run time; the fma feature is attached to marked functions after optimisation, never shown to the IR optimiser."
+never = [
+  "--semantics fast: it turns on fusion, which changes results (PP §1.2)",
+  "an x86-64-v3 target: every such build diverged at race frame 1,022, cause not isolated (SM §4)",
+  "DOLRECOMP_FMA_EARLY=1: with the fma feature visible to the IR optimiser exactness broke 100 fields in; the transformation is not isolated (SC §3 and 'The optimiser and the fma feature')",
+  "DOLRECOMP_FPRF_KEEP: the FPRF keep list showed visibly jumping scenery and gave no speed (SM §4); taken out of the recompiler",
+]
+pgo = true
+note = "Module 20: closed, deferred bodies for every task the runner calls (140 roots, 2,195 functions), the GPU wait and the OS idle loop excluded. Dual core against its batch's JIT: fn_1_83858 21.5-21.9 us, guest code in the physics 1.29-1.30 ms a frame (JIT 1.23-1.27), CPU thread 3.07-3.14 ms (JIT 2.75-2.84), 1,278 dispatches a field. Every gate passes. Build 19 (module 18d: the same switches with the 16 roots of closed-roots-18.txt and no exclusion) is within noise in dual core and has a quarter of the deferred surface: the conservative choice for a first playable build. A profile-guided build takes 12-15 minutes at 16 jobs. DOLRECOMP_CODEGEN_REV changes no code; it only keys the object cache."
+source = "SC+ Status, '18', '19', '20', 'State at hand-over'; SC §1 (--native-abi off), §3 (the target), §15 (PGO); scripts cg-build.sh (--cpu gekko --gamecube)"
+
+[build.switches]
+DOLRECOMP_MEM2_BASE = "0xA0000000"            # SM §5: the second direct window covers the locked cache
+DOLRECOMP_SCALAR_FP = "inline"                # SC §2
+DOLRECOMP_PAIRED_FP = "jit64"                 # SC §3
+DOLRECOMP_FMA = "hw"                          # SC §3 and 'The optimiser and the fma feature'
+DOLRECOMP_FPRF = "lazy"                       # SC §4
+DOLRECOMP_STATE_SYNC = "changed"              # SC §5a
+DOLRECOMP_PSQ_GQR = "0:0"                     # SC §6
+DOLRECOMP_RESERVATION = "stwcx-only"          # SC §7
+DOLRECOMP_PRESERVE_NONE = "1"                 # SC §7
+DOLRECOMP_STATE_ALIAS = "scoped"              # SC §5b
+DOLRECOMP_CYCLES = "deferred"                 # SC §10
+DOLRECOMP_FPSCR = "inline"                    # SC §10
+DOLRECOMP_BUDGET_CYCLES = "runtime"           # SC §11
+DOLRECOMP_INDIRECT_CALLS = "native"           # SC §12
+DOLRECOMP_INDIRECT_CALL_EXITS = "801BE858"    # SC §12: the task runner's call site, kept for the probe
+DOLRECOMP_ENTRY_LOADS = "split"               # SC §13
+DOLRECOMP_CALL_COUNTERS = "registers"         # SC §14
+DOLRECOMP_GATHER_PIPE = "inline"              # SC+ §16
+DOLRECOMP_LLVM_CHUNK_INSTRUCTIONS = "4096"    # SC+ §17a
+DOLRECOMP_CLOSED_DEFER = "1"                  # SC+ §18
+DOLRECOMP_CLOSED_EXCLUDE = "8006FDEC,8001071C"  # SC+ §20: the GPU wait and the OS idle loop stay ordinary
+DOLRECOMP_CODEGEN_REV = "20"                  # SC+ State at hand-over: keys the object cache only
+# SC+ §20: 140 roots (the tasks and their pointer targets): the list of [[fact.closed_unit]] "tasks"
+DOLRECOMP_CLOSED_ROOTS = "8023DF94,8023F800,8027F1F8,80080974,801D3738,801D421C,801D574C,801ED17C,801ED928,80213C50,80214404,80217FC8,80218B00,8021B6B8,8021E7D4,802460F4,8023EF9C,8023DF94,80211488,80211034,8027F1F8,802B1FE8,80316AA8,8030EED4,80304764,802E37B8,802E3690,802B2014,802B1864,802A3CF0,8029F110,8029E12C,8029E010,8028CEF4,8028CB40,8027EA30,80254EF8,80254D08,80252A98,8025296C,80248490,8023F800,80239224,80239100,80236234,802335F8,80233124,80213474,802133A8,802130D0,80212DD0,8020ECF4,801FB024,801FA028,801EF8B4,801EF860,801E99D0,801E7774,801E6EA4,801C381C,801C0B10,801C0AD0,8000DD10,802133C8,80213418,802BF11C,801EF060,802BF80C,80011C74,8001A55C,8001D7D0,8001E4FC,8001EAF4,80028FA0,800307CC,800343BC,80034488,8004EA94,8004EB00,80055768,80058380,801C298C,802087E0,80210384,802105DC,80211924,80213B88,80213BA8,80213C08,80213C28,80213D68,80213EAC,802141AC,80214490,80214620,80215008,8021775C,802178F4,80218054,80218058,802186E0,80218C14,80219244,802192D4,80219D00,8021B6BC,8021B6C0,8021B7AC,8021E7E0,8021EA24,8021EAC4,8021ED04,8021F018,8021F558,80220298,80220418,80221DBC,80222448,8022265C,80222790,80222830,80241E8C,80248AE0,80253018,80253554,80253664,802BBB40,802BBB64,80012A74,80013934,80020464,80021AB8,80021B2C,800700F4,802225D0,802634A0,8001C704,800243C4,80025854,8005ADBC,8006AF94,8025A694,80058070"
+
+[[build.training]]
+scene = "race300"
+fields = 1500
+configuration = "single-core"
+note = "One training run. A build on the scene it was not trained on is within 0-5% of the one trained on it; differently trained builds agree bit for bit. A new profile is needed when a change alters control flow in most functions."
+source = "SC §15; SC+ §16; scripts cg-pgo.sh"

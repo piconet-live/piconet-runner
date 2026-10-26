@@ -1,0 +1,38 @@
+name	comment
+RAM	main memory's first guest address
+RETAIL_RAM_SIZE	the retail 24 MiB
+WINDOW	the mod's data window: no guest memory is behind it
+WINDOW_END	
+IMAGE	the mod image's bytes ('FZMD'): its routines run as native code; the bytes here serve the words those routines read from their own image
+IMAGE_LIMIT	
+SLOT	the seat routines' slot 'FZSI': +4 seat, +32 off, +36 uniform, +40 player seats (bit i = seat i), +44 input delay
+CONTROL	the frame routine's control block (netframe.py lists every word)
+CHECKSUMS	the checksum ring: 1024 x u32, entry step & 1023
+SMOOTH	rivals' drawn offsets (smooth.py)
+NAMES	player names: 30 x NAME_SIZE bytes, NUL-terminated, seat order; empty: the pilot's name
+NAME_SIZE	
+RACE	the race block 'FZRC'
+RACE_COURSE	words
+RACE_MACHINE0	
+RACE_OPPONENTS	
+RACE_LAPS	
+RACE_TYPE	
+RACE_SHUFFLE	
+RACE_CPUSEED	
+RACE_MACHINES	30 bytes, seat 0 first
+RACE_CPULEVEL	the host's rules: words
+RACE_BOOST	
+RACE_RESTORE	
+RACE_SETTINGS	30 bytes
+RACE_SIZE	
+MODE	what the game was started for, tested by every routine at a patched site: 0 a plain start (the stock game's behaviour), 1 a race (a match file, or a replay played as the race)
+PRELOAD	the results screen's pictures read before the race (port/image/build.py): +0 state (2 read, 3 not read), three pairs (bitmap group, the packed file's address), +28 loads served from memory, +32 the main heap's largest free block when it was tried
+END_OFFICIAL	the race's end, held until it is official: the host's word, every step below this one ran, or runs in this frame, with the official inputs (0: never said)
+END_ASKED	the image's: 1, the race looks over on steps not yet official; the host's next frame checks them, runs no new step, and clears it
+END_OVER	the image's: 1, its race-over test said "over": the host predicts no step from here
+HOST_NET	host calls (nothing is behind these addresses): the network hook
+HOST_TICK	every game frame of a race or replay start, from the mode machine's routine
+HOST_LINKED	main.rel is linked and none of its code has run
+MAIN_REL	main.rel's module header in every boot (the pin)
+INPUTS	the input buffer: 1024 steps x 30 seats x 8 bytes (a 6-byte control record each)
+INPUTS_END	

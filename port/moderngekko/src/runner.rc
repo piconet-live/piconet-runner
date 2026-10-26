@@ -1,0 +1,4 @@
+// The runner's program file carries the app's icon: what Explorer and the taskbar show for it, and what the game
+// window takes as its own (taskbar.cpp, by this number). The file is the launcher's, one copy for both:
+// build.sh puts it beside the sources (app/app.ico) and port.cmake adds this file to the runner.
+1 ICON "app.ico"

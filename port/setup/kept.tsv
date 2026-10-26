@@ -1,0 +1,16 @@
+name	sha1	needed by
+# Inputs of the gates under the work folder that no recipe makes again. The recordings the gates play back. The JIT reference's match race (run nmj): it was run through a launcher staged with the retired fork's bundle. The two saved states of the gate scenes, recorded under the JIT from a stock boot with two older codes: the gates' runs/state.sh records one from a boot of the native form, which the JIT reference of row batch cannot run (inputs.md, "The gate scenes' saved states"). Nothing a build is made from is here: every build input is made fresh (inputs.md). A new work folder gets them from one that has them: kept.sh WORK --from REFERENCE. SHA-1 as found on 2026-10-06 (the crash's recording, run nmj and the saved states: 2026-10-08); the files are game data and stay in the work folder.		
+port/replays-test/20261004-155342-m32-hr.fzrp	edac0d90eda22d7d54013dc61fbc508ae2a180da	rows fork, forced (recorded on the retired fork)
+port/replays-test/20261004-014343-m32-P1.fzrp	007f0d6747f82af6013131eab7a0ec68fa8de7b5	row forced (recorded on the retired fork)
+port/runs/rm1/race.fzrp	9f0a1659187aafaa96e7bc2241f03c747aa372e7	row forced (a race on module n6 with forced rollbacks; a new one can be recorded, it will not be this race)
+port/runs/qs0-1/replays/20261006-101707-m22.fzrp	5383f90bfe10eadcfe13c7aa9ab2c7232bf409e0	row control (recorded with the locked-cache fault, on purpose)
+port/replays-test/20261006-w4b-1.fzrp	48c2a163a7f735dbdb2147dcab769e5fd118c20e	row crash (game 1's recording of the 30-player race w4b of 2026-10-06, a copy of port/runs/w4b-1/race.fzrp: the race that crashed runner 7dac514f)
+port/runs/nmj/probe.csv	59f67b124d9c6e2a17d42055154d3f6fa9858302	row match (the JIT reference's match race: the machines' hashes at every step)
+port/runs/nmj/fzgx.log	11d909d00d770e0c9979663c310ee11435c48a61	row match (the reference's own lines, which run-summary.py prints)
+port/runs/nmj/stderr.txt	d30431cde32335fb4517c27f4e856f3bdf647509	row match (the same)
+port/runs/nmj/pace.csv	71ad52d52b78b0e7e2ed2aee34b0afe278bea7bb	row start (the JIT's long fields and catch-up, read by hand against the native run's)
+port/runs/nmj/race.fzrp	b2948b7cbdc610a3ee37910a91798fc6fa80d84c	the reference race's recording (no row reads it; kept with its run)
+port/runs/nmj/match.json	45b0a2935447bb101283c51a5a7a2f7ad22eeed5	the reference race's match file as the game was given it
+port/scratch/match/nmj.json	45b0a2935447bb101283c51a5a7a2f7ad22eeed5	row match (the set-up of the reference race: match-run.sh FROM=nmj makes the same race again)
+derived/race300.sav	9aaf315028d012c197b1656c3d7ee42ab07e7700	rows batch and timing (the gate scene race300: race frame about 300 of a Grand Prix race, recorded 2026-10-04 under the JIT)
+derived/racego.sav	cf3fe47ddf9c1ffc09ac8c4341c03b52f220e31e	rows batch and timing (the gate scene racego: 1.5 s before the green light, recorded 2026-10-05 under the JIT)

@@ -1,0 +1,16 @@
+{
+  "about": "A match whose stat pack the game must refuse: it says which value and starts no race (stat-pack-refused.sh, for stat-pack-run.sh). The pack's two texts are the run's; the relay is nobody's",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "match": {
+    "match": {
+      "matchId": "refused", "seat": 0, "token": "1f2e3d4c5b6a7988", "relay": {"host": "127.0.0.1", "port": 47811},
+      "setup": {
+        "course": 16, "laps": 1, "shuffleSeed": 4660, "cpuSeed": 305419896,
+        "stats": {"name": "Refused", "fingerprint": "{fingerprint}", "values": "{values}"},
+        "seats": [{"seat": 0, "machine": 6, "playerId": "p1", "name": "PACK"}, {"seat": 1, "machine": 12, "cpu": true, "name": "CPU"}]
+      }
+    },
+    "relayHost": "127.0.0.1"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "about": "A practice as practice.json with no lap count (laps 0: the game's free run, the launcher's Unlimited), run with FIELDS=15000 past where a race of three laps ends; recorded in the run's folder (practice-run.sh)",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "match": {
+    "practice": true,
+    "record": "{run}\\practice.fzrp",
+    "match": {
+      "matchId": "practice-check",
+      "setup": {
+        "course": 1,
+        "laps": 0,
+        "seats": [
+          {
+            "seat": 0,
+            "machine": 0,
+            "setting": 100,
+            "playerId": "practice",
+            "name": "PRACTICE"
+          }
+        ]
+      }
+    }
+  },
+  "debug": {
+    "autopilot": true,
+    "pad": "0:0,2400:2,2404:0,2700:1000,2704:0,2710:0:0:128,2750:0:255:128,2770:0:128:128,2800:1000,2804:0,3100:1,3104:0,3400:1000,3404:0,3420:0:80:128,3480:0:176:128,3500:0:128:128,3510:1000,3514:0,3800:2,3804:0,4700:1,4704:0"
+  }
+}

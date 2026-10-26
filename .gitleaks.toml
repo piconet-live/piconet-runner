@@ -1,0 +1,10 @@
+# gitleaks (github.com/gitleaks/gitleaks): its default rules, with one exception. 1f2e3d4c5b6a7988 is the made-up
+# relay token of the tests and the protocol's test vectors, never a real one; nothing else is allowed.
+title = "piconet"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "the tests' made-up relay token"
+regexes = ['''1f2e3d4c5b6a7988''']

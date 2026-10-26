@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- The runner scales itself with the screen (per monitor, version 2; older systems: per monitor): Windows no
+     longer stretches the game's window as one picture on a screen scaled above 100 %. The strip's lengths follow
+     the window's dots per inch (fzgx/strip.h), the game's picture fills the window at the screen's own pixels, and
+     the window's first size is made larger by the screen's scaling (frame.cpp, ScaleFirstSize). port.cmake adds
+     this file to the runner; the linker merges it into the program's manifest. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>

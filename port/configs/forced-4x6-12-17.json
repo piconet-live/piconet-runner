@@ -1,0 +1,7 @@
+{
+  "about": "A recording played back as the race, a rollback forced every 4 displayed frame(s), 6, 12, 17 step(s) deep in turn: the late frames of deep rollbacks, before and after the draw skip (replay-check.sh; the history-speed-work notes)",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "replay": {"file": "{replay}"},
+  "debug": {"forceRollback": {"every": 4, "depths": [6, 12, 17]}}
+}

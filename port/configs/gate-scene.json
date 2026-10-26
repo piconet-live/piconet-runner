@@ -1,0 +1,5 @@
+{
+  "about": "A gate scene from a saved state on the native module: a plain start with the bundle, the patch list written over the saved state's older code (gate-native.sh, time-native.sh; rows batch and timing)",
+  "bundle": "{bundle}",
+  "debug": {"forcePatches": true}
+}

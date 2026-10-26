@@ -1,0 +1,4 @@
+{
+  "about": "The reference of a gate scene with the picture on the CPU thread: the emulator's own compiler, no bundle (gate-native.sh; row batch, the single-core pairs)",
+  "debug": {"jit": true, "singleCore": true}
+}

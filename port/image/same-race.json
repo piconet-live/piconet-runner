@@ -1,0 +1,615 @@
+{
+ "version": 1,
+ "what": "Mod images that are the same race: a replay recorded with `recorded` plays back as recorded on a game whose image is `plays_on`. A replay names its image by SHA-1 (mod_sha1); the launcher plays a replay whose image is the game's own or is named here for it, and refuses any other (RecompLaunch.RecordedWithThisImage). A row is added only for a run in which a recording made with the one played on the other with 0 steps differing from its recorded checksums, to the replay's end; `evidence` names the run. Never add a row by reasoning. One recording that differs outweighs the rows of its image: 7675335d (the fork's of 2026-10-03 13:42) is absent because 20261003-134423 P1 differs from step 363 on, although 20261003-134204 P1 of the same image does not (the port-recomp notes 5.10). `released`: the builds handed to players and their images; an image with no row from one of them refuses that build's replays, which stage-launcher.sh says and package.py refuses a player copy for (port/build/same_race.py; OLD_REPLAYS_REFUSED=1 marks a build that is not to play them, on purpose).",
+ "released": [
+  {
+   "version": "0.1.0",
+   "image": "aa956d743f73087ec871dde09ef928020bfc8cb5"
+  },
+  {
+   "version": "0.2.0",
+   "image": "ba2913176e299a2f0f003fc180a2ec09c30516b7"
+  },
+  {
+   "version": "0.2.1",
+   "image": "ba2913176e299a2f0f003fc180a2ec09c30516b7"
+  }
+ ],
+ "rows": [
+  {
+   "recorded": "eef142965e70409b09f004301843b4b9bd7c0054",
+   "plays_on": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "evidence": "the port-recomp notes 5.10: 20261003-134204 P2, 0 of 2,336 steps differ, under the JIT and on native build 19"
+  },
+  {
+   "recorded": "723441c195f0adb31964baa9b411c8dba4768617",
+   "plays_on": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "evidence": "5.10: 20261003-200059 P1, 0 of 4,903 (runs pj/pn and lr1 through the launcher)"
+  },
+  {
+   "recorded": "a03a4d72714baf80225347d36e385a8fbd0c3020",
+   "plays_on": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "evidence": "5.10: 20261003-221110 P2, 0 of 2,536"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "evidence": "5.10: 20261004-014343 P1 and P2, 0 of 4,880 and 0 of 4,884"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "evidence": "the port-recomp notes 5.11: the fork's image and the native form's of one generator state; run pn2 (module n2), 20261004-155342 hr, 0 of 5,641 steps differ; again on module n6 (5.11): run pn6, 0 of 5,641"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "evidence": "5.11: run pn3 (module n2), 20261004-014343 P1, 0 of 4,880"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "evidence": "the port-recomp notes 5.12: a match race recorded on the native form (module n6, run nmn6: one lap of Split Oval, 30 racers, one player seat), played back under the JIT with the fork's image: runs rt1-j-replay (the game's replay mode, 0 steps differ to the replay's end) and rt1-j-race (as the race, 0 of 2,882)"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "evidence": "the port-recomp notes 5.17 (module n7, c62d1bd6): run pn7-1, 20261004-155342 hr, the game's replay mode, 0 of 5,641 steps differ"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "evidence": "the port-recomp notes 5.17 (module n7, c62d1bd6): runs pn7-2 and pn7-3, 20261004-014343 P1 and P2, 0 of 4,880 and 0 of 4,884"
+  },
+  {
+   "recorded": "eef142965e70409b09f004301843b4b9bd7c0054",
+   "plays_on": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "evidence": "the port-recomp notes 5.17 (module n7, c62d1bd6): run pn7-4, 20261003-134204 P2, 0 of 2,336"
+  },
+  {
+   "recorded": "723441c195f0adb31964baa9b411c8dba4768617",
+   "plays_on": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "evidence": "the port-recomp notes 5.17 (module n7, c62d1bd6): run pn7-5, 20261003-200059 P1, 0 of 4,903"
+  },
+  {
+   "recorded": "a03a4d72714baf80225347d36e385a8fbd0c3020",
+   "plays_on": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "evidence": "the port-recomp notes 5.17 (module n7, c62d1bd6): run pn7-6, 20261003-221110 P2, 0 of 2,536"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "evidence": "the port-recomp notes 5.17 (module n7, c62d1bd6): module n6's recordings: runs k7-1 to k7-3 in the game's replay mode (x16p2-1 0 of 4,096, x16p2-2 0 of 4,082, qi4-1 0 of 8,326: recorders knocked out, which differed on n6's own image in that mode), f7g-1 and -2 as the race (x16p4, 0 of 4,095 and 4,093)"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "e3806361cf30b2d28a693c90a0c40792ebcef560",
+   "evidence": "the port-recomp notes 5.22 (module raceend, 73c3dd79, runner 4a577b62): run racen2-fork-1, 20261004-155342 hr, the game's replay mode, 0 of 5,641 steps differ"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "e3806361cf30b2d28a693c90a0c40792ebcef560",
+   "evidence": "the port-recomp notes 5.22 (module raceend, 73c3dd79, runner 4a577b62): run racen3-s1-1, 20261004-014343 P1, the game's replay mode, 0 of 4,880"
+  },
+  {
+   "recorded": "eef142965e70409b09f004301843b4b9bd7c0054",
+   "plays_on": "e3806361cf30b2d28a693c90a0c40792ebcef560",
+   "evidence": "the port-recomp notes 5.22 (module raceend, 73c3dd79, runner 4a577b62): run racen3-s2-1, 20261003-134204 P2, 0 of 2,336"
+  },
+  {
+   "recorded": "723441c195f0adb31964baa9b411c8dba4768617",
+   "plays_on": "e3806361cf30b2d28a693c90a0c40792ebcef560",
+   "evidence": "the port-recomp notes 5.22 (module raceend, 73c3dd79, runner 4a577b62): run racen3-s3-1, 20261003-200059 P1, 0 of 4,903"
+  },
+  {
+   "recorded": "a03a4d72714baf80225347d36e385a8fbd0c3020",
+   "plays_on": "e3806361cf30b2d28a693c90a0c40792ebcef560",
+   "evidence": "the port-recomp notes 5.22 (module raceend, 73c3dd79, runner 4a577b62): run racen3-s4-1, 20261003-221110 P2, 0 of 2,536"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "e3806361cf30b2d28a693c90a0c40792ebcef560",
+   "evidence": "the port-recomp notes 5.22 (module raceend, 73c3dd79, runner 4a577b62): run racen3-s5-1, the match race of run rm1 recorded on module n6, as the race, 0 of 5,873"
+  },
+  {
+   "recorded": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "plays_on": "e3806361cf30b2d28a693c90a0c40792ebcef560",
+   "evidence": "the port-recomp notes 5.22 (module raceend, 73c3dd79, runner 4a577b62): runs racen2-old1-1, racen2-old2-1, racen2-old3-1: two-game races recorded on module n7 (w10b-pb1 game 2, whose race ended twice; w10b-pg1 game 1; raceo1 game 2), as the race, 0 of 4,109, 4,105 and 4,162; the same with inputs known two steps late (racen2-oldl1 to 3)"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "evidence": "the port-recomp notes 5.23 (module finish3, 6802365b, runner 52d93831): runs gfin3b-f1 to f4, 20261004-155342 hr, the game's replay mode with rollbacks forced 1 to 17 steps deep, 0 of 5,639, 5,623, 5,623 and 5,634 steps differ"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "evidence": "the port-recomp notes 5.23 (module finish3, 6802365b, runner 52d93831): run gfin3b-f6, 20261004-014343 P1, the game's replay mode with rollbacks forced, 0 of 4,880"
+  },
+  {
+   "recorded": "eef142965e70409b09f004301843b4b9bd7c0054",
+   "plays_on": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "evidence": "the port-recomp notes 5.23 (module finish3, 6802365b, runner 52d93831): run sfin-old-1, 20261003-134204 P2, the game's replay mode, 0 of 2,336"
+  },
+  {
+   "recorded": "723441c195f0adb31964baa9b411c8dba4768617",
+   "plays_on": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "evidence": "the port-recomp notes 5.23 (module finish3, 6802365b, runner 52d93831): run sfin-old-2, 20261003-200059 P1, 0 of 4,903"
+  },
+  {
+   "recorded": "a03a4d72714baf80225347d36e385a8fbd0c3020",
+   "plays_on": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "evidence": "the port-recomp notes 5.23 (module finish3, 6802365b, runner 52d93831): run sfin-old-3, 20261003-221110 P2, 0 of 2,536"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "evidence": "the port-recomp notes 5.23 (module finish3, 6802365b, runner 52d93831): run gfin3b-f5, the match race of run rm1 recorded on module n6, as the race with rollbacks forced, 0 of 5,873"
+  },
+  {
+   "recorded": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "plays_on": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "evidence": "the port-recomp notes 5.23 (module finish3, 6802365b, runner 52d93831): run sfin-new-2, the two-game race w10b-pb1 game 2 recorded on module n7, as the race, 0 of 4,109"
+  },
+  {
+   "recorded": "e3806361cf30b2d28a693c90a0c40792ebcef560",
+   "plays_on": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "evidence": "the port-recomp notes 5.23 (module finish3, 6802365b, runner 52d93831): run sfin-new-1, the two-game race racem-pair game 1 recorded on module raceend, as the race, 0 of 3,978"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "b3ed4918f62cc7b05fd2470a6575149de1980dd2",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam1, e473dad2, runner 672749d2): runs cam-old-1 and cam-old-2, the final build's two-game race wftwo-pair games 1 and 2, as the race, 0 of 3,977 and 0 of 3,981; run cam-oldr-1, game 1 in the game's replay mode, 0 of 3,977"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "b3ed4918f62cc7b05fd2470a6575149de1980dd2",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam1, e473dad2, runner 672749d2): gate batch cam1g, row fork, 20261004-155342 hr in the game's replay mode, 0 of 5,641; row forced (runs cam1g-f1 to f4), rollbacks forced 1 to 17 steps deep, 0 of 5,639, 5,623, 5,623 and 5,634"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "b3ed4918f62cc7b05fd2470a6575149de1980dd2",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam1, e473dad2, runner 672749d2): gate batch cam1g, row forced (run cam1g-f6), 20261004-014343 P1, the game's replay mode with rollbacks forced, 0 of 4,880"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "b3ed4918f62cc7b05fd2470a6575149de1980dd2",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam1, e473dad2, runner 672749d2): gate batch cam1g, row forced (run cam1g-f5), the match race of run rm1 recorded on module n6, as the race with rollbacks forced, 0 of 5,873"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "513407f57fecd5eca179b4932a6a08f55c19677f",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam4, e0946190, runner 672749d2): runs cam4-old-1 and cam4-old-2, the final build's two-game race wftwo-pair games 1 and 2, as the race, 0 of 3,977 and 0 of 3,981; run cam4-oldr-1, game 1 in the game's replay mode, 0 of 3,977"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "513407f57fecd5eca179b4932a6a08f55c19677f",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam4, e0946190, runner 672749d2): gate batch cam4h, row fork, 20261004-155342 hr in the game's replay mode, 0 of 5,641; gate batch cam4g, row forced (runs cam4g-f1 to f4), rollbacks forced 1 to 17 steps deep, 0 of 5,639, 5,623, 5,623 and 5,634"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "513407f57fecd5eca179b4932a6a08f55c19677f",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam4, e0946190, runner 672749d2): gate batch cam4g, row forced (run cam4g-f6), 20261004-014343 P1, the game's replay mode with rollbacks forced, 0 of 4,880"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "513407f57fecd5eca179b4932a6a08f55c19677f",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam4, e0946190, runner 672749d2): gate batch cam4g, row forced (run cam4g-f5), the match race of run rm1 recorded on module n6, as the race with rollbacks forced, 0 of 5,873"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "6b571d90504598bc7b39ad27cc3dae3122420bef",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam7, ee54d590, runner 672749d2): runs cam7-old-1 and cam7-old-2, the final build's two-game race wftwo-pair games 1 and 2, as the race, 0 of 3,977 and 0 of 3,981; run cam7-oldr-1, game 1 in the game's replay mode, 0 of 3,977"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "6b571d90504598bc7b39ad27cc3dae3122420bef",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam7, ee54d590, runner 672749d2): gate batch cam7g, row fork, 20261004-155342 hr in the game's replay mode, 0 of 5,641; row forced (runs cam7g-f1 to f4), rollbacks forced 1 to 17 steps deep, 0 of 5,639, 5,623, 5,623 and 5,634"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "6b571d90504598bc7b39ad27cc3dae3122420bef",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam7, ee54d590, runner 672749d2): gate batch cam7g, row forced (run cam7g-f6), 20261004-014343 P1, the game's replay mode with rollbacks forced, 0 of 4,880"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "6b571d90504598bc7b39ad27cc3dae3122420bef",
+   "evidence": "branch feat/race-and-spectator-camera, 2026-10-11 (module cam7, ee54d590, runner 672749d2): gate batch cam7g, row forced (run cam7g-f5), the match race of run rm1 recorded on module n6, as the race with rollbacks forced, 0 of 5,873"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "evidence": "branch feat/race-end-timer, 2026-10-11 (module raceend3, 1335d94e, runner 207f620a): runs raceend-old-1 and raceend-old-2, the final build's two-game race wftwo-pair games 1 and 2 (no finish limit in their match start), as the race, 0 of 3,977 and 0 of 3,981"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "evidence": "branch feat/race-end-timer, 2026-10-11 (module raceend3, 1335d94e, runner 207f620a): gate batch raceendg3, row fork, 20261004-155342 hr in the game's replay mode, 0 of 5,641; row forced (runs raceendg3-f1 to f4), rollbacks forced 1 to 17 steps deep, 0 of 5,639, 5,623, 5,623 and 5,634"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "evidence": "branch feat/race-end-timer, 2026-10-11 (module raceend3, 1335d94e, runner 207f620a): gate batch raceendg3, row forced (run raceendg3-f6), 20261004-014343 P1, the game's replay mode with rollbacks forced, 0 of 4,880"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "evidence": "branch feat/race-end-timer, 2026-10-11 (module raceend3, 1335d94e, runner 207f620a): gate batch raceendg3, row forced (run raceendg3-f5), the match race of run rm1 recorded on module n6, as the race with rollbacks forced, 0 of 5,873"
+  },
+  {
+   "recorded": "cd45973faad67bbe41e77e704344c512ff4fd0ef",
+   "plays_on": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "evidence": "branch feat/effects-follow-drawn-body, 2026-10-14 (module efx, dad106db, runner 0e584cbf): gate batch efxgate, row fork, 20261004-155342 hr in the game's replay mode, 0 of 5,641; row forced (runs efxgate-f1 to f4), rollbacks forced 1 to 17 steps deep, 0 of 5,639, 5,623, 5,623 and 5,634"
+  },
+  {
+   "recorded": "958dff637d10e5cf522a29115930053d44780276",
+   "plays_on": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "evidence": "branch feat/effects-follow-drawn-body, 2026-10-14 (module efx, dad106db, runner 0e584cbf): gate batch efxgate, row forced (run efxgate-f6), 20261004-014343 P1, the game's replay mode with rollbacks forced, 0 of 4,880"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "evidence": "branch fix/older-replays, 2026-10-14 (the try copy of main 0d5c8e4: module efx, dad106db, runner cf200034): 0.2.0's and 0.2.1's recordings (module 69e9c001), in the game's replay mode (runs orp-r-*) and as the race (orp-x-*): the recorded races m35 (0.2.0, stat pack) 0 of 8,548 and 0 of 9,013, m40 and m39 (0.2.1, stat pack) 0 of 6,049 and 6,249, 0 of 7,253 and 7,453; m10 of the 0.2.0 copy 0 of 9,708 twice; the gate pairs v020gate-pair-1 0 of 4,215 twice and v021j-pair-1 0 of 3,905 and 4,105; test runners frz1, spb-fin-1, ehl-pair-1 and test modules 7d84349f, 77782a92, 1335d94e on the same image, 0 differ in every one"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "evidence": "branch fix/older-replays, 2026-10-14 (the try copy of main 0d5c8e4: module efx, dad106db, runner cf200034): 0.1.0's image (module w12, 8a3a451e): run ctlw2's recording, the game's replay mode 0 of 2,382 (orp-r-f2), as the race 0 of 2,932 (orp-x-f2)"
+  },
+  {
+   "recorded": "aba727f7781ae3f1cdfc35212f4dfe8e93f3902e",
+   "plays_on": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "evidence": "branch fix/older-replays, 2026-10-14 (the try copy of main 0d5c8e4: module efx, dad106db, runner cf200034): the match race of run rm1 recorded on module n6: the game's replay mode 0 of 5,269 (orp-r-f3), as the race 0 of 5,873 (orp-x-f3)"
+  },
+  {
+   "recorded": "62b3d9bf64d1feb8507cece79f508e79c1f8c778",
+   "plays_on": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "evidence": "branch fix/older-replays, 2026-10-14 (the try copy of main 0d5c8e4: module efx, dad106db, runner cf200034): module n7's 30-player race w4b-1: 0 of 7,512 in the game's replay mode (orp-r-f4) and as the race (orp-x-f4)"
+  },
+  {
+   "recorded": "6b571d90504598bc7b39ad27cc3dae3122420bef",
+   "plays_on": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "evidence": "branch fix/older-replays, 2026-10-14 (the try copy of main 0d5c8e4: module efx, dad106db, runner cf200034): module cam7's gate pair cam7g-pair-1: the game's replay mode 0 of 3,415 (orp-r-f1), as the race 0 of 3,615 (orp-x-f1)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "fedffeaf7f5cf09d5752eb8b5c034849dac70f97",
+   "evidence": "branch fix/game-out-test, 2026-10-17 (module outtest 2911b52d, runner v022): five 0.2.2 recordings as the race, 0 steps differing: three with Restore on, 10,670, 14,507 and 11,087 steps (out-m12, out-m13, out-m16), one with it off, 5,533 (out-m7), and that one seen from seat 0 (out-m7s0)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "evidence": "branch integration/review-030, 2026-10-18 (module review030 547694e2, runner 05a2a1fe; 0.1.0's on runner 904a0600): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (rv030-v010-x), in the game's replay mode 0 of 2,382 (rv030-v010-r)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "evidence": "branch integration/review-030, 2026-10-18 (module review030 547694e2, runner 05a2a1fe; 0.1.0's on runner 904a0600): 0.2.0's and 0.2.1's image (module 69e9c001): a 0.2.0 race 20261011-234725-m32 as the race 0 of 4,390 (rv030-old-1), in the replay mode 0 of 3,793 (rv030-oldr-1); a 0.2.1 race 20261013-002757-m43 (stat pack) as the race 0 of 5,914 (rv030-old-2), in the replay mode 0 of 5,914 (rv030-oldr-2)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "evidence": "branch integration/review-030, 2026-10-18 (module review030 547694e2, runner 05a2a1fe; 0.1.0's on runner 904a0600): 0.2.2's and 0.2.3's image (module 53d49ffc): a 0.2.2 race m23 as the race 0 of 8,777 (rv030-old-3), in the replay mode 0 of 8,777 (rv030-oldr-3); no 0.2.3 recording exists on the PC (0.2.3's copy holds 0.2.2's replays only)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "de246feae7aa463a9ed2347ad320fbd3acf1b80a",
+   "evidence": "branch integration/review-031, 2026-10-18 (module review031 235f4516, runner 46c69f30, headless): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (r31b-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "de246feae7aa463a9ed2347ad320fbd3acf1b80a",
+   "evidence": "branch integration/review-031, 2026-10-18 (module review031 235f4516, runner 46c69f30, headless): 0.2.0's and 0.2.1's image: a 0.2.0 race 20261011-234725-m32 as the race 0 of 4,390 (r31b-v020); a 0.2.1 race 20261013-002757-m43 (stat pack) as the race 0 of 5,914 (r31b-v021)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "de246feae7aa463a9ed2347ad320fbd3acf1b80a",
+   "evidence": "branch integration/review-031, 2026-10-18 (module review031 235f4516, runner 46c69f30, headless): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 as the race 0 of 8,777 (r31b-m23; also on runner a02c1bb1: r31-m23)"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "de246feae7aa463a9ed2347ad320fbd3acf1b80a",
+   "evidence": "branch integration/review-031, 2026-10-18 (module review031 235f4516, runner 46c69f30, headless): feat/custom-online's image (071e6200, module c20a21fc): its pair race co-pair1's game-1 replay, both players on custom machines (version 4), as the race 0 of 3,117 (r31b-cust; also on runner a02c1bb1: r31-cust)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "d869547ac4c386c50f04a041cc3797a21adc1819",
+   "evidence": "branch integration/review-032, 2026-10-18 (module review032 6e52313d, runner ada84ff9, headless): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (r32b-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "d869547ac4c386c50f04a041cc3797a21adc1819",
+   "evidence": "branch integration/review-032, 2026-10-18 (module review032 6e52313d, runner ada84ff9, headless): 0.2.0's and 0.2.1's image: a 0.2.0 race 20261011-234725-m32 as the race 0 of 4,390 (r32b-v020); a 0.2.1 race 20261013-002757-m43 (stat pack) as the race 0 of 5,914 (r32b-v021)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "d869547ac4c386c50f04a041cc3797a21adc1819",
+   "evidence": "branch integration/review-032, 2026-10-18 (module review032 6e52313d, runner ada84ff9, headless): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 as the race 0 of 8,777 (r32b-m23)"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "d869547ac4c386c50f04a041cc3797a21adc1819",
+   "evidence": "branch integration/review-032, 2026-10-18 (module review032 6e52313d, runner ada84ff9, headless): feat/custom-online's image (071e6200, module c20a21fc): its pair race co-pair1's game-1 replay, both players on custom machines (version 4), as the race 0 of 3,117 (r32b-cust)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "c5e4146424ffab2016ac9334f85bd37e52716c02",
+   "evidence": "branch integration/review-033, 2026-10-18 (module review033 45100db9, runner 7899e32a, headless): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (r33-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "c5e4146424ffab2016ac9334f85bd37e52716c02",
+   "evidence": "branch integration/review-033, 2026-10-18 (module review033 45100db9, runner 7899e32a, headless): 0.2.0's and 0.2.1's image: a 0.2.0 race 20261011-234725-m32 as the race 0 of 4,390 (r33-v020); a 0.2.1 race 20261013-002757-m43 (stat pack) as the race 0 of 5,914 (r33-v021)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "c5e4146424ffab2016ac9334f85bd37e52716c02",
+   "evidence": "branch integration/review-033, 2026-10-18 (module review033 45100db9, runner 7899e32a, headless): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 as the race 0 of 8,777 (r33-m23)"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "c5e4146424ffab2016ac9334f85bd37e52716c02",
+   "evidence": "branch integration/review-033, 2026-10-18 (module review033 45100db9, runner 7899e32a, headless): feat/custom-online's image (071e6200, module c20a21fc): its pair race co-pair1's game-1 replay, both players on custom machines (version 4), as the race 0 of 3,117 (r33-cust)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "evidence": "branch feat/mine-regen, 2026-10-18 (module mines 7628cd8b, runner 16c81cca, headless): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (mines-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "evidence": "branch feat/mine-regen, 2026-10-18 (module mines 7628cd8b, runner 16c81cca, headless): 0.2.0's and 0.2.1's image: a 0.2.1 race m39 on Serial Gaps (scratch/crash-m39, a mine course) as the race 0 of 7,453 (mines-m39)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "evidence": "branch feat/mine-regen, 2026-10-18 (module mines 7628cd8b, runner 16c81cca, headless): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 on Multiplex (a mine course) as the race 0 of 8,777 (mines-m23)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "f5e1d5201cdb04b321f9fbbc749a6d7f0d052bbe",
+   "evidence": "branch integration/review-034, 2026-10-19 (module review034 e26c95ca, runner a136dbd5, headless): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (r34-v010)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "f5e1d5201cdb04b321f9fbbc749a6d7f0d052bbe",
+   "evidence": "branch integration/review-034, 2026-10-19 (module review034 e26c95ca, runner a136dbd5, headless): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 on Multiplex (a mine course) as the race 0 of 8,777 (r34-m23)"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "f5e1d5201cdb04b321f9fbbc749a6d7f0d052bbe",
+   "evidence": "branch integration/review-034, 2026-10-19 (module review034 e26c95ca, runner a136dbd5, headless): feat/custom-online's image (071e6200, module c20a21fc): its pair race co-pair1's game-1 replay, both players on custom machines (version 4), as the race 0 of 3,117 (r34-custom)"
+  },
+  {
+   "recorded": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "plays_on": "f5e1d5201cdb04b321f9fbbc749a6d7f0d052bbe",
+   "evidence": "branch integration/review-034, 2026-10-19 (module review034 e26c95ca, runner a136dbd5, headless): feat/mine-regen's image (module mines 7628cd8b): its pair race mines-p3 on Serial Gaps with the mine rule (12 steps; 7 went off, 7 came back; version 5) as the race 0 of 6,377 (r34-mines)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "f5e1d5201cdb04b321f9fbbc749a6d7f0d052bbe",
+   "evidence": "branch integration/review-034, 2026-10-19 (module review034 e26c95ca, runner a136dbd5, headless): 0.2.0's and 0.2.1's image: a 0.2.1 race m39 on Serial Gaps (scratch/crash-m39, a mine course) as the race 0 of 7,453 (r34-m39)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "f15cbd1e6349aff0adff59ebfc4413d3b888c777",
+   "evidence": "branch integration/review-035, 2026-10-19 (module review035 e4c261be, runner dcfaeeef, headless): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (r35-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "f15cbd1e6349aff0adff59ebfc4413d3b888c777",
+   "evidence": "branch integration/review-035, 2026-10-19 (module review035 e4c261be, runner dcfaeeef, headless): 0.2.0's and 0.2.1's image: the recorded races m32 (0 of 4,390, r35-v020), m43 (0 of 5,914, r35-v021) and m39 (scratch/crash-m39, a mine course, 0 of 7,453, r35-m39) as the race"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "f15cbd1e6349aff0adff59ebfc4413d3b888c777",
+   "evidence": "branch integration/review-035, 2026-10-19 (module review035 e4c261be, runner dcfaeeef, headless): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 on Multiplex (0 of 8,777, r35-v022) and 0.2.3's v023b-mixa-1 (0 of 3,974, r35-v023) as the race"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "f15cbd1e6349aff0adff59ebfc4413d3b888c777",
+   "evidence": "branch integration/review-035, 2026-10-19 (module review035 e4c261be, runner dcfaeeef, headless): feat/custom-online's image (071e6200, module c20a21fc): its pair race co-pair1's game-1 replay, both players on custom machines (version 4), as the race 0 of 3,117 (r35-cust)"
+  },
+  {
+   "recorded": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "plays_on": "f15cbd1e6349aff0adff59ebfc4413d3b888c777",
+   "evidence": "branch integration/review-035, 2026-10-19 (module review035 e4c261be, runner dcfaeeef, headless): feat/mine-regen's image: its pair race mines-p1's game-1 replay, mines that come back (version 5), as the race 0 of 8,110 (r35-mines)"
+  },
+  {
+   "recorded": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "plays_on": "f15cbd1e6349aff0adff59ebfc4413d3b888c777",
+   "evidence": "branch integration/review-035, 2026-10-19 (module review035 e4c261be, runner dcfaeeef, headless): review-030's image (module 547694e2): fix/practice-polish's free run polish-unlimited (Unlimited laps) as the race 0 of 11,723 (r35-free)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "072796a41be65a80cb2305d89681a692072ea095",
+   "evidence": "branch feat/present-stage1, 2026-10-19 (module present1 fbca39c3, runner cf6e020c, headless; every row with its inputs two steps late and the drawing of every second race frame skipped, debug.skipDraws 2): 0.1.0's image: run ctlw2's recording as the race, 0 of 2,932 (ps-set-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "072796a41be65a80cb2305d89681a692072ea095",
+   "evidence": "branch feat/present-stage1, 2026-10-19 (module present1 fbca39c3, runner cf6e020c, headless; every row with its inputs two steps late and the drawing of every second race frame skipped, debug.skipDraws 2): 0.2.0's and 0.2.1's image: the recorded races m32 (0 of 4,390, ps-set-v020), m43 (0 of 5,914, ps-set-v021) and m39 (0 of 7,453, ps-set-m39)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "072796a41be65a80cb2305d89681a692072ea095",
+   "evidence": "branch feat/present-stage1, 2026-10-19 (module present1 fbca39c3, runner cf6e020c, headless; every row with its inputs two steps late and the drawing of every second race frame skipped, debug.skipDraws 2): 0.2.2's and 0.2.3's image: m23 (0 of 8,777, ps-set-v022) and v023b-mixa-1 (0 of 3,974, ps-set-v023)"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "072796a41be65a80cb2305d89681a692072ea095",
+   "evidence": "branch feat/present-stage1, 2026-10-19 (module present1 fbca39c3, runner cf6e020c, headless; every row with its inputs two steps late and the drawing of every second race frame skipped, debug.skipDraws 2): feat/custom-online's image: co-pair1's game-1 replay, custom machines, 0 of 3,117 (ps-set-cust)"
+  },
+  {
+   "recorded": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "plays_on": "072796a41be65a80cb2305d89681a692072ea095",
+   "evidence": "branch feat/present-stage1, 2026-10-19 (module present1 fbca39c3, runner cf6e020c, headless; every row with its inputs two steps late and the drawing of every second race frame skipped, debug.skipDraws 2): feat/mine-regen's image: mines-p1's game-1 replay, 0 of 8,110 (ps-set-mines)"
+  },
+  {
+   "recorded": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "plays_on": "072796a41be65a80cb2305d89681a692072ea095",
+   "evidence": "branch feat/present-stage1, 2026-10-19 (module present1 fbca39c3, runner cf6e020c, headless; every row with its inputs two steps late and the drawing of every second race frame skipped, debug.skipDraws 2): review-030's image: the free run polish-unlimited, 0 of 11,723 (ps-set-free)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "d43dd6989d74564d47a09a7da86d5b38aca4ff2d",
+   "evidence": "branch feat/hfr-034, 2026-10-19 (module hfr034 7fb72337, runner c230838b, headless, pictures between in every pass: debug.drawnFrames 3): 0.1.0's image: ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) in the replay mode 0 of 2,382 (h34o-15)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "d43dd6989d74564d47a09a7da86d5b38aca4ff2d",
+   "evidence": "branch feat/hfr-034, 2026-10-19 (module hfr034 7fb72337, runner c230838b, headless, pictures between in every pass: debug.drawnFrames 3): 0.2.0's and 0.2.1's image: the recorded races m35 (a1) and m40, m39 (b1, b2) of port/scratch/older-replays/rec in the replay mode 0 of 8,548, 6,049, 7,253 (h34o-1, -4, -5)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "d43dd6989d74564d47a09a7da86d5b38aca4ff2d",
+   "evidence": "branch feat/hfr-034, 2026-10-19 (module hfr034 7fb72337, runner c230838b, headless, pictures between in every pass: debug.drawnFrames 3): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 (scratch/m23/m23.fzrp) as the race 0 of 8,777, also at 0 and 1 drawn (h34g3-1, h34g0-1, h34g1-1)"
+  },
+  {
+   "recorded": "523fbbcfaf82b8c3081a407f3891e84c5d665730",
+   "plays_on": "d43dd6989d74564d47a09a7da86d5b38aca4ff2d",
+   "evidence": "branch feat/hfr-034, 2026-10-19 (module hfr034 7fb72337, runner c230838b, headless, pictures between in every pass: debug.drawnFrames 3): the re-draw's test image (hfr2): its 30-racer races on courses 37 and 38 (port/runs/hfrc37, hfrc38) as the race 0 of 2,807 and 4,328, also at 0 and 1 drawn (h34g3-4, -5, h34g0-4, -5, h34g1-4, -5)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "d6c305489f063cf49fbe133b8e0c3aee30943291",
+   "evidence": "branch integration/review-036, 2026-10-19 (module review036 a1c496d4, runner 9a94405c, headless): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (r36-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "d6c305489f063cf49fbe133b8e0c3aee30943291",
+   "evidence": "branch integration/review-036, 2026-10-19 (module review036 a1c496d4, runner 9a94405c, headless): 0.2.0's and 0.2.1's image: the recorded races m32 (0 of 4,390, r36-v020), m43 (0 of 5,914, r36-v021) and m39 (scratch/crash-m39, a mine course, 0 of 7,453, r36-m39) as the race"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "d6c305489f063cf49fbe133b8e0c3aee30943291",
+   "evidence": "branch integration/review-036, 2026-10-19 (module review036 a1c496d4, runner 9a94405c, headless): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 on Multiplex (0 of 8,777, r36-v022) and 0.2.3's v023b-mixa-1 (0 of 3,974, r36-v023) as the race"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "d6c305489f063cf49fbe133b8e0c3aee30943291",
+   "evidence": "branch integration/review-036, 2026-10-19 (module review036 a1c496d4, runner 9a94405c, headless): feat/custom-online's image (071e6200, module c20a21fc): its pair race co-pair1's game-1 replay, both players on custom machines (version 4), as the race 0 of 3,117 (r36-cust)"
+  },
+  {
+   "recorded": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "plays_on": "d6c305489f063cf49fbe133b8e0c3aee30943291",
+   "evidence": "branch integration/review-036, 2026-10-19 (module review036 a1c496d4, runner 9a94405c, headless): feat/mine-regen's image: its pair race mines-p1's game-1 replay, mines that come back (version 5), as the race 0 of 8,110 (r36-mines)"
+  },
+  {
+   "recorded": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "plays_on": "d6c305489f063cf49fbe133b8e0c3aee30943291",
+   "evidence": "branch integration/review-036, 2026-10-19 (module review036 a1c496d4, runner 9a94405c, headless): review-030's image (module 547694e2): fix/practice-polish's free run polish-unlimited (Unlimited laps) as the race 0 of 11,723 (r36-free)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "evidence": "branch integration/review-037, 2026-10-19 (module review037 82b7241c, runner 8410ffcb, headless, lanes auto): 0.1.0's image (module w12): run ctlw2's recording (port/scratch/older-replays/rec/f2-v010-ctlw2.fzrp) as the race 0 of 2,932 (r37c-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "evidence": "branch integration/review-037, 2026-10-19 (module review037 82b7241c, runner 8410ffcb, headless, lanes auto): 0.2.0's and 0.2.1's image: the recorded races m32 (0 of 4,390, r37c-v020), m43 (0 of 5,914, r37c-v021) and m39 (scratch/crash-m39, a mine course, 0 of 7,453, r37c-m39) as the race"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "evidence": "branch integration/review-037, 2026-10-19 (module review037 82b7241c, runner 8410ffcb, headless, lanes auto): 0.2.2's and 0.2.3's image: a 0.2.2 race m23 on Multiplex (0 of 8,777, r37c-v022) and 0.2.3's v023b-mixa-1 (0 of 3,974, r37c-v023) as the race"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "evidence": "branch integration/review-037, 2026-10-19 (module review037 82b7241c, runner 8410ffcb, headless, lanes auto): feat/custom-online's image (071e6200, module c20a21fc): its pair race co-pair1's game-1 replay, both players on custom machines (version 4), as the race 0 of 3,117 (r37c-cust)"
+  },
+  {
+   "recorded": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "plays_on": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "evidence": "branch integration/review-037, 2026-10-19 (module review037 82b7241c, runner 8410ffcb, headless, lanes auto): feat/mine-regen's image: its pair race mines-p1's game-1 replay, mines that come back (version 5), as the race 0 of 8,110 (r37c-mines)"
+  },
+  {
+   "recorded": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "plays_on": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "evidence": "branch integration/review-037, 2026-10-19 (module review037 82b7241c, runner 8410ffcb, headless, lanes auto): review-030's image (module 547694e2): fix/practice-polish's free run polish-unlimited (Unlimited laps) as the race 0 of 11,723 (r37c-free)"
+  },
+  {
+   "recorded": "d6c305489f063cf49fbe133b8e0c3aee30943291",
+   "plays_on": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "evidence": "branch integration/review-037, 2026-10-19 (module review037 82b7241c, runner 8410ffcb, headless): review-036's and 037's first image: a recorded practice crash-202550 (port/scratch/review037/crash-202550, recorded on launcher-review037-try) as the race 0 of 6,429 at lanes 0 (r37ys-l0, with the scrubber) and with forced rollbacks 7x17 (r37yf7x17-l0)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "evidence": "branch integration/review-040, 2026-10-24 (module review040 d0ce329f, runner 1d9b415a, headless, lanes auto; the rubber band a race's word, older recordings with it): f2-v010-ctlw2.fzrp as the race 0 of 2,932 (r40-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "evidence": "branch integration/review-040, 2026-10-24 (module review040 d0ce329f, runner 1d9b415a, headless, lanes auto; the rubber band a race's word, older recordings with it): v020-m32.fzrp as the race 0 of 4,390 (r40-v020); v021-m43.fzrp as the race 0 of 5,914 (r40-v021); the m39 recording as the race 0 of 7,453 (r40-m39)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "evidence": "branch integration/review-040, 2026-10-24 (module review040 d0ce329f, runner 1d9b415a, headless, lanes auto; the rubber band a race's word, older recordings with it): v022-m23.fzrp as the race 0 of 8,777 (r40-v022); race.fzrp as the race 0 of 3,974 (r40-v023)"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "evidence": "branch integration/review-040, 2026-10-24 (module review040 d0ce329f, runner 1d9b415a, headless, lanes auto; the rubber band a race's word, older recordings with it): co-pair1-1.fzrp as the race 0 of 3,117 (r40-cust)"
+  },
+  {
+   "recorded": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "plays_on": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "evidence": "branch integration/review-040, 2026-10-24 (module review040 d0ce329f, runner 1d9b415a, headless, lanes auto; the rubber band a race's word, older recordings with it): race.fzrp as the race 0 of 8,110 (r40-mines)"
+  },
+  {
+   "recorded": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "plays_on": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "evidence": "branch integration/review-040, 2026-10-24 (module review040 d0ce329f, runner 1d9b415a, headless, lanes auto; the rubber band a race's word, older recordings with it): practice.fzrp as the race 0 of 11,723 (r40-free)"
+  },
+  {
+   "recorded": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "plays_on": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "evidence": "branch integration/review-040, 2026-10-24 (module review040 d0ce329f, runner 1d9b415a, headless, lanes auto; the rubber band a race's word, older recordings with it): race.fzrp as the race 0 of 2,981 (r40-v030)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): f2-v010-ctlw2.fzrp as the race 0 of 2,932 (cv-v010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): v020-m32.fzrp as the race 0 of 4,390 (cv-v020), v021-m43.fzrp 0 of 5,914 (cv-v021), the m39 recording 0 of 7,453 (cv-m39)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): v022-m23.fzrp as the race 0 of 8,777 (cv-v022); race.fzrp 0 of 3,974 (cv-v023)"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): co-pair1-1.fzrp as the race 0 of 3,117 (cv-cust)"
+  },
+  {
+   "recorded": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): race.fzrp as the race 0 of 8,110 (cv-mines)"
+  },
+  {
+   "recorded": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): practice.fzrp as the race 0 of 11,723 (cv-free)"
+  },
+  {
+   "recorded": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): race.fzrp as the race 0 of 2,981 (cv-v030)"
+  },
+  {
+   "recorded": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): review-040's own image: r40u-pair-1's race.fzrp as the race 0 of 3,120 (cv-r40)"
+  }
+ ]
+}

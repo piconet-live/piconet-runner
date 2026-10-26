@@ -1,0 +1,7 @@
+{
+  "about": "The gate that must fail: a playback with a 3-step rollback forced every frame and the locked cache left out of the undo log, the fault of the port-recomp notes 5.16 (replay-check.sh; row control)",
+  "bundle": "{bundle}",
+  "widescreen": true,
+  "replay": {"file": "{replay}"},
+  "debug": {"forceRollback": {"every": 1, "depths": [3]}, "keepScratch": true}
+}
