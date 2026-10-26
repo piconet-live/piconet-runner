@@ -124,7 +124,7 @@ targets and the steps: [port/build/README.md](port/build/README.md).
     git ls-files -z '*.sh' | xargs -0 -n1 bash -n     # the scripts parse
 
 The plain check: the facts table's, the image's, the core's (built with g++) and the setup's checks. It needs no
-work folder and no disc. Without `.venv` (with keystone) the image's code builds and tests are skipped, and said;
+work folder and no disc, but piconet-launcher cloned beside this checkout: the facts table's check reads its files. Without `.venv` (with keystone) the image's code builds and tests are skipped, and said;
 without the gates' checkout it says that their checks are left out. CI runs the same on Linux
 (`.github/workflows/ci.yml`) once the repositories are public; the Windows build above is a workflow run by hand
 (`windows-build.yml`).
