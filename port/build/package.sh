@@ -30,9 +30,10 @@
 #                           own (scripts/release-build.sh)
 #   MORE_IDENTITIES=<file>  more names no copy may hold, a name a line (or kind<TAB>name): a nickname, an older
 #                           address (the file is yours and is never tracked; what the PC knows is gathered by itself)
-#   WITHOUT_IDENTITIES="windows git:fzgx-tools"   sources of names this PC does not have, left out knowingly. A
+#   WITHOUT_IDENTITIES="windows git:tools"   sources of names this PC does not have, left out knowingly. A
 #                           source that cannot be asked and is not named here refuses the copy (package_names.py)
-# The launcher is published from the commit checked out, which must be clean; the read-me comes from
+# The launcher is published from the commit its own checkout (pins.tsv REPO_LAUNCHER) has checked out, which must be
+# clean, as this checkout must be; the read-me comes from
 # port/build/player-copy/, and the fonts of the game window's strip from the launcher's own (recomp/Fonts). What is checked and refused: port/build/package.py (its head). Nothing of the game
 # is in a copy, nor anybody's name (package_identities.py: every file is searched for this PC's and the repositories'
 # git users' names before a copy is made), and a copy is written under the work folder only: it is copied by hand
@@ -61,12 +62,18 @@ release_stage=$(said Stage "$APP_LAUNCHER/Branding.cs")     # the release's stag
 [ -n "$name" ] && [ -n "$program" ] || { echo "package: no name in $APP_LAUNCHER/Branding.cs" >&2; exit 1; }
 [ -n "$folder" ] && [ -n "$marker" ] || { echo "package: no folder or marker name in $APP_INSTALL" >&2; exit 1; }
 case "${COPIES:=$W}/" in "$W"/*) ;; *) echo "package: COPIES is a folder under the work folder ($W)" >&2; exit 1;; esac
-parts=(--name "$name" --stack "$STACK" --repository "$PWD" --work "$COPIES" --runner "$RUNNER" --runner-commit "$RUNNER_COMMIT"
+pin() { awk -F'\t' -v n="$1" '$1 == n { print $2; f = 1 } END { exit !f }' port/setup/pins.tsv; }
+launcher=$(pin REPO_LAUNCHER) && tools=$(pin REPO_TOOLS) || { echo "package: port/setup/pins.tsv has no row REPO_LAUNCHER or REPO_TOOLS" >&2; exit 1; }
+launcher=$(cd "$launcher" 2> /dev/null && pwd) || { echo "package: no launcher checkout at pins.tsv REPO_LAUNCHER ($(pin REPO_LAUNCHER))" >&2; exit 1; }
+# the launcher is published from its own checkout, whose commit names the copy (package.py --launcher-repository)
+parts=(--name "$name" --stack "$STACK" --repository "$PWD" --launcher-repository "$launcher" --work "$COPIES" --runner "$RUNNER" --runner-commit "$RUNNER_COMMIT"
        --module "$module" --bundle "$BUNDLE" --sys "$SYS" --sys-source "$SYS_SOURCE" --vcrt "$VCRT" --fonts "$PWD/$APP_FONTS")
 [ -z "${OLD_REPLAYS_REFUSED:-}" ] || parts+=(--old-replays-refused)
-# Whose names no copy may hold, beside the checkout's and SYS_SOURCE's git users, which package.py asks itself: the
-# users of the work folder's other trees and of the sibling repository the launcher's disc reader is packed in.
-for tree in "$W/ModernGekko" "$W/DolRecomp" "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/../fzgx-tools"; do
+# Whose names no copy may hold, beside the two checkouts' and SYS_SOURCE's git users, which package.py asks itself: the
+# users of the work folder's other trees and of piconet-tools, whose disc reader the launcher is built with (pins.tsv
+# REPO_TOOLS: the launcher's submodule; its source name is git:tools). The launcher's checkout's are asked by
+# package.py, as this checkout's are.
+for tree in "$W/ModernGekko" "$W/DolRecomp" "$PWD/$tools"; do
     parts+=(--identity-repository "$tree")
 done
 [ -z "${MORE_IDENTITIES:-}" ] || parts+=(--more-identities "$MORE_IDENTITIES")

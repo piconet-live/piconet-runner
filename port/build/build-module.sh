@@ -32,7 +32,7 @@ TOOL=${TOOL:-dolrecomp-port}
 SWITCHES=${SWITCHES:-$root/$REPO_SWITCHES}
 EXTRA=${EXTRA:-"805960D4:$W/derived/loaded-05-movie.bin 8059EF6C:$W/derived/loaded-0c-movie_module.bin"}
 PROFILE=${PROFILE:-}; BUNDLE=${BUNDLE:-}
-BUSY=${BUSY_CHECK:-$W/port/scratch/rp/chk.sh}
+BUSY=$(busy_check "$W")   # none: no busy check
 problems=0
 refuse() { echo "build-module: $*" >&2; problems=1; }
 # AGAIN=1: the two folders are the caller's own, from a try of this build that stopped (scripts/release-build.sh
@@ -54,7 +54,7 @@ cmd="TOOL=$TOOL SWITCHES=$SWITCHES EXTRA=\"$EXTRA\" PROFILE=$PROFILE BUNDLE=$BUN
 pc_sharing "$BUSY"
 if [ -n "$DRY" ]; then
   echo "cd $root"
-  [ ! -e "$BUSY" ] || echo "$BUSY    # exit 0 (\"none\"): go on; exit 3: wait"
+  [ "$BUSY" = none ] || [ ! -e "$BUSY" ] || echo "$BUSY    # exit 0 (\"none\"): go on; exit 3: wait"
   lead="( "; line() { echo "$lead$*"; lead="  "; }
   ! pc_has native-build-lock.sh || line "source $PC_SCRIPTS/native-build-lock.sh \"native module $N, optimised (about 11 min)\" 15"
   ! pc_has cpu-window.sh || line "source $PC_SCRIPTS/cpu-window.sh \"native module $N, optimised (about 11 min)\" 12"
@@ -69,7 +69,7 @@ if [ -n "$DRY" ]; then
 fi
 [ $problems = 0 ] || exit 1
 cd "$root"
-[ ! -e "$BUSY" ] || "$BUSY" > /dev/null || { echo "build-module: the busy check says wait:"; "$BUSY" || true; exit 3; }
+[ "$BUSY" = none ] || [ ! -e "$BUSY" ] || "$BUSY" > /dev/null || { echo "build-module: the busy check says wait:"; "$BUSY" || true; exit 3; }
 ( pc_take native-build-lock.sh "native module $N, optimised (about 11 min)" 15
   pc_take cpu-window.sh "native module $N, optimised (about 11 min)" 12
   python3 port/build/manifest.py module-begin "$W" "$N" --switches "$SWITCHES" --bundle "$BUNDLE" --profile "$PROFILE" --extra "$EXTRA" --tool "$TOOL"

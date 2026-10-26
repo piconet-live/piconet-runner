@@ -11,8 +11,9 @@ and tree of every source tree the runner and the module were built from, with th
 is GPL code: the read-me points to its source, the public repositories at this release's tag (SOURCE_LINE).
 
 What it refuses, each with the offending path:
-  - a checkout that is not clean, or a launcher that was not published from the commit checked out; a program
-    that does not start the launcher in its folder;
+  - a checkout that is not clean (this repository's, or the launcher's, --launcher-repository), or a launcher that
+    was not published from the commit the launcher's checkout has checked out; a program that does not start the
+    launcher in its folder;
   - a batch file, a script Windows runs on a double-click or a shortcut anywhere (START_FILES), any file at the top
     but the program and the read-me, and any folder at the top but the launcher's, recomp and source;
   - a launcher that was not made for the copy's stack: its own program must carry the stack's name, its address and
@@ -34,6 +35,8 @@ What it refuses, each with the offending path:
     --old-replays-refused (said on purpose, for a build that is not to play them);
   - an output that exists (REPLACE=1 makes it again), or a place that is not <work>/dist.
 
+The copy is named, dated and stamped by the launcher's commit (its own checkout's, separate from this repository's
+since the split); the runner's commit is the one its manifest names (the record's parts.source.runner_commit).
 The same parts give the same copy: files in name order, every time stamp the launcher's commit's, no path of the
 PC and no clock in the record. Status 0 and the copy's name, or status 1 and "package: REFUSED: why: path"."""
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, time, zipfile
@@ -163,7 +166,8 @@ class Plan:
 
 
 def checkout(repository):
-    """The commit checked out: the launcher is published from it, so nothing may differ from it."""
+    """The commit checked out, which must be clean: this repository's (the table of same races is read from it) or the
+    launcher's (the launcher is published from it, so nothing may differ from it)."""
     status = git(repository, "status", "--porcelain")
     if status is None:
         raise Refused("not a git checkout", repository)
@@ -259,7 +263,8 @@ def emulator_sys(a, plan, commit):
 
 
 def launcher(a, plan, at):
-    """The published launcher, in its folder. Its own file says which commit it was built from: the one checked out."""
+    """The published launcher, in its folder. Its own file says which commit it was built from: the one the launcher's
+    checkout has checked out (at, from --launcher-repository)."""
     with open(real_file(os.path.join(a.launcher, LAUNCHER_LIBRARY), "the launcher's program"), "rb") as f:
         stamps = set(re.findall(rb"(\d+\.\d+\.\d+)\+([0-9a-f]{7,40})(?![0-9a-f])", f.read()))
     versions = sorted({v.decode() for v, c in stamps if c.decode() == at["build"]})
@@ -387,13 +392,14 @@ def write(plan, folder, name, stamp):
 
 
 def package(a):
-    at, plan = checkout(a.repository), Plan()
+    checkout(a.repository)                         # the runner's own checkout: clean (its commit is the manifest's)
+    at, plan = checkout(a.launcher_repository), Plan()    # the launcher's: the copy's name, date, stamps and record
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", a.stack):
         raise Refused("a stack's name is letters, digits, '.', '_' and '-'", a.stack)
     made = parts(a, plan)
     if not made["module"]["same_trees_as_the_runner"]:
         print("package: note: the module was built from other source trees than the runner; the read-me points to the runner's (the GPL part)")
-    whose = [a.repository, a.sys_source, *a.identity_repository]         # the repositories whose git users are searched for
+    whose = [a.repository, a.launcher_repository, a.sys_source, *a.identity_repository]         # the repositories whose git users are searched for
     if a.parts_only:
         refuse_game_data(plan)
         refuse_identities(plan, whose, a.name, a.more_identities, Refused, a.identity_without)
@@ -442,8 +448,8 @@ def package(a):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    for option in ("name", "stack", "repository", "work", "runner", "runner-commit", "module", "bundle", "sys",
-                   "sys-source", "vcrt", "fonts"):
+    for option in ("name", "stack", "repository", "launcher-repository", "work", "runner", "runner-commit", "module",
+                   "bundle", "sys", "sys-source", "vcrt", "fonts"):
         p.add_argument("--" + option, required=True)
     for option in ("launcher", "program", "program-name", "program-folder", "marker", "stack-address", "stack-kind"):
         p.add_argument("--" + option)

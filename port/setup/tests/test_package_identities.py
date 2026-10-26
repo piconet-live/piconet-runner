@@ -57,7 +57,7 @@ class ACleanCopy(Identities):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("package: identities: searched every file as UTF-8, UTF-16 and UTF-32 text for ", done.stdout)
         self.assertIn("package: identities: names login: gathered, 2 names; host: gathered, ", done.stdout)
-        self.assertIn("; windows: left out, by the caller's word; git:repo: gathered, 2 names; git:emulator: gathered, none is set; more: gathered, 1 name\n",
+        self.assertIn("; windows: left out, by the caller's word; git:repo: gathered, 2 names; git:launcher-repo: gathered, none is set; git:emulator: gathered, none is set; more: gathered, 1 name\n",
                       done.stdout)                                                 # every source, gathered or not
         for kind in ("this PC's login name", "git's user.name (repo)", "a word of git's user.name (repo)", "git's user.email (repo)",
                      "git's user.name (repo), written together", "the made-up PC's host name"):

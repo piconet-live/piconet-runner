@@ -27,9 +27,9 @@ CC=(-DCMAKE_C_COMPILER="$L/bin/clang" -DCMAKE_CXX_COMPILER="$L/bin/clang++" -DCM
 # heavy WHAT MINUTES CMD...: the busy check, the PC's locks (where they are: port/setup/lib.sh, pc_take), then CMD
 # with its output in LB/$step.log
 heavy() {
-  local what=$1 min=$2 check=${BUSY_CHECK:-$W/port/scratch/rp/chk.sh}; shift 2
+  local what=$1 min=$2 check; check=$(busy_check "$W"); shift 2
   pc_sharing "$check"
-  [ ! -e "$check" ] || "$check" > /dev/null || { echo "linux: the busy check says wait" >&2; exit 3; }
+  [ "$check" = none ] || [ ! -e "$check" ] || "$check" > /dev/null || { echo "linux: the busy check says wait" >&2; exit 3; }
   ( pc_take native-build-lock.sh "linux: $what" "$min"
     pc_take cpu-window.sh "linux: $what" "$min"
     "$@" ) > "$LB/$step.log" 2>&1 || { echo "linux: $what failed; see $LB/$step.log" >&2; grep -n "error\|FAILED" "$LB/$step.log" | head -20 >&2; exit 1; }

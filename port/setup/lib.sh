@@ -61,6 +61,9 @@ unset _pins _table _name _value _line
 # folder: PC_SCRIPTS, by default PC_SCRIPTS_DEFAULT (empty here; a row of ~/.config/piconet/pins.tsv). They are used
 # where they are, and a checkout or a work folder without them builds all the same.
 #   pc_sharing CHECK   says which of them are not here, once for a command and the scripts it starts
+#   busy_check WORK    the busy check's file: BUSY_CHECK, or WORK's port/scratch/rp/chk.sh (install.sh puts it
+#                      there); BUSY_CHECK=none leaves the check out on purpose (said once by pc_sharing). An empty
+#                      BUSY_CHECK is the default, as an unset one
 #   pc_has SCRIPT      whether the PC's SCRIPT is here (PC_SCRIPTS/SCRIPT)
 #   pc_take SCRIPT WHAT [MINUTES]   sources PC_SCRIPTS/SCRIPT when it is here, in the calling shell (the lock or the
 #                      request is given back when that shell exits); nothing when it is not
@@ -78,25 +81,27 @@ pc_sharing() {
   pc_has native-build-lock.sh || gone="$gone; the build lock (native-build-lock.sh)"
   pc_has cpu-window.sh || gone="$gone; the CPU window (cpu-window.sh)"
   [ -z "$gone" ] || gone="$gone, this PC's own scripts (PC_SCRIPTS: ${PC_SCRIPTS:-none named})"
-  [ -z "${1:-}" ] || [ -e "$1" ] || gone="$gone; the busy check ($1)"
+  [ -z "${1:-}" ] || [ "$1" = none ] || [ -e "$1" ] || gone="$gone; the busy check ($1)"
   [ -z "$gone" ] || echo "note: left out, as this PC's machine sharing is not here: ${gone#; }"
+  [ "${1:-}" != none ] || echo "note: no busy check: BUSY_CHECK=none"
 }
+busy_check() { printf '%s' "${BUSY_CHECK:-$1/port/scratch/rp/chk.sh}"; }
 
-# pc_busy_check WORK: sets BUSY, the busy check a test game asks first: BUSY_CHECK, or WORK's
-# port/scratch/rp/chk.sh (which install.sh puts there); `true` when the file is not there, so a game starts
-# (pc_sharing says so on standard error, once for the command and the scripts it starts).
+# pc_busy_check WORK: sets BUSY, the busy check a test game asks first (busy_check WORK); `true` when the file is
+# not there or BUSY_CHECK=none, so a game starts (pc_sharing says so on standard error, once for the command and
+# the scripts it starts).
 pc_busy_check() {
-  BUSY=${BUSY_CHECK:-$1/port/scratch/rp/chk.sh}
+  BUSY=$(busy_check "$1")
   pc_sharing "$BUSY" >&2
-  [ -e "$BUSY" ] || BUSY=true
+  [ "$BUSY" != none ] && [ -e "$BUSY" ] || BUSY=true
 }
 
 # wait_while_busy CHECK: go on when the busy check says "none"; while a game or a launcher of anyone's runs, look
 # again every five seconds, for at most 40 minutes (then status 3). The check itself is run as it is. Without a
-# check (no file CHECK: pc_sharing says so) it goes on at once.
+# check (no file CHECK, or CHECK none: pc_sharing says so) it goes on at once.
 wait_while_busy() {
   local waited=0
-  [ -e "$1" ] || return 0
+  [ "$1" != none ] && [ -e "$1" ] || return 0
   until "$1" > /dev/null; do
     [ $waited = 0 ] && echo "waiting: the busy check says a game or a launcher is running"
     sleep 5; waited=$((waited + 5))
@@ -122,9 +127,22 @@ _port_cmake_cmd() {   # WORK COMMAND: COMMAND in the Developer environment, thro
   local bat status; mkdir -p "$1/cmake"; bat=$(mktemp "$1/cmake/run-XXXXXX.cmd")
   printf '@echo off\r\ncall "%s" >nul || exit /b 1\r\nset "PATH=%s\\Scripts;%s;%%PATH%%"\r\n%s\r\nexit /b %%errorlevel%%\r\n' \
     "$TOOL_VCVARS_WIN" "$TOOL_PYTHON_WIN" "$TOOL_PYTHON_WIN" "${2//%/%%}" > "$bat"   # (a % of the command: %%)
-  (cd "$1" && cmd.exe /c "$(wslpath -w "$bat")"); status=$?
-  rm -f "$bat"; return $status
+  local run=$bat priority; priority=$(port_priority) || { rm -f "$bat"; return 1; }
+  if [ "$priority" = low ]; then   # the batch file through another, which starts it below normal and waits for
+    run=${bat%.cmd}-low.cmd                 # it: start /wait gives its status back; the compilers it starts inherit it
+    printf '@echo off\r\nstart "" /belownormal /b /wait cmd /c "%s"\r\nexit /b %%errorlevel%%\r\n' "$(wslpath -w "$bat")" > "$run"
+  fi
+  (cd "$1" && cmd.exe /c "$(wslpath -w "$run")"); status=$?
+  rm -f "$bat" "${bat%.cmd}-low.cmd"; return $status
 }
+# PORT_PRIORITY=low: the build's Windows compile steps (every batch file above: the configure and each target) run
+# at below-normal priority, and the WSL side of a script that sources this file at nice 10, so that a PC that is
+# also used for something else keeps answering. Unset or normal: as before, normal priority.
+port_priority() {
+  case "${PORT_PRIORITY:-normal}" in normal|low) printf '%s' "${PORT_PRIORITY:-normal}";;
+    *) echo "build: PORT_PRIORITY is low or normal (unset: normal), not '$PORT_PRIORITY'" >&2; return 1;; esac
+}
+if [ "${PORT_PRIORITY:-}" = low ] && [ "$(nice)" -lt 10 ]; then renice -n 10 -p $$ > /dev/null; fi
 port_cmake() {
   local work=$1 root bin log; shift
   root=$(cd "$_pc_setup/../.." && pwd); bin=$(port_cmake_dir "$work"); mkdir -p "$bin"; log=$bin/configure.log

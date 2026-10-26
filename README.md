@@ -85,10 +85,16 @@ The native module is built with a training profile, `PORT_PROFILE=FILE`. No rele
 with `PORT_PROFILE=none` (the same game, slower); a release will carry the profile (`setup.sh --profile FILE` puts it
 where the build looks).
 
+Two settings for a PC that is used for something else while it builds: `PORT_PRIORITY=low` runs the Windows compile
+steps below normal priority (and the build's WSL side at nice 10; unset or `normal`: normal priority), and
+`BUSY_CHECK=none` builds without waiting on a busy check (by default the work folder's `port/scratch/rp/chk.sh`, where
+a PC's own machine sharing has one; an empty `BUSY_CHECK` is the default).
+
 In WSL, for the preferred place:
 
     git clone https://github.com/piconet-live/piconet-runner.git
-    git clone --recurse-submodules https://github.com/piconet-live/piconet-launcher.git    # beside it
+    git clone https://github.com/piconet-live/piconet-launcher.git    # beside it
+    git -C piconet-launcher submodule update --init                   # its protocol and tools
     cd piconet-runner
     git submodule update --init                     # the protocol and the forks; not Dolphin's bundled libraries
     port/setup/setup.sh /mnt/c/piconet-work         # the work folder: trees, tools, disc (a WSL clone names one)

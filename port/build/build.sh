@@ -26,7 +26,8 @@
 #                      venv in the work folder is fine). Given once, the build folder keeps it; by default CMake's
 #                      Python3, which is refused when it has no keystone
 #   PORT_PAUSE=<seconds>  a pause between the steps, on a PC that other work shares (default 0)
-#   PORT_AGENT, PORT_LOCKS, BUSY_CHECK   as this PC's cpu-window.sh (PC_SCRIPTS) and build-module.sh take them
+#   PORT_AGENT, PORT_LOCKS, BUSY_CHECK   as this PC's cpu-window.sh (PC_SCRIPTS) and build-module.sh take them;
+#                      BUSY_CHECK=none builds without the busy check (default: the work folder's port/scratch/rp/chk.sh)
 # Every step that compiles or runs a game waits for the busy check and takes the PC by a request file of its own;
 # the native builds (the recompiler, the runner, the module) take NATIVE-BUILD.lock first, one at a time on the PC.
 # Those are this PC's machine sharing: where they are not (a clone), the build goes on without them and says so once
@@ -42,7 +43,7 @@ W=${PORT_WORK:-$PORT_WORK_DEFAULT}
 [ -d "$W" ] || { echo "build: no work folder at $W: port/setup/setup.sh makes it (or PORT_WORK=<a work folder setup.sh made>)" >&2; exit 1; }
 W=$(cd "$W" && pwd)
 export PORT_WORK=$W PORT_WORK_WIN; PORT_WORK_WIN=$(wslpath -w "$W")
-export BUSY_CHECK=${BUSY_CHECK:-$W/port/scratch/rp/chk.sh}
+export BUSY_CHECK; BUSY_CHECK=$(busy_check "$W")   # none: no busy check (lib.sh busy_check)
 PROFILE=${PORT_PROFILE:-${PROFILE:-$W/input/module.profdata}}   # PORT_PROFILE, as CMake names it; PROFILE still works
 B=$W/port/bundle-$N; G=$W/port/game-$N; L=$W/port/launcher-$N
 RUNNER=$W/port/runner-$N/moderngekko-run.exe; MODULE=$W/work/mod-cg-$N/gGFZE01_recomp.dll
