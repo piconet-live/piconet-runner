@@ -1,28 +1,39 @@
 # port/setup: a work folder from a checkout and a disc
 
-A newcomer's first command, in WSL on a Windows PC, from the root of a clone on a Windows drive (under `/mnt/c/`, say;
-no spaces in its path). It works in `build/work` in the clone, ignored by git. Then the build: CMake's preset `windows`
-(`cmake --preset windows`, `cmake --build --preset windows`), or `port/build/build.sh NAME` in WSL, which builds the
-same targets and stages a launcher: [../build](../build/README.md).
+A newcomer's first command, in WSL on a Windows PC, from the root of a clone made with git inside WSL (Git for
+Windows' `core.autocrlf` would give the `.sh` files Windows line ends). The Windows compilers need the work folder on
+a Windows drive (no spaces in its path), and the clone can be in either place
+([the runner's README](../../README.md#building)):
 
-    port/setup/setup.sh [--profile FILE]
+- in WSL's own file system, with the work folder on a Windows drive (preferred: git is much faster there): `setup.sh
+  WORK`, then `PORT_WORK=WORK` for the build, or once in your settings below. The Windows compilers cannot work in
+  WSL's own file system (`cmd.exe` refuses a `\\wsl.localhost` folder), so the trees they compile are in WORK;
+- on a Windows drive (under `/mnt/c/`, say): by default the work folder is `build/work` in the clone, ignored by git.
 
-The Windows compilers cannot work in WSL's own filesystem (`cmd.exe` refuses a `\\wsl.localhost` folder), so a clone
-there names a work folder on a Windows drive (`setup.sh WORK`, then `PORT_WORK=WORK`; or once, in your settings below).
+Then the build: `port/build/build.sh NAME` in WSL, which builds CMake's preset `windows` and stages a launcher, or,
+with the clone on a Windows drive, CMake's own commands from a Developer prompt: [../build](../build/README.md).
+
+    port/setup/setup.sh [WORK] [--profile FILE]
+
 `setup.sh` looks for everything first and says in one line each what is missing and how to get it or point at it:
 
 | What | Where from |
 |---|---|
 | Your own disc image, F-Zero GX (USA), as an ISO | you: the setting `DISC_DEFAULT` (below), or `setup.sh WORK DISC` |
 | Visual Studio 2022 Build Tools, C++ workload | visualstudio.microsoft.com; found by `vswhere.exe`, the installer's own query |
-| LLVM 20.1.8 for Windows with `lib/cmake` (`clang+llvm-20.1.8-x86_64-pc-windows-msvc`) | github.com/llvm/llvm-project releases; found on `PATH` (`clang.exe`) |
-| Python 3.10 for Windows, `cmake`, `ninja`, Git for Windows | python.org (the `py` launcher or `PATH`); the others on `PATH` (cmake and ninja also by `pip` into that Python). The image needs a Python with `keystone` (`pip install keystone-engine`, a venv is fine): `PORT_PYTHON` |
-| In WSL: `git`, `python3` (3.11 or later), `rsync`; github.com. `--profile FILE`: the module's training profile | `apt`; the profile is handed out beside a release (or the gates' `runs/profile.sh` trains one; `PROFILE=none` builds without one) |
+| LLVM 20.1.8 for Windows with `lib/cmake` (`clang+llvm-20.1.8-x86_64-pc-windows-msvc`) | github.com/llvm/llvm-project releases; found on `PATH` (`clang.exe`), or by `TOOL_LLVM_WIN` (below) |
+| Python 3.10 for Windows, `cmake`, `ninja`, Git for Windows | python.org (the `py` launcher or `PATH`); the others on `PATH` (cmake and ninja also by `pip` into that Python). The image needs a Windows Python with `keystone`: `py -3 -m venv DIR`, `DIR\Scripts\python.exe -m pip install keystone-engine`, then that python as `PORT_PYTHON` |
+| In WSL: `git`, `python3` (3.11 or later), `rsync`; github.com (`sudo apt install build-essential python3 python3-venv rsync git`). `--profile FILE`: the module's training profile | `apt`; the profile is handed out beside a release (none is handed out yet: `PORT_PROFILE=none` builds without one; the gates' `runs/profile.sh` trains one) |
 
 `pins.tsv` pins each tool's version (the `VERSION_` rows), never its place; `tools.py --say` shows what is found where.
 Your settings, outside every clone: `~/.config/piconet/pins.tsv` (rows `DISC_DEFAULT`, your disc image, and for a tool
 kept off `PATH` `TOOL_LLVM_WIN`, `TOOL_PYTHON_WIN`: its folder as Windows spells it, `TOOL_VCVARS_WIN`: its
 `vcvars64.bat`) and `~/.config/piconet/work-folder.env` (`PORT_WORK_DEFAULT=/mnt/<drive>/...`: your own work folder).
+`pins.tsv` has three tab-separated columns under a header row, as `port/setup/pins.tsv` has:
+
+    name	value	note
+    DISC_DEFAULT	/path/to/F-Zero GX (USA).iso	your own disc
+    TOOL_LLVM_WIN	C:\llvm-20.1.8	LLVM, kept off PATH
 
 | File | What |
 |---|---|

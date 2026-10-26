@@ -1,9 +1,11 @@
 # port/build: the builds, in order
 
 The runner's build is one CMake superbuild at the checkout's root (`CMakeLists.txt`) with a preset per platform
-(`CMakePresets.json`; Windows today). After [../setup](../setup/README.md) made the work folder, a contributor builds
-with CMake's two commands, from a Developer environment (Visual Studio's `vcvars64.bat`, with Python, ninja and
-LLVM's `bin` on `PATH`, or LLVM named by `PORT_LLVM_ROOT`):
+(`CMakePresets.json`; Windows today). After [../setup](../setup/README.md) made the work folder, `build.sh` (below)
+builds it from WSL, wherever the clone is (in WSL's own file system, the preferred place, or on a Windows drive). With
+the clone on a Windows drive, CMake's commands also work by hand, from a Developer environment (Visual Studio's
+`vcvars64.bat`, which `port/setup/tools.py --say` finds, with Python, ninja and LLVM's `bin` on `PATH`, or LLVM named
+by `PORT_LLVM_ROOT`; the [runner's README](../../README.md#building) has a batch file):
 
     cmake --preset windows                          # PORT_WORK: the work folder (default build/work in the clone)
     cmake --build --preset windows                  # the recompiler and the runner
@@ -11,7 +13,7 @@ LLVM's `bin` on `PATH`, or LLVM named by `PORT_LLVM_ROOT`):
 
 The module needs the work folder's inputs from your disc (`setup.sh` makes them) and a training profile:
 `PORT_PROFILE=FILE` (default `PORT_WORK/input/module.profdata`, where `setup.sh --profile` puts the one handed out with
-a release) or `PORT_PROFILE=none` (the same game, slower), and the image needs a Windows Python with the module
+a release; none is handed out yet) or `PORT_PROFILE=none` (the same game, slower), and the image needs a Windows Python with the module
 keystone (`pip install keystone-engine`; `PORT_PYTHON=...\python.exe`). Your own values go in `CMakeUserPresets.json`
 (ignored by git), a preset that inherits `windows`, or on the configure line as `-DNAME=VALUE`:
 
@@ -48,7 +50,7 @@ In WSL, one command builds everything (steps 1-6) through the same preset and ta
 | 2. the image | target `image` | a Windows Python with `keystone` (`PORT_PYTHON=/mnt/c/.../python.exe`; a venv in the work folder is fine) |
 | 3. the game folder | `native-game.sh` | - |
 | 4. the runner | `port/moderngekko/build.sh` (target `runner`), kept as `port/runner-NAME` | the work folder's trees at this checkout's pins (`forks/check.sh --trees`) |
-| 5. the module | `build-module.sh` (target `module`, through `native-module.sh`) | the profile: `PORT_WORK/input/module.profdata` or `PROFILE=FILE` (or `PROFILE=none`) |
+| 5. the module | `build-module.sh` (target `module`, through `native-module.sh`) | the profile: `PORT_WORK/input/module.profdata` or `PORT_PROFILE=FILE` (or `PORT_PROFILE=none`) |
 | 6. the staged launcher | `stage-launcher.sh`, into `port/launcher-NAME` | `dotnet` (.NET SDK 10) and nuget.org |
 | 7. only with `FIRST_BOOT=1`: a first boot, which makes the save file the gates' test games start from | the gates' `runs/launcher-run.sh RUN boot-first` | the gates (piconet-gates, private, checked out at `pins.tsv` REPO_GATES), and the harness's `launch.ps1` in `PORT_WORK/kit-win` (`port/setup/install.sh`) |
 
@@ -60,7 +62,7 @@ build lock and the CPU window, the build manifests, the kept copies (`runner-NAM
 exists.
 Every part is kept under NAME, as `scripts/release-build.sh` keeps them; a step whose result is there is skipped
 (the two compilers' always run: ninja rebuilds what changed); the last lines name the game build. A PC's own machine sharing (the busy check, the build lock and the CPU
-window, in the PC's own folder PC_SCRIPTS) is used where it is there; a clone builds without it and says so once (`port/setup/lib.sh`, `pc_take`). Then, with the gates, `PORT_WORK=... LAUNCHER=launcher-NAME port/gates/runs/launcher-run.sh RUN` boots the game, goes through the menus and races. `PROFILE=none` builds the module without a training profile (the same game, slower).
+window, in the PC's own folder PC_SCRIPTS) is used where it is there; a clone builds without it and says so once (`port/setup/lib.sh`, `pc_take`). Then, with the gates, `PORT_WORK=... LAUNCHER=launcher-NAME port/gates/runs/launcher-run.sh RUN` boots the game, goes through the menus and races. `PORT_PROFILE=none` builds the module without a training profile (the same game, slower).
 
 | File | What |
 |---|---|
