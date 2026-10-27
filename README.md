@@ -6,7 +6,7 @@ F-Zero GX recompiled to native code, as Piconet's races run it: the game's port 
 machine files (`recomp/`), and the pins of the upstream trees it is built from (`forks/`). The launcher
 ([piconet-launcher](https://github.com/piconet-live/piconet-launcher)) starts it for offline play, replays and
 online races with rollback. Piconet is online multiplayer for F-Zero GX: see
-[piconet](https://github.com/piconet-live/piconet).
+[github.com/piconet-live](https://github.com/piconet-live).
 
 No game data is stored here: no generated code, modules, dumps, saved states, profiles or replays of real races.
 A build reads your own disc image.
