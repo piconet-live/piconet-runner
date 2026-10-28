@@ -145,6 +145,9 @@ FINISH_END = CONTROL + 0xF54     # the step word (+124) at which the local count
 FINISH_COUNT = CONTROL + 0xF58   # what the picture reads in place of the game's countdown (.bss 0x50EC): the local
                                  # countdown, 0 once the results are on; the game's own while FINISH_KIND is 0;
                                  # run out before the results: 0 when out, 0xFFFF ("not started") when finished
+FINISH_SPECTATE = 734            # steps after the local racer's finish from which it spectates (frame_spectate.py
+                                 # `spectate`): the finish camera's first round of shots has ended there (it then
+                                 # starts it again: run fs-m0) and the place and its sounds are long over
 # The racer the results' cameras follow (follow.py, the results camera's site; for the picture only, no step reads
 # either word, no rollback puts them back, the checksum does not cover them).
 RESULTS_KEEP = CONTROL + 0xF5C   # the host's: not 0, the results' cameras follow the local seat whatever it is (a

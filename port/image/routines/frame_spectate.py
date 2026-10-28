@@ -43,7 +43,15 @@ table past its end. So in every step of a manual shot:
   use), from what that frame shows; the C-stick goes on from there, D-pad down from the mode last asked for
   (SPEC_ASKED), so every mode is at most six presses away whatever the game picks.
 
-`spectate`, after a frame's steps: counts the frames the local seat has been out and, at 180, picks the leader.
+`spectate`, after a frame's steps: counts the frames the local seat has been out and, at 180, picks the leader. A
+local racer who has finished spectates too, from memmap.FINISH_SPECTATE steps after its finish (FINISH_KIND 1 and
+FINISH_END, frame_hud.py `finwatch`, the step word's; never once the results are on): the finish camera has shown its
+first round of shots by then and starts the same round again (run fs-m0: shots at 0, 139, 186 and 234 steps after the
+finish, the pull-back from 234 and the circling to 733, the first shot again at 734), and the FINISH!, the place and
+their sounds are over. Until then its own camera and the settled place stay, as they were. It counts as 180 at once,
+takes the HUD's finished bit off (+268: no FINISH! or place over the racer watched; `hudstate` gives it back with the
+results, frame_hud.py) and watches the best-placed racer still racing (neither finished nor out), else the leader as
+a racer out does. From there it is a racer out's spectating in everything: the controls, the cameras, the HUD.
 
 The game's rank icons (1st, 2nd, 3rd above the machines) are not drawn above the racer the cameras follow
 (rankicons.py, fn_1_12999C's two port reads): what the stock game does for the local racer, done for the racer
@@ -85,6 +93,10 @@ TOPS = sum((n - 1) << (5 * mode) for mode, n in enumerate(memmap.SPEC_HEIGHTS))
 assert TOPS < 1 << 32 and all(n - 1 < 32 for n in memmap.SPEC_HEIGHTS)
 assert memmap.SPEC_LOG_ENTRIES < 0x8000 and memmap.SPEC_CHASE == memmap.SPEC_MODES - 1
 STICK = 40          # the C-stick's Y (PADStatus +5, signed) from which it counts as pushed up or down
+# a finished racer spectates from memmap.FINISH_SPECTATE steps after its finish: FINISH_END is the finish's boundary
+# plus the countdown's 480 (frame_hud.py `finwatch`)
+FIN_AFTER = memmap.FINISH_SPECTATE - 480
+assert 0 < FIN_AFTER < 0x8000
 
 
 def asm():
@@ -94,7 +106,8 @@ def asm():
     for name, m, t1, out, racing in (("OUT_SPECTATE", 10, 7, "sp_out", "sp_racing"),
                                      ("OUT_LEADER", 3, 9, "sp_find_next", "sp_found"),
                                      ("OUT_SHOWN", 12, 10, "sh_log_shown", "sh_log_asked"),
-                                     ("OUT_ASKED", 12, 10, "sh_log_out", "sh_log_racing")):
+                                     ("OUT_ASKED", 12, 10, "sh_log_out", "sh_log_racing"),
+                                     ("OUT_FINISHED", 3, 10, "spf_skip", "spf_racing")):
         text = text.replace(name + "\n", outtest.clause(m, 30, 0, t1, out, racing))
     for name, value in (("S_MODES", memmap.SPEC_MODES), ("S_CHASE", memmap.SPEC_CHASE), ("S_MANUAL", memmap.SPEC_MANUAL),
                         ("S_COURSE", memmap.SPEC_COURSE), ("TOPS_HI", ((TOPS >> 16) ^ 0x8000) - 0x8000), ("TOPS_LO", TOPS & 0xFFFF),
@@ -102,7 +115,8 @@ def asm():
                         ("S_MODE", MODE), ("S_HEIGHT", HEIGHT), ("S_CHANGE", CHANGE), ("S_PENDING", PENDING),
                         ("S_LOGGED", LOGGED), ("LOG_ENTRIES", memmap.SPEC_LOG_ENTRIES), ("STICK_UP", STICK),
                         ("S_STEP", memmap.SPEC_STEP - C), ("S_ASKED", memmap.SPEC_ASKED - C),
-                        ("S_LOGS", memmap.IMAGE_LOGS - C),
+                        ("S_LOGS", memmap.IMAGE_LOGS - C), ("FIN_KIND", memmap.FINISH_KIND - C),
+                        ("FIN_END", memmap.FINISH_END - C), ("FIN_AFTER", FIN_AFTER),
                         ("STICK_DOWN", -STICK)):
         text = text.replace(name, str(value))
     return text
@@ -124,6 +138,18 @@ _TEXT = frame_speccontrols.TEXT + """spectate:
     lwz 10, -0x27C8(10)
     mulli 9, 9, 0x620
     add 10, 10, 9
+    lwz 0, FIN_KIND(31)
+    cmpwi 0, 1
+    bne sp_test
+    lwz 0, 0x3C30(30)
+    andi. 0, 0, 0x1000
+    bne sp_test
+    lwz 0, FIN_END(31)
+    lwz 7, 124(31)
+    subf 0, 0, 7
+    cmpwi 0, FIN_AFTER
+    bge spf_on
+sp_test:
 OUT_SPECTATE
 sp_racing:
     li 0, 0
@@ -136,6 +162,7 @@ sp_count:
     bltlr
     li 0, 1
     stw 0, 56(31)
+sp_lead:
     addis 5, 30, 7
     lwz 6, -0x27C8(5)
     lbz 5, -0x27B6(5)
@@ -157,6 +184,44 @@ sp_find_next:
     li 4, 0
 sp_found:
     stw 4, 252(31)
+    blr
+spf_on:
+    li 0, 180
+    stw 0, 248(31)
+    li 0, 1
+    stw 0, 56(31)
+    li 0, 0
+    stb 0, 268(31)
+    addis 5, 30, 7
+    lwz 3, -0x27C8(5)
+    lbz 5, -0x27B6(5)
+    li 4, 0
+    li 11, -1
+    li 12, 255
+spf_loop:
+    cmpw 4, 5
+    bge spf_end
+    lwz 9, 0x49C(3)
+    cmpwi 9, 0
+    beq spf_skip
+    lwz 0, 0(3)
+    andis. 0, 0, 1
+    bne spf_skip
+OUT_FINISHED
+spf_racing:
+    lbz 0, 0x115(9)
+    cmplw 0, 12
+    bge spf_skip
+    mr 12, 0
+    mr 11, 4
+spf_skip:
+    addi 3, 3, 0x620
+    addi 4, 4, 1
+    b spf_loop
+spf_end:
+    cmpwi 11, 0
+    blt sp_lead
+    stw 11, 252(31)
     blr
 specstep:
     lwz 9, 248(31)

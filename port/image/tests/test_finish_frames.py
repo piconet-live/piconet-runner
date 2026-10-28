@@ -340,6 +340,21 @@ class WholeFrames(unittest.TestCase):
                 r.frame(lambda s: "")
                 self.assertEqual(get(r.window, PRESS_A), 0)
 
+    def test_a_finished_racer_spectating_gets_its_results_pages(self):
+        # frame_spectate.py `spectate` puts a finished racer to spectating (+56) and takes its finished bit (+268)
+        # off: no FINISH! or place over the racer watched. Until the results nothing writes it back; with them the
+        # pages are its own, as a finisher's, the race's HUD off
+        r = self.race()
+        seen = [r.frame(lambda s: "F4" if s == 1000 else "") for _ in range(500)]
+        self.assertEqual((seen[1], seen[499]), ("FINISH 480", "place 0"))
+        r.window[SPECTATOR + 3] = 1
+        r.window[FIN] = 0
+        self.assertEqual([r.frame(lambda s: "") for _ in range(3)], ["race"] * 3)
+        self.assertEqual(r.window.get(FIN, 0), 0)
+        put(r.main, RULES, 0x1000)
+        self.assertEqual([r.frame(lambda s: "") for _ in range(3)], ["list"] * 3)
+        self.assertEqual((r.window.get(FIN, 0), get(r.main, HUD_MASK), get(r.window, PRESS_A)), (1, 0, 0))
+
     def test_a_spectator_whose_machine_races_is_left_alone_at_the_results(self):
         r = self.race(spectator=1)
         put(r.main, RULES, 0x1000)
