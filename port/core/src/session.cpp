@@ -211,6 +211,8 @@ void TakeTheGo(Guest& g, Session& s)
          g.Read32(game::BOOT_TIME + 4));
 }
 
+}  // namespace
+
 // The results screens' state (u8, fn_1_14A028's block): 0 the race's own results page, 7 every racer's (A leaves it),
 // 8 leaving (netframe.py +0xA30).
 constexpr u32 RESULTS_STATE = BSS + 0x8E51D;
@@ -233,7 +235,7 @@ void SayResultsLeavable(Guest& g, Session& s)
 
 // The player leaves the results: the image asked for it (+0xA30, the results state reached 8 after A on every
 // racer's page). Stops the game once, as the window's stop button does.
-void LeaveTheResults(Guest& g, Session& s, const char* why)
+static void LeaveTheResults(Guest& g, Session& s, const char* why)
 {
   s.exit_sent = true;
   Notice("fzgx: {}; stopping", why);
@@ -268,6 +270,8 @@ void LeaveTheResultsInTime(Guest& g, Session& s)
     LeaveTheResults(g, s, "the results were not left after the A pressed for the player");
 }
 
+namespace
+{
 void RunSession(Guest& g)
 {
   if (!s_session && (s_config_failed || !Start(g)))
