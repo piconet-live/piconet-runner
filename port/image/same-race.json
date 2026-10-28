@@ -610,6 +610,51 @@
    "recorded": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
    "plays_on": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
    "evidence": "branch integration/review-040 (setting-curve-slots), 2026-10-24 (module curve040b f87d7ae0, runner 79e7a4db, headless, lanes auto; the machine setting's curve and the boost length as seat constants): review-040's own image: r40u-pair-1's race.fzrp as the race 0 of 3,120 (cv-r40)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): f2-v010-ctlw2.fzrp as the race 0 of 2,932 (fs-pb-1)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): v020-m32.fzrp as the race 0 of 4,390 (fs-pb-2)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): v022-m23.fzrp as the race 0 of 8,777 (fs-pb-3)"
+  },
+  {
+   "recorded": "e64ac290d0fb15f2955879325d670480b255eed1",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): co-pair1-1.fzrp as the race 0 of 3,117 (fs-pb-4)"
+  },
+  {
+   "recorded": "8fabfcbe5b98bb5bb00a683e8309ef9b79704548",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): mines-p1-1's race.fzrp as the race 0 of 8,110 (fs-pb-5)"
+  },
+  {
+   "recorded": "c660b1f573defe002b1ab743a2c8869f6283ea1a",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): polish-unlimited practice.fzrp as the race 0 of 11,723 (fs-pb-6)"
+  },
+  {
+   "recorded": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): r37w-pair-1's race.fzrp as the race 0 of 2,981 (fs-pb-7)"
+  },
+  {
+   "recorded": "6269c9c647afa22391aefd9f6af8d53bf68d6dac",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): r40u-pair-1's race.fzrp as the race 0 of 3,120 (fs-pb-8)"
+  },
+  {
+   "recorded": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
+   "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): 0.5.0's fs-m0-2 race.fzrp as the race 0 of 5,095 (fs-pb-9)"
   }
  ]
 }

@@ -81,8 +81,11 @@ exception, as stock versus shows an out human no results pages) gets the same th
   (frame_spectate.py `spechud` leaves the HUD parts off once the flag is set). memmap.FINISH_COUNT is already 0
   there (the kind stands at 2: `fw_local`), so the pages take buttons (0x14A094);
 - the first page's lap times would be a finisher's: it is passed by the same A press (fn_1_143780, fn_1_14A328).
-While spectating without the results, and for a spectator whose machine is not out, `hudstate` writes nothing,
-as before. The machine and every word the simulation reads are untouched."""
+A local machine that finished and spectates (frame_spectate.py `spectate`, FINISH_SPECTATE steps after its finish)
+gets, from rule flag 0x1000 on, what a finisher who does not spectate gets: its finished bit (+268, which `spectate`
+took off), its kept row and the HUD's parts off. While spectating without the results, and for a spectator whose
+machine is neither out nor finished, `hudstate` writes nothing, as before. The machine and every word the simulation
+reads are untouched."""
 import memmap
 import outtest
 import seatport
@@ -121,8 +124,6 @@ hs_local:
     li 6, 0
     andis. 0, 8, 1
     beq hs_test
-    cmpwi 5, 0
-    bnelr
     b hs_flags
 hs_test:
 OUT_HUD

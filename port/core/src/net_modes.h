@@ -59,6 +59,13 @@ void GiveTheReplayItsPlace(Session& s);
 void LeaveTheCrashedReplay(Session& s);
 // The game stops by no stop of its own while the player's seat still races: the seat may come back (Rejoin).
 bool LeftWhileRacing(const Session& s);
+// session.cpp: the step every racer's results page opens is said (and its time kept); a racer's game leaves that page
+// by itself RESULTS_LEAVE after it, as with the player's A.
+void SayResultsLeavable(Guest& g, Session& s);
+void LeaveTheResultsInTime(Guest& g, Session& s);
+// session.cpp: a racer's game passes the race's own results page (the first) by itself RESULTS_FIRST_PAGE after it
+// stood, with the same A, so that every racer's page and its RESULTS_LEAVE follow.
+void PassTheFirstResultsPageInTime(Guest& g, Session& s);
 // rumble.cpp: whether the player's controllers may rumble (fzgx::RumbleAllowed): `s` the session (none: a plain start,
 // or a race before its session), `step` the step about to run.
 bool RumbleWanted(const Options& o, const Session* s, u32 step);

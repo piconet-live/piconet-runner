@@ -133,6 +133,8 @@ PAINT_REPORT_AT	port/core/src/paint.cpp	use	table::PAINT_REPORT_AT	1
 OTHER_SOUNDS_AT	port/core/src/boot.cpp	use	table::OTHER_SOUNDS_AT	1
 UNTRACKED_AT	port/core/src/rollback.h	cxx	UNTRACKED	
 EXIT_REQUEST_AT	port/core/src/net_internal.h	cxx	EXIT_REQUEST	
+PRESS_A	port/image/routines/frame_hud.py	re	stw 0, (0xA34)\(31\)	1
+PRESS_A	port/image/routines/frame_entry.py	re	stw 0, (0xA34)\(31\)	1
 WATCH_AS_RACE	port/core/src/session.cpp	re	g\.Write32\(CONTROL \+ (0xA38), 1\)	1
 SLOT	port/core/src/files.h	use	table::SLOT	1
 SLOT	port/core/src/net_internal.h	use	table::SLOT	1

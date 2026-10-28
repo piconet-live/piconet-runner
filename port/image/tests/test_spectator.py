@@ -352,6 +352,41 @@ class TheSpectator(Build):
         g.press(DOWN)                                                # and round to the TV cameras
         self.assertEqual(g.pictures[-1][:3], ("tv", 0, 5))
 
+    def test_a_finished_racer_spectates_once_its_finish_camera_s_first_round_is_over(self):
+        # the local racer finished at the boundary before step 500 (frame_hud.py `finwatch`: FINISH_END is that step
+        # plus 480); memmap.FINISH_SPECTATE steps later its game spectates, as a racer out does, on the best-placed
+        # racer still racing: racer 0 has finished too and racer 1 is out, so racer 2
+        after = memmap.FINISH_SPECTATE
+        g = self.race(out=False)
+        put(g.mem, MACHINES + LOCAL * 0x620, 0x04010000)             # finished, a CPU's driver since
+        put(g.mem, MACHINES, 0x04010000); put(g.mem, MACHINES + 0x620, 0x08000000)
+        put(g.mem, memmap.FINISH_KIND, 1); put(g.mem, memmap.FINISH_END, 500 + 480)
+        put(g.mem, CONTROL + 268, 1 << 24)                           # the finished bit for the HUD (a byte)
+        for _ in range(after - 1):
+            self.assertEqual(g.frame(), ("racing", LOCAL))
+        self.assertEqual((get(g.mem, SPECTATOR), g.calls, g.step), (0, [], 500 + after - 1))
+        g.frame()                                                    # FINISH_SPECTATE steps after the finish
+        self.assertEqual((get(g.mem, SPECTATOR), get(g.mem, OUT_FRAMES), get(g.mem, WATCHED)), (1, 180, 2))
+        self.assertEqual(g.mem.get(CONTROL + 268), 0)                # no FINISH! or place over the racer watched
+        shown = g.frame()
+        self.assertEqual(shown[:2] + shown[5:], ("tv", 2, "hud"))
+        self.assertEqual(g.calls, [(1, 2, g.step - 1)])
+        self.assertEqual(g.press(RIGHT)[1], 3)                       # the controls as for a racer out
+        # nobody left racing: the leader, as for a racer out
+        g = self.race(out=False)
+        for seat in range(RACERS):
+            put(g.mem, MACHINES + seat * 0x620, 0x04010000 if seat != 1 else 0x08000000)
+        put(g.mem, memmap.FINISH_KIND, 1); put(g.mem, memmap.FINISH_END, 980)
+        g.watch(after)
+        self.assertEqual((get(g.mem, SPECTATOR), get(g.mem, WATCHED)), (1, 0))
+        # the results began first: they stay (no spectating); and a racer only out by a rollback's guess keeps racing
+        for kind, rules in ((1, 0x1000), (0, 0)):
+            g = self.race(out=False)
+            put(g.mem, MACHINES + LOCAL * 0x620, 0x04010000)
+            put(g.mem, memmap.FINISH_KIND, kind); put(g.mem, memmap.FINISH_END, 980); put(g.mem, BSS + 0x3C30, rules)
+            g.watch(after + 20)
+            self.assertEqual((get(g.mem, SPECTATOR), g.pictures[-1]), (0, ("racing", LOCAL)), (kind, rules))
+
     def test_a_hides_the_hud(self):
         g = self.race().watch(182)
         self.assertEqual(g.press(A)[-1], "no hud")

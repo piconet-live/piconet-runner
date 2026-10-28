@@ -211,9 +211,13 @@ void TakeTheGo(Guest& g, Session& s)
          g.Read32(game::BOOT_TIME + 4));
 }
 
+}  // namespace
+
 // The results screens' state (u8, fn_1_14A028's block): 0 the race's own results page, 7 every racer's (A leaves it),
 // 8 leaving (netframe.py +0xA30).
 constexpr u32 RESULTS_STATE = BSS + 0x8E51D;
+// The rule word (.bss 0x3C30) and its results bit: GameResultCtrl (fn_1_14A028) runs the pages only while it is set.
+constexpr u32 RULES = BSS + 0x3C30, RULE_RESULTS = 0x1000;
 
 // The step from which the player's next A leaves the results: the first in the results phase (0x2A) whose results
 // state is 7, every racer's page. Before it the game takes the leave press at no step (the race's own page goes to
@@ -227,9 +231,89 @@ void SayResultsLeavable(Guest& g, Session& s)
   if (module == 0 || g.Read16(module + PHASE) != 0x2A || g.Read8(module + RESULTS_STATE) != 7)
     return;
   s.leavable_said = true;
+  s.leavable_at = Clock::now();
   Notice("fzgx: the results can be left from step {} (every racer's page)", g.Read32(STEP));
 }
 
+// The player leaves the results: the image asked for it (+0xA30, the results state reached 8 after A on every
+// racer's page). Stops the game once, as the window's stop button does.
+static void LeaveTheResults(Guest& g, Session& s, const char* why)
+{
+  s.exit_sent = true;
+  Notice("fzgx: {}; stopping", why);
+  ReportResultsPictures(g, "leaving the results");
+  TheHost().RequestStop();
+}
+
+// A racer's game leaves the results by itself RESULTS_LEAVE after every racer's page opened (the owner,
+// 28 October): as if the player pressed A there. The A is pressed through the image (+0xA34: A on port 0 for one
+// frame, the press the HUD pass already gives a racer still racing when the results begin), not by a stop from
+// here: the game's own results then take the step a player's A takes (state 8, where the image asks to leave), so
+// the leave is the player's in everything, its log line, its results pictures and its exit code included. Should
+// the game not take the press (it never did in a test), the stop follows RESULTS_LEAVE_GRACE later, by the same
+// lines. The wall clock is enough: leaving is this game's own and changes nothing another game computes. Only a
+// racer: a playback and a practice have no results to wait on, and a spectator stops when the relay drops the
+// race (relay_wire.cpp TakeJoinedAgain).
+void LeaveTheResultsInTime(Guest& g, Session& s)
+{
+  if (!s.leavable_said || s.exit_sent || s.watcher || s.playback || s.practice)
+    return;
+  const auto waited = Clock::now() - s.leavable_at;
+  if (waited < RESULTS_LEAVE)
+    return;
+  if (!s.leave_pressed)
+  {
+    s.leave_pressed = true;
+    Notice("fzgx: every racer's page stood {} s: A pressed for the player", RESULTS_LEAVE.count());
+    g.Write32(PRESS_A, 1);
+    return;
+  }
+  if (waited >= RESULTS_LEAVE + RESULTS_LEAVE_GRACE)
+    LeaveTheResults(g, s, "the results were not left after the A pressed for the player");
+}
+
+// A racer's game passes the race's own results page by itself RESULTS_FIRST_PAGE after it stood (the owner,
+// 28 October): a player who pressed nothing stayed on it for good, and every racer's page, whose RESULTS_LEAVE leaves
+// the results, never opened (run fs-leave1). The page is GameResultCtrl's state 0 ("time", fn_1_14A028's table at
+// .data 0x42B94), which runs while the rule word's results bit is set; its routine fn_1_14A328 takes the pad's A
+// (.bss 0x9F8 +8, bit 0x100) and, with the rule word's bit 0x04000000 (set in our races: the line below logs the
+// word), goes to state 7 ("practice", every racer's page) when the race has two racers or more (.bss 0x3C30 +9),
+// to state 8 (leaving) else: one A, as the player's, so a race of ours has no page between. (Without that bit the
+// race type picks a Grand Prix's, versus' or time attack's pages, states 1 to 6: not a race of ours.)
+// The A is the image's (+0xA34), as for RESULTS_LEAVE and as the HUD pass gives a racer still racing on this page.
+// The game takes no A while a finish countdown runs (0x14A094) or .bss 0x25BA0 is set: should the page stay, the
+// A is pressed again every RESULTS_LEAVE_GRACE. A player's own A before the time moves the page, and nothing is
+// pressed. The same racers as RESULTS_LEAVE; the wall clock, as there: the pages are this game's own.
+void PassTheFirstResultsPageInTime(Guest& g, Session& s)
+{
+  if (s.leavable_said || s.exit_sent || s.watcher || s.playback || s.practice)
+    return;
+  const u32 module = g.Read32(MODULE_POINTER);
+  if (module == 0 || g.Read16(module + PHASE) != 0x2A || !(g.Read32(module + RULES) & RULE_RESULTS) ||
+      g.Read8(module + RESULTS_STATE) != 0)
+    return;
+  const auto now = Clock::now();
+  if (!s.first_page_seen)
+  {
+    s.first_page_seen = true;
+    s.first_page_at = now;
+    Notice("fzgx: the race's own results page stands from step {} (rule word {:08x})", g.Read32(STEP),
+           g.Read32(module + RULES));
+    return;
+  }
+  if (now - s.first_page_at < (s.first_page_presses == 0 ? RESULTS_FIRST_PAGE : RESULTS_LEAVE_GRACE))
+    return;
+  s.first_page_at = now;
+  if (++s.first_page_presses == 1)
+    Notice("fzgx: the race's own results page stood {} s: A pressed for the player", RESULTS_FIRST_PAGE.count());
+  else
+    Notice("fzgx: the race's own results page still stands: A pressed for the player again ({})",
+           s.first_page_presses);
+  g.Write32(PRESS_A, 1);
+}
+
+namespace
+{
 void RunSession(Guest& g)
 {
   if (!s_session && (s_config_failed || !Start(g)))
@@ -271,12 +355,9 @@ void RunSession(Guest& g)
   }
   SayResultsLeavable(g, s);
   if (!s.exit_sent && g.Read32(EXIT_REQUEST) == 1)
-  {
-    s.exit_sent = true;
-    Notice("fzgx: the player left the results; stopping");
-    ReportResultsPictures(g, "leaving the results");
-    TheHost().RequestStop();
-  }
+    LeaveTheResults(g, s, "the player left the results");
+  PassTheFirstResultsPageInTime(g, s);
+  LeaveTheResultsInTime(g, s);
   // the machines' textures load in the step into the countdown (steps 2 to 4): then the racers' colours, once (a
   // race from a launch file's match)
   if (g.Read32(STEP) >= 6)

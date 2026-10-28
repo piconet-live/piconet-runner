@@ -72,7 +72,9 @@ manager) in fn_1_37AA8 (main.rel offset 0x37C14) by the image's trampoline. Cont
   +248 automatic spectating (in a network session's race phase, after the frame's steps, before drawing): the
       displayed frames the local seat (slot 'FZSI' +4) has been out (retired, 0x08000000: destroyed or at rest after a
       breakdown, standin.py; or 0x800) and not finished (0x10000; a machine broken down, 0x80, coasts on and may
-      still finish, and the camera left it 180 frames after the breakdown); at 180 the TV cameras
+      still finish, and the camera left it 180 frames after the breakdown); 180 at once memmap.FINISH_SPECTATE steps
+      after the local racer's finish, before the results (frame_spectate.py `spectate`, which then watches the
+      best-placed racer still racing); at 180 the TV cameras
       (fn_1_5370(1, N)) follow +252, at first the leader (the first-placed machine still in), and the spectator HUD
       (+56) comes on. +252 is the racer watched: the truth, in the control block, which no rollback puts back; the
       cameras' own words (live camera +0x8, the chase camera's record +0x2) are written from it inside every step

@@ -122,6 +122,7 @@ PAINT_REPORT	control	536	CONTROL	u32		port/core/src/paint.cpp:29	tests: machines
 OTHER_SOUNDS	control	548	CONTROL	u32		port/core/src/boot.cpp:16	the loudness of other racers' own sounds, of 256, plus 1
 UNTRACKED	control	0x700	CONTROL	u32		port/core/src/rollback.h:28	set by the image: the count of memory ranges never rolled back, then their start and end
 EXIT_REQUEST	control	0xA30	CONTROL	u32		port/core/src/net_internal.h:37	1: the player is done with the results and the game is to stop
+PRESS_A	control	0xA34	CONTROL	u32		port/image/routines/frame_hud.py:149	1: the image presses A on port 0 for one frame, then writes 0 (the results' leave in time; the HUD pass past a racing racer's first results page)
 WATCH_AS_RACE	control	0xA38	CONTROL	u32		port/core/src/session.cpp:145	1 while a replay is watched as the race: the D-pad moves the seat the camera follows
 # ---- slot
 SLOT	slot	=IMAGE + 0x10		u32		port/core/src/files.h:22	the seat routines' slot in the image: this game's seat and what goes with it
