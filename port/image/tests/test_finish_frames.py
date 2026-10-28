@@ -346,7 +346,7 @@ class WholeFrames(unittest.TestCase):
         # pages are its own, as a finisher's, the race's HUD off
         r = self.race()
         seen = [r.frame(lambda s: "F4" if s == 1000 else "") for _ in range(500)]
-        self.assertEqual((seen[1], seen[499]), ("FINISH 480", "place 0"))
+        self.assertEqual((seen[0], seen[499]), ("FINISH 480", "place 0"))
         r.window[SPECTATOR + 3] = 1
         r.window[FIN] = 0
         self.assertEqual([r.frame(lambda s: "") for _ in range(3)], ["race"] * 3)

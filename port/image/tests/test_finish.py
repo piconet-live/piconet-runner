@@ -7,7 +7,7 @@ import os, struct, sys, tempfile, unittest
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(here, ".."))
 import build, memmap
-import frame_hud, native
+import frame_hud, frame_spectate, native
 from test_race_end import Machine, signed, BSS, MODULE, MACHINES, FINISHED, OUT, POINTER
 
 IMAGE, CONTROL, TEXT = memmap.IMAGE, memmap.CONTROL, memmap.REL_TEXT
@@ -306,7 +306,16 @@ class TheFinish(unittest.TestCase):
                  for w in [struct.unpack_from(">I", self.image, o)[0]]
                  if (w >> 26 == 14 or 32 <= w >> 26 <= 47) and w & 0xFFFF in names]
         helpers = {self.helper(site) + 4 for site in COUNT_SITES}
-        outside = [n for n in named if not self.finwatch <= n[0] < self.end and n[0] not in helpers]
+        # frame_spectate.py `spectate` (after a frame's steps, the picture's) reads the kind and the end: a finished
+        # racer spectates FINISH_SPECTATE steps after its finish
+        from keystone import Ks, KS_ARCH_PPC, KS_MODE_PPC32, KS_MODE_BIG_ENDIAN
+        text = frame_spectate.asm()
+        code = bytes(Ks(KS_ARCH_PPC, KS_MODE_PPC32 + KS_MODE_BIG_ENDIAN).asm(text)[0])
+        spectate = IMAGE + self.image.index(code) + native.label_offsets(text)["spectate"]
+        stop = IMAGE + self.image.index(code) + native.label_offsets(text)["specstep"]
+        reads = [n for n in named if spectate <= n[0] < stop]
+        self.assertEqual(sorted(n[1:] for n in reads), [(32, "end"), (32, "kind")])
+        outside = [n for n in named if not self.finwatch <= n[0] < self.end and n[0] not in helpers and n not in reads]
         self.assertEqual(outside, [])
         # of the race's end the watch reads one word, "over" (twice: a racer's row, an out racer's), and writes none
         ends = {a - CONTROL: n for a, n in ((memmap.END_OFFICIAL, "official"), (memmap.END_ASKED, "asked"), (OVER, "over"))}
