@@ -227,7 +227,45 @@ void SayResultsLeavable(Guest& g, Session& s)
   if (module == 0 || g.Read16(module + PHASE) != 0x2A || g.Read8(module + RESULTS_STATE) != 7)
     return;
   s.leavable_said = true;
+  s.leavable_at = Clock::now();
   Notice("fzgx: the results can be left from step {} (every racer's page)", g.Read32(STEP));
+}
+
+// The player leaves the results: the image asked for it (+0xA30, the results state reached 8 after A on every
+// racer's page). Stops the game once, as the window's stop button does.
+void LeaveTheResults(Guest& g, Session& s, const char* why)
+{
+  s.exit_sent = true;
+  Notice("fzgx: {}; stopping", why);
+  ReportResultsPictures(g, "leaving the results");
+  TheHost().RequestStop();
+}
+
+// A racer's game leaves the results by itself RESULTS_LEAVE after every racer's page opened (the owner,
+// 28 October): as if the player pressed A there. The A is pressed through the image (+0xA34: A on port 0 for one
+// frame, the press the HUD pass already gives a racer still racing when the results begin), not by a stop from
+// here: the game's own results then take the step a player's A takes (state 8, where the image asks to leave), so
+// the leave is the player's in everything, its log line, its results pictures and its exit code included. Should
+// the game not take the press (it never did in a test), the stop follows RESULTS_LEAVE_GRACE later, by the same
+// lines. The wall clock is enough: leaving is this game's own and changes nothing another game computes. Only a
+// racer: a playback and a practice have no results to wait on, and a spectator stops when the relay drops the
+// race (relay_wire.cpp TakeJoinedAgain).
+void LeaveTheResultsInTime(Guest& g, Session& s)
+{
+  if (!s.leavable_said || s.exit_sent || s.watcher || s.playback || s.practice)
+    return;
+  const auto waited = Clock::now() - s.leavable_at;
+  if (waited < RESULTS_LEAVE)
+    return;
+  if (!s.leave_pressed)
+  {
+    s.leave_pressed = true;
+    Notice("fzgx: every racer's page stood {} s: A pressed for the player", RESULTS_LEAVE.count());
+    g.Write32(PRESS_A, 1);
+    return;
+  }
+  if (waited >= RESULTS_LEAVE + RESULTS_LEAVE_GRACE)
+    LeaveTheResults(g, s, "the results were not left after the A pressed for the player");
 }
 
 void RunSession(Guest& g)
@@ -271,12 +309,8 @@ void RunSession(Guest& g)
   }
   SayResultsLeavable(g, s);
   if (!s.exit_sent && g.Read32(EXIT_REQUEST) == 1)
-  {
-    s.exit_sent = true;
-    Notice("fzgx: the player left the results; stopping");
-    ReportResultsPictures(g, "leaving the results");
-    TheHost().RequestStop();
-  }
+    LeaveTheResults(g, s, "the player left the results");
+  LeaveTheResultsInTime(g, s);
   // the machines' textures load in the step into the countdown (steps 2 to 4): then the racers' colours, once (a
   // race from a launch file's match)
   if (g.Read32(STEP) >= 6)

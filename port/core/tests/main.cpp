@@ -45,6 +45,7 @@ void TestACustomMachinesOwnPartWordsOnAStatPack();
 void TestARelayWhoseClockIsNoClock();
 void TestAGameClosedMidRaceEndsAsLeftRacing();
 void TestTheExitWhenTheGameStopsWhileItsSeatRaces();
+void TestTheResultsAreLeftThirtySecondsAfterEveryRacersPage();
 void TestRumble();
 void TestTheStatusBoardOfAPlainStart();
 void TestABoardThatIsNotThisVersionsIsLeft();
@@ -312,6 +313,7 @@ void TestARaceAgainstARelay()
   TestARelayWhoseClockIsNoClock();
   TestAGameClosedMidRaceEndsAsLeftRacing();
   TestTheExitWhenTheGameStopsWhileItsSeatRaces();
+  TestTheResultsAreLeftThirtySecondsAfterEveryRacersPage();
   TestRumble();
   TestTheStatusBoardOfAPlainStart();
   TestABoardThatIsNotThisVersionsIsLeft();

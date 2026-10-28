@@ -52,6 +52,12 @@ constexpr u32 RUNNING = CONTROL + 120;
 // The mod's request to leave the game (the player is done with the results): 1 stops the emulation once, as the
 // window's stop button does (the launcher starts the game with -b, so Dolphin then exits).
 constexpr u32 EXIT_REQUEST = CONTROL + 0xA30;
+// The image presses A on port 0 for one frame when this is 1 (netframe.py +0xA34), then sets it back to 0.
+constexpr u32 PRESS_A = layout::PRESS_A_AT;
+// How long every racer's results page stands before a racer's game leaves it by itself, as with the player's A (the
+// owner, 28 October), and how long after that A the game stops anyway (session.cpp LeaveTheResultsInTime).
+constexpr std::chrono::seconds RESULTS_LEAVE{30};
+constexpr std::chrono::seconds RESULTS_LEAVE_GRACE{3};
 // The image's count of displayed race frames the local seat has been out (knocked out or retired; not finished),
 // after which, at 180, it watches the leader (frame_spectate.py `spectate`); it stays at 180 from there.
 constexpr u32 OUT_FRAMES = CONTROL + 248;
@@ -300,6 +306,8 @@ struct Session
   float watch_slowest = 1.0f, watch_fastest = 1.0f;
 
   bool exit_sent = false, leavable_said = false;  // leavable_said: SayResultsLeavable logged its step
+  Clock::time_point leavable_at{};  // when every racer's results page was first seen (LeaveTheResultsInTime)
+  bool leave_pressed = false;       // the A of the results' own leave was pressed for the player
   u32 stands_done = 0;  // tests ("debug.standStill"): how many of its stands were made (freeze.cpp)
   bool speeding = false;     // lockstep catching up at CATCH_UP_SPEED
   float normal_speed = 1.0f;  // the emulation speed and CPU clock override to go back to

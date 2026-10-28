@@ -170,6 +170,8 @@ UNTRACKED = 0x700  # set by the image: the count of memory ranges never rolled b
 UNTRACKED_AT = 0x81810700
 EXIT_REQUEST = 0xA30  # 1: the player is done with the results and the game is to stop
 EXIT_REQUEST_AT = 0x81810A30
+PRESS_A = 0xA34  # 1: the image presses A on port 0 for one frame, then writes 0 (the results' leave in time; the HUD pass past a racing racer's first results page)
+PRESS_A_AT = 0x81810A34
 WATCH_AS_RACE = 0xA38  # 1 while a replay is watched as the race: the D-pad moves the seat the camera follows
 WATCH_AS_RACE_AT = 0x81810A38
 
