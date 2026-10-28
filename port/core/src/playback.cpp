@@ -106,7 +106,7 @@ void VerifyReplay(Guest& g, Session& s)
   for (; s.verified < s.final_steps && s.verified < s.replay_checksums.size(); ++s.verified)
   {
     const u32 value = Rollback::KeptChecksum(g, s.verified);
-    if (value == s.replay_checksums[s.verified])
+    if (RecordedChecksumMatches(s.replay_checksums, s.replay_compact, s.verified, value))
       continue;
     if (s.desyncs == 0)
     {
@@ -115,6 +115,29 @@ void VerifyReplay(Guest& g, Session& s)
     }
     ++s.desyncs;
   }
+}
+
+// Playback: the results the race came to, read where a recording reads them (frame.cpp), against the file's. A
+// difference is said like a step that differs, and counted apart (the summary); a file without results is said too.
+void CheckResults(Guest& g, Session& s)
+{
+  if (s.results_checked)
+    return;
+  s.results_checked = true;
+  if (s.replay_results.empty())
+  {
+    Notice("fzgx: playback: results: none in the recording to compare");
+    return;
+  }
+  const std::string raced = ResultsOfTheRace(g);
+  if (SameResults(s.replay_results, raced))
+  {
+    Notice("fzgx: playback: results: the recording's, before step {}", Rollback::Step(g));
+    return;
+  }
+  s.results_differ = true;
+  Warn("fzgx: playback: results: DIFFER from the recording's before step {}: recorded {}, raced {}", Rollback::Step(g),
+       s.replay_results.substr(0, 2000), raced.substr(0, 2000));
 }
 
 // The results screen's pictures (the image's results_preload and results_load): whether
@@ -177,6 +200,9 @@ void PlaybackSummary(Guest& g, Session& s)
          "deepest {}, {} steps re-simulated; sound commands {}, dropped as a re-simulated step's {}",
          s.verified, s.replay_checksums.size(), s.desyncs, s.rollbacks, s.forced, s.max_depth, s.resim_steps,
          g.Read32(CONTROL + 36), g.Read32(CONTROL + 32));
+  Notice("fzgx: playback: results {}", s.results_differ ? "DIFFER from the recording's"
+                                       : !s.results_checked ? "not reached"
+                                       : s.replay_results.empty() ? "not in the recording" : "the recording's");
   MinesSummary(g);
   ReportResultsPictures(g, "the playback ends");
 }
@@ -193,6 +219,8 @@ bool StartPlayback(Guest& g, const std::string& path)
   s->seats = std::move(recording.seats);
   s->official = std::move(recording.rows);
   s->replay_checksums = std::move(recording.checksums);
+  s->replay_compact = recording.compact;
+  s->replay_results = std::move(recording.results);
   s->playback = true;
   s->phase = Phase::Joined;
   s->go = true;

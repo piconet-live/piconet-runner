@@ -14,6 +14,8 @@ namespace fzgx::net
 // playback.cpp
 void SpectateReplay(Guest& g, Session& s, u32 step);
 void VerifyReplay(Guest& g, Session& s);
+// Playback: the race's results against the recorded ones, once, where a recording takes them (frame.cpp).
+void CheckResults(Guest& g, Session& s);
 void ReportResultsPictures(Guest& g, const char* when);
 void ReportPresentation(Guest& g, Session& s);
 void PlaybackSummary(Guest& g, Session& s);

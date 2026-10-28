@@ -1,5 +1,5 @@
 // The fuzzer of the race set-ups of 0.3.0 (fuzz_replays.cpp says what the fuzzers do; tests/fuzz.sh builds them):
-//   fuzz_core packs SECONDS SEED DIR   replay files of every version this core plays (2 to 7) whose header's match
+//   fuzz_core packs SECONDS SEED DIR   replay files of every version this core plays (2 to 8) whose header's match
 //       carries what a server or a replay's maker chooses since stat packs: the race's pack ("setup.stats"), the
 //       packs a seat ("setup.packs" and a seat's "pack"), custom machines (parts, pilot, colour words), the rules
 //       (the mines' coming back among them), and the lineup's custom id. Each pack is made with its own fingerprint,

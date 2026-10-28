@@ -26,7 +26,7 @@ for f in "$here"/src/*.cpp "$here"/tests/fuzz_*.cpp; do
   if [ ${#pids[@]} -ge 2 ]; then wait "${pids[0]}" || exit 2; pids=("${pids[@]:1}"); fi
 done
 for p in "${pids[@]}"; do wait "$p" || exit 2; done
-g++ -fsanitize=address,undefined "$out"/obj/*.o -o "$out/fuzz_core" -lpthread || exit 2
+g++ -fsanitize=address,undefined "$out"/obj/*.o -o "$out/fuzz_core" -lpthread -llzma || exit 2
 
 one() {  # mode core
   local mode=$1 core=$2 dir="$out/$1" s=$seed found=0 end=$(( $(date +%s) + seconds ))

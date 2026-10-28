@@ -217,7 +217,7 @@ void TookFrontStep(Guest& g, Session& s, u32 t)
     return;
   s.verified = std::max(s.verified, t);
   const u32 value = Rollback::KeptChecksum(g, t - 1);
-  if (value == s.replay_checksums[t - 1])
+  if (RecordedChecksumMatches(s.replay_checksums, s.replay_compact, t - 1, value))
     return;
   ++s.desyncs;
   a.front_differed.push_back(t - 1);
@@ -266,7 +266,7 @@ void CheckPlayStep(Guest& g, Session& s, u32 t, const char* what)
     return;
   ++a.play_checked;
   const u32 value = Rollback::KeptChecksum(g, t);
-  if (value == s.replay_checksums[t])
+  if (RecordedChecksumMatches(s.replay_checksums, s.replay_compact, t, value))
     return;
   ++s.desyncs;
   a.play_differed.push_back(t);

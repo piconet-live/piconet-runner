@@ -277,10 +277,11 @@ void TestAStatPackInARecording()
   CHECK(Says(played(3, Stats({{6, 4, Bits(0)}})), "the race's stat pack is refused: block 6's Weight is 0"));
   CHECK(Says(played(4, ""), "a version 4 replay names no custom machine, and version 4 is a race with one: refused"));
   CHECK(Says(played(5, ""), "a version 5 replay names no mine rule, and version 5 is a race with one: refused"));
-  CHECK(Says(played(8, ""), "is not a version 2, 3, 4, 5, 6 or 7 replay file"));
+  CHECK(Says(played(8, ""), "is a compact replay (version 8) that does not read"));  // (a recording's layout under 8)
+  CHECK(Says(played(9, ""), "is not a version 2, 3, 4, 5, 6, 7 or 8 replay file"));
   CHECK(Says(played(7, ""), "names no start grid and has the rubber band, and version 7 is a race of 0.4.0's set-up"));
   CHECK(Says(played(6, ""), "names no pack a seat, and version 6 is a race with one"));
-  CHECK(Says(played(1, ""), "is not a version 2, 3, 4, 5, 6 or 7 replay file"));
+  CHECK(Says(played(1, ""), "is not a version 2, 3, 4, 5, 6, 7 or 8 replay file"));
   std::filesystem::remove_all(dir);
 }
 

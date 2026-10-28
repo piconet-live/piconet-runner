@@ -357,7 +357,7 @@ void Shutdown()
     PracticeEnd(*s_session);
   if (s_session && !s_session->playback)
   {
-    s_session->recorder.Close();
+    s_session->recorder.Close(true);  // (made compact: the recording's end)
     LeaveTheCrashedReplay(*s_session);
   }
   // The race's line for the player's file: last, after the replay is closed, and nothing it throws leaves here (no
