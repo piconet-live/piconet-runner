@@ -58,6 +58,10 @@ constexpr u32 PRESS_A = layout::PRESS_A_AT;
 // owner, 28 October), and how long after that A the game stops anyway (session.cpp LeaveTheResultsInTime).
 constexpr std::chrono::seconds RESULTS_LEAVE{30};
 constexpr std::chrono::seconds RESULTS_LEAVE_GRACE{3};
+// How long the race's own results page (the first, results state 0) stands before a racer's game passes it by itself
+// with an A, to every racer's page, whose RESULTS_LEAVE then runs (the owner, 28 October: "First page gets a timer of
+// 15s"; session.cpp PassTheFirstResultsPageInTime). Pressed again every RESULTS_LEAVE_GRACE while the page stays.
+constexpr std::chrono::seconds RESULTS_FIRST_PAGE{15};
 // The image's count of displayed race frames the local seat has been out (knocked out or retired; not finished),
 // after which, at 180, it watches the leader (frame_spectate.py `spectate`); it stays at 180 from there.
 constexpr u32 OUT_FRAMES = CONTROL + 248;
@@ -308,6 +312,9 @@ struct Session
   bool exit_sent = false, leavable_said = false;  // leavable_said: SayResultsLeavable logged its step
   Clock::time_point leavable_at{};  // when every racer's results page was first seen (LeaveTheResultsInTime)
   bool leave_pressed = false;       // the A of the results' own leave was pressed for the player
+  bool first_page_seen = false;     // the race's own results page was seen standing (PassTheFirstResultsPageInTime)
+  Clock::time_point first_page_at{};  // when it was first seen, then when the A of its pass was last pressed
+  u32 first_page_presses = 0;       // the As pressed for the player on that page
   u32 stands_done = 0;  // tests ("debug.standStill"): how many of its stands were made (freeze.cpp)
   bool speeding = false;     // lockstep catching up at CATCH_UP_SPEED
   float normal_speed = 1.0f;  // the emulation speed and CPU clock override to go back to

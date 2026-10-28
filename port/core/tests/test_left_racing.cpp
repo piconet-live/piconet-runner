@@ -133,3 +133,96 @@ void TestTheResultsAreLeftThirtySecondsAfterEveryRacersPage()
   Shutdown();
   Init(host, Options{});
 }
+
+// A racer's game passes the race's own results page (state 0, the first) by itself 15 s after it stood
+// (session.cpp PassTheFirstResultsPageInTime): the A through the image (+0xA34), again every 3 s while the page
+// stays; only while the rule word's results bit is set; never after the player's own A moved the page, nor in a
+// playback, a practice or a spectator.
+void TestTheFirstResultsPageIsPassedAfterFifteenSeconds()
+{
+  TestHost host;
+  auto now = std::chrono::steady_clock::time_point{} + std::chrono::hours(1);
+  host.time = now;
+  Init(host, Options{});
+  Guest g(host, Data());
+  LinkMainRel(g);
+  const auto page = [&](u8 state, u32 rules) {
+    g.Write16(MODULE + net::PHASE, 0x2A);
+    g.Write32(MODULE + net::BSS + 0x3C30, rules);
+    g.Write8(MODULE + net::BSS + 0x8E51D, state);
+  };
+  const auto at = [&](std::chrono::milliseconds t) { *host.time = now + t; };
+  const auto both = [&](net::Session& s) {
+    net::SayResultsLeavable(g, s);
+    net::PassTheFirstResultsPageInTime(g, s);
+    net::LeaveTheResultsInTime(g, s);
+  };
+  {
+    net::Session s;
+    Racing(s);
+    page(0, 0x04000000);  // the results bit not yet set: the pages do not run, nothing is timed
+    at(std::chrono::seconds(10));
+    both(s);
+    CHECK(!s.first_page_seen && g.Read32(net::PRESS_A) == 0);
+    page(0, 0x04001000);  // the first page stands, seen at 10 s
+    both(s);
+    CHECK(s.first_page_seen && Says(host.notices, "the race's own results page stands from step"));
+    at(std::chrono::milliseconds(24'999));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 0 && s.first_page_presses == 0);
+    at(std::chrono::seconds(25));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 1 && s.first_page_presses == 1 && host.stops == 0);
+    CHECK(Says(host.notices, "fzgx: the race's own results page stood 15 s: A pressed for the player"));
+    g.Write32(net::PRESS_A, 0);  // the image's frame took it; the game did not (a countdown ran): again 3 s on
+    at(std::chrono::milliseconds(27'999));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 0);
+    at(std::chrono::seconds(28));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 1 && s.first_page_presses == 2);
+    CHECK(Says(host.notices, "A pressed for the player again"));
+    g.Write32(net::PRESS_A, 0);
+    page(7, 0x04001000);  // every racer's page: its own 30 s from here, no more first-page presses
+    at(std::chrono::seconds(29));
+    both(s);
+    CHECK(s.leavable_said && g.Read32(net::PRESS_A) == 0);
+    at(std::chrono::seconds(58));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 0 && s.first_page_presses == 2 && !s.leave_pressed);
+    at(std::chrono::seconds(59));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 1 && s.leave_pressed);
+    g.Write32(net::PRESS_A, 0);
+  }
+  // the player's own A before the 15 s: every racer's page, and no press on the first
+  {
+    net::Session s;
+    Racing(s);
+    page(0, 0x04001000);
+    at(std::chrono::seconds(100));
+    both(s);
+    at(std::chrono::seconds(105));
+    page(7, 0x04001000);
+    both(s);
+    at(std::chrono::seconds(130));
+    both(s);
+    CHECK(s.first_page_presses == 0 && g.Read32(net::PRESS_A) == 0 && s.leavable_said && !s.leave_pressed);
+  }
+  // a playback, a practice and a spectator: no press
+  for (const auto& other : {+[](net::Session& s) { s.playback = true; }, +[](net::Session& s) { s.practice = true; },
+                            +[](net::Session& s) { s.watcher = true; }})
+  {
+    net::Session s;
+    Racing(s);
+    other(s);
+    page(0, 0x04001000);
+    at(std::chrono::seconds(200));
+    both(s);
+    at(std::chrono::seconds(300));
+    both(s);
+    CHECK(!s.first_page_seen && g.Read32(net::PRESS_A) == 0);
+  }
+  Shutdown();
+  Init(host, Options{});
+}

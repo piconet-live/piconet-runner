@@ -46,6 +46,7 @@ void TestARelayWhoseClockIsNoClock();
 void TestAGameClosedMidRaceEndsAsLeftRacing();
 void TestTheExitWhenTheGameStopsWhileItsSeatRaces();
 void TestTheResultsAreLeftThirtySecondsAfterEveryRacersPage();
+void TestTheFirstResultsPageIsPassedAfterFifteenSeconds();
 void TestRumble();
 void TestTheStatusBoardOfAPlainStart();
 void TestABoardThatIsNotThisVersionsIsLeft();
@@ -314,6 +315,7 @@ void TestARaceAgainstARelay()
   TestAGameClosedMidRaceEndsAsLeftRacing();
   TestTheExitWhenTheGameStopsWhileItsSeatRaces();
   TestTheResultsAreLeftThirtySecondsAfterEveryRacersPage();
+  TestTheFirstResultsPageIsPassedAfterFifteenSeconds();
   TestRumble();
   TestTheStatusBoardOfAPlainStart();
   TestABoardThatIsNotThisVersionsIsLeft();
