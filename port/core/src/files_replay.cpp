@@ -311,6 +311,7 @@ bool ReadRecording(const std::string& path, Recording* out)
   out->rows.clear();
   out->checksums.clear();
   out->compact = compact;
+  out->version = p.version;
   out->results = p.results ? std::string(data.begin() + p.results_at, data.begin() + p.results_at + p.results_length) : "";
   if (p.Steps() > boot::MAX_REPLAY_STEPS)
   {

@@ -270,6 +270,7 @@ struct Session
   std::string replay_results;   // the recording's results (JSON), or empty: compared once (CheckResults)
   bool results_checked = false;
   bool results_differ = false;
+  bool results_judged = true;   // a recording from 0.4.0 on (version 7 and later): its results were taken as now
   bool seen_over = false;       // a playback in lockstep saw the image's race-over word (frame.cpp)
   u32 verified = 0;
   bool replay_ended = false;

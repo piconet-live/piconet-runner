@@ -83,6 +83,7 @@ struct Recording
   std::vector<u32> checksums;
   bool compact = false;
   std::string results;
+  u32 version = 0;  // the recording's own (a compact file's: the one it was made of)
 };
 // false, with a line in the log, when the file is no replay of a version the game plays (2 to 8).
 bool ReadRecording(const std::string& path, Recording* out);

@@ -4,6 +4,7 @@
 
 #include "net_internal.h"
 #include "out_test.h"
+#include "replay_file.g.h"
 
 #include <algorithm>
 #include <memory>
@@ -136,6 +137,13 @@ void CheckResults(Guest& g, Session& s)
     return;
   }
   s.results_differ = true;
+  if (!s.results_judged)
+  {
+    Notice("fzgx: playback: results: other than the recording's before step {}, which is from before 0.4.0 and is not "
+           "judged by them: recorded {}, raced {}", Rollback::Step(g), s.replay_results.substr(0, 2000),
+           raced.substr(0, 2000));
+    return;
+  }
   Warn("fzgx: playback: results: DIFFER from the recording's before step {}: recorded {}, raced {}", Rollback::Step(g),
        s.replay_results.substr(0, 2000), raced.substr(0, 2000));
 }
@@ -200,7 +208,8 @@ void PlaybackSummary(Guest& g, Session& s)
          "deepest {}, {} steps re-simulated; sound commands {}, dropped as a re-simulated step's {}",
          s.verified, s.replay_checksums.size(), s.desyncs, s.rollbacks, s.forced, s.max_depth, s.resim_steps,
          g.Read32(CONTROL + 36), g.Read32(CONTROL + 32));
-  Notice("fzgx: playback: results {}", s.results_differ ? "DIFFER from the recording's"
+  Notice("fzgx: playback: results {}", s.results_differ && !s.results_judged ? "other, not judged (a recording from before 0.4.0)"
+                                       : s.results_differ ? "DIFFER from the recording's"
                                        : !s.results_checked ? "not reached"
                                        : s.replay_results.empty() ? "not in the recording" : "the recording's");
   MinesSummary(g);
@@ -221,6 +230,10 @@ bool StartPlayback(Guest& g, const std::string& path)
   s->replay_checksums = std::move(recording.checksums);
   s->replay_compact = recording.compact;
   s->replay_results = std::move(recording.results);
+  // Results taken as a recording takes them now are those of version 7 on (0.4.0); before, some were read from a
+  // state that was not the race's end (a recording of 4 October holds every lap 0 and times of hours), so a
+  // difference there is said and not counted
+  s->results_judged = recording.version >= replay::VERSION_GRID;
   s->playback = true;
   s->phase = Phase::Joined;
   s->go = true;
