@@ -307,17 +307,17 @@ JOINED_OVER	wire	=relay_joined_flags_over		u8		protocol/relay.toml:195	Joined's 
 EXIT_RACE_OVER	wire	3		int		port/core/include/fzgx/core.h:336	the game's exit code when it was started again into a race the relay said is over: nothing to rejoin, no error
 EXIT_LEFT_RACING	wire	4		int		port/core/include/fzgx/core.h:341	the game's exit code when it stopped by no stop of its own (its window closed, Escape) while its seat raced: the launcher keeps the race for Rejoin
 # ---- file
-REPLAY_MARK	file	=replay_mark		mark		protocol/replay.toml:32	a replay file begins with this
-REPLAY_VERSION	file	=replay_version_plain		u16		protocol/replay.toml:48	the replay file's version, after its mark
-REPLAY_VERSION_STATS	file	=replay_version_stats		u16		protocol/replay.toml:53	the replay file's version when its race ran on a stat pack (the header's match.setup.stats): a program from before stat packs refuses it
-REPLAY_VERSION_CUSTOM	file	=replay_version_custom		u16		protocol/replay.toml:59	the replay file's version when a seat of its race raced a custom machine (a seat's match.setup.seats[].custom): a program from before custom machines refuses it
-REPLAY_VERSION_MINES	file	=replay_version_mines		u16		protocol/replay.toml:65	the replay file's version when its race ran with mines that come back (the header's match.setup.rules.mineRegenMs not 0): a program from before the rule refuses it
-REPLAY_VERSION_SEATS	file	=replay_version_seats		u16		protocol/replay.toml:71	the replay file's version when a seat of its race raced a pack of its own (the header's match.setup.packs and a seat's pack): a program from before packs a seat refuses it
-REPLAY_VERSION_GRID	file	=replay_version_grid		u16		protocol/replay.toml:77	the replay file's version when its race is 0.4.0's set-up: it started on the coordinator's grid (the header's match.setup.grid) or raced with no rubber band (the header's rubberBand false: every race and practice from 0.4.0), whatever else it holds: a program from before refuses it
-REPLAY_FRAMES_MARK	file	=replay_frames_mark		mark		protocol/replay.toml:90	in a replay file: the player seats and the recorder's seat follow
-REPLAY_LINEUP_MARK	file	=replay_lineup_mark		mark		protocol/replay.toml:97	in a replay file: the lineup at go follows
-REPLAY_LINEUP_SIZE	file	=replay_lineup_size		u32		protocol/replay.toml:96	bytes of a replay's lineup: 30 machines, 30 ranks, 30 settings of 2 bytes, 2 bytes, 2 unused
-REPLAY_RESULTS_MARK	file	=replay_results_mark		mark		protocol/replay.toml:113	a replay file with results ends with this
+REPLAY_MARK	file	=replay_mark		mark		protocol/replay.toml:49	a replay file begins with this
+REPLAY_VERSION	file	=replay_version_plain		u16		protocol/replay.toml:77	the replay file's version, after its mark
+REPLAY_VERSION_STATS	file	=replay_version_stats		u16		protocol/replay.toml:82	the replay file's version when its race ran on a stat pack (the header's match.setup.stats): a program from before stat packs refuses it
+REPLAY_VERSION_CUSTOM	file	=replay_version_custom		u16		protocol/replay.toml:88	the replay file's version when a seat of its race raced a custom machine (a seat's match.setup.seats[].custom): a program from before custom machines refuses it
+REPLAY_VERSION_MINES	file	=replay_version_mines		u16		protocol/replay.toml:94	the replay file's version when its race ran with mines that come back (the header's match.setup.rules.mineRegenMs not 0): a program from before the rule refuses it
+REPLAY_VERSION_SEATS	file	=replay_version_seats		u16		protocol/replay.toml:100	the replay file's version when a seat of its race raced a pack of its own (the header's match.setup.packs and a seat's pack): a program from before packs a seat refuses it
+REPLAY_VERSION_GRID	file	=replay_version_grid		u16		protocol/replay.toml:106	the replay file's version when its race is 0.4.0's set-up: it started on the coordinator's grid (the header's match.setup.grid) or raced with no rubber band (the header's rubberBand false: every race and practice from 0.4.0), whatever else it holds: a program from before refuses it
+REPLAY_FRAMES_MARK	file	=replay_frames_mark		mark		protocol/replay.toml:119	in a replay file: the player seats and the recorder's seat follow
+REPLAY_LINEUP_MARK	file	=replay_lineup_mark		mark		protocol/replay.toml:126	in a replay file: the lineup at go follows
+REPLAY_LINEUP_SIZE	file	=replay_lineup_size		u32		protocol/replay.toml:125	bytes of a replay's lineup: 30 machines, 30 ranks, 30 settings of 2 bytes, 2 bytes, 2 unused
+REPLAY_RESULTS_MARK	file	=replay_results_mark		mark		protocol/replay.toml:142	a replay file with results ends with this
 IMAGE_MARK	file	'FZMD'		mark		port/core/src/boot.cpp:114	the mod image begins with this
 IMAGE_VERSION	file	2		u32		port/image/build.py:216	the mod image's version, after its mark: 2 is the native form
 PATCHES_MARK	file	'FZPT'		mark		port/image/build.py:215	in the mod image: the routines of the patched sites follow
