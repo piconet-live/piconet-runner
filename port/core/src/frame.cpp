@@ -197,6 +197,8 @@ FrameKind KindOfFrame(Guest& g, Session& s, u32 step, u32 module, const Forcing&
     const bool may_race_on = g.Read32(table::RACE_FINISH_LIMIT_AT) != 0 || g.Read32(table::RACE_FLOW_AT) != 0;
     if (may_race_on && !s.playback && s.recorder.IsOpen() && !s.recorder.HasResults())
       s.recorder.TakeResults(g);
+    if (may_race_on && s.playback)
+      CheckResults(g, s);
   }
   // (Not after the race-over test's "over": the game then stays in the race phase by itself, for the seconds of its
   // finish sequence, and those frames are lockstep's by design.)
@@ -222,6 +224,20 @@ void LockstepFrame(Guest& g, Session& s, u32 step, bool race_phase)
   // game's recording, and when the rollback went back before the race's end, results of a race not yet over.)
   if (s.settled && !race_phase && !s.playback && s.recorder.IsOpen() && !s.recorder.HasResults())
     s.recorder.TakeResults(g);
+  // A playback compares its results with the recording's at the same moment. A playback in lockstep throughout never
+  // settles (it never rolls back): every step it ran is the recording's, and its race ends where the image's
+  // race-over word says so (with a rule that lets machines race on, there; else in the first frame out of the race
+  // phase after it), as the race's settling frame found it.
+  if (s.settled && !race_phase && s.playback)
+    CheckResults(g, s);
+  if (s.playback && !s.settled)
+  {
+    const bool over = g.Read32(END_OVER) != 0;
+    const bool may_race_on = g.Read32(table::RACE_FINISH_LIMIT_AT) != 0 || g.Read32(table::RACE_FLOW_AT) != 0;
+    if ((over && may_race_on) || (s.seen_over && !race_phase))
+      CheckResults(g, s);
+    s.seen_over = s.seen_over || over;
+  }
   const bool watching = s.watch == Watch::Behind;  // its own slack, never CATCH_UP_SPEED (spectate.cpp)
   BeforeTheWatchersWait(s, step);
   if (!WaitFor(s, step + 1))

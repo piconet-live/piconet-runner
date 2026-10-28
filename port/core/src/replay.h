@@ -59,16 +59,21 @@ public:
   void TakeResults(Guest& g);
   bool HasResults() const { return !m_results.empty(); }
   u32 Recorded() const { return m_recorded; }
-  void Close();
+  // The results after the last step (when taken), and the file closed. With `compact`, at the recording's end: the
+  // file is then made compact (CompactReplay).
+  void Close(bool compact = false);
 
 private:
+  std::string m_path;
   std::unique_ptr<File> m_file;
   u32 m_recorded = 0;
   std::string m_results;
 };
 
 // A replay file read back: the player seats, the recorder's seat (and its place among the player seats), and for
-// every step the seats' inputs and the checksum the recording game kept.
+// every step the seats' inputs and the checksum the recording game kept; of a compact file (version 8) a step's
+// checksum is whole only where the file keeps it whole (Matches), elsewhere its folded byte. The results' JSON as the
+// file holds it, or empty.
 struct Recording
 {
   std::vector<int> seats;
@@ -76,8 +81,23 @@ struct Recording
   int index = -1;
   std::vector<std::vector<u8>> rows;
   std::vector<u32> checksums;
+  bool compact = false;
+  std::string results;
+  u32 version = 0;  // the recording's own (a compact file's: the one it was made of)
 };
-// false, with a line in the log, when the file is no replay of a version the game plays (2 to 7).
+// false, with a line in the log, when the file is no replay of a version the game plays (2 to 8).
 bool ReadRecording(const std::string& path, Recording* out);
+// Whether a step's checksum a game computed is the recorded one: the whole word, or of a compact file's step that
+// keeps only its folded byte, that byte (protocol/formats.md section 1).
+bool RecordedChecksumMatches(const std::vector<u32>& checksums, bool compact, size_t step, u32 computed);
+// The recording at `path` made compact (version 8): written beside it and moved over it, so the file is at every
+// moment one recording or the other. A file that is not a whole recording, or one that cannot be written, stays as
+// it is; the log says which.
+bool CompactReplay(const std::string& path);
+// Whether the results a playback's race came to (ResultsJson of the game's racers now) are the recorded ones: equal
+// JSON values (formats.md section 1).
+bool SameResults(const std::string& recorded, const std::string& raced);
+// The results' JSON of the game's racers now (Recorder::TakeResults'); empty when there are no racers.
+std::string ResultsOfTheRace(Guest& g);
 
 }  // namespace fzgx::net

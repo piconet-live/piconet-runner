@@ -1,6 +1,8 @@
 // A replay file's two readers: boot::ReadReplay gives the race a playback is set up with (the header's match, the
 // lineup), net::ReadRecording the steps it runs and compares. Both take the file's parts from the generated reader
 // (protocol/replay.toml, generated/replay_file.g.h) and judge them; what each refuses: protocol/formats.md section 1.
+// A compact file (version 8, generated/replay_compact.g.h) is first expanded into the recording it was made of
+// (ReadReplayFile), and read as that.
 // Lifted from the Dolphin fork (dolphin-fzgx Core/FzgxBoot.cpp and Core/FzgxNet.cpp at 5bdc7c640e).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -14,6 +16,7 @@
 #include <cstring>
 
 #include "replay.h"
+#include "replay_compact.g.h"
 #include "replay_file.g.h"
 
 namespace fzgx
@@ -25,6 +28,32 @@ u32 Get32(const u8* p)
   return (u32(p[0]) << 24) | (u32(p[1]) << 16) | (u32(p[2]) << 8) | u32(p[3]);
 }
 }  // namespace
+
+// A replay file's bytes as the readers take them: a recording's as they are, a compact file's (version 8) expanded
+// into the recording it was made of (`compact` says so; its steps between the whole checksums hold their folded
+// byte). false, with a line in the log, for a compact file that does not read; a file that cannot be read, or one over
+// `most` bytes, is no bytes (each reader then says what it refuses).
+bool ReadReplayFile(const std::string& path, size_t most, std::vector<u8>* data, bool* compact)
+{
+  File f(path, "rb");
+  const size_t size = f.GetSize();
+  data->assign(size <= most ? size : 0, 0);
+  if (!f.IsOpen() || data->empty() || !f.ReadBytes(data->data(), data->size()))
+    data->clear();
+  *compact = data->size() >= replay::COMPACT_HEAD && std::memcmp(data->data(), replay::MARK.data(), 4) == 0 &&
+             ((*data)[4] << 8 | (*data)[5]) == replay::COMPACT_VERSION;
+  if (!*compact)
+    return true;
+  std::vector<u8> expanded;
+  std::string why;
+  if (!replay::Expand(data->data(), data->size(), &expanded, &why))
+  {
+    Error("fzgx: {} is a compact replay (version {}) that does not read: {}", path, replay::COMPACT_VERSION, why);
+    return false;
+  }
+  *data = std::move(expanded);
+  return true;
+}
 
 namespace boot
 {
@@ -42,14 +71,14 @@ struct ReplayParts
 
 std::optional<ReplayParts> ReadParts(const std::string& path)
 {
-  File f(path, "rb");
-  const size_t size = f.GetSize();
-  std::vector<u8> data(size <= MAX_REPLAY_BYTES ? size : 0);
-  const bool read = f.IsOpen() && !data.empty() && f.ReadBytes(data.data(), data.size());
-  const replay::Parts p = replay::Parse(data.data(), read ? data.size() : 0);
+  std::vector<u8> data;
+  bool compact = false;
+  if (!ReadReplayFile(path, MAX_REPLAY_BYTES, &data, &compact))
+    return std::nullopt;
+  const replay::Parts p = replay::Parse(data.data(), data.size());
   if (!p.marked || !replay::Played(p.version))
   {
-    Error("fzgx: {} is not a version 2, 3, 4, 5, 6 or 7 replay file", path);
+    Error("fzgx: {} is not a version 2, 3, 4, 5, 6, 7 or 8 replay file", path);
     return std::nullopt;
   }
   picojson::value root;
@@ -243,15 +272,15 @@ namespace net
 // a part of a step at the end is not read.
 bool ReadRecording(const std::string& path, Recording* out)
 {
-  File file(path, "rb");
   // (a recording of an hour of 30 seats is 40 MiB)
-  const size_t size = file.GetSize();
-  std::vector<u8> data(size <= replay::MAX_BYTES ? size : 0);
-  const bool read = file.IsOpen() && !data.empty() && file.ReadBytes(data.data(), data.size());
-  const replay::Parts p = replay::Parse(data.data(), read ? data.size() : 0);
+  std::vector<u8> data;
+  bool compact = false;
+  if (!ReadReplayFile(path, replay::MAX_BYTES, &data, &compact))
+    return false;
+  const replay::Parts p = replay::Parse(data.data(), data.size());
   if (!p.marked || !boot::PlayedVersion(p.version))
   {
-    Error("fzgx: {} is not a version 2, 3, 4, 5, 6 or 7 replay file", path);
+    Error("fzgx: {} is not a version 2, 3, 4, 5, 6, 7 or 8 replay file", path);
     return false;
   }
   if (!p.frames || !p.frames_marked)
@@ -281,6 +310,9 @@ bool ReadRecording(const std::string& path, Recording* out)
   }
   out->rows.clear();
   out->checksums.clear();
+  out->compact = compact;
+  out->version = p.version;
+  out->results = p.results ? std::string(data.begin() + p.results_at, data.begin() + p.results_at + p.results_length) : "";
   if (p.Steps() > boot::MAX_REPLAY_STEPS)
   {
     Error("fzgx: {} holds {} steps, and a replay is at most {} (six hours)", path, p.Steps(), boot::MAX_REPLAY_STEPS);
@@ -297,14 +329,13 @@ bool ReadRecording(const std::string& path, Recording* out)
 }  // namespace net
 bool ReplayInfo(const std::string& path, std::string* json, std::string* error)
 {
-  File file(path, "rb");
-  const size_t size = file.GetSize();
-  std::vector<u8> data(size <= replay::MAX_BYTES ? size : 0);
-  const bool read = file.IsOpen() && !data.empty() && file.ReadBytes(data.data(), data.size());
-  const replay::Parts p = replay::Parse(data.data(), read ? data.size() : 0);
+  std::vector<u8> data;
+  bool compact = false;
+  const bool expanded = ReadReplayFile(path, replay::MAX_BYTES, &data, &compact);
+  const replay::Parts p = replay::Parse(data.data(), expanded ? data.size() : 0);
   if (!p.marked || !replay::Played(p.version) || !p.frames || !p.frames_marked)
   {
-    *error = path + " is no replay of a version the game plays (2 to 7), or ends before its frames";
+    *error = path + " is no replay of a version the game plays (2 to 8), or ends before its frames";
     return false;
   }
   const std::string header(data.begin() + p.HeaderAt(), data.begin() + p.FramesAt());
@@ -321,9 +352,9 @@ bool ReplayInfo(const std::string& path, std::string* json, std::string* error)
   for (u32 i = 0; i < 32; ++i)
     if (p.mask >> i & 1)
       seats += (seats.empty() ? "" : ",") + std::to_string(i);
-  *json = std::format("{{\"version\":{},\"seat\":{},\"mask\":{},\"seats\":[{}],\"steps\":{},\"whole\":{},"
+  *json = std::format("{{\"version\":{},\"compact\":{},\"seat\":{},\"mask\":{},\"seats\":[{}],\"steps\":{},\"whole\":{},"
                       "\"lineup\":{},\"header\":{},\"results\":{}}}",
-                      p.version, p.seat, p.mask, seats, p.Steps(), p.Whole(), p.lineup, root.serialize(),
+                      compact ? replay::COMPACT_VERSION : p.version, compact, p.seat, p.mask, seats, p.Steps(), p.Whole(), p.lineup, root.serialize(),
                       has_results ? results.serialize() : "null");
   return true;
 }

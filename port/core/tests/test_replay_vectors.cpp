@@ -1,5 +1,5 @@
 // The replay file's shared samples (protocol/tests/vectors/replays: a real recording of every version 2 to 7, cut to
-// a few hundred steps, each as hex text, NAME.fzrp.hex), read by the generated reader (protocol/generated/replay_file.g.h): every part agrees with the
+// a few hundred steps, and that of version 7 made compact, version 8, each as hex text, NAME.fzrp.hex), read by the generated reader (protocol/generated/replay_file.g.h): every part agrees with the
 // line replays.tsv holds for it (written by the hand-written reader the generated one replaced; the launcher's test,
 // protocol/tests/dotnet-replay, holds its reader to the same file), each file's version is the one its race's
 // features make (replay::VersionOf), and the generated writer's parts give the file's bytes back, the results' JSON
@@ -20,6 +20,7 @@
 #include "parts.h"
 #include "picojson.h"
 #include "fzgx/replay_info.h"
+#include "replay_compact.g.h"
 #include "replay_file.g.h"
 
 namespace
@@ -89,10 +90,10 @@ replay::Features FeaturesOf(const picojson::object& header)
   return f;
 }
 
-std::string Describe(const std::string& name, const std::vector<u8>& d)
+std::string Describe(const std::string& name, const std::vector<u8>& d, u16 version)
 {
   const replay::Parts p = replay::Parse(d.data(), d.size());
-  std::string line = name + "\t" + std::to_string(p.version) + "\t" + std::to_string(p.header_length) + "\t" +
+  std::string line = name + "\t" + std::to_string(version) + "\t" + std::to_string(p.header_length) + "\t" +
                      Fnv(d.data() + p.HeaderAt(), p.header_length) + "\t" + std::to_string(p.mask) + "\t" +
                      std::to_string(p.seat);
   if (p.lineup)
@@ -187,8 +188,18 @@ static void TestTheReplaySamplesOfEveryVersion()
     if (line.empty() || line[0] == '#')
       continue;
     const std::string name = line.substr(0, line.find('\t'));
-    const std::vector<u8> d = Sample(folder, name);
-    const std::string got = Describe(name, d);
+    const std::vector<u8> file = Sample(folder, name);
+    // a compact sample (version 8): read as the recording it was made of, and made again from it, byte for byte
+    std::vector<u8> d = file;
+    std::string why;
+    const bool compact = file.size() > 6 && file[5] == replay::COMPACT_VERSION;
+    if (compact)
+    {
+      CHECK(replay::Expand(file.data(), file.size(), &d, &why));
+      std::vector<u8> again;
+      CHECK(replay::Compact(d.data(), d.size(), &again, &why) && again == file);
+    }
+    const std::string got = Describe(name, d, compact ? replay::COMPACT_VERSION : replay::Parse(d.data(), d.size()).version);
     if (got != line)
       std::printf("  %s:\n    read    %s\n    vectors %s\n", name.c_str(), got.c_str(), line.c_str());
     CHECK(got == line);
@@ -197,10 +208,33 @@ static void TestTheReplaySamplesOfEveryVersion()
     CHECK(picojson::parse(header, std::string(d.begin() + p.HeaderAt(), d.begin() + p.FramesAt())).empty());
     CHECK(replay::VersionOf(FeaturesOf(header.get<picojson::object>())) == p.version);
     CHECK(WrittenAgain(d) == d);
-    versions.push_back(p.version);
+    versions.push_back(compact ? replay::COMPACT_VERSION : p.version);
   }
-  for (u16 v : {2, 3, 4, 5, 6, 7})
+  for (u16 v : {2, 3, 4, 5, 6, 7, 8})
     CHECK(std::count(versions.begin(), versions.end(), v) >= 1);
+  // every recording sample made compact and expanded is itself again, but the steps' checksums between the whole
+  // ones, which are their folded byte; one with no step is no recording to make compact
+  for (const char* name : {"v2.fzrp", "v3.fzrp", "v4.fzrp", "v5.fzrp", "v6.fzrp", "v7.fzrp", "v2-no-steps.fzrp"})
+  {
+    const std::vector<u8> d = Sample(folder, name);
+    std::vector<u8> compact, back;
+    std::string why;
+    const bool made = replay::Compact(d.data(), d.size(), &compact, &why);
+    CHECK(made == (std::string(name) != "v2-no-steps.fzrp"));
+    if (!made)
+      continue;
+    CHECK(replay::Expand(compact.data(), compact.size(), &back, &why) && back.size() == d.size());
+    const replay::Parts p = replay::Parse(d.data(), d.size());
+    for (size_t t = 0; t < p.Steps(); ++t)
+    {
+      const size_t at = p.StepAt(t);
+      CHECK(std::equal(d.begin() + at, d.begin() + at + p.Row(), back.begin() + at));
+      const u32 whole = replay::detail::Get32(d.data() + at + p.Row()), kept = replay::detail::Get32(back.data() + at + p.Row());
+      CHECK(replay::IsFull(t, p.Steps()) ? kept == whole : kept == replay::Fold(whole));
+    }
+    CHECK(std::equal(d.begin(), d.begin() + p.StepAt(0), back.begin()));
+    CHECK(std::equal(d.begin() + p.steps_end, d.end(), back.begin() + p.steps_end));
+  }
   // the writer writes version 7 alone
   CHECK(replay::EncodeStart("{}", 1, 0)[5] == replay::VERSION_GRID && replay::VERSION_WRITTEN == replay::VERSION_GRID);
 }
@@ -235,7 +269,7 @@ static void TestTheReplayInfoOfEverySample()
   const std::filesystem::path folder = ProtocolFile("protocol/tests/vectors/replays");
   const std::filesystem::path temp = std::filesystem::temp_directory_path() / "fzgx-replay-info";
   std::filesystem::create_directories(temp);
-  for (const char* name : {"v2.fzrp", "v2-no-steps.fzrp", "v6.fzrp", "v7.fzrp"})
+  for (const char* name : {"v2.fzrp", "v2-no-steps.fzrp", "v6.fzrp", "v7.fzrp", "v8.fzrp"})
   {
     const std::vector<u8> d = Sample(folder, name);
     std::ofstream(temp / name, std::ios::binary).write(reinterpret_cast<const char*>(d.data()), static_cast<std::streamsize>(d.size()));
@@ -243,8 +277,13 @@ static void TestTheReplayInfoOfEverySample()
     CHECK(ReplayInfo((temp / name).string(), &json, &error));
     picojson::value info;
     CHECK(picojson::parse(info, json).empty() && info.is<picojson::object>());
-    const replay::Parts p = replay::Parse(d.data(), d.size());
-    CHECK(info.get("version").get<double>() == p.version && info.get("seat").get<double>() == p.seat);
+    std::vector<u8> e = d;
+    std::string why;
+    const bool compact = std::string(name) == "v8.fzrp";
+    CHECK(!compact || replay::Expand(d.data(), d.size(), &e, &why));
+    const replay::Parts p = replay::Parse(e.data(), e.size());
+    CHECK(info.get("version").get<double>() == (compact ? 8 : p.version) && info.get("seat").get<double>() == p.seat);
+    CHECK(info.get("compact").get<bool>() == compact);
     CHECK(info.get("steps").get<double>() == static_cast<double>(p.Steps()) && info.get("whole").get<bool>());
     CHECK(info.get("seats").get<picojson::array>().size() == p.Seats() && info.get("lineup").get<bool>() == p.lineup);
     CHECK(info.get("header").get("match").is<picojson::object>());

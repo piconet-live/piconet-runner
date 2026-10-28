@@ -244,7 +244,31 @@ void TestARecordingRoundTrip()
   CHECK(ReadFileToString(dir + "/r.fzrp", all) && all.size() > 4 && all.substr(all.size() - 4) == "FZRS");
   CHECK(all.find("\"results\":[{\"seat\":0,") != std::string::npos);
   WriteText(dir + "/bad.fzrp", "FZRP");
-  CHECK(!net::ReadRecording(dir + "/bad.fzrp", &back) && host.log.find("not a version 2, 3, 4, 5, 6 or 7 replay") != std::string::npos);
+  CHECK(!net::ReadRecording(dir + "/bad.fzrp", &back) && host.log.find("not a version 2, 3, 4, 5, 6, 7 or 8 replay") != std::string::npos);
+  // At the recording's end it is made compact (version 8): read back, the same rows, every checksum compares (the
+  // whole word every 60th step and at the last, the folded byte between), the results the same.
+  CHECK(net::CompactReplay(dir + "/r.fzrp"));
+  std::string compact;
+  CHECK(ReadFileToString(dir + "/r.fzrp", compact) && compact.substr(0, 8) == std::string("FZRP\0\x08\0\x02", 8));
+  CHECK(!std::filesystem::exists(dir + "/r.fzrp.compact"));
+  net::Recording small;
+  CHECK(net::ReadRecording(dir + "/r.fzrp", &small) && small.compact && !back.compact);
+  CHECK(small.seats == seats && small.seat == 1 && small.rows == rows && small.checksums.size() == sums.size());
+  CHECK(small.results == back.results && !small.results.empty());
+  for (size_t t = 0; t < sums.size(); ++t)
+  {
+    CHECK(net::RecordedChecksumMatches(small.checksums, true, t, sums[t]));
+    const bool full = t % 60 == 0 || t + 1 == sums.size();
+    // (a change the folded byte cannot see is seen at the whole steps alone)
+    CHECK(net::RecordedChecksumMatches(small.checksums, true, t, sums[t] ^ 0x01010101u) == !full);
+    CHECK(!net::RecordedChecksumMatches(small.checksums, true, t, sums[t] ^ 1));
+    CHECK(full ? small.checksums[t] == sums[t] : small.checksums[t] < 256);
+  }
+  CHECK(!net::RecordedChecksumMatches(back.checksums, false, 1, sums[1] ^ 0x01010101u));  // whole: every bit
+  CHECK(!net::CompactReplay(dir + "/r.fzrp") && host.notices.find("stays as it was recorded") != std::string::npos);
+  WriteText(dir + "/cut.fzrp", compact.substr(0, compact.size() / 2));
+  CHECK(!net::ReadRecording(dir + "/cut.fzrp", &small) && host.log.find("is a compact replay (version 8) that does not read") != std::string::npos);
+  CHECK(net::SameResults(back.results, back.results) && !net::SameResults(back.results, "{\"results\":[]}"));
   Shutdown();
   std::filesystem::remove_all(dir);
   // the shared samples of every version, and the runner's --replay-info (test_replay_vectors.cpp)

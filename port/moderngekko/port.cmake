@@ -12,6 +12,14 @@ target_include_directories(fzgx_core
     PUBLIC "${_fzgx}/core/include" "${_fzgx}/protocol/generated"
     PRIVATE "${_fzgx}/core/src" "${_fzgx}/core/third_party/picojson")
 target_compile_features(fzgx_core PUBLIC cxx_std_20)
+# liblzma (xz-utils): the compact replay file's xz parts (protocol/generated/replay_compact.g.h). The emulator's own
+# build already has it for its disc formats (WIA, RVZ): Dolphin's Externals/liblzma, or the system's
+# (dolphin_find_optional_system_library), as LibLZMA::LibLZMA; a system's is found again here, where its imported
+# target is not seen.
+if(NOT TARGET LibLZMA::LibLZMA)
+    find_package(LibLZMA REQUIRED)
+endif()
+target_link_libraries(fzgx_core PRIVATE LibLZMA::LibLZMA)
 if(WIN32)
     target_compile_definitions(fzgx_core PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
     target_link_libraries(fzgx_core PUBLIC ws2_32)

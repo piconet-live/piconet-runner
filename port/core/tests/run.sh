@@ -67,7 +67,7 @@ else
   # 123).
   printf '%s\0' "${sources[@]}" |
     xargs -0 -P "$(nproc)" -I{} sh -c 'g++ $flags -c "$1" -o "$out/$(basename "$1" .cpp).o"' _ {}
-  g++ "$out"/*.o -o "$out/test_core" -lpthread
+  g++ "$out"/*.o -o "$out/test_core" -lpthread -llzma
   # kept for the next run of these same files: only when they are still the files the key was taken from
   if [ -n "$k" ] && [ "$(key)" = "$k" ] && new=$(mktemp -d "$cache/.new.XXXXXX" 2> /dev/null); then
     # (a program kept under this key that is no longer the bytes that were kept goes first: it is never run, and

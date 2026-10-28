@@ -43,8 +43,8 @@ A Windows PC with WSL (Ubuntu). On Windows:
 
 In WSL:
 
-- git, Python 3.11 or later, rsync, g++ with C++20 (for the core's tests): `sudo apt install build-essential python3
-  python3-venv rsync git`
+- git, Python 3.11 or later, rsync, g++ with C++20 and liblzma (for the core's tests; the compact replay file is xz):
+  `sudo apt install build-essential python3 python3-venv rsync git liblzma-dev`
 - the .NET SDK 10 (for the staged launcher). Ubuntu's package is older than the 10.0.401 that
   piconet-launcher's `global.json` needs, so install it with Microsoft's script:
 

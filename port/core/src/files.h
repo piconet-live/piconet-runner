@@ -190,8 +190,8 @@ bool OfVersion7(const Match& m);
 bool PacksOfSetup(const picojson::object& setup, const std::string& path, std::vector<StatPack>* out);
 // A pack's fingerprint, from its values as they travel (6 bytes an entry).
 std::string StatFingerprint(const std::vector<u8>& values);
-// A replay file's version is one this core plays (2 to 7: replay.toml's versions, each the same file under another
-// number).
+// A recording's version is one this core plays (2 to 7: replay.toml's versions, each the same file under another
+// number; a compact file, version 8, is read as the recording it was made of: files_replay.cpp ReadReplayFile).
 constexpr bool PlayedVersion(u32 version)
 {
   return replay::Played(version);  // protocol/replay.toml's versions

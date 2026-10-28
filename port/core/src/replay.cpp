@@ -9,6 +9,7 @@
 
 #include "files.h"
 #include "internal.h"
+#include "replay_compact.g.h"
 #include "replay_file.g.h"
 #include "rollback.h"
 
@@ -38,6 +39,7 @@ std::optional<RacerRecord> ReadRacer(Guest& g, u32 machines, u32 i)
 
 bool Recorder::Open(const std::string& path)
 {
+  m_path = path;
   m_file = std::make_unique<File>(path, "ab");
   if (!m_file->IsOpen())
     m_file.reset();
@@ -82,11 +84,19 @@ void Recorder::Flush()
 // recording ends (Shutdown), so the launcher can list finish times without playing the replay.
 void Recorder::TakeResults(Guest& g)
 {
+  m_results = ResultsOfTheRace(g);
+  if (!m_results.empty())
+    Notice("fzgx: race results taken for the replay before step {} ({} racers)", Rollback::Step(g),
+           g.Read8(g.Read32(MODULE_POINTER) + MACHINE_COUNT));
+}
+
+std::string ResultsOfTheRace(Guest& g)
+{
   const u32 module = g.Read32(MODULE_POINTER);
   const u32 machines = g.Read32(module + MACHINES);
   const u32 count = g.Read8(module + MACHINE_COUNT);
   if (machines == 0 || count == 0)
-    return;
+    return "";
   std::vector<replay::Result> results;
   for (u32 i = 0; i < std::min<u32>(count, 30); ++i)
   {
@@ -97,8 +107,48 @@ void Recorder::TakeResults(Guest& g)
                        .time_ms = r->finished ? std::optional<u32>(r->lap_sum_ms) : std::nullopt,
                        .best_lap_ms = r->best_lap_ms});
   }
-  m_results = replay::ResultsJson(results);
-  Notice("fzgx: race results taken for the replay before step {} ({} racers)", Rollback::Step(g), count);
+  return replay::ResultsJson(results);
+}
+
+bool SameResults(const std::string& recorded, const std::string& raced)
+{
+  picojson::value a, b;
+  return picojson::parse(a, recorded).empty() && picojson::parse(b, raced).empty() && a == b;
+}
+
+bool RecordedChecksumMatches(const std::vector<u32>& checksums, bool compact, size_t step, u32 computed)
+{
+  return step < checksums.size() &&
+         replay::ChecksumMatches(checksums[step], !compact || replay::IsFull(step, checksums.size()), computed);
+}
+
+bool CompactReplay(const std::string& path)
+{
+  std::vector<u8> data, compact;
+  std::string why;
+  File in(path, "rb");
+  const size_t size = in.IsOpen() ? in.GetSize() : 0;
+  data.resize(size <= replay::MAX_BYTES ? size : 0);
+  const bool read = !data.empty() && in.ReadBytes(data.data(), data.size());
+  in.Close();
+  if (!read || !replay::Compact(data.data(), data.size(), &compact, &why))
+  {
+    Notice("fzgx: the replay {} stays as it was recorded (version {}): {}", path, replay::VERSION_WRITTEN,
+           read ? why : "it cannot be read");
+    return false;
+  }
+  const std::string aside = path + ".compact";
+  File out(aside, "wb");
+  const bool written = out.IsOpen() && out.WriteBytes(compact.data(), compact.size()) && out.Close();
+  if (!written || !MoveOver(aside, path))
+  {
+    RemoveQuietly(aside);
+    Error("fzgx: cannot write the compact replay beside {}: it stays as it was recorded", path);
+    return false;
+  }
+  Notice("fzgx: the replay {} made compact (version {}): {} bytes, {} as recorded", path, replay::COMPACT_VERSION,
+         compact.size(), data.size());
+  return true;
 }
 
 // Recording: the lineup at go (the file's format since version 2; a playback
@@ -127,8 +177,9 @@ void Recorder::WriteLineup(Guest& g)
 }
 
 // The race's results after the last step (JSON, u32 its length, 'FZRS'), when they were taken.
-void Recorder::Close()
+void Recorder::Close(bool compact)
 {
+  const bool open = m_file != nullptr;
   if (m_file && !m_results.empty())
   {
     const std::vector<u8> results = replay::EncodeResults(m_results);
@@ -136,6 +187,10 @@ void Recorder::Close()
     m_file->Flush();
   }
   m_file.reset();
+  // At the recording's end the file is made compact: it was written as the race ran, step by step, so that a game
+  // that stops on the way leaves a whole recording behind (formats.md section 1).
+  if (open && compact)
+    CompactReplay(m_path);
 }
 
 
