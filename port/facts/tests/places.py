@@ -356,9 +356,10 @@ def check(rows=None):
     # the schema as the table's source lines name it: its path in the protocol's checkout, the same wherever that is
     schema = os.path.relpath(generate.SCHEMA, parts.checkout("REPO_PROTOCOL")).replace(os.sep, "/")
     replay_schema = os.path.join(os.path.dirname(schema), "replay.toml")
+    rules_schema = os.path.join(os.path.dirname(schema), "rules.toml")
     for r in rows:
         if r.schema:
-            want = replay_schema if r.schema == "replay" else schema
+            want = {"replay": replay_schema, "rules": rules_schema}.get(r.schema, schema)
             if r.source.rpartition(":")[0] != want:
                 problems.append(f"game.tsv:{r.line}: {r.name}: its value is the {r.schema} schema's, so its source is "
                                 f"{want}, not {r.source}")
