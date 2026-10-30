@@ -63,7 +63,7 @@ import memmap, outtest
 
 SLOT = memmap.IMAGE + 0x10          # the seat routines' slot 'FZSI' (standin.py): +40 the player seats
 PLAYERS = SLOT + 40
-FINISHED_HI, OUT = 0x0001, 0x80     # a machine's flags: 0x10000 finished, 0x80 out
+FINISHED_HI, OUT = memmap.MACHINE_FLAG_FINISHED >> 16, memmap.MACHINE_FLAG_BROKEN_DOWN  # a machine's flags: 0x10000 finished, 0x80 out
 assert memmap.hi(memmap.RACE) == memmap.hi(memmap.RACE + memmap.RACE_FLOW) and memmap.lo(memmap.RACE) < 0x7000
 assert memmap.hi(PLAYERS) == memmap.hi(memmap.IMAGE) and memmap.lo(PLAYERS) < 0x8000
 
@@ -88,7 +88,7 @@ def clause(bss, prefix, yes, no, behind=None):
     lwz 0, 0(10)
     andis. 7, 0, {FINISHED_HI}
     beq {p}unfinished
-    lwz 7, 0x49C(10)
+    lwz 7, 0x{memmap.MACHINE_PROGRESS:X}(10)
     cmplwi 7, 0
     beq {p}next
     lwz 7, 0x1D8(7)
@@ -101,7 +101,7 @@ def clause(bss, prefix, yes, no, behind=None):
     bne {p}next
     li 4, 0
 {p}next:
-    addi 10, 10, 0x620
+    addi 10, 10, 0x{memmap.MACHINE_SIZE:X}
     bdnz {p}each
     cmpwi 6, 0
     bne {p}rule
@@ -120,7 +120,7 @@ def clause(bss, prefix, yes, no, behind=None):
     lwz 0, 0(10)
     andis. 7, 0, {FINISHED_HI}
     beq {p}f_unfinished
-    lwz 7, 0x49C(10)
+    lwz 7, 0x{memmap.MACHINE_PROGRESS:X}(10)
     cmplwi 7, 0
     beq {p}f_next
     lwz 7, 0x1D8(7)
@@ -136,7 +136,7 @@ def clause(bss, prefix, yes, no, behind=None):
     li 4, 0
 {p}f_next:
     addi 12, 12, 1
-    addi 10, 10, 0x620
+    addi 10, 10, 0x{memmap.MACHINE_SIZE:X}
     bdnz {p}f_each
     cmpwi 6, 0
     bne {p}rule
@@ -176,7 +176,7 @@ def clause(bss, prefix, yes, no, behind=None):
     srw 0, 7, 9
     andi. 0, 0, 1
     beq {p}last_next
-    lwz 4, 0x49C(10)
+    lwz 4, 0x{memmap.MACHINE_PROGRESS:X}(10)
     cmplwi 4, 0
     beq {p}last_next
     lwz 4, 0x1D8(4)
@@ -190,7 +190,7 @@ def clause(bss, prefix, yes, no, behind=None):
     mr 12, 4
 {p}last_next:
     addi 9, 9, 1
-    addi 10, 10, 0x620
+    addi 10, 10, 0x{memmap.MACHINE_SIZE:X}
     bdnz {p}last
     cmpwi 12, -1
     beq {yes}

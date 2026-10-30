@@ -1,5 +1,5 @@
 region,offset,type,name,category,confidence,changes_in_race,net,mask_7200
-block,0x000,u32 bits,"flags (spin 0x8, boost req 0x40, broken 0x80, CPU 0x200, contact 0x400/0x02000000, finished 0x10000, side attack 0x20000, AI-driven 0x04000000, ...)",STATE,code,yes,SEND,0x03654076
+block,0x000,u32 bits,"flags (airborne 0x2, airborne over 10 steps 0x4, spin 0x8, landed this step 0x10, boosting 0x20, boost req 0x40, broken down 0x80, CPU 0x200, driven since start or restore 0x400, out of the course 0x800, strafe latch 0x4000, finished 0x10000, side attack 0x20000, lap event 0x40000, contact this step 0x02000000, AI-driven 0x04000000, retired 0x08000000, time over 0x10000000, destroyed 0x40000000, ...)",STATE,code,yes,SEND,0x03654076
 block,0x004,s16 | s16,+4 racer index (bit in +0x514 masks) | +6 machine id (>=0x29 custom),SETUP,code,no,ONCE,0x00000000
 block,0x008,f32,weight W,SETUP,code,no,ONCE,0x00000000
 block,0x00C,f32,stat: grip 1,SETUP,code,no,ONCE,0x00000000
@@ -133,7 +133,7 @@ block,0x208,f32,constant 200 (rewritten every step),CONSTANT,code,no,LOCAL,0x000
 block,0x20C,f32,steer of this frame (previous steer for flick tests),INPUT,code,yes,INPUT,0xBFFFFFFF
 block,0x210,u16 | u8 | u8,+210 score | +212 KOs during the current attack | +213 wall / out-of-bounds hit count (max 180),EVENT,code,yes,SEND-EV,0x00FF0000
 block,0x214,u16 | u8 | u8,+214 restore countdown (physics frozen while != 0) | +216 collision/knockback byte | +217 boosts used,EVENT,guess,yes,SEND-EV,0x00000007
-block,0x218,u32 bits,"terrain flags (0x02000000 damage strip, ...)",STATE,code,yes,SEND,0x18000000
+block,0x218,u32 bits,"surface flags, zeroed at step start (0x02000000 damage strip, 0x04000000 jump, 0x08000000 pit, 0x10000000 dash, 0x20000000 dirt, 0x40000000 mine hit, 0x80000000 ice)",STATE,code,yes,SEND,0x18000000
 block,0x21C,u32,split-path indicator,EVENT,inferred,no,SEND-EV,0x00000000
 block,0x220,f32,stat: acceleration,SETUP,code,no,ONCE,0x00000000
 block,0x224,f32,"""base speed"" (impacts add, KO zeroes)",STATE,code,yes,SEND,0x7FFFFFFF
@@ -143,7 +143,7 @@ block,0x230,f32,stat: boost strength,SETUP,code,no,ONCE,0x00000000
 block,0x234,f32,stat: boost duration,SETUP,code,no,ONCE,0x00000000
 block,0x238,f32,stat: turn deceleration,SETUP,code,no,ONCE,0x00000000
 block,0x23C,f32,stat: drag,SETUP,code,no,ONCE,0x00000000
-block,0x240,u8 x2 | pad,+240 boost-state bytes | +242 padding,EVENT,code,no,SEND-EV,0x00000000
+block,0x240,u8 x2 | pad,+240/+241 speed-decay pair (dormant: never set non-zero) | +242 padding,EVENT,code,no,SEND-EV,0x00000000
 block,0x244,u32 bits,hover corner flags: ground/air state (front right),STATE,code,yes,SEND,0x0000003E
 block,0x248,f32,hover corner: unused (0) (front right),CONSTANT,code,no,LOCAL,0x00000000
 block,0x24C,vec3 f32,hover corner: local offset (tilt stat width/height/length) (front right).x,SETUP,code,no,ONCE,0x00000000
@@ -284,7 +284,7 @@ block,0x464,vec3 f32,"wall corner: world position, resolved (D) (back left).z",S
 block,0x468,vec3 f32,wall corner: collision vector (back left).x,DERIVED,inferred,no,RECOMPUTE,0x00000000
 block,0x46C,vec3 f32,wall corner: collision vector (back left).y,DERIVED,inferred,no,RECOMPUTE,0x00000000
 block,0x470,vec3 f32,wall corner: collision vector (back left).z,DERIVED,inferred,no,RECOMPUTE,0x00000000
-block,0x474,s8 | s8 | u8 | u8,+474 pad port (-1 none) | +475 player (viewport) slot (-1 none) | +476 flag (A mashing / low-speed dash plate) | +477 machine stat byte (stat block +0x48),EVENT,guess,no,SEND-EV,0x00000000
+block,0x474,s8 | s8 | u8 | u8,+474 pad port (-1 none) | +475 player (viewport) slot (-1 none) | +476 full-grip countdown (from +0x477 at an accelerator re-press) | +477 machine stat byte (stat block +0x48): the full-grip window in steps,EVENT,guess,no,SEND-EV,0x00000000
 block,0x478,f32,speed-related visual value,STATE,inferred,yes,VISUAL,0x07FFFFFF
 block,0x47C,u32,frames since start or restore,STATE,code,yes,SEND,0x00001FFF
 block,0x480,u8 | u8 | u8 | u8,+480 side-attack countdown (6 frames) | +481 frames since start or restore (saturating; spin needs > 60) | +482 skull (KO) count | +483 air-time frames,EVENT,inferred,yes,SEND-EV,0x00FF003F
@@ -324,7 +324,7 @@ block,0x504,vec3 f32,last collision impulse.y,EVENT,code,yes,RECOMPUTE,0xFFFFFFF
 block,0x508,vec3 f32,last collision impulse.z,EVENT,code,yes,RECOMPUTE,0xFFFFFFFF
 block,0x50C,u8 | u8 | u8 | u8,+50C split-path indicator 2 | +50D model detail level | +50E human handed to CPU flag | +50F per-frame byte (zeroed every frame),EVENT,guess,yes,SEND-EV,0x04000000
 block,0x510,f32,contact radius (2.0),CONSTANT,code,no,LOCAL,0x00000000
-block,0x514,u32 bits,contact immunity mask (bit 0x80000000>>j),STATE,code,no,SEND,0x00000000
+block,0x514,u32 bits,"contact immunity mask (bit 0x80000000>>j: no contact response with j; restore sets -1; not a record of contact)",STATE,code,no,SEND,0x00000000
 block,0x518,f32,restore distance progress,EVENT,code,no,SEND-EV,0x00000000
 block,0x51C,f32,restore-related float,EVENT,code,no,SEND-EV,0x00000000
 block,0x520,mtx3x4 f32,restore pose A (start pose until the first restore)[0][0],EVENT,inferred,no,SEND-EV,0x00000000
@@ -354,7 +354,7 @@ block,0x57C,mtx3x4 f32,restore pose B[2][3],EVENT,inferred,no,SEND-EV,0x00000000
 block,0x580,f32,turning value,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
 block,0x584,f32,stat: obstacle collision,SETUP,code,no,ONCE,0x00000000
 block,0x588,f32,stat: track collision,SETUP,code,no,ONCE,0x00000000
-block,0x58C,u32 bits,"flags 2 (0x8 stepped this frame, 0x10 out of contact, 0x4 alt input scheme, 0x20 ...)",STATE,code,yes,SEND,0x00000001
+block,0x58C,u32 bits,"flags 2 (0x1 used a pit this race, 0x2 jump-plate guard, 0x4 alt input scheme, 0x8 stepped this frame, 0x10 destroyed/out of contact, 0x40 Time Attack record, 0x80 CPU at rest, 0x200 damage surface)",STATE,code,yes,SEND,0x00000001
 block,0x590,u8 | u8 | u8 | u8,+590 control mode / restore completion | +591 byte (reset) | +592 set on the first KO | +593 breakdown countdown (60),EVENT,guess,no,SEND-EV,0x00000000
 block,0x594,mtx3x4 f32,restore pose C[0][0],EVENT,inferred,no,SEND-EV,0x00000000
 block,0x598,mtx3x4 f32,restore pose C[0][1],EVENT,inferred,no,SEND-EV,0x00000000

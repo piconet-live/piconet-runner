@@ -16,8 +16,9 @@ to an earlier one, and a press that went on from there never reached the chase c
 Out is the game's own verdict (outtest.py), as everywhere in the image: the racer asked for (r9), the one shown
 (r9), each racer looked at in race order (r3)."""
 import outtest
+import memmap
 
-TEXT = """speccontrols:
+TEXT = f"""speccontrols:
     lhz 9, 0x998(30)
     lbz 10, 0x99D(30)
     extsb 10, 10
@@ -143,7 +144,7 @@ sc_racer:
     lwz 4, 252(31)
     cmplw 4, 5
     bgelr
-    mulli 9, 4, 0x620
+    mulli 9, 4, 0x{memmap.MACHINE_SIZE:X}
     add 9, 9, 6
 OUT_ASKED
 sc_asked_out:
@@ -166,18 +167,18 @@ sc_from_chase:
 sc_from_shown:
     cmplw 3, 5
     bge sc_from
-    mulli 9, 3, 0x620
+    mulli 9, 3, 0x{memmap.MACHINE_SIZE:X}
     add 9, 9, 6
 OUT_SHOWN
 sc_shown_racing:
     mr 4, 3
 sc_from:
-    mulli 4, 4, 0x620
+    mulli 4, 4, 0x{memmap.MACHINE_SIZE:X}
     add 4, 4, 6
-    lwz 4, 0x49C(4)
+    lwz 4, 0x{memmap.MACHINE_PROGRESS:X}(4)
     cmpwi 4, 0
     beqlr
-    lbz 11, 0x115(4)
+    lbz 11, 0x{memmap.PROGRESS_RANK:X}(4)
     li 12, 1
     andi. 0, 8, 0x2
     bne sc_step
@@ -198,10 +199,10 @@ sc_high:
     li 4, 0
     mr 3, 6
 sc_find:
-    lwz 9, 0x49C(3)
+    lwz 9, 0x{memmap.MACHINE_PROGRESS:X}(3)
     cmpwi 9, 0
     beq sc_find_next
-    lbz 9, 0x115(9)
+    lbz 9, 0x{memmap.PROGRESS_RANK:X}(9)
     cmpw 9, 11
     bne sc_find_next
 OUT_FOUND
@@ -211,7 +212,7 @@ sc_found:
     stw 0, S_PENDING(31)
     blr
 sc_find_next:
-    addi 3, 3, 0x620
+    addi 3, 3, 0x{memmap.MACHINE_SIZE:X}
     addi 4, 4, 1
     cmpw 4, 5
     blt sc_find

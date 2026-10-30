@@ -236,8 +236,8 @@ struct FakeRace
     g.Write8(MODULE + net::MACHINE_COUNT, 2);
     for (u32 i = 0; i < 2; ++i)
     {
-      g.Write32(machines + i * 0x620 + 0x49C, first + 0x500000 + i * 0x200);
-      g.Write32(machines + i * 0x620 + 0x7C, 0x1000 + i);
+      g.Write32(machines + i * game::MACHINE_SIZE + game::MACHINE_PROGRESS, first + 0x500000 + i * 0x200);
+      g.Write32(machines + i * game::MACHINE_SIZE + game::MACHINE_POSITION_X, 0x1000 + i);
     }
     g.Write32(net::DOL_RNG, 0x2026);
   }
@@ -248,7 +248,7 @@ struct FakeRace
     {
       u8 record[6];
       g.CopyFrom(record, layout::INPUTS + ((t & 1023) * 30 + i) * 8, 6);
-      u32 h = g.Read32(machines + i * 0x620 + 0x7C) ^ rng ^ (t * 2654435761u);
+      u32 h = g.Read32(machines + i * game::MACHINE_SIZE + game::MACHINE_POSITION_X) ^ rng ^ (t * 2654435761u);
       for (const u8 b : record)
         h = (h ^ b) * 0x01000193;
       if (leak)
@@ -256,11 +256,11 @@ struct FakeRace
       // as the game's collision work area in the locked cache: a machine takes from it what the step before left
       if (!host.scratch.empty())
         h ^= ScratchWord();
-      g.Write32(machines + i * 0x620 + 0x7C, h);
-      g.Write32(g.Read32(machines + i * 0x620 + 0x49C) + 0xF8, h ^ 0x55AA55AA);
+      g.Write32(machines + i * game::MACHINE_SIZE + game::MACHINE_POSITION_X, h);
+      g.Write32(g.Read32(machines + i * game::MACHINE_SIZE + game::MACHINE_PROGRESS) + game::PROGRESS_DISTANCE, h ^ 0x55AA55AA);
       // and a word the race's results are read from: the thousandths of the best lap (progress record +0x1CC + 10)
       if (lap_times)
-        g.Write16(g.Read32(machines + i * 0x620 + 0x49C) + 0x1CC + 10, static_cast<u16>(h % 1000));
+        g.Write16(g.Read32(machines + i * game::MACHINE_SIZE + game::MACHINE_PROGRESS) + game::PROGRESS_BEST_LAP + 10, static_cast<u16>(h % 1000));
       // a page that may never have changed before (a late page of the undo log)
       if (h % 7 == 0)
         g.Write32(first + (h % 0x300) * net::PAGE + 0x40, h);
@@ -270,7 +270,7 @@ struct FakeRace
     // once it has come `seat0_goal` far (1: from the race's first step)
     for (u32 i = 0; finish_goal != 0 && t >= from && i < 2; ++i)
     {
-      const u32 machine = machines + i * 0x620;
+      const u32 machine = machines + i * game::MACHINE_SIZE;
       const u32 far = g.Read32(machine + 0x10) + 1 + (g.Read8(layout::INPUTS + ((t & 1023) * 30 + i) * 8) & 1);
       g.Write32(machine + 0x10, far);
       if (far >= (i == 0 ? seat0_goal : finish_goal))

@@ -16,7 +16,7 @@ own part to the same record, and every follower takes it from here.
 r10, r11, ctr, cr0. Neither tests the mode word: their callers do. Neither writes memory."""
 import memmap
 
-SEATS, BLOCK, ENTRY = 30, 0x620, 48
+SEATS, BLOCK, ENTRY = 30, memmap.MACHINE_SIZE, 48
 OFFSET, WRITTEN = 12, 36           # the entry's offset (three floats) and its byte "drawn with it in this frame"
 
 

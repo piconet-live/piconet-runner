@@ -55,7 +55,7 @@ void TestTheOutTestReadsTheGame()
   CHECK(!out());
   g.Write32(machine, 0x80);                                       // a breakdown, at rest
   CHECK(out());
-  g.Write32(machine + 0x17C, std::bit_cast<u32>(50.0f));          // ... moving
+  g.Write32(machine + game::MACHINE_SPEED, std::bit_cast<u32>(50.0f));          // ... moving
   CHECK(!out());
   g.Write8(MODULE + net::BSS + 0x3C35, 5);                        // ... in race type 5
   CHECK(out());
@@ -63,7 +63,7 @@ void TestTheOutTestReadsTheGame()
   CHECK(!out());
   g.Write32(MODULE + net::BSS + 0x3C30, 0x04000000);
   g.Write8(MODULE + net::BSS + 0x3C35, 6);
-  g.Write32(machine + 0x58C, 0x10);                               // a fall
+  g.Write32(machine + game::MACHINE_FLAGS2, 0x10);                               // a fall
   CHECK(out());
   g.Write32(machine, 0x10080);                                    // finished
   CHECK(!out());

@@ -28,13 +28,13 @@ std::vector<u8> MachineState(Guest& g)
   std::vector<u8> state;
   if (machines == 0)
     return state;
-  state.resize(count * (0x620 + 0x1FC), 0);
+  state.resize(count * (game::MACHINE_SIZE + game::PROGRESS_SIZE), 0);
   for (u32 i = 0; i < count; ++i)
   {
-    g.CopyFrom(state.data() + i * (0x620 + 0x1FC), machines + i * 0x620, 0x620);
-    const u32 progress = g.Read32(machines + i * 0x620 + 0x49C);
+    g.CopyFrom(state.data() + i * (game::MACHINE_SIZE + game::PROGRESS_SIZE), machines + i * game::MACHINE_SIZE, game::MACHINE_SIZE);
+    const u32 progress = g.Read32(machines + i * game::MACHINE_SIZE + game::MACHINE_PROGRESS);
     if (progress != 0)
-      g.CopyFrom(state.data() + i * (0x620 + 0x1FC) + 0x620, progress, 0x1FC);
+      g.CopyFrom(state.data() + i * (game::MACHINE_SIZE + game::PROGRESS_SIZE) + game::MACHINE_SIZE, progress, game::PROGRESS_SIZE);
   }
   return state;
 }
@@ -133,7 +133,7 @@ void AlterState(Guest& g, Session& s)
   const u32 machines = g.Read32(g.Read32(MODULE_POINTER) + MACHINES);
   if (machines == 0)
     return;
-  const u32 word = machines + static_cast<u32>(s.my_seat) * 0x620 + 0x7C;
+  const u32 word = machines + static_cast<u32>(s.my_seat) * game::MACHINE_SIZE + game::MACHINE_POSITION_X;
   const u32 value = g.Read32(word);
   if (!s.altered)
   {
@@ -187,16 +187,16 @@ void Audit(Guest& g, Session& s, bool extra)
   if (now.size() != first->second.size())
     return;
   ++s.audits;
-  const std::size_t each = 0x620 + 0x1FC;
+  const std::size_t each = game::MACHINE_SIZE + game::PROGRESS_SIZE;
   for (std::size_t at = 0; at + 4 <= now.size(); at += 4)
   {
     if (std::memcmp(now.data() + at, first->second.data() + at, 4) == 0)
       continue;
     const u32 offset = static_cast<u32>(at % each);
-    if (offset < 0x620)
+    if (offset < game::MACHINE_SIZE)
       ++s.audit_block[offset];
     else
-      ++s.audit_progress[offset - 0x620];
+      ++s.audit_progress[offset - game::MACHINE_SIZE];
   }
 }
 

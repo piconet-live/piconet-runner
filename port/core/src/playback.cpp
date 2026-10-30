@@ -33,7 +33,7 @@ void SpectateReplay(Guest& g, Session& s, u32 step)
   const u32 seat = g.Read32(SEAT_SLOT + 4);
   if (machines == 0 || seat >= count)
     return;
-  const auto out = [&](u32 i) { return out_test::Out(g, module, machines + i * 0x620); };
+  const auto out = [&](u32 i) { return out_test::Out(g, module, machines + i * game::MACHINE_SIZE); };
   // the step a racer went out: the scrubber's front edge saw it exactly; without the scrubber, the step it was first
   // seen out (forgotten when it is seen in again)
   const auto out_since = [&](u32 i) {
@@ -86,10 +86,10 @@ void SpectateReplay(Guest& g, Session& s, u32 step)
       u32 best = 0x100;
       for (u32 i = 0; i < count; ++i)
       {
-        const u32 progress = g.Read32(machines + i * 0x620 + 0x49C);
+        const u32 progress = g.Read32(machines + i * game::MACHINE_SIZE + game::MACHINE_PROGRESS);
         if (progress == 0 || out(i))
           continue;
-        const u32 rank = g.Read8(progress + 0x115);
+        const u32 rank = g.Read8(progress + game::PROGRESS_RANK);
         if (rank < best)
           std::tie(best, want) = std::pair{rank, i};
       }

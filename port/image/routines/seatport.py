@@ -137,7 +137,7 @@ def finish_stop():
     lbz 0, 0x1EB0(11)
     andi. 0, 0, 1
     beq fw_no_stop
-    lwz 0, 0x58C(10)
+    lwz 0, 0x{memmap.MACHINE_FLAGS2:X}(10)
     andi. 0, 0, 0x10
     bne fw_no_stop
     li 0, 5

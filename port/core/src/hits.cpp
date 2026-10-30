@@ -54,7 +54,7 @@ constexpr u32 HARD_HIT_SOUND = 0xA9090600;
 constexpr u32 RUMBLE_ON = BSS + 0x7F028;
 constexpr u32 RUMBLE_REQUESTS = BSS + 0x7F02C;
 constexpr u32 RUMBLE_PADS = 0x1ABEF0;  // .data 0x3E8F0, from the module's base
-constexpr u32 PAD = 0x474, MACHINE_FLAGS = 0x58C;
+constexpr u32 PAD = game::MACHINE_PAD, MACHINE_FLAGS = game::MACHINE_FLAGS2;
 constexpr u8 HIT_RUMBLE = 4;
 constexpr u16 HIT_RUMBLE_FRAMES = 12;
 
@@ -148,7 +148,7 @@ bool RumbleHit(Guest& g, u32 module, u32 machine)
   std::int8_t pad = static_cast<std::int8_t>(g.Read8(machine + PAD));
   if (pad < 0)
     pad = 0;
-  if (pad > 3 || (g.Read32(machine + MACHINE_FLAGS) & 0x10) != 0 || (g.Read8(module + RUMBLE_ON) & 1) == 0 ||
+  if (pad > 3 || (g.Read32(machine + MACHINE_FLAGS) & game::MACHINE_FLAGS2_FALLEN) != 0 || (g.Read8(module + RUMBLE_ON) & 1) == 0 ||
       (g.Read8(module + RUMBLE_PADS) >> pad & 1) == 0)
     return false;
   const u32 request = module + RUMBLE_REQUESTS + 4 * static_cast<u32>(pad);

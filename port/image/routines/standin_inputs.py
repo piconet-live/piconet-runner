@@ -156,9 +156,9 @@ no_boost:
     ori 9, 9, 0x1000
 no_1000:
     stw 9, 0(31)
-    lwz 0, 0x58C(31)
+    lwz 0, 0x{memmap.MACHINE_FLAGS2:X}(31)
     rlwinm 0, 0, 0, 30, 28
-    stw 0, 0x58C(31)
+    stw 0, 0x{memmap.MACHINE_FLAGS2:X}(31)
 call_orig:
     li 28, 0
     lwz 0, 36(30)

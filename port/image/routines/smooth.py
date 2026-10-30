@@ -196,7 +196,7 @@ sr_loop:
     lwz 9, 8(4)
     stw 9, 0x178(3)
 sr_next:
-    addi 3, 3, 0x620
+    addi 3, 3, 0x{memmap.MACHINE_SIZE:X}
     addi 4, 4, 48
     addi 5, 5, 1
     b sr_loop
@@ -274,13 +274,13 @@ sd_loop:
     cmpwi 9, 0
     beq sd_reset
     li 10, 1
-    lfs 1, 0x7C(3)
+    lfs 1, 0x{memmap.MACHINE_POSITION_X:X}(3)
     lfs 0, 0x88(3)
     fsubs 1, 1, 0
-    lfs 2, 0x80(3)
+    lfs 2, 0x{memmap.MACHINE_POSITION_Y:X}(3)
     lfs 0, 0x8C(3)
     fsubs 2, 2, 0
-    lfs 3, 0x84(3)
+    lfs 3, 0x{memmap.MACHINE_POSITION_Z:X}(3)
     lfs 0, 0x90(3)
     fsubs 3, 3, 0
     lfs 7, 24(4)
@@ -355,9 +355,9 @@ sd_test:
     lwz 9, 0(3)
     andi. 9, 9, 2
     bne sd_flying
-    lfs 10, 0x1BC(3)
-    lfs 11, 0x1C0(3)
-    lfs 12, 0x1C4(3)
+    lfs 10, 0x{memmap.MACHINE_UP_X:X}(3)
+    lfs 11, 0x{memmap.MACHINE_UP_X + 4:X}(3)
+    lfs 12, 0x{memmap.MACHINE_UP_X + 8:X}(3)
     fmuls 0, 4, 10
     fmadds 0, 5, 11, 0
     fmadds 0, 6, 12, 0
@@ -428,7 +428,7 @@ sd_store:
     stfs 8, 0x168(3)
     stfs 9, 0x178(3)
 sd_next:
-    addi 3, 3, 0x620
+    addi 3, 3, 0x{memmap.MACHINE_SIZE:X}
     addi 4, 4, 48
     addi 5, 5, 1
     b sd_loop

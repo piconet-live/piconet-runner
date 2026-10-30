@@ -200,7 +200,7 @@ mn_same:
     cmplw 3, 0
     bge mn_out
     addi 22, 3, 1
-    mulli 24, 3, 0x620
+    mulli 24, 3, 0x{memmap.MACHINE_SIZE:X}
 """ + at(9, 23, 0x6D838) + f"""    lwz 9, 0(9)
     add 24, 24, 9
     addi 28, 27, {RECORD}

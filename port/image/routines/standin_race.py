@@ -34,7 +34,7 @@ def asm():
         "FINISH_LIMIT", str(memmap.lo(memmap.RACE) + memmap.RACE_FINISH_LIMIT))
 
 
-_TEXT = """refs:
+_TEXT = f"""refs:
     stwu 1, -16(1)
     mflr 0
     stw 0, 20(1)
@@ -83,8 +83,8 @@ refs_loop:
     srw 0, 10, 3
     andi. 0, 0, 1
     beq refs_next
-    lwz 9, 0x49C(7)
-    lbz 0, 0x115(9)
+    lwz 9, 0x{memmap.MACHINE_PROGRESS:X}(7)
+    lbz 0, 0x{memmap.PROGRESS_RANK:X}(9)
     cmplw 0, 4
     bge refs_not_best
     mr 4, 0
@@ -96,7 +96,7 @@ refs_not_best:
     mr 12, 3
 refs_next:
     addi 3, 3, 1
-    addi 7, 7, 0x620
+    addi 7, 7, 0x{memmap.MACHINE_SIZE:X}
     b refs_loop
 refs_done:
     cmpwi 5, -1
