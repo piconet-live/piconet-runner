@@ -2,7 +2,9 @@
 // start, from the host's frame tick (core.cpp FrameTick: the mode machine's start, before the frame's steps and
 // before the network hook, so what it reads is what the last frame drew: the drawn bodies with the smoothing's
 // offsets still on them, the HUD parts as drawn).
-//   - The game's map picture: its bit of the HUD part mask (game::HUD_PARTS, viewport 0) is cleared, and in the
+//   - The game's map picture: never drawn in a race of the native form, which never calls its draw (fn_1_79654: the
+//     image's overlay site, port/image/sites_present.py MAP_PASS) in any phase or frame. For the fork's image, which
+//     has no such site, its bit of the HUD part mask (game::HUD_PARTS, viewport 0) is cleared, and in the
 //     word the image keeps the race's own mask in (control block +60: frame_spectate.py `spechud` keeps it,
 //     frame_hud.py `hudstate` and the spectator's controls put it back), so neither puts the bit back. Only the
 //     map's draw (fn_1_79654) reads the bit; the mask is drawing's alone and no checksum covers it. The core
