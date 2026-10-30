@@ -470,7 +470,7 @@ private:
         break;
       const u8* o = m_p.code.data() + at + 1;
       at += size;
-      if (++m_ops > BUDGET)
+      if (++m_ops > BUDGET || (op == OP_FSQRT && (m_ops += modes::FSQRT_COST - 1) > BUDGET))
       {
         Fail(FAULT_BUDGET);
         return false;
@@ -694,7 +694,18 @@ private:
           MODE_BINARY(OP_BITANDNOT);
           MODE_UNARY(OP_INEG);
           MODE_UNARY(OP_FNEG);
-          MODE_UNARY(OP_FSQRT);
+        case OP_FSQRT:  // (modes.toml's fsqrt_cost: counted before the stack is looked at, as the plain loop's)
+          ops += static_cast<u32>(modes::FSQRT_COST) - 1;
+          if (ops > static_cast<u32>(BUDGET))
+          {
+            Fail(FAULT_BUDGET);
+            goto done;
+          }
+          if (sp < 1)
+            goto slow;
+          stack[sp - 1] = Unary<OP_FSQRT>(stack[sp - 1]);
+          ++ip;
+          continue;
           MODE_UNARY(OP_ITOF);
           MODE_UNARY(OP_FLOOR);
           MODE_UNARY(OP_CEIL);
@@ -1539,6 +1550,12 @@ u32 Members(const Package& p, u32 team, u32 count)
 }
 
 // The queue, in its order, into the block and the machines; `end` is set by end_race (the end clause runs after).
+// Retired and the seat's own Restore cleared in one write (the verdict would hide 0x08000000 behind 0x1).
+void Retired(Mem& g, u32 machine, u32 flags)
+{
+  g.Write32(machine + game::MACHINE_FLAGS, (flags & ~game::MACHINE_FLAG_RESTORE) | game::MACHINE_FLAG_RETIRED);
+}
+
 void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* end)
 {
   const u32 count = m.Count();
@@ -1600,10 +1617,9 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
       }
       case ACTION_ELIMINATE:
       case ACTION_RETIRE:
-        // retired and the seat's own Restore cleared in one write (the verdict would hide 0x08000000 behind 0x1)
         mask(RESPAWN, seat, false);
         if (!finished)
-          g.Write32(machine + game::MACHINE_FLAGS, (flags & ~game::MACHINE_FLAG_RESTORE) | game::MACHINE_FLAG_RETIRED);
+          Retired(g, machine, flags);
         break;
       case ACTION_EXPLODE:
         if (!finished && g.Read16(machine + M_RESTORING) == 0 && !(g.Read32(machine + M_CONTACT) & 0x10) &&
@@ -1867,6 +1883,49 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
 }
 }  // namespace
 
+// A mode without `cpus allowed`: a player gone retires instead of being driven by the AI (the owner, 2026-10-30). The
+// relay closes a gone player's seat with the "AI drives" record, in every game and every replay alike, so this reads the
+// step's record and its result stands under a rollback with the rest of the block. Only a seat that has driven, a record
+// neither that one nor all zeros (the relay's rows before a seat's first input, and a pad left alone): a seat that never
+// got ready has only those from the start, and so has a test game's autopilot, whose every input is "AI drives"; both
+// stay the AI's.
+void GonePlayers(Mem& g, const Package& p, u32 block, u32 module, u32 step, u32 count)
+{
+  u32 driven = g.Read32(block + DRIVEN);
+  const u32 before = driven;
+  const u32 machines = g.Read32(module + net::MACHINES);
+  for (u32 seat = 0; seat < std::min<u32>(count, SEATS); ++seat)
+  {
+    if (!(p.players >> seat & 1))
+      continue;
+    const u32 at = layout::INPUTS + ((step & 1023) * SEATS + seat) * 8;
+    static constexpr std::array<u8, 6> AI_DRIVES = {0, 0x80, 0, 0, 0, 0};
+    bool ai = true, zero = true;
+    for (u32 k = 0; k < AI_DRIVES.size(); ++k)
+    {
+      const u8 byte = g.Read8(at + k);
+      ai = ai && byte == AI_DRIVES[k];
+      zero = zero && byte == 0;
+    }
+    if (!ai)
+    {
+      if (!zero)
+        driven |= 1u << seat;
+      continue;
+    }
+    if (!(driven >> seat & 1))
+      continue;
+    driven &= ~(1u << seat);
+    const u32 machine = machines + seat * game::MACHINE_SIZE;
+    const u32 flags = g.Read32(machine + game::MACHINE_FLAGS);
+    g.Write32(block + RESPAWN, g.Read32(block + RESPAWN) & ~(1u << seat));
+    if (!(flags & F_FINISHED))
+      Retired(g, machine, flags);
+  }
+  if (driven != before)
+    g.Write32(block + DRIVEN, driven);
+}
+
 void Run(Guest& guest, const Package& p, u32 block, u32 module)
 {
   Mem g(guest);
@@ -1904,6 +1963,8 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
     g.Write32(block + FLAGS, 0);
     Begin(m, g, p, block, module);
   }
+  if (!p.cpus_allowed && !p.solo)
+    GonePlayers(g, p, block, module, guest.Read32(net::STEP), m.Count());
   // the records: the setup words' every step, no speed held until a rule holds it (a frozen seat's at 0); the CPU
   // drives the seats handed to it, and every seat through a rolling start's countdown, the pedals held
   const bool rolling = p.rolling.has_value() && !n.started;

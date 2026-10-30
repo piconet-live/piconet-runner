@@ -21,7 +21,6 @@ using namespace modes;
 constexpr u32 NONE = 0xFFFFFFFF;
 constexpr u32 SRC = net::BSS + 0x84;  // the story parts' source block: +0 s32*, +4 f32*, +8 P*, +0xC R*, +0x10 u32
 constexpr u32 R = net::BSS + 0x3C30;
-constexpr u32 PHASE_INTRO = 0x27;
 constexpr s32 DIGIT_MOST = 4 * 60 - 1;  // the digit sheet 0xBA0A holds 0 to 3: value / 60 must stay below 4
 
 u32 Seat(u32 block, u32 seat)

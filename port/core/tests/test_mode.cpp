@@ -2,12 +2,15 @@
 // compiler's own packages) read as the match start carries them, and Overdrive run on a fake race.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <memory>
 #include <array>
 #include <bit>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -16,6 +19,8 @@
 #include "harness.h"
 #include "mode.h"
 #include "parts.h"
+#include "fzgx/practice.h"
+#include "mode_board.h"
 #include "rollback.h"
 
 namespace
@@ -792,4 +797,276 @@ void TestThePreparedInterpreterIsThePlainOne()
     }
   }
   CHECK(faults != 0);   // the changed code does reach the faults
+}
+
+// A mode's `board` lines read from the package, and their values from the block: the columns in the file's order within
+// a scope, the name cut at a character, the same values from the same block whoever reads (a watcher, a replay); and a
+// reading writes nothing of the game.
+void TestTheBoardsLinesAndValues()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("board.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->board.size() == 9);
+  const board::ModeHead head = mode::hud::BoardHead(*p);
+  CHECK(head.serial == 1 && head.count == 9 && head.name_length == 5 && std::memcmp(head.name.data(), "Board", 5) == 0);
+  CHECK(head.hash[0] == 0x0C && head.hash[1] == 0x45 && p->hash.starts_with("0c45"));
+  CHECK(head.lines[1].scope == board::ModeBoardScope::Global && head.lines[1].type == board::ModeBoardType::Real && head.lines[1].column == 1);
+  CHECK(head.lines[3].type == board::ModeBoardType::Seat && head.lines[4].type == board::ModeBoardType::Seats);
+  CHECK(head.lines[5].scope == board::ModeBoardScope::Seat && head.lines[5].column == 0 && head.lines[6].column == 1);
+  CHECK(head.lines[7].scope == board::ModeBoardScope::Team && head.lines[7].label_length == 4 && std::memcmp(head.lines[7].label.data(), "Tank", 4) == 0);
+  // the line's words, in the head, the empty one kept; a line without has none and no one is simulation state
+  CHECK(head.lines[8].word_count == 3 && head.lines[0].word_count == 0);
+  CHECK(head.words[8 * 16].length == 0 && head.words[8 * 16 + 1].length == 4 && std::memcmp(head.words[8 * 16 + 1].text.data(), "S\xC3\xBBr", 4) == 0);
+  CHECK(head.words[8 * 16 + 2].length == 3 && std::memcmp(head.words[8 * 16 + 2].text.data(), "Out", 3) == 0 && head.words[8 * 16 + 3].length == 0);
+  // and on a status board: a launcher's read of the head has them, at the layout's place
+  alignas(64) static u8 file[board::SIZE];
+  board::View view(file);
+  view.WriteModeHead(head);
+  auto read = std::make_unique<board::ModeHead>();
+  CHECK(view.ReadModeHead(read.get()));
+  CHECK(read->lines[8].word_count == 3 && read->words[8 * 16 + 2].length == 3);
+  CHECK(std::memcmp(file + board::at::MODE_HEAD + 1144 + (8 * 16 + 2) * 20 + 4, "Out", 3) == 0);
+  mode::Package long_name = *p;
+  long_name.name = std::string(63, 'x') + "\xC3\xA9";
+  CHECK(mode::hud::BoardHead(long_name).name_length == 63);
+
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 4, 100);
+  for (int run = 0; run < 3; ++run)
+    mode::Run(g, *p, BLOCK, MODULE);
+  const auto before = host.ram;
+  board::ModeValues a, b;
+  mode::hud::BoardValues(g, *p, BLOCK, &a);
+  mode::hud::BoardValues(g, *p, BLOCK, &b);
+  CHECK(host.ram == before);
+  CHECK(a.globals[0].value == 10);                                       // next_cut: 7, one more a run
+  CHECK(std::bit_cast<float>(a.globals[1].value) == 1.5f);               // pace
+  CHECK(a.globals[3].value == -1);                                       // leader: none
+  CHECK(a.seats[2 * 8].value == static_cast<s32>(g.Read32(BLOCK + mode::SeatWord(2, 0))));
+  CHECK(a.seats[29 * 8].value == static_cast<s32>(g.Read32(BLOCK + mode::SeatWord(29, 0))));
+  CHECK(a.teams[3 * 8].value == 6);                                      // the team word: seat 3's, its own team
+  CHECK(std::memcmp(&a, &b, sizeof a) == 0);
+}
+
+// Practice's file: its words as the session reads them, its restore a parameter on the seat's own flag; a package with
+// no board reads as before; a practice's undo: the mode's block, run again from the moment before, is the same block
+// (the rewind, a load and a resume on the same inputs all are that).
+void TestPracticeIsAMode()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("practice.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->solo && p->pause && p->save_state && p->rewind == practice::WINDOW && p->resume_countdown == practice::COUNTDOWN);
+  CHECK(p->laps == 0u && p->board.empty() && !p->restore && p->params.size() == 1 && p->params[0] == 0);
+  const std::optional<mode::Package> over = mode::Read(Vector("overdrive.mode.json"), &why);
+  CHECK(over && !over->solo && !over->pause && over->rewind == 0 && over->board.empty());
+
+  // a mode rule running with the practice's words: Overdrive's own package, run, kept, run again
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 1, 100);
+  for (int run = 0; run < 40; ++run)
+    mode::Run(g, *over, BLOCK, MODULE);
+  const auto kept = host.ram;
+  for (int run = 0; run < 40; ++run)
+    mode::Run(g, *over, BLOCK, MODULE);
+  const auto straight = host.ram;
+  host.ram = kept;
+  for (int run = 0; run < 40; ++run)
+    mode::Run(g, *over, BLOCK, MODULE);
+  CHECK(host.ram == straight);
+}
+
+// A solo mode's words in a match: a practice takes it and refuses a mode without; a race with a relay refuses it.
+void TestSoloModesAndTheRelay()
+{
+  BEGIN_TEST();
+  TestHost host;
+  const std::string dir = (std::filesystem::temp_directory_path() / "fzgx-test-solo").string();
+  std::filesystem::create_directories(dir);
+  std::string image(0x100, '\0');
+  image.replace(0, 4, "FZMD");
+  image.replace(0x10, 4, "FZSI");
+  WriteText(dir + "/mod.bin", image);
+  WriteText(dir + "/manifest.json", "{\"commit\": \"abc1234\"}");
+  WriteText(dir + "/codes.txt", "$Boot to race\n48000000 800030C8\n$Race setup\nC0000000 00000001\n4E800020 00000000\n");
+  const auto match = [](const char* vector, const std::string& relay) {
+    return R"({"matchId": "m7", "seat": 0, )" + relay + R"("setup": {"course": 8, "laps": 3, "seats": [{"seat": 0, "machine": 5, "playerId": "p1", "name": "A"}], "rules": {"restore": true}, "mode": )" +
+           Vector(vector).serialize() + "}}";
+  };
+  const std::string relayed = R"("token": "1f2e3d4c5b6a7988", "relay": {"host": "127.0.0.1", "port": 47811}, )";
+  Options options;
+  options.bundle_dir = dir;
+  Init(host, options);
+  CHECK(!boot::ReadMatch(match("practice.mode.json", relayed), "test"));
+  CHECK(boot::ReadMatch(match("overdrive.mode.json", relayed), "test").has_value());
+  Shutdown();
+  options.practice = true;
+  Init(host, options);
+  const auto practice = boot::ReadMatch(match("practice.mode.json", ""), "test");
+  CHECK(practice && practice->game_mode && practice->game_mode->solo);
+  if (practice)  // laps unlimited over the match's 3: the game's free run; the rule's restore off the seat's own
+  {
+    const u8* r = practice->race.data();
+    CHECK(r[19] == 0 && r[23] == 3 && r[boot::RACE_RESTORE + 3] == 0);
+  }
+  CHECK(!boot::ReadMatch(match("overdrive.mode.json", ""), "test"));
+  Shutdown();
+  std::filesystem::remove_all(dir);
+}
+
+// `sqrt` counts modes::FSQRT_COST, in both loops, and the budget's fault lands on the same operation with the same
+// memory in both, whether it is a square root that passes the budget or the operation after one.
+void TestASquareRootsCostInBothLoops()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> base = mode::Read(Vector("overdrive.mode.json"), &why);
+  CHECK(base.has_value());
+  if (!base)
+    return;
+  CHECK(modes::FSQRT_COST == 8);
+  const auto with_code = [&](const std::vector<u8>& code) {
+    mode::Package p = *base;
+    p.globals.clear();
+    p.seat_words.clear();
+    p.team_words.clear();
+    mode::Rule rule;
+    rule.label = "R";
+    rule.event = modes::EVENT_EVERYSTEP;
+    rule.body = 0;
+    p.rules = {rule};
+    p.code = code;
+    mode::Prepare(p);
+    return p;
+  };
+  const auto run = [&](const mode::Package& p, bool prepared, u32* ops, u32* fault) {
+    mode::Package q = p;
+    if (!prepared)
+      q.prepared = {};
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 1, 100);
+    mode::Run(g, q, BLOCK, MODULE);
+    *ops = g.Read32(BLOCK + mode::OPS);
+    *fault = g.Read32(BLOCK + mode::FAULT);
+    return BlockOf(g);
+  };
+  const std::vector<u8> push = {modes::OP_PUSH, 0x40, 0x80, 0, 0};  // 4.0f
+  const auto then = [&](std::initializer_list<u8> rest, u32 pad) {
+    std::vector<u8> code;
+    for (u32 i = 0; i < pad; ++i)
+    {
+      code.insert(code.end(), push.begin(), push.end());
+      code.push_back(modes::OP_POP);
+    }
+    code.insert(code.end(), rest);
+    return code;
+  };
+  // one square root against one operation that costs one: seven more, in both
+  std::vector<u8> root = push, neg = push;
+  root.insert(root.end(), {modes::OP_FSQRT, modes::OP_POP, modes::OP_END});
+  neg.insert(neg.end(), {modes::OP_FNEG, modes::OP_POP, modes::OP_END});
+  for (const bool prepared : {false, true})
+  {
+    u32 a = 0, b = 0, fault = 0;
+    run(with_code(root), prepared, &a, &fault);
+    CHECK(fault == mode::FAULT_NONE);
+    run(with_code(neg), prepared, &b, &fault);
+    CHECK(a == b + modes::FSQRT_COST - 1);
+  }
+  // a loop of them to the budget, its start moved on by a few operations so that the budget falls on each of the
+  // loop's operations: the square root's seven and the others'
+  std::set<u32> ends;
+  for (u32 pad = 0; pad < 12; ++pad)
+  {
+    std::vector<u8> code = then({}, pad);
+    const u32 loop = static_cast<u32>(code.size());
+    code.insert(code.end(), push.begin(), push.end());
+    code.insert(code.end(), {modes::OP_FSQRT, modes::OP_POP, modes::OP_JUMP, 0, 0, static_cast<u8>(loop >> 8), static_cast<u8>(loop)});
+    const mode::Package p = with_code(code);
+    u32 ops_plain = 0, ops_prepared = 0, fault_plain = 0, fault_prepared = 0;
+    const std::vector<u8> plain = run(p, false, &ops_plain, &fault_plain);
+    const std::vector<u8> prepared = run(p, true, &ops_prepared, &fault_prepared);
+    CHECK(fault_plain == mode::FAULT_BUDGET && fault_prepared == mode::FAULT_BUDGET);
+    CHECK(ops_plain == ops_prepared && plain == prepared);
+    ends.insert(ops_plain);
+  }
+  CHECK(ends.size() > 1);  // (a sqrt's fault overshoots the budget by up to seven; another's by one)
+}
+
+// A mode without `cpus allowed`: a player seat that has driven and then has the "AI drives" record retires at that step
+// (flag set, its Restore cleared), once; a finished seat keeps its finish; a seat with that record from the start (never
+// ready, an autopilot) and a seat that is no player's stay as they are; `cpus allowed` and `solo` never retire anyone;
+// the same memory from a run again.
+void TestAGonePlayerRetires()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("board.mode.json"), &why);
+  std::optional<mode::Package> with_cpus = mode::Read(Vector("overdrive.mode.json"), &why);
+  std::optional<mode::Package> solo = mode::Read(Vector("practice.mode.json"), &why);
+  CHECK(p && with_cpus && solo);
+  if (!p || !with_cpus || !solo)
+    return;
+  CHECK(!p->cpus_allowed && with_cpus->cpus_allowed && !solo->cpus_allowed);
+  const auto row = [](Guest& g, u32 step, u32 seat, bool ai) {
+    const u32 at = layout::INPUTS + ((step & 1023) * 30 + seat) * 8;
+    const std::array<u8, 6> real = {0, 0, 0x80, 0x80, 0, 0}, gone = {0, 0x80, 0, 0, 0, 0};
+    for (u32 k = 0; k < 6; ++k)
+      g.Write8(at + k, ai ? gone[k] : real[k]);
+  };
+  const auto race = [&](mode::Package q, TestHost& host, ModData& data, std::function<void(Guest&)> check) {
+    q.players = 0xF;  // seats 0 to 3 are players', 4 is no player's
+    Guest g(host, data);
+    FakeModeRace(g, 5, 100);
+    for (u32 seat = 0; seat < 5; ++seat)
+      g.Write32(MachineAt(seat), 0);
+    g.Write32(MachineAt(1), game::MACHINE_FLAG_FINISHED);
+    for (u32 step = 0; step < 6; ++step)
+    {
+      g.Write32(net::STEP, step);
+      // seat 0 and 1 drive to step 2 and are gone from 3; seat 2 is the AI's from the start; seat 3 drives on; seat 4 no player's
+      row(g, step, 0, step >= 3);
+      row(g, step, 1, step >= 3);
+      row(g, step, 2, true);
+      row(g, step, 3, false);
+      row(g, step, 4, true);
+      mode::Run(g, q, BLOCK, MODULE);
+      if (step == 2)
+        CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED));
+      if (step == 3)
+        check(g);
+    }
+    check(g);
+  };
+  {
+    TestHost host;
+    ModData data;
+    race(*p, host, data, [](Guest& g) {
+      CHECK(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED);
+      CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RESTORE));
+      CHECK(!(g.Read32(MachineAt(1)) & game::MACHINE_FLAG_RETIRED));
+      CHECK(!(g.Read32(MachineAt(2)) & game::MACHINE_FLAG_RETIRED));
+      CHECK(!(g.Read32(MachineAt(3)) & game::MACHINE_FLAG_RETIRED));
+      CHECK(!(g.Read32(MachineAt(4)) & game::MACHINE_FLAG_RETIRED));
+    });
+  }
+  for (const mode::Package* q : {&*with_cpus, &*solo})
+  {
+    TestHost host;
+    ModData data;
+    race(*q, host, data, [](Guest& g) { CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED)); });
+  }
 }
