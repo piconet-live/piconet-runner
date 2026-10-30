@@ -44,13 +44,13 @@ class Proof(unittest.TestCase):
 
     def test_every_generated_file_says_what_the_table_says(self):
         """Read back from the files, as a compiler would: the header and the module hold every name, the C# class
-        its three groups."""
+        its four groups."""
         everything = {**self.table, **self.masks}
         self.assertEqual(self.made["cxx"], {k: v for k, v in everything.items() if self.in_header(k)})
         self.assertEqual(self.made["python"], {k: v for k, v in everything.items() if not k.endswith("_WORD")})
         sharp = {generate.pascal(r.name): r.value for r in self.rows if generate.GROUPS[r.group][1]}
         self.assertEqual(self.made["csharp"], sharp)
-        self.assertEqual({r.group for r in self.rows if generate.GROUPS[r.group][1]}, {"limit", "wire", "file"})
+        self.assertEqual({r.group for r in self.rows if generate.GROUPS[r.group][1]}, {"limit", "wire", "file", "rel"})
 
     def in_header(self, name):
         owner = next((r for r in self.rows if name in (r.name, r.name + "_AT", r.name + "_WORD")), None)
