@@ -213,27 +213,25 @@ bool CustomSeat(Match& m, const picojson::object& s, int seat, const std::string
 namespace
 {
 // The host's rules (Online.Protocol RaceRules, a match start's "rules"; none in a replay from before them) into the
-// race block: the CPUs' level (Master unless set), boosting on the first lap, restore, the race's end after the
-// first finish, the mines' coming back.
-void RulesIntoRace(Match& m, const picojson::object* rules)
+// race block's words, as protocol/rules.toml says each (race_rules.g.h IntoRace): the CPUs' level (Master unless
+// set), boosting on the first lap, restore, the race's end after the first finish, the mines' coming back. A rule a
+// match start leaves out (every recording made before it) is the game's own way.
+struct RulesOf
 {
-  u8* r = m.race.data();
-  const auto flag = [&](const char* key) {
+  const picojson::object* rules;
+  double Number(const char* key, double absent) const { return rules ? boot::Number(*rules, key, absent) : absent; }
+  bool Flag(const char* key) const
+  {
     const auto it = rules ? rules->find(key) : picojson::object::const_iterator{};
     return rules && it != rules->end() && it->second.is<bool>() && it->second.get<bool>();
-  };
-  Put32(r + RACE_CPULEVEL, static_cast<u32>(std::clamp(rules ? Number(*rules, "cpuLevel", 3) : 3.0, 0.0, 3.0)));
-  m.boost_from_start = flag("boostFromStart");
-  Put32(r + RACE_BOOST, m.boost_from_start ? 1 : 0);
-  Put32(r + RACE_RESTORE, flag("restore") ? 1 : 0);
-  // the race ends for everyone this many seconds after the first finish; a match start without it (every recording
-  // made before the rule) has no such end
-  const double limit = std::clamp(rules ? Number(*rules, "finishLimitSeconds", 0) : 0.0, 0.0, double{MAX_FINISH_LIMIT});
-  Put32(r + RACE_FINISH_LIMIT, static_cast<u32>(limit) * STEPS_A_SECOND);
-  // a mine that went off comes back this many milliseconds later, as whole steps; a match start without it (every
-  // recording made before the rule) keeps the game's own way, a mine stays gone
-  const double mines = std::clamp(rules ? Number(*rules, "mineRegenMs", 0) : 0.0, 0.0, double{MAX_MINE_REGEN_MS});
-  Put32(r + RACE_MINE_REGEN, static_cast<u32>(mines) * STEPS_A_SECOND / 1000);
+  }
+};
+
+void RulesIntoRace(Match& m, const picojson::object* rules)
+{
+  race_rules::IntoRace(RulesOf{rules}, m.race.data());
+  const u8* boost = m.race.data() + RACE_BOOST;   // the fork's rule flag 0x10 too (boot.cpp)
+  m.boost_from_start = (boost[0] | boost[1] | boost[2] | boost[3]) != 0;
 }
 
 // The start grid of the set-up ("grid", the coordinator's RaceSetup.Grid: the seats in starting order, pole first)

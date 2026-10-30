@@ -9,11 +9,11 @@ INPUT_SLOT	limit	8		u32		port/core/src/rollback.cpp:81	bytes one seat's record t
 RING_STEPS	limit	1024		u32		memmap.py:25	steps the input buffer and the checksum ring keep: step s is at s & 1023
 LAPS_MIN	limit	0		int		port/core/src/files_match.cpp:174	the fewest laps the game takes: 0 is a free run, with no lap count
 LAPS_MAX	limit	99		int		port/core/src/files.h:39	the most laps the game takes: two digits, as its lap counter shows
-CPU_LEVEL_MAX	limit	3		int		port/core/src/files_match.cpp:245	the highest CPU level: 0 Novice, 1 Standard, 2 Expert, 3 Master
+CPU_LEVEL_MAX	limit	=rule_most_cpu_level		int		protocol/rules.toml:103	the highest CPU level: 0 Novice, 1 Standard, 2 Expert, 3 Master
 SETTING_MAX	limit	100		int		port/core/src/files_match.cpp:204	the highest machine setting: 0 is all acceleration, 100 all top speed
-FINISH_LIMIT_MAX	limit	600		int		port/core/src/files.h:36	the longest a host may set between the first finish and the race's end for everyone, in seconds (0: no such end)
-MINE_REGEN_MAX	limit	5000		int		port/core/src/files.h:50	the longest a host may set between a mine going off and its coming back, in milliseconds (0: a mine stays gone, the game's own way)
-MINE_REGEN_STEP	limit	50		int		port/core/src/files.h:51	the host's mine rule moves in steps of this many milliseconds: 50 ms is 3 steps of the game exactly
+FINISH_LIMIT_MAX	limit	=rule_most_finish_limit		int		protocol/rules.toml:141	the longest a host may set between the first finish and the race's end for everyone, in seconds (0: no such end)
+MINE_REGEN_MAX	limit	=rule_most_mine_regen		int		protocol/rules.toml:156	the longest a host may set between a mine going off and its coming back, in milliseconds (0: a mine stays gone, the game's own way)
+MINE_REGEN_STEP	limit	=rule_step_mine_regen		int		protocol/rules.toml:157	the host's mine rule moves in steps of this many milliseconds: 50 ms is 3 steps of the game exactly
 INPUT_DELAY	limit	2		u32		port/core/src/net_internal.h:141	steps between a player's input and the step it is used in (decided: 2, never more)
 MAX_UNTRACKED	limit	32		u32		port/core/src/rollback.h:29	memory ranges never rolled back, at most (the list at UNTRACKED)
 # ---- window
@@ -142,13 +142,13 @@ RACE_CPUSEED	race	28	RACE	u32		memmap.py:19	the CPUs' seed for this race
 RACE_MACHINES	race	32	RACE	u32		memmap.py:19	the 30 seats' machines, a byte each, seat 0 first
 RACE_GRID_ON	race	64	RACE	u32		memmap.py:55	the start grid's word: 1, the race names its grid (RACE_GRID); 0, the game's own sort, every race and recording without one
 RACE_GRID	race	68	RACE	u32		memmap.py:55	the start grid: the seat of each of the 30 slots, a byte each, pole first
-RACE_CPULEVEL	race	256	RACE	u32		memmap.py:22	the host's rule: the CPU level, 0 to 3
-RACE_BOOST	race	260	RACE	u32		memmap.py:22	the host's rule: boosting from the start
-RACE_RESTORE	race	264	RACE	u32		memmap.py:22	the host's rule: a machine that falls or is wrecked is put back
+RACE_CPULEVEL	race	=rule_at_cpu_level	RACE	u32		protocol/rules.toml:106	the host's rule: the CPU level, 0 to 3
+RACE_BOOST	race	=rule_at_boost_start	RACE	u32		protocol/rules.toml:124	the host's rule: boosting from the start
+RACE_RESTORE	race	=rule_at_restore	RACE	u32		protocol/rules.toml:133	the host's rule: a machine that falls or is wrecked is put back
 RACE_SETTINGS	race	268	RACE	u32		memmap.py:22	every seat's machine setting, a byte each
-RACE_FINISH_LIMIT	race	300	RACE	u32		memmap.py:24	the host's rule: the steps after the first finish at which the race ends for everyone (0: no such end)
+RACE_FINISH_LIMIT	race	=rule_at_finish_limit	RACE	u32		protocol/rules.toml:146	the host's rule: the steps after the first finish at which the race ends for everyone (0: no such end)
 RACE_FLOW	race	304	RACE	u32		memmap.py:28	the race's flow: 1, out by the game's own verdict and the race waits for player seats only; 0, a recording made before
-RACE_MINE_REGEN	race	308	RACE	u32		memmap.py:56	the host's rule: the steps after which a mine that went off comes back (0: it stays gone, the game's own way)
+RACE_MINE_REGEN	race	=rule_at_mine_regen	RACE	u32		protocol/rules.toml:163	the host's rule: the steps after which a mine that went off comes back (0: it stays gone, the game's own way)
 RACE_RUBBER_BAND_ON	race	100	RACE	u32		memmap.py:54	the rubber band: 1, the CPU drivers pace against the player seats (the game's own way, every recording made before 0.4.0); 0, every driver at its own pace (every race and practice from 0.4.0; the core writes it, a future lobby rule could set it from the server)
 RACE_CUSTOM	race	320	RACE	u32		memmap.py:48	the seats' custom machines: 30 entries of 32 bytes (a used word, three part entries, the pilot)
 RACE_SIZE	race	1280		u32		memmap.py:52	bytes of the race block

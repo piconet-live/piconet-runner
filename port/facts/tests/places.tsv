@@ -24,11 +24,7 @@ RING_STEPS	memmap.py	re	INPUTS \+ (\d+) \* \d+ \* \d+	1
 RING_STEPS - 1	port/core/src/rollback.cpp	re	\((?:t|step) & (\d+)\)	4
 LAPS_MIN	port/core/src/files_match.cpp	re	"laps", \d+, (\d+), MAX_LAPS\)	1
 LAPS_MAX	port/core/src/files.h	cxx	MAX_LAPS	
-CPU_LEVEL_MAX	port/core/src/files_match.cpp	re	"cpuLevel", \d+\) : [\d.]+, 0\.0, (\d+)\.0\)	1
 SETTING_MAX	port/core/src/files_match.cpp	re	"setting", default_setting\), 0\.0, (\d+)\.0\)	1
-FINISH_LIMIT_MAX	port/core/src/files.h	cxx	MAX_FINISH_LIMIT	
-MINE_REGEN_MAX	port/core/src/files.h	cxx	MAX_MINE_REGEN_MS	
-MINE_REGEN_STEP	port/core/src/files.h	cxx	MINE_REGEN_STEP_MS	
 INPUT_DELAY	port/core/src/net_internal.h	re	u32 delay = (\d+);	1
 INPUT_DELAY	port/core/src/files.h	re	u32 delay = (\d+);	1
 INPUT_DELAY	port/core/include/fzgx/core.h	re	u32 delay = (\d+);	1
@@ -166,24 +162,14 @@ RACE_CPUSEED	port/core/src/files_match.cpp	re	Put32\(r \+ (28),	1
 RACE_MACHINES	memmap.py	py	RACE_MACHINES	
 RACE_MACHINES	port/core/src/files_match.cpp	re	std::memcpy\(r \+ (\d+), machines	1
 RACE_MACHINES	port/core/src/files_replay.cpp	re	r\[(\d+) \+ i\]	1
-RACE_FINISH_LIMIT	memmap.py	py	RACE_FINISH_LIMIT	
-RACE_FINISH_LIMIT	port/core/src/files.h	cxx	RACE_FINISH_LIMIT	
 RACE_GRID_ON	memmap.py	py	RACE_GRID_ON	
 RACE_GRID_ON	port/core/src/files.h	cxx	RACE_GRID_ON	
 RACE_GRID	memmap.py	py	RACE_GRID	
 RACE_GRID	port/core/src/files.h	cxx	RACE_GRID	
 RACE_FLOW	memmap.py	py	RACE_FLOW	
 RACE_FLOW	port/core/src/files.h	cxx	RACE_FLOW	
-RACE_MINE_REGEN	memmap.py	py	RACE_MINE_REGEN	
-RACE_MINE_REGEN	port/core/src/files.h	cxx	RACE_MINE_REGEN	
 RACE_RUBBER_BAND_ON	memmap.py	py	RACE_RUBBER_BAND_ON	
 RACE_RUBBER_BAND_ON	port/core/src/files.h	cxx	RACE_RUBBER_BAND_ON	
-RACE_CPULEVEL	memmap.py	py	RACE_CPULEVEL	
-RACE_CPULEVEL	port/core/src/files.h	cxx	RACE_CPULEVEL	
-RACE_BOOST	memmap.py	py	RACE_BOOST	
-RACE_BOOST	port/core/src/files.h	cxx	RACE_BOOST	
-RACE_RESTORE	memmap.py	py	RACE_RESTORE	
-RACE_RESTORE	port/core/src/files.h	cxx	RACE_RESTORE	
 RACE_SETTINGS	memmap.py	py	RACE_SETTINGS	
 RACE_SETTINGS	port/core/src/files.h	cxx	RACE_SETTINGS	
 RACE_CUSTOM	memmap.py	py	RACE_CUSTOM	
