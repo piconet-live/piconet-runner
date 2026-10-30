@@ -314,8 +314,19 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
     return false;
   if (!PacksOfSetup(*setup, path, &m.packs))
     return false;
+  if (const auto mode = setup->find("mode"); mode != setup->end())
+  {
+    std::string why;
+    m.game_mode = mode::Read(mode->second, &why);
+    if (!m.game_mode)
+    {
+      Error("fzgx: {}: the race's game mode {}: refused (a mode error)", path, why);
+      return false;
+    }
+  }
   const u32 racers = static_cast<u32>(std::min<size_t>(seats.size(), MAX_SEATS));
-  const u32 laps = *lap_count;
+  // a game mode's `laps` is the race's, over the match's (its setup words win)
+  const u32 laps = m.game_mode ? m.game_mode->LapsFor(*course).value_or(*lap_count) : *lap_count;
   std::array<u8, 30> machines{};
   for (const picojson::value& v : seats)
   {

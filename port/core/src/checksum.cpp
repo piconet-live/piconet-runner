@@ -3,6 +3,8 @@
 
 #include "rollback.h"
 
+#include "mode.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdlib>
@@ -15,7 +17,7 @@ namespace fzgx::net
 // bytes), leaving out the words whose bit is set in the masks game::BLOCK_SKIP and game::PROGRESS_SKIP (pointers and
 // drawing-only fields; the facts table makes them from the machine-state map: the top bit of mask 0 is the first
 // word). Computed here before a step for the state after the previous one, natively, so it costs the emulated CPU
-// nothing.
+// nothing. With a game mode, its block follows, whole.
 constexpr u32 FIRST_WORD = 1u << 31;           // in a mask of 32 words: the bit of its first word
 constexpr u32 FNV_OFFSET_BASIS = 2166136261u;  // FNV-1a over 32 bits: the value the hash starts from,
 constexpr u32 FNV_PRIME = 16777619u;           // and what it is multiplied by after every word
@@ -91,6 +93,13 @@ u32 StateChecksum(Guest& g, u32 module)
     h = HashWords(h, block, BLOCK_WORDS);
     const u32 progress = Big32(block + game::MACHINE_PROGRESS);
     h = HashWords(h, g.Ram(progress, game::PROGRESS_SIZE), PROGRESS_WORDS);
+  }
+  // a game mode's block, every word (mode.h): its state is the race's. A race without one hashes as before.
+  if (const u32 block = g.Read32(layout::MODES + 4); block != 0)
+  {
+    if (const u8* p = g.Ram(block, mode::BLOCK))
+      for (u32 at = 0; at < mode::BLOCK; at += 4)
+        h = (h ^ LoadBig32(p + at)) * FNV_PRIME;
   }
   return h;
 }

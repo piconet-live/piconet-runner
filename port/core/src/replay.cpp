@@ -236,9 +236,12 @@ bool StartReplay(const std::string& path)
   if (TheOptions().practice)
     header[replay::header::PRACTICE] = picojson::value(true);
   // Version 7 whatever the race holds (replay.toml's written): every race and practice since 0.4.0 is 0.4.0's
-  // set-up, with no rubber band (files_match.cpp); a program from before refuses it.
+  // set-up, with no rubber band (files_match.cpp); a program from before refuses it. A race of a game mode is
+  // version 9 (its header's match holds the mode: files_replay.cpp), which a program from before modes refuses.
   const std::string json = picojson::value(header).serialize();
-  const std::vector<u8> out = replay::EncodeStart(json, m->player_mask, static_cast<u32>(m->seat));
+  const std::vector<u8> out =
+      m->game_mode ? replay::EncodeStartAs(replay::VERSION_MODE, json, m->player_mask, static_cast<u32>(m->seat))
+                   : replay::EncodeStart(json, m->player_mask, static_cast<u32>(m->seat));
   File file(path, "wb");
   if (!file.IsOpen() || !file.WriteBytes(out.data(), out.size()))
   {

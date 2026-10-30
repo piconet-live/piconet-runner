@@ -1,8 +1,17 @@
 """The seat routines' second part (standin.py assembles the three in order; its docstring, at "Input buffer", says
 what it does): a player seat's controls from the input buffer, from `ps_yes` on: the buffer's index (the session's
 step, or the race clock at `clock_index`), the local seat's capture, the record turned into the game's controls,
-and the call of the game's own rule hook (`call_orig` to `co_done`)."""
+and the call of the game's own rule hook (`call_orig` to `co_done`). With a game mode (memmap.MODES +4, the mode's
+block; sites_mode.py has a seat's record) the hook's call is wrapped as the mode's vocabulary says: before it, a
+seat whose record says "pedals locked" (1) takes the record's accelerator (M+0x200) and brake (M+0x204) and no
+accelerator press (flag 0x2000): after both input sources, so CPUs are held too, and before the game's own holds
+(before GO, time over), which still win; after it, a seat whose record says "boost off" (2) has its boost request
+(flag 0x40) cleared, after the lap-1 rule as the race map's refusal point (0x33244) would. Without a mode both are
+one test each."""
 import memmap
+
+MODE_SEAT_SHIFT = 4       # a seat's record in the mode's block: 16 bytes
+assert memmap.MODE_SEAT == 1 << MODE_SEAT_SHIFT and memmap.lo(memmap.MODES) + 4 < 0x8000
 
 
 def asm():
@@ -176,6 +185,24 @@ call_orig:
     rlwinm 9, 9, 0, 6, 4
     stw 9, 0(31)
 co_call:
+    lis 11, {memmap.hi(memmap.MODES)}
+    lwz 11, {memmap.lo(memmap.MODES) + 4}(11)
+    cmplwi 11, 0
+    beq co_plain
+    lha 9, 4(31)
+    slwi 9, 9, {MODE_SEAT_SHIFT}
+    add 11, 11, 9
+    lwz 9, 0(11)
+    andi. 0, 9, 1
+    beq co_plain
+    lwz 0, 4(11)
+    stw 0, 0x200(31)
+    lwz 0, 8(11)
+    stw 0, 0x204(31)
+    lwz 0, 0(31)
+    rlwinm 0, 0, 0, 19, 17
+    stw 0, 0(31)
+co_plain:
     mr 3, 31
     lis 12, 0x8000
     lwz 12, 0x30C8(12)
@@ -183,6 +210,20 @@ co_call:
     addi 12, 12, 0x32C8
     mtctr 12
     bctrl
+    lis 11, {memmap.hi(memmap.MODES)}
+    lwz 11, {memmap.lo(memmap.MODES) + 4}(11)
+    cmplwi 11, 0
+    beq co_boost
+    lha 9, 4(31)
+    slwi 9, 9, {MODE_SEAT_SHIFT}
+    add 11, 11, 9
+    lwz 9, 0(11)
+    andi. 0, 9, 2
+    beq co_boost
+    lwz 0, 0(31)
+    rlwinm 0, 0, 0, 26, 24
+    stw 0, 0(31)
+co_boost:
     lwz 0, 36(30)
     cmpwi 0, 0
     beq co_done

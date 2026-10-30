@@ -6,7 +6,7 @@ were calls (frame routine, name tags, chase camera, main.rel linked), the result
 monitors' pictures (sites_monitors.py),
 the cameras' own words (sites_camera.py), the drawn transform's readers (sites_drawn.py), the shadows' place (sites_shadow.py), the effects' draws
 (sites_effects.py), the seats' custom machines (sites_custom.py) and their pilots (sites_pilot.py), mines that come back
-(sites_mines.py), computer drivers at their own pace (sites_cpu.py), the dash plate's and the energy boost's length as data (sites_dash.py), the machine setting's curve as data
+(sites_mines.py), the game mode's block, mode point, speed hold and a seat's own Restore (sites_mode.py), computer drivers at their own pace (sites_cpu.py), the dash plate's and the energy boost's length as data (sites_dash.py), the machine setting's curve as data
 (sites_curve.py), a
 stat pack a seat (sites_seats.py), the start grid (sites_grid.py), true widescreen's view (sites_view.py), the frames
 drawn between two steps (sites_hfr.py), the countdown movie's request (sites_countdown.py), and the entry table.
@@ -24,6 +24,7 @@ import sites_effects
 import sites_grid
 import sites_hfr
 import sites_mines
+import sites_mode
 import sites_monitors
 import sites_pilot
 import sites_present
@@ -128,6 +129,7 @@ cpu_seed_on:
     @b {FRAME_CALL + 4:#x}
 frame_on:
     @bl mines_preload
+    @bl mode_preload
     @bl results_preload
     @bl monitors_preload
     @bl frame_routine
@@ -444,6 +446,7 @@ rl_disc:
     sites_seats.add(k, r, patch, stock, test, middle)
     sites_grid.add(k, r, patch, stock, test, middle, complete)
     sites_mines.add(k, r, patch, stock, test, la, D, middle)
+    sites_mode.add(k, r, patch, stock, test, la, D, middle)
     sites_cpu.add(k, r, patch, stock, test, middle, complete)
     sites_dash.add(k, r, patch, stock, test, la, middle)
     sites_curve.add(k, r, patch, stock, test, middle)

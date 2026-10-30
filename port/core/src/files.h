@@ -13,6 +13,7 @@
 
 #include "game_facts.h"
 #include "internal.h"
+#include "mode.h"
 #include "picojson.h"
 #include "race_rules.g.h"   // the host's rules the games apply (protocol/rules.toml): their words
 #include "replay_file.g.h"  // the replay file (protocol/replay.toml): its versions
@@ -135,6 +136,9 @@ struct Match
   std::vector<StatPack> packs;
   std::array<int, 30> seat_pack = MakeNoStock();
   std::vector<u8> seat_block;  // the seats' block as written before the boot (const_pack.cpp SeatBlock): its rows off
+  // The race's game mode ("setup.mode": protocol/formats.md section 9; mode.h): its package, read and checked. None:
+  // the race of the host's rules. A mode's setup words win over the match's (its laps are the race's).
+  std::optional<mode::Package> game_mode;
 };
 
 // The mod bundle's files (the launch file's "bundle"). Two kinds: the fork's (mod.bin, codes.txt: Gecko codes, the reference
@@ -192,7 +196,7 @@ bool OfVersion7(const Match& m);
 bool PacksOfSetup(const picojson::object& setup, const std::string& path, std::vector<StatPack>* out);
 // A pack's fingerprint, from its values as they travel (6 bytes an entry).
 std::string StatFingerprint(const std::vector<u8>& values);
-// A recording's version is one this core plays (2 to 7: replay.toml's versions, each the same file under another
+// A recording's version is one this core plays (2 to 7 and 9: replay.toml's versions, each the same file under another
 // number; a compact file, version 8, is read as the recording it was made of: files_replay.cpp ReadReplayFile).
 constexpr bool PlayedVersion(u32 version)
 {

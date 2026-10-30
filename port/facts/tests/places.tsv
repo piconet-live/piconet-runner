@@ -37,6 +37,7 @@ SMOOTH_GLOBALS	port/core/src/frame_report.cpp	re	layout::SMOOTH \+ (0x[0-9A-F]+)
 NAMES	memmap.py	py	NAMES	
 MONITORS	memmap.py	py	MONITORS	
 MINES	memmap.py	py	MINES	
+MODES	memmap.py	py	MODES	
 ICONS	memmap.py	py	ICONS	
 NAMES	port/core/src/files.h	use	table::NAMES	1
 RACE	memmap.py	py	RACE	
@@ -87,6 +88,7 @@ HOST_NET	memmap.py	py	HOST_NET
 HOST_TICK	memmap.py	py	HOST_TICK	
 HOST_LINKED	memmap.py	py	HOST_LINKED	
 HOST_HFR	memmap.py	py	HOST_HFR	
+HOST_MODE	memmap.py	py	HOST_MODE	
 EXTRA_STEPS_AT	port/core/src/rollback.cpp	cxx	EXTRA_STEPS	
 EXTRA_STEPS	port/core/src/session.cpp	re	g\.Read32\(CONTROL \+ (8)\)	1
 RESIMULATING_AT	port/core/src/rollback.cpp	cxx	RESIMULATING	
@@ -385,6 +387,7 @@ MACHINE_FLAGS2	port/core/src/out_test.h	use	game::MACHINE_FLAGS2	1
 MACHINE_FLAGS2_FALLEN	port/core/src/out_test.h	use	game::MACHINE_FLAGS2_FALLEN	1
 MACHINE_FLAG_BROKEN_DOWN	port/core/src/out_test.h	use	game::MACHINE_FLAG_BROKEN_DOWN	1
 MACHINE_FLAG_CPU	port/core/src/out_test.h	use	game::MACHINE_FLAG_CPU	1
+MACHINE_FLAG_RESTORE	port/core/src/out_test.h	use	game::MACHINE_FLAG_RESTORE	1
 MACHINE_FLAG_OUT	port/core/src/out_test.h	use	game::MACHINE_FLAG_OUT	1
 MACHINE_FLAG_FINISHED	port/core/src/out_test.h	use	game::MACHINE_FLAG_FINISHED	1
 MACHINE_FLAG_RETIRED	port/core/src/out_test.h	use	game::MACHINE_FLAG_RETIRED	1
@@ -494,6 +497,7 @@ PROGRESS_DISTANCE	port/facts/machine-state.csv	hex	(?m)^\+0x49C,0x0*(F8),	1
 PROGRESS_LAP_LENGTH	port/facts/machine-state.csv	hex	(?m)^\+0x49C,0x0*(FC),	1
 PROGRESS_LAP_TIME	port/facts/machine-state.csv	hex	(?m)^\+0x49C,0x0*(160),	1
 PROGRESS_RACE_TIME	port/facts/machine-state.csv	hex	(?m)^\+0x49C,0x0*(1E4),	1
+MACHINE_FLAG_RESTORE	port/facts/machine-state.csv	re	"flags \([^"]*\bRestore regime (0x[0-9A-F]+)\b	1
 MACHINE_FLAG_AIRBORNE	port/facts/machine-state.csv	re	"flags \([^"]*\bairborne (0x[0-9A-F]+)\b	1
 MACHINE_FLAG_AIRBORNE_LONG	port/facts/machine-state.csv	re	"flags \([^"]*\bairborne over 10 steps (0x[0-9A-F]+)\b	1
 MACHINE_FLAG_SPIN	port/facts/machine-state.csv	re	"flags \([^"]*\bspin (0x[0-9A-F]+)\b	1
