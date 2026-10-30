@@ -1,5 +1,5 @@
-// The panel's look from the game's art (fzgx/art.h, fzgx/panel.h): a packed file unpacked, a texture's pixels, the
-// venue names' letters cut from strips made here, a picture scaled for the screen, and the load's progress.
+// The panel's look from the game's art (fzgx/art.h, fzgx/panel.h): a packed file unpacked, a texture's pixels, a
+// picture scaled for the screen, and the load's progress.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "harness.h"
@@ -10,32 +10,6 @@ namespace
 {
 using namespace fzgx::panel;
 namespace art = fzgx::art;
-
-// Twelve strips made here: each letter of a venue's name a solid white block 8 wide and 20 high (an "I" 3 wide),
-// 12 pixels on from the last, with a ring of half-clear grey around it.
-art::Image Strips(int drop_from_strip = -1)
-{
-  static const char* names[STRIPS] = {"MUTECITY", "PORTTOWN", "BIGBLUE", "LIGHTNING", "SANDOCEAN", "GREENPLANT",
-                                      "FIREFIELD", "CASINOPALACE", "OUTERSPACE", "AEROPOLIS", "COSMOTERMINAL", "PHANTOMROAD"};
-  art::Image image{STRIP_WIDTH, STRIPS * STRIP_HEIGHT, std::vector<u8>(STRIP_WIDTH * STRIPS * STRIP_HEIGHT * 4, 0)};
-  for (u32 strip = 0; strip < STRIPS; ++strip)
-  {
-    const std::string name = names[strip];
-    for (std::size_t n = 0; n < name.size() - (static_cast<int>(strip) == drop_from_strip ? 1 : 0); ++n)
-    {
-      const u32 left = 20 + static_cast<u32>(n) * 12, width = name[n] == 'I' ? 3 : 8;
-      for (u32 y = 6; y < 30; ++y)
-        for (u32 x = left - 2; x < left + width + 2; ++x)
-        {
-          const bool body = y >= 8 && y < 28 && x >= left && x < left + width;
-          const u8 pixel[4] = {static_cast<u8>(body ? 255 : 100), static_cast<u8>(body ? 255 : 120),
-                               static_cast<u8>(body ? 255 : 140), static_cast<u8>(body ? 255 : 128)};
-          std::copy_n(pixel, 4, image.At(x, strip * STRIP_HEIGHT + y));
-        }
-    }
-  }
-  return image;
-}
 
 struct Queue
 {
@@ -106,44 +80,6 @@ void TestATexturesPixels()
   CHECK(art::Texture({}, 0).Empty());
 }
 
-// The letters from the strips: found by their regions, never by a place written down; a strip whose regions are
-// not its name's letters gives none; a line is set a pixel tighter than the letters' widths, a space 9.
-void TestTheVenueLettersAreCutFromTheirStrips()
-{
-  BEGIN_TEST();
-  Lettering none;
-  CHECK(!none.Load({}) && !none.Has('A') && !none.Writes("A") && none.Line("A").Empty());
-  CHECK(!none.Load(art::Image{100, 432, std::vector<u8>(100 * 432 * 4, 0)}));   // not the strips' width
-  CHECK(!none.Load(art::Image{STRIP_WIDTH, 432, std::vector<u8>(STRIP_WIDTH * 432 * 4, 0)}));  // nothing in them
-  Lettering letters;
-  CHECK(letters.Load(Strips()));
-  for (const char c : std::string("ABCDEFGHILMNOPRSTUWY"))
-    CHECK(letters.Has(c));
-  for (const char c : std::string("JKQVXZ0/ a"))
-    CHECK(!letters.Has(c));
-  CHECK(letters.Writes("LOADING") && letters.Writes("WAITING FOR PLAYERS") && !letters.Writes("3/5") && !letters.Writes(""));
-  CHECK(letters.Line("3/5").Empty());
-  // "LI": an L of 8 and an I of 3, each a pixel tighter, and the margins
-  const art::Image li = letters.Line("LI");
-  CHECK(li.height == STRIP_HEIGHT && li.width == 7 + 2 + 1 + 12);
-  // solid, black outside, white in the letters, the grey ring between (128 of 255 of its colour, on black)
-  const auto at = [&](const art::Image& image, u32 x, u32 y) { return image.At(x, y); };
-  CHECK(at(li, 0, 0)[0] == 0 && at(li, 0, 0)[3] == 255);
-  CHECK(at(li, 6, 8)[0] == 255 && at(li, 13, 27)[1] == 255);    // the L from 6, 8 wide
-  CHECK(at(li, 13, 8)[0] == 255 && at(li, 15, 8)[0] == 255);    // the I from 13, 3 wide
-  CHECK(at(li, 16, 8)[0] == 50 && at(li, 16, 8)[2] == 70);      // its ring
-  CHECK(at(li, 5, 7)[0] == 50 && at(li, 6, 6)[1] == 60 && at(li, 6, 5)[0] == 0);
-  // a space is 9 pixels
-  CHECK(letters.Line("L L").width == letters.Line("LL").width + 9);
-  // a strip that is not its name: MUTE CITY one region short. Its letters come from the other strips, but for Y,
-  // which no other name has
-  Lettering short_one;
-  CHECK(short_one.Load(Strips(0)) && short_one.Has('M') && short_one.Has('U') && !short_one.Has('Y'));
-  CHECK(!short_one.Writes("WAITING FOR PLAYERS") && short_one.Writes("LOADING"));
-  Lettering no_w;
-  CHECK(no_w.Load(Strips(1)) && !no_w.Has('W') && !no_w.Writes("WAITING FOR PLAYERS") && no_w.Writes("LOADING"));
-}
-
 // A picture of the game's size for a picture of the screen: a 480th of its height a pixel, each way, times the
 // scale; on black, solid.
 void TestAGamePictureScaledForTheScreen()
@@ -158,8 +94,8 @@ void TestAGamePictureScaledForTheScreen()
   const Picture large = ForThePicture(native, 1344, METER_SCALE);
   CHECK(large.width == 381 && large.height == 67 && large.rgba.size() == 381u * 67 * 4);
   CHECK(large.rgba[3] == 255 && large.rgba[0] == 128 && large.rgba[(40 * 381 + 100) * 4] == 255);
-  // the lettering's two thirds: a strip's 36 lines are 24, its capitals 16
-  CHECK(ForThePicture(native, 480, LETTERS_SCALE).height == 16 && ForThePicture(native, 480, LETTERS_SCALE).width == 91);
+  // two thirds: 24 lines are 16
+  CHECK(ForThePicture(native, 480, 2.0 / 3.0).height == 16 && ForThePicture(native, 480, 2.0 / 3.0).width == 91);
   CHECK(ForThePicture({}, 480, 1.0).rgba.empty() && ForThePicture(native, 50, 1.0).rgba.empty());
   CHECK(ForThePicture(native, 480, 0.0).rgba.empty() && ForThePicture(native, 480, 9.0).rgba.empty());
 }

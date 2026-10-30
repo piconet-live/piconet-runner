@@ -1,10 +1,10 @@
 // The panel over the picture before a race (fzgx/panel.h): LOADING with the game's energy meter under it as the
 // load's bar, until the course's first picture; WAITING FOR PLAYERS at the start gate. Drawn by the runner with the
 // emulator's own on-screen drawing (its ImGui frame, which goes over the game's picture at every present): a black
-// rectangle over the whole window, the words as one texture (the venue name's lettering of the course intro, cut
-// from the player's own game files; the game's small font when that cannot be had), and under LOADING the meter's
-// frame and its fill, drawn as wide as the load is far. No emulator patch: the present event and the on-screen
-// frame are the emulator's own.
+// rectangle over the whole window, the words in the launcher's display face (Saira Condensed ExtraBold leaning, the
+// strip's own font from the Fonts folder: overlay.h; white, with a soft shadow under them), the count of ready players
+// under WAITING FOR PLAYERS in the same face, smaller, and under LOADING the meter's frame and its fill, drawn as wide
+// as the load is far. No emulator patch: the present event and the on-screen frame are the emulator's own.
 //   - Every picture the game hands over while the board shows something gets the panel over it (DrawPanel, from
 //     the hook before a present, on the thread that presents).
 //   - While the game loads and at the start gate it hands no picture over at all. The game's thread asks for a
@@ -58,14 +58,20 @@ namespace ov = overlay;
 using Clock = std::chrono::steady_clock;
 
 // Everything here belongs to the thread that presents, but s_asked.
-panel::Font s_font;
-panel::Lettering s_lettering;
 panel::Meter s_meter;
 bool s_art_asked = false;
-// The textures and what they were made for: the words; under them the meter's frame and fill (LOADING) or the
-// count (WAITING FOR PLAYERS, when there is one). And those no longer drawn, until the emulator has let go of them.
-ImTextureData *s_words = nullptr, *s_frame = nullptr, *s_fill = nullptr, *s_count = nullptr;
+// The textures and what they were made for: the countdown's figure; the meter's frame and fill (LOADING). And those
+// no longer drawn, until the emulator has let go of them. The words are text, laid each picture.
+ImTextureData *s_figure = nullptr, *s_frame = nullptr, *s_fill = nullptr;
 fzgx::u32 s_shows = 0, s_ready = 0, s_of = 0, s_height = 0;
+std::vector<std::string> s_lines;
+// The words' shadow: black, this opaque, this far down and its softness (a second pass further down), in the
+// capitals' height.
+constexpr float SHADOW = 0.5f, SHADOW_DROP = 0.07f, SHADOW_SOFT = 0.14f;
+// Where the display face's capitals stand in a line of the overlay's type (ImGui's size of a font is its ascent to its
+// descent: Saira's 1.135 and 0.439 of the em, its capitals 0.688 of the em): from CAP_TOP of the size below the line's
+// top, CAP_OF_SIZE of it high.
+constexpr float CAP_OF_SIZE = 0.688f / 1.574f, CAP_TOP = (1.135f - 0.688f) / 1.574f;
 std::vector<ImTextureData*> s_old;
 // The meter as it is shown: it follows the board's progress, at most a whole bar in half a second.
 constexpr float FILL_A_SECOND = 2.0f;
@@ -106,13 +112,9 @@ void LoadArt()
     return;
   s_art_asked = true;
   std::string problem;
-  panel::LoadArtFromTheGame(&s_lettering, &s_meter, &problem);
-  std::size_t size = 0;
-  if (!panel::LoadFromTheGame(&s_font, &size))
-    problem += std::string(problem.empty() ? "" : "; ") + "the small font (" + panel::FONT_FILE + ") is not the file known";
+  panel::LoadArtFromTheGame(&s_meter, &problem);
   if (!problem.empty())
-    s_core_host.Log(fzgx::LogLevel::Warning, "fzgx: panel: " + problem + ": what is missing is drawn in the small "
-                                             "font, or left out");
+    s_core_host.Log(fzgx::LogLevel::Warning, "fzgx: panel: " + problem + ": LOADING is shown without its meter");
 }
 
 // A texture that is no longer drawn goes back in two steps: the emulator's drawing destroys its own half at the
@@ -156,33 +158,48 @@ ImTextureData* TextureOf(const panel::Picture& picture)
 
 void MakeTextures(panel::Shows shows, fzgx::u32 ready, fzgx::u32 of, fzgx::u32 height)
 {
-  Retire(s_words), Retire(s_frame), Retire(s_fill), Retire(s_count);
+  Retire(s_figure), Retire(s_frame), Retire(s_fill);
   s_shows = static_cast<fzgx::u32>(shows), s_ready = ready, s_of = of, s_height = height;
   LoadArt();
-  const std::vector<std::string> lines = panel::Lines(shows, ready, of);
-  if (lines.empty())
+  s_lines = panel::Lines(shows, ready, of);
+  if (s_lines.empty())
     return;
-  // the words in the venue name's lettering; the small font when a letter is missing
-  // (the small font beside lettering of capitals 16: its cell two thirds of the course name's)
-  const fzgx::u32 cell = std::max<fzgx::u32>(8, panel::CellHeight(height) * 2 / 3);
-  // the countdown's figure: the heading face with its own transparency (panel_figure.cpp), eased in
+  // the countdown's figure: the heading face with its own transparency (panel_figure.cpp), eased in; where it cannot
+  // be had, the figure is text like the other lines
   if (shows == panel::Shows::Countdown)
   {
     s_figure_since = Clock::now();
-    if ((s_words = TextureOf(FigurePicture(ready, height))))
-      return;
+    s_figure = TextureOf(FigurePicture(ready, height));
+    return;
   }
-  s_words = s_lettering.Writes(lines[0]) ? TextureOf(panel::ForThePicture(s_lettering.Line(lines[0]), height, panel::LETTERS_SCALE))
-                                         : TextureOf(panel::Draw(s_font, {lines[0]}, cell));
   if (shows == panel::Shows::Loading && s_meter.Loaded())
   {
     // (the fill is made as wide as the frame's inside, so that the two meet whatever the rounding)
     s_frame = TextureOf(panel::ForThePicture(s_meter.frame, height, panel::METER_SCALE));
     s_fill = TextureOf(panel::ForThePicture(s_meter.fill, height, panel::METER_SCALE));
   }
-  // the count's digits and slash are in no strip: the small font
-  if (lines.size() > 1)
-    s_count = TextureOf(panel::Draw(s_font, {lines[1]}, cell));
+}
+
+// The display face at `cap` lines of the game's 480-line screen (its capitals that high), in a picture `height`
+// pixels high.
+ov::Type Face(double cap, fzgx::u32 height)
+{
+  return ov::Display(static_cast<float>(cap * height / panel::SCREEN_LINES / CAP_OF_SIZE));
+}
+
+// A line of the display face centred on `middle`, its capitals' top at `top` (its lean's reach counted in the
+// centring), white over a soft shadow. Where its capitals end comes back.
+float Words(ImDrawList* list, const ov::Type& type, float middle, float top, const std::string& line, float opacity = 1)
+{
+  const float cap = type.size * CAP_OF_SIZE;
+  const float reach = type.lean ? cap * ov::LEAN : 0.0f;
+  const float left = std::floor(middle - (ov::Width(type, line.c_str()) + reach) / 2);
+  const float at = std::floor(top - type.size * CAP_TOP);
+  const int shadow = static_cast<int>(std::lround(SHADOW * opacity * 255));
+  ov::Draw(list, type, left, at + cap * SHADOW_SOFT, IM_COL32(0, 0, 0, shadow / 2), line.c_str());
+  ov::Draw(list, type, left, at + cap * SHADOW_DROP, IM_COL32(0, 0, 0, shadow), line.c_str());
+  ov::Draw(list, type, left, at, ov::Colour(ov::TEXT, opacity), line.c_str());
+  return top + cap;
 }
 
 void Image(ImDrawList* list, ImTextureData* texture, float left, float top, float share = 1.0f)
@@ -216,21 +233,25 @@ bool Draw(panel::Shows shows, bool full)
   const float line = height / static_cast<float>(panel::SCREEN_LINES);  // a pixel of the game's 640 by 480 screen
   const float middle = picture.left + picture.GetWidth() / 2.0f;
   float below = picture.top + picture.GetHeight() / 2.0f;
-  if (s_words && shows == panel::Shows::Countdown)
+  if (s_figure)
   {
     // over the picture's middle: from a little larger and clear to its size and solid, eased out
     const float eased = EaseOut(Since(s_figure_since) / FIGURE_IN_S);
     const float scale = FIGURE_FROM_SCALE + (1 - FIGURE_FROM_SCALE) * eased;
-    const float w = s_words->Width * scale / 2, h = s_words->Height * scale / 2;
+    const float w = s_figure->Width * scale / 2, h = s_figure->Height * scale / 2;
     const float y = picture.top + picture.GetHeight() / 2.0f;
-    list->AddImage(s_words->GetTexRef(), ImVec2(middle - w, y - h), ImVec2(middle + w, y + h), ImVec2(0, 0),
+    list->AddImage(s_figure->GetTexRef(), ImVec2(middle - w, y - h), ImVec2(middle + w, y + h), ImVec2(0, 0),
                    ImVec2(1, 1), IM_COL32(255, 255, 255, static_cast<int>(std::lround(eased * 255))));
   }
-  else if (s_words)
+  else if (!s_lines.empty())
   {
-    const float top = static_cast<float>(picture.top + (picture.GetHeight() - s_words->Height) / 2);
-    Image(list, s_words, std::floor(middle - s_words->Width / 2.0f), top);
-    below = top + s_words->Height;
+    // the first line over the picture's middle, in the display face; the count under it, smaller
+    // (the capitals centred on the picture's middle)
+    const float top = std::floor(picture.top + (picture.GetHeight() - panel::WORDS_CAP * line) / 2.0f);
+    const float opacity = shows == panel::Shows::Countdown ? EaseOut(Since(s_figure_since) / FIGURE_IN_S) : 1.0f;
+    below = Words(list, Face(panel::WORDS_CAP, height), middle, top, s_lines[0], opacity);
+    if (s_lines.size() > 1)
+      Words(list, Face(panel::COUNT_CAP, height), middle, std::floor(below + 2 * panel::METER_GAP * line), s_lines[1]);
   }
   if (s_frame && s_fill)
   {
@@ -245,8 +266,6 @@ bool Draw(panel::Shows shows, bool full)
     Image(list, s_frame, left, top);
     Image(list, s_fill, left + (s_frame->Width - s_fill->Width) / 2, top + (s_frame->Height - s_fill->Height) / 2, s_filled);
   }
-  if (s_count)
-    Image(list, s_count, std::floor(middle - s_count->Width / 2.0f), std::floor(below + panel::METER_GAP * line));
   if (!s_was_up)
     s_up_since = Clock::now();
   s_was_up = true;
@@ -257,7 +276,8 @@ bool Draw(panel::Shows shows, bool full)
 void TakeDown()
 {
   s_was_up = false;
-  Retire(s_words), Retire(s_frame), Retire(s_fill), Retire(s_count);
+  Retire(s_figure), Retire(s_frame), Retire(s_fill);
+  s_lines.clear();
   s_shows = 0;
   s_filled = 0;
   s_filled_at = {};

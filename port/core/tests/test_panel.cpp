@@ -1,5 +1,5 @@
-// The panel before a race (fzgx/panel.h): what it shows from a start to the go, its lines, the game's font read
-// from a file made here, the text as a picture, and a session that holds at the start gate.
+// The panel before a race (fzgx/panel.h): what it shows from a start to the go, its lines, and a session that holds
+// at the start gate.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "harness.h"
@@ -11,15 +11,6 @@ namespace
 {
 using namespace fzgx::panel;
 
-// A font file made here: every character clear, but those given, whose cells are filled by `value`.
-std::vector<u8> AFontFile(const std::vector<u32>& glyphs, u8 value)
-{
-  std::vector<u8> file(std::size_t{GLYPHS} * GLYPH_BYTES, 0);
-  for (const u32 glyph : glyphs)
-    std::fill_n(file.begin() + std::size_t{glyph} * GLYPH_BYTES, GLYPH_BYTES, static_cast<u8>(value * 17));
-  return file;
-}
-
 // The host is told on the game's thread when the panel changes.
 class PanelHost : public TestHost
 {
@@ -29,11 +20,6 @@ public:
   int told = 0;
   std::vector<bool> pace;  // every LoadPace call, in order
 };
-
-const u8* Pixel(const Picture& picture, u32 x, u32 y)
-{
-  return &picture.rgba[(std::size_t{y} * picture.width + x) * 4];
-}
 }  // namespace
 
 // LOADING from the start until the game's mode holds a course; then nothing, and never LOADING again. At the gate
@@ -144,89 +130,6 @@ void TestThePanelsLines()
   CHECK(Lines(Shows::Waiting, 9, 5)[1] == "5/5");   // never more ready than there are
 }
 
-// The font file: its size, the order of a character's pixels (blocks of 8 by 8, the high half of a byte first),
-// and where the panel's characters are.
-void TestTheGamesFontIsRead()
-{
-  BEGIN_TEST();
-  Font font;
-  CHECK(!font.Loaded() && !font.Load({}) && !font.Load(std::vector<u8>(GLYPHS * GLYPH_BYTES - 1)));
-  CHECK(!font.Load(std::vector<u8>(GLYPHS * GLYPH_BYTES + 288)) && !font.Loaded());
-  CHECK(font.Cell('A')[0] == 0);   // nothing loaded: clear cells
-  // "A" is the 69th character: its second block's first row holds 1 to 8, its last block's last byte 0xAB
-  std::vector<u8> file(std::size_t{GLYPHS} * GLYPH_BYTES, 0);
-  u8* a = file.data() + 68 * GLYPH_BYTES;
-  a[32] = 0x12, a[33] = 0x34, a[34] = 0x56, a[35] = 0x78;
-  a[287] = 0xAB;
-  file[58 * GLYPH_BYTES] = 0xF0;        // "0": its first pixel
-  file[(58 + 9) * GLYPH_BYTES] = 0xE0;  // "9"
-  file[18 * GLYPH_BYTES] = 0xD0;        // "/"
-  file[(94 + 25) * GLYPH_BYTES] = 0xC0; // "z"
-  file[(68 + 25) * GLYPH_BYTES] = 0xB0; // "Z"
-  CHECK(font.Load(file) && font.Loaded());
-  const auto& cell = font.Cell('A');
-  for (u32 x = 0; x < 8; ++x)
-    CHECK(cell[8 + x] == x + 1);        // row 0, columns 8 to 15
-  CHECK(cell[0] == 0 && cell[CELL * 8] == 0);
-  CHECK(cell[23 * CELL + 22] == 0xA && cell[23 * CELL + 23] == 0xB);
-  CHECK(font.Cell('0')[0] == 15 && font.Cell('9')[0] == 14 && font.Cell('/')[0] == 13);
-  CHECK(font.Cell('z')[0] == 12 && font.Cell('Z')[0] == 11);
-  // anything else is the space
-  for (const char c : {' ', '!', '@', '[', '{', '\x7F', '\xE9', '\0'})
-    CHECK(font.Cell(c) == font.Cell(' '));
-}
-
-// The text as a picture: on black, opaque, the lines centred, sized by the cell's height, the letters near white at
-// the top and cyan below with a grey edge around them.
-void TestThePanelsPicture()
-{
-  BEGIN_TEST();
-  Font font;
-  CHECK(Draw(font, {"LOADING"}, 54).rgba.empty());   // no font: nothing
-  // every letter and digit a solid cell
-  std::vector<u32> solid;
-  for (u32 glyph = 58; glyph < 120; ++glyph)
-    solid.push_back(glyph);
-  CHECK(font.Load(AFontFile(solid, 15)));
-  CHECK(Draw(font, {}, 54).rgba.empty() && Draw(font, {"A"}, 7).rgba.empty() && Draw(font, {"A"}, 513).rgba.empty());
-  CHECK(CellHeight(448) == 18 && CellHeight(1344) == 54 && CellHeight(2160) == 87 && CellHeight(100) == 8);
-
-  const Picture one = Draw(font, {"LOADING"}, 48);   // two pixels down for one of the font's
-  CHECK(one.width > 0 && one.rgba.size() == std::size_t{one.width} * one.height * 4);
-  // seven letters of two thirds of a cell, and the margins: (7 * 16 + 10) * 2 * 0.933 across, (24 + 10) * 2 down
-  CHECK(one.height == 68 && one.width == 228);
-  for (std::size_t i = 3; i < one.rgba.size(); i += 4)
-    CHECK(one.rgba[i] == 255);
-  // black at the corners, a letter in the middle: near white at its top, cyan at its bottom
-  for (const auto& [x, y] : {std::pair<u32, u32>{0, 0}, {one.width - 1, 0}, {0, one.height - 1}})
-    CHECK(Pixel(one, x, y)[0] == 0 && Pixel(one, x, y)[1] == 0 && Pixel(one, x, y)[2] == 0);
-  const u8* top = Pixel(one, one.width / 2, 17);
-  const u8* bottom = Pixel(one, one.width / 2, 54);
-  CHECK(top[0] > 230 && top[1] > 245 && top[2] > 245);
-  CHECK(bottom[0] < 180 && bottom[0] > 150 && bottom[1] > 240 && bottom[2] > 240);
-  // the edge: just above the letters, grey-blue and dim
-  const u8* edge = Pixel(one, one.width / 2, 5);
-  CHECK(edge[0] > 60 && edge[0] < 100 && edge[2] > edge[0] && edge[2] < 120);
-
-  // two lines: the second a line's pitch lower and centred under the first
-  const Picture two = Draw(font, {"WAITING FOR PLAYERS", "3/5"}, 48);
-  CHECK(two.height == 68 + 72 && two.width > one.width);
-  const auto lit = [&](u32 y) {
-    u32 first = two.width, last = 0;
-    for (u32 x = 0; x < two.width; ++x)
-      if (Pixel(two, x, y)[1] > 200)
-        first = std::min(first, x), last = x;
-    return std::pair<u32, u32>{first, last};
-  };
-  const auto [first_left, first_right] = lit(34);
-  const auto [second_left, second_right] = lit(72 + 34);
-  CHECK(first_left < second_left && second_right < first_right);
-  // (the "/" of the made-up font is clear, so the second line is two blocks about its middle)
-  CHECK(std::abs(static_cast<int>(first_left + first_right) - static_cast<int>(second_left + second_right)) <= 2);
-  // a space is a whole cell: "A A" is wider than "AAA" by a third of a cell
-  CHECK(Draw(font, {"A A"}, 48).width > Draw(font, {"AAA"}, 48).width);
-}
-
 // A start that goes straight into a replay: LOADING from Init, through the frames of the title and of the load,
 // down at the first frame of the course intro. A plain start shows nothing. The load's speed limit and sound are
 // lifted for exactly that stretch: asked once before the game starts, given back once at the intro's first frame;
@@ -243,10 +146,11 @@ void TestThePanelFromAStartToTheCourse()
   options.play_file = dir + "/race.fzrp";
   Init(host, options);
   CHECK(Active() && TheBoard().Now() == Shows::Loading);
-  // (a host without the game's font file: no font, and the panel is black without its text)
-  Font none;
-  std::size_t size = 7;
-  CHECK(!LoadFromTheGame(&none, &size) && size == 0 && !none.Loaded());
+  // (a host without the game's files: no meter, and why is said; the words need none)
+  Meter none;
+  std::string problem;
+  LoadArtFromTheGame(&none, &problem);
+  CHECK(!none.Loaded() && problem.find(METER_FILE) != std::string::npos);
   CHECK(host.pace.empty());
   BeforeTheGameStarts();
   CHECK(host.pace == std::vector<bool>{true});
