@@ -1,6 +1,8 @@
 """The frame routine's state checksum `checksum`, stored after every step in the ring at memmap.CHECKSUMS (netframe.py
 assembles the parts in order; its docstring's last paragraphs say what is summed). TABLES stands for the skip
-masks' words, which netframe.py works out from the machine-state map and puts in.
+masks' words, which netframe.py works out from the machine-state map and puts in. With a game mode (memmap.MODES +4,
+its block: sites_mode.py), every word of its block follows, as the core's StateChecksum (port/core/src/checksum.cpp)
+folds it.
 
 `genlog`, after every step of a running session in a game told to keep the logs (memmap.IMAGE_LOGS; a players'
 game writes nothing): the race's two generator words as that step left them, into the
@@ -9,6 +11,8 @@ tests' log (memmap.GENERATOR_LOG, 8 bytes at step & 2047: the executable's 0x801
 again, so the log holds what the last run of each step left. Two games' logs, from dumps of the data window at one
 step, say whether the words were equal step by step (the gates' reports/generator-log.py)."""
 import memmap
+
+assert memmap.MODE_BLOCK < 0x8000 and memmap.lo(memmap.MODES) + 4 < 0x8000
 
 assert memmap.EXECUTABLE_GENERATOR == 0x801A0000 + 0x63C0
 assert 0x16D600 + memmap.EFFECTS_GENERATOR_DATA == 0x1BA040 - 0x30000 + 0xBE8    # .data from .bss
@@ -59,6 +63,19 @@ cs_racer:
     addi 6, 6, -1
     cmpwi 6, 0
     bne cs_racer
+    lis 10, {memmap.hi(memmap.MODES)}
+    lwz 10, {memmap.lo(memmap.MODES) + 4}(10)
+    cmplwi 10, 0
+    beq cs_store
+    li 8, 0
+    li 0, 0x{memmap.MODE_BLOCK:X}
+cs_mode:
+    lwzx 9, 10, 8
+    xor 3, 3, 9
+    mullw 3, 3, 4
+    addi 8, 8, 4
+    cmplw 8, 0
+    blt cs_mode
 cs_store:
     lwz 0, 12(1)
     mtlr 0
