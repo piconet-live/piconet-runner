@@ -13,7 +13,7 @@ Sites (main.rel .text offset: the port read it replaces):
 - the lap event fn_1_327F8 (0x32818-0x32A04) and the rule hook's live-lap entry (0x33004): the lap banner's HUD slot
   0 and the lap list get the local racer's laps, against the time of that lap's leader;
 - RETIRED (fn_1_32600: 0x32660, 0x32684) and the time-bonus counter (fn_1_32A40: 0x32FD4);
-- the results snapshot (per-port slot of progress record, max speed, place: .bss 0x26314, 0x26304, 0x26B04), filled
+- the results snapshot (per-port slot of progress record, max speed, skulls: .bss 0x26314, 0x26304, 0x26B04), filled
   at seat 0's finish (0x32D20: the guard only; the reads after it are reached only past it) and at race over
   (fn_1_3A330: 0x3A934-0x3AAA4; fn_1_33A20: 0x343C0-0x34440): slot 0 holds the local racer's results;
 - the results board's name and machine (0x142748, `bl fn_1_86900(0)`, the player-0 machine): the local racer's car

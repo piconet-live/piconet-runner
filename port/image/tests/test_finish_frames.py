@@ -19,7 +19,7 @@ SESSION, STEP, SPECTATOR, FIN, KEPT, MASK = (CONTROL + 116, CONTROL + 124, CONTR
                                              CONTROL + 60)
 KEPT_RECORD, KEPT_SPEED, KEPT_PLACE = CONTROL + 0x400, CONTROL + 0x5FC, CONTROL + 0x600
 PHASE, RULES, GAMES_COUNT = BSS + 0x3C2A, BSS + 0x3C30, BSS + 0x50EC
-SLOT_SPEED, SLOT_RECORD, SLOT_PLACE = BSS + 0x26304, BSS + 0x26314, BSS + 0x26B04
+SLOT_SPEED, SLOT_RECORD, SLOT_SKULLS = BSS + 0x26304, BSS + 0x26314, BSS + 0x26B04
 BITS = (BSS + 0x26B18, BSS + 0x26B19, BSS + 0x26B1A)
 HUD_MASK = BSS - 0x10000 + 0xB04
 PRESS_A, PAGES_STATE = CONTROL + 0xA34, BSS + 0x8E51D       # the frame routine's A press; the results pages' state
@@ -61,7 +61,7 @@ class Race:
         m.r[31], m.r[30] = CONTROL, BSS
         m.run(routine)
         for address in m.written:
-            size = 1 if address in (FIN, KEPT_PLACE, SLOT_PLACE) + BITS else 4
+            size = 1 if address in (FIN, KEPT_PLACE, SLOT_SKULLS) + BITS else 4
             target = self.window if address >= IMAGE else self.main
             for i in range(size):
                 target[address + i] = m.mem.get(address + i, 0)
@@ -120,7 +120,7 @@ class Race:
 
     def slot(self):
         return (get(self.main, SLOT_SPEED), bytes(self.main.get(SLOT_RECORD + k, 0) for k in range(0x1FC)),
-                self.main.get(SLOT_PLACE, 0))
+                self.main.get(SLOT_SKULLS, 0))
 
     def words(self):
         return get(self.window, KIND), get(self.window, END), get(self.window, COUNT), get(self.window, KEPT)
@@ -273,7 +273,7 @@ class WholeFrames(unittest.TestCase):
         window = {a for a in r.written if a >= IMAGE}
         kept = {KEPT_RECORD + 4 * k for k in range(127)} | {KEPT_SPEED, KEPT_PLACE}
         self.assertEqual(window, {KIND, END, COUNT, KEPT, FIN} | kept)
-        slot = {SLOT_RECORD + 4 * k for k in range(127)} | {SLOT_SPEED, SLOT_PLACE}
+        slot = {SLOT_RECORD + 4 * k for k in range(127)} | {SLOT_SPEED, SLOT_SKULLS}
         self.assertEqual({a for a in r.written if a < IMAGE}, slot | set(BITS) | {HUD_MASK})
 
     def test_a_finish_shows_finish_then_the_place_held_until_the_results(self):

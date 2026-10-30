@@ -47,10 +47,10 @@ manager) in fn_1_37AA8 (main.rel offset 0x37C14) by the image's trampoline. Cont
       bits, which fn_1_32200 sets for seat 0 by port) from the local machine's flags (0x10000000, 0x80 out,
       0x800 KO), and the HUD part mask .data 0x3D544[0] to 0 when the local racer is out or finished, else to the
       race's own (+60): seat 0's knockout or finish no longer strips every game's HUD. The results board's slot 0
-      (.bss 0x26314 progress record, 0x26304 max speed, 0x26B04 place), which the game fills by pad port and the
+      (.bss 0x26314 progress record, 0x26304 max speed, 0x26B04 skulls), which the game fills by pad port and the
       race-over loops never fill for a seat without one: at the step boundary after the local racer's finish
       step (`finwatch`, below), with the slot still empty (seat 0's own finish fills it in the game that follows
-      seat 0), its progress record, max speed (+0xD8) and place (+0x482, at most 30) are kept at
+      seat 0), its progress record, max speed (+0xD8) and skulls (+0x482, at most 30) are kept at
       +0x400/+0x5FC/+0x600 (+276 kept; +272 is no longer used) and written into the slot every frame from then on
       (so a rollback cannot take them back out). A rollback that takes the finish back drops them, and the finish
       step run again keeps them anew: kept once, on the first frame that showed the finish, they were a
