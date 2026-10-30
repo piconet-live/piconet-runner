@@ -23,6 +23,8 @@ namespace
 constexpr u32 SCOPES = 3, TEAMS_SHOWN = modes::TEAMS, SEATS_SHOWN = modes::SEATS;
 static_assert(static_cast<u32>(modes::BOARD) * SEATS_SHOWN == 240 && static_cast<u32>(modes::BOARD) == 8 &&
               static_cast<u32>(modes::BOARD_LABEL) == 32 && TEAMS_SHOWN == 30, "board.toml's arrays hold the api's");
+static_assert(static_cast<u32>(modes::BOARD_WORDS) == 16 && static_cast<u32>(modes::BOARD_WORD) == 16 &&
+              sizeof(board::ModeHead::words) / sizeof(board::ModeWord) == 24 * 16, "board.toml's words hold the api's");
 
 u32 HexByte(const std::string& hash, size_t i)
 {
@@ -48,12 +50,20 @@ board::ModeHead BoardHead(const Package& p)
   {
     if (head.count >= head.lines.size())
       break;
-    board::ModeLine& out = head.lines[head.count++];
+    const u32 at = head.count++;
+    board::ModeLine& out = head.lines[at];
     out.scope = static_cast<board::ModeBoardScope>(line.scope);
     out.type = static_cast<board::ModeBoardType>(line.type);
     out.column = column[line.scope]++;
     out.label_length = static_cast<u32>(line.label.size());
     std::memcpy(out.label.data(), line.label.data(), line.label.size());
+    out.word_count = static_cast<u32>(line.words.size());
+    for (size_t k = 0; k < line.words.size(); ++k)
+    {
+      board::ModeWord& word = head.words[at * 16 + k];
+      word.length = static_cast<u32>(line.words[k].size());
+      std::memcpy(word.text.data(), line.words[k].data(), line.words[k].size());
+    }
   }
   return head;
 }

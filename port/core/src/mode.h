@@ -118,6 +118,7 @@ struct BoardLine
   u8 type = 0;   // board::ModeBoardType
   u16 word = 0;
   std::string label;
+  std::vector<std::string> words;  // what the variable's whole number picks; none: it shows the number
 };
 
 // A package's code in the form the interpreter runs (Prepare in mode.cpp): one entry for each byte offset of the code,

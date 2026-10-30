@@ -5,6 +5,7 @@
 
 #include "mode.h"
 
+#include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <cstring>
@@ -306,6 +307,12 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
       line.type = s.U8();
       line.word = s.U16();
       line.label = s.Text();
+      const u8 word_count = s.U8();
+      for (u8 w = 0; w < word_count && !s.bad; ++w)
+        line.words.push_back(s.Text());
+      if (line.words.size() > static_cast<size_t>(modes::BOARD_WORDS) || (line.type == 1 && !line.words.empty()) ||
+          std::ranges::any_of(line.words, [](const std::string& w) { return w.size() > static_cast<size_t>(modes::BOARD_WORD); }))
+        return Fail(why, "has a board line this build cannot show");
       const size_t words = line.scope == 0 ? p.globals.size() : line.scope == 1 ? p.seat_words.size() : p.team_words.size();
       if (s.bad || line.scope > 2 || line.type > 4 || line.word >= words || line.label.empty() ||
           line.label.size() > static_cast<size_t>(modes::BOARD_LABEL) || ++in_scope[line.scope] > static_cast<u32>(modes::BOARD))

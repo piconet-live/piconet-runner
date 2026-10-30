@@ -2,6 +2,7 @@
 // compiler's own packages) read as the match start carries them, and Overdrive run on a fake race.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <memory>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -809,14 +810,26 @@ void TestTheBoardsLinesAndValues()
   CHECK(p.has_value());
   if (!p)
     return;
-  CHECK(p->board.size() == 8);
+  CHECK(p->board.size() == 9);
   const board::ModeHead head = mode::hud::BoardHead(*p);
-  CHECK(head.serial == 1 && head.count == 8 && head.name_length == 5 && std::memcmp(head.name.data(), "Board", 5) == 0);
-  CHECK(head.hash[0] == 0x0A && head.hash[1] == 0xD6 && p->hash.starts_with("0ad6"));
+  CHECK(head.serial == 1 && head.count == 9 && head.name_length == 5 && std::memcmp(head.name.data(), "Board", 5) == 0);
+  CHECK(head.hash[0] == 0x0C && head.hash[1] == 0x45 && p->hash.starts_with("0c45"));
   CHECK(head.lines[1].scope == board::ModeBoardScope::Global && head.lines[1].type == board::ModeBoardType::Real && head.lines[1].column == 1);
   CHECK(head.lines[3].type == board::ModeBoardType::Seat && head.lines[4].type == board::ModeBoardType::Seats);
   CHECK(head.lines[5].scope == board::ModeBoardScope::Seat && head.lines[5].column == 0 && head.lines[6].column == 1);
   CHECK(head.lines[7].scope == board::ModeBoardScope::Team && head.lines[7].label_length == 4 && std::memcmp(head.lines[7].label.data(), "Tank", 4) == 0);
+  // the line's words, in the head, the empty one kept; a line without has none and no one is simulation state
+  CHECK(head.lines[8].word_count == 3 && head.lines[0].word_count == 0);
+  CHECK(head.words[8 * 16].length == 0 && head.words[8 * 16 + 1].length == 4 && std::memcmp(head.words[8 * 16 + 1].text.data(), "S\xC3\xBBr", 4) == 0);
+  CHECK(head.words[8 * 16 + 2].length == 3 && std::memcmp(head.words[8 * 16 + 2].text.data(), "Out", 3) == 0 && head.words[8 * 16 + 3].length == 0);
+  // and on a status board: a launcher's read of the head has them, at the layout's place
+  alignas(64) static u8 file[board::SIZE];
+  board::View view(file);
+  view.WriteModeHead(head);
+  auto read = std::make_unique<board::ModeHead>();
+  CHECK(view.ReadModeHead(read.get()));
+  CHECK(read->lines[8].word_count == 3 && read->words[8 * 16 + 2].length == 3);
+  CHECK(std::memcmp(file + board::at::MODE_HEAD + 1144 + (8 * 16 + 2) * 20 + 4, "Out", 3) == 0);
   mode::Package long_name = *p;
   long_name.name = std::string(63, 'x') + "\xC3\xA9";
   CHECK(mode::hud::BoardHead(long_name).name_length == 63);

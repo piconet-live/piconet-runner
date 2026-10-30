@@ -77,7 +77,7 @@ void TestTheStatusBoardOfAPlainStart()
   Options o;
   o.board = path;
   Init(host, o);
-  CHECK(board::Taken() && host.notices.find("fzgx: board: taken (game.board, version 2)") != std::string::npos);
+  CHECK(board::Taken() && host.notices.find("fzgx: board: taken (game.board, version 3)") != std::string::npos);
   {
     Seen s(path);
     CHECK(s.view().HeaderRunnerVersion() == board::VERSION && s.view().HeaderRunnerPid() == board::ProcessId() &&
