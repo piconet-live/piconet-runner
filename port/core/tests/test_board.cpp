@@ -142,7 +142,7 @@ void TestABoardThatIsNotThisVersionsIsLeft()
   o.board = MakeBoard(dir, board::VERSION + 1);
   Init(host, o);
   CHECK(!board::Taken() && host.log.find("fzgx: board: game.board refused: the launcher's layout is another version (its "
-                                         "version 3, this game's 2") != std::string::npos);
+                                         "version 4, this game's 3") != std::string::npos);
   CHECK(Seen(o.board).view().HeaderRunnerVersion() == board::VERSION);
   board::Field();
   board::Stopped(board::StopReason::Escape);
