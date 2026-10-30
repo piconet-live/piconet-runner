@@ -1,7 +1,7 @@
 # AuroraCopy.cmake (cmake -DFROM=BUILD -DDEPS=FETCHED -DTO=RUNNER_FOLDER -P): the aurora target's install step. aurora-present.dll
 # and the libraries it loads at run time (Dawn's webgpu_dawn.dll, SDL3.dll, the shader compiler's dxcompiler.dll and
 # dxil.dll, and whatever else of the build's DLLs it links), copied beside the runner, which loads it from there.
-file(GLOB_RECURSE dlls "${FROM}/*.dll" "${DEPS}/*-build/*.dll" "${DEPS}/dawn_prebuilt-src/*.dll")
+file(GLOB_RECURSE dlls "${FROM}/*.dll" "${DEPS}/*-build/*.dll" "${DEPS}/*_prebuilt-src/bin/*.dll")
 list(FILTER dlls EXCLUDE REGEX "/CMakeFiles/")
 set(seen "")
 if(NOT EXISTS "${FROM}/aurora-present.dll")
