@@ -174,12 +174,17 @@ void TestTheStartGrid();
 void TestTheOutTestsCases();
 void TestTheOutTestReadsTheGame();
 void TestTheModeVectorsRead();
+void TestDestroyedAndOutTellAnEndApart();
 void TestOverdriveRunsInTheBlock();
 void TestEveryWordRuns();
 void TestTheGamesSquareRootIsTheCompilers();
 void TestTheGeneratorIsTheReferences();
 void TestWaitsRunInTheBlock();
 void TestTheLanguageVectorRuns();
+void TestTheRaceWordsRun();
+void TestTheKnockoutEndsWithItsPlaces();
+void TestTheLivesLibraryRuns();
+void TestTheLobbysRestoreStaysOut();
 // test_stats_race.cpp
 void TestAStatPackIsLaidOverTheCarData();
 void TestAStatPackUnderRollback();
@@ -507,12 +512,17 @@ int main(int argc, char** argv)
   TestTheOutTestsCases();
   TestTheOutTestReadsTheGame();
   TestTheModeVectorsRead();
+  TestDestroyedAndOutTellAnEndApart();
   TestOverdriveRunsInTheBlock();
   TestEveryWordRuns();
   TestTheGamesSquareRootIsTheCompilers();
   TestTheGeneratorIsTheReferences();
   TestWaitsRunInTheBlock();
   TestTheLanguageVectorRuns();
+  TestTheRaceWordsRun();
+  TestTheKnockoutEndsWithItsPlaces();
+  TestTheLobbysRestoreStaysOut();
+  TestTheLivesLibraryRuns();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);
   return s_failed == 0 ? 0 : 1;
 }

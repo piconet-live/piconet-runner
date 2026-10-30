@@ -150,6 +150,8 @@ constexpr EmulatorKey EMULATOR_KEYS[] = {
     {"lockstepWhitelist", "STATICRECOMP_LOCKSTEP_WHITELIST", nullptr, "0123456789abcdefABCDEFx,-: "},
     // files, and time lost writing them
     {"probe", "FZGX_PROBE"},
+    {"modeTrace", "FZGX_MODE_TRACE"},   // the game mode's events, actions and the seats' state (mode.cpp)
+    {"modeTraceEvery", "FZGX_MODE_TRACE_EVERY", nullptr, "0123456789"},
     {"probeNoHash", "FZGX_PROBE_HASH", "0"},
     {"paceLog", "FZGX_PACE_LOG"},
     {"taskTimers", "FZGX_TASKPROF", "1"},

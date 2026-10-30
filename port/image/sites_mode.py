@@ -34,11 +34,16 @@ import memmap
 
 MODES = memmap.MODES
 SEAT, SEATS = memmap.MODE_SEAT, memmap.MODE_SEATS
-PEDALS, BOOST_OFF, HELD = 1, 2, 4                 # a seat record's flags
+PEDALS, BOOST_OFF, HELD, BOOST, EXPLODE, HAND, ROLL = 1, 2, 4, 8, 16, 32, 64   # a seat record's flags
 WANTED, TAKEN, NONE = 4, 1, 3                     # MODES +0: the host asks; the block taken; none
 POINT, POINT_KNOWN = 0x8548C, 0x807F015C          # fn_1_850C4: lwz r3, 0x15c(r31)
 SPEED, SPEED_KNOWN = 0x23854, 0xC03F0014          # fn_1_236CC: lfs f1, 0x14(r31)
 VERDICT, VERDICT_KNOWN = 0x32628, 0x54000421      # fn_1_32600: rlwinm. r0, r0, 0, 16, 16
+PAIR, PAIR_CALL = 0x8514C, 0x239C4                # fn_1_850C4: bl fn_1_239C4 (a pair's contact; r28 i, r27 j)
+PAIR_KNOWN = 0x4BF9E879
+TIMER, TIMER_SKIP = 0x3A36C, 0x3A448              # fn_1_3A330: beq on the rule word's timed bit (cr0)
+TIMER_KNOWN = 0x418200DC                          # beq +0xDC
+DESTROY = 0x25004                                 # fn_1_25004: the game's explosion of a machine (r3)
 SQRT = 0x8006D0B4                                 # main.dol: the game's square root (f1 -> f1)
 NOT_HELD = 0x8000 | 0x80 | 0x800 | 0x10000 | 0x08000000 | 0x40000000
 RESTORING = 0x214                                 # M+0x214: the restore's countdown (u16)
@@ -243,6 +248,55 @@ mheld_no:
     blr
 """)
 
+    # explode: story action 16, the game's own explosion (fn_1_25004: flags 0x800 | 0x80 | 0x00800000 | 0x40000000,
+    # +0x58C 0x10, energy and motion 0, the effect) with the motion written back as it was: momentum P and +0xA0 to
+    # +0xA8, the base speed +0x224, the read-out +0x17C (the wreck slides on). r3 the machine; changes the volatile
+    # registers. A second explode is the game's no-op (fn_1_25004 returns at +0x58C 0x10).
+    r.add("mode_explode", f"""    stwu 1, -0x40(1)
+    mflr 0
+    stw 0, 0x44(1)
+    stw 31, 0x3C(1)
+    mr 31, 3
+    lwz 0, 0x94(31)
+    stw 0, 0x10(1)
+    lwz 0, 0x98(31)
+    stw 0, 0x14(1)
+    lwz 0, 0x9C(31)
+    stw 0, 0x18(1)
+    lwz 0, 0xA0(31)
+    stw 0, 0x1C(1)
+    lwz 0, 0xA4(31)
+    stw 0, 0x20(1)
+    lwz 0, 0xA8(31)
+    stw 0, 0x24(1)
+    lwz 0, 0x224(31)
+    stw 0, 0x28(1)
+    lwz 0, 0x17C(31)
+    stw 0, 0x2C(1)
+    @bl {FN(DESTROY)}
+    lwz 0, 0x10(1)
+    stw 0, 0x94(31)
+    lwz 0, 0x14(1)
+    stw 0, 0x98(31)
+    lwz 0, 0x18(1)
+    stw 0, 0x9C(31)
+    lwz 0, 0x1C(1)
+    stw 0, 0xA0(31)
+    lwz 0, 0x20(1)
+    stw 0, 0xA4(31)
+    lwz 0, 0x24(1)
+    stw 0, 0xA8(31)
+    lwz 0, 0x28(1)
+    stw 0, 0x224(31)
+    lwz 0, 0x2C(1)
+    stw 0, 0x17C(31)
+    lwz 31, 0x3C(1)
+    lwz 0, 0x44(1)
+    mtlr 0
+    addi 1, 1, 0x40
+    blr
+""")
+
     # the mode point: the interpreter, then the rescale and read-out of every held seat (r31 the car manager)
     point = TEXT + POINT
     word = stock(point, POINT_KNOWN)
@@ -264,6 +318,12 @@ mheld_no:
     extsb. 26, 26
     ble mpt_done
 mpt_seat:
+    lwz 0, 0(28)
+    andi. 0, 0, {EXPLODE}
+    beq mpt_whole
+    mr 3, 27
+    bl mode_explode
+mpt_whole:
     mr 3, 27
     mr 4, 28
     bl mode_held
@@ -317,11 +377,50 @@ mpt_stock:
     mr 3, 30
     bl mode_held
     cmpwi 3, 0
-    beq mspd_done
+    beq mspd_move
     mr 3, 30
     mr 4, 28
     li 5, 0
     bl mode_hold
+mspd_move:
+{la(12, MODES)}    lwz 12, 4(12)
+    lha 4, 4(30)
+    mulli 4, 4, {memmap.MODE_MOVE}
+    add 4, 4, 12
+    addi 4, 4, {memmap.MODE_MOVES:#x}
+    lwz 0, 0(4)
+    cmpwi 0, 0
+    beq mspd_done
+    lhz 3, {RESTORING:#x}(30)
+    cmpwi 3, 0
+    bne mspd_done
+    lwz 3, 0(30)
+    andis. 5, 3, {NOT_HELD >> 16:#x}
+    bne mspd_done
+    andi. 5, 3, {NOT_HELD & 0xFFFF:#x}
+    bne mspd_done
+    cmpwi 0, 1
+    bne mspd_set
+    lfs 1, 0x94(30)
+    lfs 2, 4(4)
+    fadds 1, 1, 2
+    stfs 1, 0x94(30)
+    lfs 1, 0x98(30)
+    lfs 2, 8(4)
+    fadds 1, 1, 2
+    stfs 1, 0x98(30)
+    lfs 1, 0x9C(30)
+    lfs 2, 12(4)
+    fadds 1, 1, 2
+    stfs 1, 0x9C(30)
+    b mspd_done
+mspd_set:
+    lwz 0, 4(4)
+    stw 0, 0x94(30)
+    lwz 0, 8(4)
+    stw 0, 0x98(30)
+    lwz 0, 12(4)
+    stw 0, 0x9C(30)
 mspd_done:
 {LOAD_FPR}{LOAD_GPR}    lwz 0, 0xC(1)
     mtctr 0
@@ -353,3 +452,101 @@ resp_stock:
 """.format(back=site + 4, word=word))
     patch(site, word, 0, "respawns")
     middle.append((site, ["r3", "r12", "cr0"], "respawns"))
+
+    # the pair gate (the contact loop's call of a pair, i = r28, j = r27, r3 = M[i], r4 = M[j]): a pair the mode
+    # keeps apart (contact off, ghost, no contact, a team's) is not answered (fn_1_239C4 not called, the answer 0: no
+    # push, damage, KO, wreck or sparks) and keeps the game's own immunity bits on both machines' +0x514, so the pair
+    # stays immune until it first separates when the mode lets it meet again (ghost-machines.md 2.4); a pair answered
+    # (1) goes into the touching rows, both ways. Registers: r0, r11, r12, cr0 and lr (the call's own), r3 the answer.
+    site = TEXT + PAIR
+    call = TEXT + PAIR_CALL
+    word = stock(site, PAIR_KNOWN)
+    nc, touch = memmap.MODE_NC, memmap.MODE_TOUCH
+    r.add("mode_pair", test + f"""    beq mpair_stock
+""" + la(12, MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq mpair_stock
+    lwz 0, {memmap.MODE_NC_ANY:#x}(12)
+    cmpwi 0, 0
+    beq mpair_call
+    slwi 11, 28, 2
+    add 11, 11, 12
+    lwz 11, {nc:#x}(11)
+    addi 0, 27, 1
+    rlwnm. 0, 11, 0, 31, 31
+    bne mpair_skip
+    slwi 11, 27, 2
+    add 11, 11, 12
+    lwz 11, {nc:#x}(11)
+    addi 0, 28, 1
+    rlwnm. 0, 11, 0, 31, 31
+    bne mpair_skip
+mpair_call:
+    @bl {call:#x}
+    cmpwi 3, 0
+    beq mpair_back
+""" + la(12, MODES) + f"""    lwz 12, 4(12)
+    slwi 11, 28, 2
+    add 11, 11, 12
+    lwz 12, {touch:#x}(11)
+    lis 0, 0x8000
+    srw 0, 0, 27
+    or 12, 12, 0
+    stw 12, {touch:#x}(11)
+""" + la(12, MODES) + f"""    lwz 12, 4(12)
+    slwi 11, 27, 2
+    add 11, 11, 12
+    lwz 12, {touch:#x}(11)
+    lis 0, 0x8000
+    srw 0, 0, 28
+    or 12, 12, 0
+    stw 12, {touch:#x}(11)
+mpair_back:
+    @b {site + 4:#x}
+mpair_skip:
+    lis 0, 0x8000
+    srw 0, 0, 27
+    lwz 11, 0x514(3)
+    or 11, 11, 0
+    stw 11, 0x514(3)
+    lis 0, 0x8000
+    srw 0, 0, 28
+    lwz 11, 0x514(4)
+    or 11, 11, 0
+    stw 11, 0x514(4)
+    li 3, 0
+    @b {site + 4:#x}
+mpair_stock:
+    @bl {call:#x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_pair")
+    middle.append((site, ["r0", "r11", "r12", "cr0", "lr"], "mode_pair"))
+
+    # the timer (fn_1_3A330's countdown of the timed rule, 0x40000: R+0xA4 down a step, the beeps, time over at 0):
+    # under a clock limit the mode keeps the timer (from the race clock: mode.cpp) and ends the race itself, so the
+    # game's countdown is skipped as it is without the rule. r0 holds the rule word's timed bit on entry (the site's
+    # rlwinm.), which the routine tests again after the mode test.
+    site = TEXT + TIMER
+    word = stock(site, TIMER_KNOWN)
+    skip = TEXT + TIMER_SKIP
+    r.add("mode_timer", test + """    beq mtim_stock
+    cmpwi 0, 0
+    beq mtim_skip
+""" + la(12, MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq mtim_count
+    lwz 12, {memmap.MODE_CLOCK:#x}(12)
+    cmpwi 12, 0
+    beq mtim_count
+mtim_skip:
+    @b {skip:#x}
+mtim_stock:
+    cmpwi 0, 0
+    bne mtim_count
+    @b {skip:#x}
+mtim_count:
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_timer")
+    middle.append((site, ["r12", "cr0"], "mode_timer"))

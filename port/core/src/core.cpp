@@ -320,6 +320,22 @@ u32 ModeRecord(u32 seat)
   return mode::Record(g, seat);
 }
 
+u32 ModeMove(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Move(g, seat);
+}
+
+u32 ModeRollSave(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::RollSave(g, seat);
+}
+
 void Shutdown()
 {
   net::Shutdown();
