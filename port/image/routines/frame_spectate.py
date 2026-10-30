@@ -122,7 +122,7 @@ def asm():
     return text
 
 
-_TEXT = frame_speccontrols.TEXT + """spectate:
+_TEXT = frame_speccontrols.TEXT + f"""spectate:
     lwz 9, 116(31)
     cmpwi 9, 0
     beqlr
@@ -136,7 +136,7 @@ _TEXT = frame_speccontrols.TEXT + """spectate:
     lwz 9, 0x14(9)
     addis 10, 30, 7
     lwz 10, -0x27C8(10)
-    mulli 9, 9, 0x620
+    mulli 9, 9, 0x{memmap.MACHINE_SIZE:X}
     add 10, 10, 9
     lwz 0, FIN_KIND(31)
     cmpwi 0, 1
@@ -169,15 +169,15 @@ sp_lead:
     li 4, 0
     mr 3, 6
 sp_find:
-    lwz 9, 0x49C(3)
+    lwz 9, 0x{memmap.MACHINE_PROGRESS:X}(3)
     cmpwi 9, 0
     beq sp_find_next
-    lbz 9, 0x115(9)
+    lbz 9, 0x{memmap.PROGRESS_RANK:X}(9)
     cmpwi 9, 0
     bne sp_find_next
 OUT_LEADER
 sp_find_next:
-    addi 3, 3, 0x620
+    addi 3, 3, 0x{memmap.MACHINE_SIZE:X}
     addi 4, 4, 1
     cmpw 4, 5
     blt sp_find
@@ -201,7 +201,7 @@ spf_on:
 spf_loop:
     cmpw 4, 5
     bge spf_end
-    lwz 9, 0x49C(3)
+    lwz 9, 0x{memmap.MACHINE_PROGRESS:X}(3)
     cmpwi 9, 0
     beq spf_skip
     lwz 0, 0(3)
@@ -209,13 +209,13 @@ spf_loop:
     bne spf_skip
 OUT_FINISHED
 spf_racing:
-    lbz 0, 0x115(9)
+    lbz 0, 0x{memmap.PROGRESS_RANK:X}(9)
     cmplw 0, 12
     bge spf_skip
     mr 12, 0
     mr 11, 4
 spf_skip:
-    addi 3, 3, 0x620
+    addi 3, 3, 0x{memmap.MACHINE_SIZE:X}
     addi 4, 4, 1
     b spf_loop
 spf_end:
@@ -381,7 +381,7 @@ ssc_done:
     addi 1, 1, 16
     mtlr 0
     blr
-""" + frame_specwatch.TEXT + """spechud:
+""" + frame_specwatch.TEXT + f"""spechud:
     addis 10, 30, -1
     lwz 0, 56(31)
     cmpwi 0, 0
@@ -477,7 +477,7 @@ sh_log_racer:
     beqlr
     cmplw 12, 9
     bge sh_log_asked
-    mulli 12, 12, 0x620
+    mulli 12, 12, 0x{memmap.MACHINE_SIZE:X}
     add 12, 8, 12
 OUT_SHOWN
 sh_log_shown:
@@ -488,7 +488,7 @@ sh_log_asked:
     lwz 12, 252(31)
     cmplw 12, 9
     bgelr
-    mulli 12, 12, 0x620
+    mulli 12, 12, 0x{memmap.MACHINE_SIZE:X}
     add 12, 8, 12
 OUT_ASKED
 sh_log_racing:

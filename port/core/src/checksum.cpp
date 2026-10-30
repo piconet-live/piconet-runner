@@ -47,8 +47,8 @@ constexpr Words<N> Included(const std::array<u32, N>& skip, u32 size)
   return words;
 }
 
-constexpr auto BLOCK_WORDS = Included(game::BLOCK_SKIP, 0x620);
-constexpr auto PROGRESS_WORDS = Included(game::PROGRESS_SKIP, 0x1FC);
+constexpr auto BLOCK_WORDS = Included(game::BLOCK_SKIP, game::MACHINE_SIZE);
+constexpr auto PROGRESS_WORDS = Included(game::PROGRESS_SKIP, game::PROGRESS_SIZE);
 
 // A big-endian word: one load and one byte swap.
 inline u32 LoadBig32(const u8* p)
@@ -74,8 +74,8 @@ bool Rollback::InChecksum(bool progress, u32 offset)
 {
   const u32 k = offset / 4;
   if (progress)
-    return offset < 0x1FC && ((game::PROGRESS_SKIP[k >> 5] << (k & 31)) & FIRST_WORD) == 0;
-  return offset < 0x620 && ((game::BLOCK_SKIP[k >> 5] << (k & 31)) & FIRST_WORD) == 0;
+    return offset < game::PROGRESS_SIZE && ((game::PROGRESS_SKIP[k >> 5] << (k & 31)) & FIRST_WORD) == 0;
+  return offset < game::MACHINE_SIZE && ((game::BLOCK_SKIP[k >> 5] << (k & 31)) & FIRST_WORD) == 0;
 }
 
 u32 StateChecksum(Guest& g, u32 module)
@@ -87,10 +87,10 @@ u32 StateChecksum(Guest& g, u32 module)
     return h;
   for (u32 i = 0; i < *count; ++i)
   {
-    const u8* block = g.Ram((machines + i * 0x620), 0x620);
+    const u8* block = g.Ram((machines + i * game::MACHINE_SIZE), game::MACHINE_SIZE);
     h = HashWords(h, block, BLOCK_WORDS);
-    const u32 progress = Big32(block + 0x49C);
-    h = HashWords(h, g.Ram(progress, 0x1FC), PROGRESS_WORDS);
+    const u32 progress = Big32(block + game::MACHINE_PROGRESS);
+    h = HashWords(h, g.Ram(progress, game::PROGRESS_SIZE), PROGRESS_WORDS);
   }
   return h;
 }

@@ -36,7 +36,7 @@ OUTPUTS = {"cxx": "port/facts/generated/facts.h", "python": "port/facts/generate
 COLUMNS = ["name", "group", "value", "of", "type", "manifest", "source", "meaning"]
 # group: the C++ namespace (None: not in the header), the C# class (None: not in C#)
 GROUPS = {"limit": ("limits", "Limits"), "window": ("layout", None), "control": ("layout", None),
-          "slot": ("layout", None), "race": ("layout", None), "rel": ("game", None), "game": ("game", None),
+          "slot": ("layout", None), "race": ("layout", None), "rel": ("game", "Rel"), "game": ("game", None),
           "machine": ("game", None), "site": ("game", None), "build": (None, None), "wire": ("wire", "Wire"),
           "file": ("file", "Files")}
 NAMESPACES = ["layout", "game", "limits", "wire", "file"]

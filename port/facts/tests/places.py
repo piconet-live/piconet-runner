@@ -171,9 +171,22 @@ def enum_value(path, what):
 
 # ---- Python constants
 
+_module = {}
+
+
+def generated_module():
+    """The generated Python module's names and values (port/facts/generated/facts.py)."""
+    if not _module:
+        space = {}
+        exec(compile(text_of(generate.OUTPUTS["python"]), generate.OUTPUTS["python"], "exec"), space)
+        _module.update({k: v for k, v in space.items() if k.isupper()})
+    return _module
+
+
 def py_names(path, depth=0):
     """{name: (value, line)} of a Python file's module-level assignments that are plain numbers, tuples of them, or
-    expressions over earlier names and memmap.NAME. What cannot be worked out is left out."""
+    expressions over earlier names, memmap.NAME and _facts.NAME (the generated module, as memmap.py loads it). What
+    cannot be worked out is left out."""
     out = {}
     memmap = None
 
@@ -187,6 +200,8 @@ def py_names(path, depth=0):
             return tuple(walk(e) for e in node.elts)
         if isinstance(node, ast.BinOp) and type(node.op) in generate.OPERATORS:
             return generate.OPERATORS[type(node.op)](walk(node.left), walk(node.right))
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "_facts":
+            return generated_module()[node.attr]   # memmap's names that are the table's (the generated module's)
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "memmap" and depth == 0:
             memmap = memmap or py_names("memmap.py", 1)
             return memmap[node.attr][0]

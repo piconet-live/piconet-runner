@@ -70,16 +70,16 @@ sp::Racers ReadRacers(Guest& g, u32 module, u32 machines, u32 count)
   sp::Racers racers{};
   for (u32 i = 0; i < count; ++i)
   {
-    const u32 base = machines + i * 0x620;
-    const u32 progress = g.Read32(base + 0x49C);
+    const u32 base = machines + i * game::MACHINE_SIZE;
+    const u32 progress = g.Read32(base + game::MACHINE_PROGRESS);
     if (progress == 0)
       continue;
     sp::Racer& r = racers[i];
     r.present = true;
     r.out = out_test::Out(g, module, base);
-    r.finished = (g.Read32(base) & 0x10000) != 0;
-    r.rank = g.Read8(progress + 0x115);
-    r.distance = std::bit_cast<float>(g.Read32(progress + 0xF8));
+    r.finished = (g.Read32(base) & game::MACHINE_FLAG_FINISHED) != 0;
+    r.rank = g.Read8(progress + game::PROGRESS_RANK);
+    r.distance = std::bit_cast<float>(g.Read32(progress + game::PROGRESS_DISTANCE));
   }
   return racers;
 }
@@ -102,16 +102,16 @@ void Show(Guest& g, Session& s, const sp::Frame& f, const sp::Racers& racers, u3
     const sp::Racer& r = racers[i];
     if (!r.present)
       continue;
-    const u32 base = machines + i * 0x620;
-    const u32 progress = g.Read32(base + 0x49C);
+    const u32 base = machines + i * game::MACHINE_SIZE;
+    const u32 progress = g.Read32(base + game::MACHINE_PROGRESS);
     SpectatorRow row;
     row.seat = static_cast<u8>(i);
     row.rank = static_cast<u8>(r.rank);
-    row.laps = static_cast<u8>(std::min<u32>(g.Read32(progress + 0x118), 255));
+    row.laps = static_cast<u8>(std::min<u32>(g.Read32(progress + game::PROGRESS_LAPS), 255));
     row.out = r.out;
     row.finished = r.finished;
-    const float most = static_cast<float>(g.Read16(base + 0x5DA));
-    const float energy = std::bit_cast<float>(g.Read32(base + 0x184));
+    const float most = static_cast<float>(g.Read16(base + game::MACHINE_MAX_ENERGY));
+    const float energy = std::bit_cast<float>(g.Read32(base + game::MACHINE_ENERGY));
     row.energy = most > 0 ? std::clamp(energy / most, 0.0f, 1.0f) : 0.0f;
     // in race order
     u32 at = show.count++;
@@ -328,9 +328,9 @@ void ResultsCamera(Guest& g, const Session& s, u32 module)
   u32 flags = 0, flags2 = 0, drawn = 0;
   if (machines != 0 && seat < count)
   {
-    const u32 base = machines + seat * 0x620;
+    const u32 base = machines + seat * game::MACHINE_SIZE;
     flags = g.Read32(base);
-    flags2 = g.Read32(base + 0x58C);
+    flags2 = g.Read32(base + game::MACHINE_FLAGS2);
     if (cars != 0)
       drawn = g.Read32(cars + g.Read8(base + 5) * 0x440 + 0x390);
   }

@@ -7,7 +7,7 @@ it says out of the race for good (fn_1_32200). fn_1_32600, read instruction by i
 - a finished machine (flag 0x10000) is never asked: it races on;
 - with the Restore rule (.bss 0x3C30, the rule word, bit 0x8000) none of the tests below is made: every wreck, fall
   and breakdown is put back about 160 steps later, and the machine is never out for them;
-- else out with flag 0x08000000 (retired), 0x800 (destroyed), +0x58C bit 0x10 (out of contact: a fall), or flag 0x80
+- else out with flag 0x08000000 (retired), 0x800 (out of the course: destroyed, out of bounds or off the course), +0x58C bit 0x10 (out of contact: a fall), or flag 0x80
   (broken down: energy out) with flag 0x200, or race type 5 (.bss 0x3C35), or the speed +0x17C below 1.0 (.rodata
   0xBE4; fcmpo and bge: a speed that is not a number is not below). A breakdown alone coasts on with its controls
   zeroed and may still cross the line: it is out only at rest;
@@ -32,11 +32,14 @@ it), which is not below. `out(...)` is the same verdict in Python, for the tests
 in C++, for what the core shows (the scrubber, the replay's racer watched, the live feed). Both and this text are
 held to one list of cases, tests/out-cases.tsv."""
 import struct
+import memmap
 
-FINISHED, TIME_OVER = 0x00010000, 0x10000000
+# a machine's flags and second flags (+0x58C), the facts table's (memmap: its machine group)
+FINISHED, TIME_OVER = memmap.MACHINE_FLAG_FINISHED, memmap.MACHINE_FLAG_TIME_OVER
+RETIRED, OUT = memmap.MACHINE_FLAG_RETIRED, memmap.MACHINE_FLAG_OUT
+BROKEN_DOWN, CPU = memmap.MACHINE_FLAG_BROKEN_DOWN, memmap.MACHINE_FLAG_CPU
+FALLEN = memmap.MACHINE_FLAGS2_FALLEN  # +0x58C
 RESTORE = 0x8000                      # the rule word's bit
-RETIRED, DESTROYED, BROKEN_DOWN, CPU = 0x08000000, 0x800, 0x80, 0x200
-FALLEN = 0x10                         # +0x58C
 ONE = 0x3F800000                      # 1.0, .rodata 0xBE4
 
 
@@ -52,9 +55,9 @@ def clause(m, bss, t0, t1, out, racing):
     bne {racing}
     andis. {t1}, {t0}, {RETIRED >> 16}
     bne {out}
-    andi. {t1}, {t0}, {DESTROYED}
+    andi. {t1}, {t0}, {OUT}
     bne {out}
-    lwz {t1}, 0x58C({m})
+    lwz {t1}, 0x{memmap.MACHINE_FLAGS2:X}({m})
     andi. {t1}, {t1}, {FALLEN}
     bne {out}
     andi. {t1}, {t0}, {BROKEN_DOWN}
@@ -64,7 +67,7 @@ def clause(m, bss, t0, t1, out, racing):
     lbz {t1}, 0x3C35({bss})
     cmplwi {t1}, 5
     beq {out}
-    lwz {t1}, 0x17C({m})
+    lwz {t1}, 0x{memmap.MACHINE_SPEED:X}({m})
     lis {t0}, {ONE >> 16}
     cmpw {t1}, {t0}
     bge {racing}
@@ -86,7 +89,7 @@ def out(flags, fallen=0, speed=0.0, rules=0, race_type=6):
         return True
     if rules & RESTORE:
         return False
-    if flags & (RETIRED | DESTROYED) or fallen & FALLEN:
+    if flags & (RETIRED | OUT) or fallen & FALLEN:
         return True
     if not flags & BROKEN_DOWN:
         return False

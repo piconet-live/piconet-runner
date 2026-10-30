@@ -69,7 +69,7 @@ r_here:
     cmpwi 0, 0
     bne u_game
 u_out:
-    lwz 0, 0x58C(10)
+    lwz 0, 0x{memmap.MACHINE_FLAGS2:X}(10)
     andi. 0, 0, 0x90
     beq u_next
     lwz 9, 0(10)
@@ -78,7 +78,7 @@ u_out:
     oris 9, 9, 0x0800
     stw 9, 0(10)
 u_next:
-    addi 10, 10, 0x620
+    addi 10, 10, 0x{memmap.MACHINE_SIZE:X}
     bdnz u_out
     b u_retired
 u_game:
@@ -87,7 +87,7 @@ u_game:
     oris 9, 9, 0x0800
     stw 9, 0(10)
 u_game_next:
-    addi 10, 10, 0x620
+    addi 10, 10, 0x{memmap.MACHINE_SIZE:X}
     bdnz u_game
 u_retired:
     lwz 9, 0(31)
@@ -157,7 +157,7 @@ ko_frame:
     bne ko_set
     lis 0, 0x3F80
 ko_set:
-    stw 0, 0x184(31)
+    stw 0, 0x{memmap.MACHINE_ENERGY:X}(31)
 no_ko:
     lha 9, 4(31)
     cmpwi 9, 0
@@ -165,7 +165,7 @@ no_ko:
     lwz 0, 0(31)
     andis. 0, 0, 0x0400
     bne switch
-    lbz 0, 0x474(31)
+    lbz 0, 0x{memmap.MACHINE_PAD:X}(31)
     extsb 0, 0
     cmpwi 0, -1
     beq switch

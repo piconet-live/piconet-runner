@@ -126,7 +126,7 @@ def asm():
     lbz 26, 0x3C39(30)
     cmplw 25, 26
     bge out
-    mulli 9, 25, 0x620
+    mulli 9, 25, 0x{memmap.MACHINE_SIZE:X}
     add 9, 9, 28
     lfs 28, 0x158(9)
     lfs 29, 0x168(9)
@@ -170,21 +170,21 @@ collect:
     bne c_row
     li 20, 2
 c_row:
-    mulli 24, 27, 0x620
+    mulli 24, 27, 0x{memmap.MACHINE_SIZE:X}
     add 24, 24, 28
     lwz 0, 0(24)
     andis. 9, 0, 0x0001
     bne c_leave
-""" + outtest.clause(24, 30, 0, 9, "c_leave", "c_tag") + """c_leave:
+""" + outtest.clause(24, 30, 0, 9, "c_leave", "c_tag") + f"""c_leave:
     li 20, 2
 c_tag:
-    lfs 1, 0x158(24)
+    lfs 1, 0x{memmap.MACHINE_DRAWN_X:X}(24)
     fsubs 1, 1, 28
     fmuls 4, 1, 1
-    lfs 1, 0x168(24)
+    lfs 1, 0x{memmap.MACHINE_DRAWN_Y:X}(24)
     fsubs 1, 1, 29
     fmadds 4, 1, 1, 4
-    lfs 1, 0x178(24)
+    lfs 1, 0x{memmap.MACHINE_DRAWN_Z:X}(24)
     fsubs 1, 1, 30
     fmadds 4, 1, 1, 4
     lfs 0, 52(23)
@@ -192,16 +192,16 @@ c_tag:
     bge c_not
     stfs 4, 0x30(1)
     lfs 0, 68(23)
-    lfs 1, 0x158(24)
-    lfs 2, 0x1BC(24)
+    lfs 1, 0x{memmap.MACHINE_DRAWN_X:X}(24)
+    lfs 2, 0x{memmap.MACHINE_UP_X:X}(24)
     fmadds 1, 2, 0, 1
     stfs 1, 0x10(1)
-    lfs 1, 0x168(24)
-    lfs 2, 0x1C0(24)
+    lfs 1, 0x{memmap.MACHINE_DRAWN_Y:X}(24)
+    lfs 2, 0x{memmap.MACHINE_UP_X + 4:X}(24)
     fmadds 1, 2, 0, 1
     stfs 1, 0x14(1)
-    lfs 1, 0x178(24)
-    lfs 2, 0x1C4(24)
+    lfs 1, 0x{memmap.MACHINE_DRAWN_Z:X}(24)
+    lfs 2, 0x{memmap.MACHINE_UP_X + 8:X}(24)
     fmadds 1, 2, 0, 1
     stfs 1, 0x18(1)
     addi 3, 1, 0x10
