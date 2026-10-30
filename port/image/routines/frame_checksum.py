@@ -4,8 +4,9 @@ masks' words, which netframe.py works out from the machine-state map and puts in
 
 `genlog`, after every step of a running session in a game told to keep the logs (memmap.IMAGE_LOGS; a players'
 game writes nothing): the race's two generator words as that step left them, into the
-tests' log (memmap.GENERATOR_LOG, 8 bytes at step & 2047: the executable's 0x801A63C0, then the effects' .data
-0x1D628). Both are memory a rollback puts back and neither is in the checksum; a step run again writes its entry
+tests' log (memmap.GENERATOR_LOG, 8 bytes at step & 2047: the word the race's own draws step, the executable's
+0x801A63C0 or, in a race with the simulation's own generator, memmap.SIM_GENERATOR (sites_generator.py: the
+shift word says which), then the effects' .data 0x1D628). Both are memory a rollback puts back and neither is in the checksum; a step run again writes its entry
 again, so the log holds what the last run of each step left. Two games' logs, from dumps of the data window at one
 step, say whether the words were equal step by step (the gates' reports/generator-log.py)."""
 import memmap
@@ -16,7 +17,8 @@ assert memmap.GENERATOR_LOG_STEPS & (memmap.GENERATOR_LOG_STEPS - 1) == 0
 
 
 def asm():
-    return _TEXT.replace("GENLOG_ON", str(memmap.IMAGE_LOGS - memmap.CONTROL)).replace("GENLOG_MASK", str(memmap.GENERATOR_LOG_STEPS - 1)).replace(
+    return _TEXT.replace("GENLOG_ON", str(memmap.IMAGE_LOGS - memmap.CONTROL)).replace(
+        "GENLOG_SHIFT", str(memmap.SIM_GENERATOR_SHIFT - memmap.CONTROL)).replace("GENLOG_MASK", str(memmap.GENERATOR_LOG_STEPS - 1)).replace(
         "GENLOG_HI", str(memmap.hi(memmap.GENERATOR_LOG))).replace("GENLOG_LO", str(memmap.lo(memmap.GENERATOR_LOG)))
 
 
@@ -105,7 +107,8 @@ genlog:
     lis 10, GENLOG_HI
     ori 10, 10, GENLOG_LO
     add 10, 10, 9
-    lis 9, -0x7FE6
+    lwz 9, GENLOG_SHIFT(31)
+    addis 9, 9, -0x7FE6
     lwz 0, 0x63C0(9)
     stw 0, 0(10)
     addis 9, 30, -3

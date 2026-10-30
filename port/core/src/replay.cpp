@@ -217,6 +217,10 @@ bool StartReplay(const std::string& path)
   // the rubber band (RACE_RUBBER_BAND_ON): a header without the key is a race that had it (before 0.4.0)
   const u8* band = m->race.data() + RACE_RUBBER_BAND_ON;
   header[replay::header::RUBBER_BAND] = picojson::value((band[0] | band[1] | band[2] | band[3]) != 0);
+  // the simulation's own generator (RACE_SIM_GENERATOR): a header without the key is a race that drew from the
+  // executable's word (before it)
+  const u8* sim = m->race.data() + RACE_SIM_GENERATOR;
+  header[replay::header::SIM_GENERATOR] = picojson::value((sim[0] | sim[1] | sim[2] | sim[3]) != 0);
   header[replay::header::MOD_SHA1] = picojson::value(m->image_sha1);
   header[replay::header::MOD_COMMIT] = picojson::value(m->bundle_commit);
   // the game, and what ran it: a replay is played back only by this game, and its row in the table of images that

@@ -63,6 +63,8 @@ DRAW_ASK	port/core/src/present.cpp	cxx	DRAW_ASK
 DRAW_SKIP	memmap.py	py	DRAW_SKIP	
 DRAW_SKIP	port/core/src/present.cpp	cxx	DRAW_SKIP	
 TRUE_ASPECT	memmap.py	py	TRUE_ASPECT	
+SIM_GENERATOR	memmap.py	py	SIM_GENERATOR	
+SIM_GENERATOR_SHIFT	memmap.py	py	SIM_GENERATOR_SHIFT	
 SPEC_MODE	memmap.py	py	SPEC_MODE	
 SPEC_HEIGHT	memmap.py	py	SPEC_HEIGHT	
 SPEC_CHANGE	memmap.py	py	SPEC_CHANGE	
@@ -167,6 +169,8 @@ RACE_FLOW	memmap.py	py	RACE_FLOW
 RACE_FLOW	port/core/src/files.h	cxx	RACE_FLOW	
 RACE_RUBBER_BAND_ON	memmap.py	py	RACE_RUBBER_BAND_ON	
 RACE_RUBBER_BAND_ON	port/core/src/files.h	cxx	RACE_RUBBER_BAND_ON	
+RACE_SIM_GENERATOR	memmap.py	py	RACE_SIM_GENERATOR	
+RACE_SIM_GENERATOR	port/core/src/files.h	cxx	RACE_SIM_GENERATOR	
 RACE_SETTINGS	memmap.py	py	RACE_SETTINGS	
 RACE_SETTINGS	port/core/src/files.h	cxx	RACE_SETTINGS	
 RACE_CUSTOM	memmap.py	py	RACE_CUSTOM	

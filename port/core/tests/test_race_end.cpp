@@ -318,6 +318,24 @@ void TestTheFinishLimitInTheRaceBlock()
       CHECK(host.log.find(word == -1 ? "flow or rubber band is not a number in its range" : "or no rubber band, which only version 7 does") != std::string::npos);
     Shutdown();
   }
+  // the simulation's own generator (files.h RACE_SIM_GENERATOR): a recording without the key drew from the
+  // executable's word (before it) and plays so; a key that is not true or false is refused
+  for (const auto& [sim, word] : {std::pair{"", 0}, std::pair{", \"simGenerator\": true", 1},
+                                  std::pair{", \"simGenerator\": false", 0}, std::pair{", \"simGenerator\": 1", -1}})
+  {
+    WriteReplay(options.play_file, {1, 0}, "", std::string(", \"flow\": 1") + sim);
+    host.log.clear();
+    Init(host, options);
+    CHECK(Active() == (word >= 0));
+    if (word >= 0)
+    {
+      FrameTick();
+      CHECK(Data().Read(layout::RACE_SIM_GENERATOR_AT, 4) == static_cast<u32>(word));
+    }
+    else
+      CHECK(host.log.find("or its generator is not true or false") != std::string::npos);
+    Shutdown();
+  }
   Init(host, Options{});
   std::filesystem::remove_all(dir);
 }
