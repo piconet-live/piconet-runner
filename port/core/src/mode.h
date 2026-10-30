@@ -110,6 +110,15 @@ struct Rule
   u32 when = NONE, during = NONE, body = 0;  // offsets in the code (`during`: the rule's `while`)
 };
 
+// A `board` line (the language's section 10; the package's BORD): a variable's word on the status board.
+struct BoardLine
+{
+  u8 scope = 0;  // board::ModeBoardScope
+  u8 type = 0;   // board::ModeBoardType
+  u16 word = 0;
+  std::string label;
+};
+
 // A package's code in the form the interpreter runs (Prepare in mode.cpp): one entry for each byte offset of the code,
 // and one past its end, the operands decoded and checked once. Worked out from the package alone and never written
 // after: it holds nothing of a race, so a rollback has nothing of it to put back. What it answers is what the code
@@ -155,6 +164,11 @@ struct Package
   bool contact_off = false;
   u32 clock_limit = 0;              // steps, 0 none
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
+  // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
+  bool solo = false, pause = false, save_state = false;
+  u32 rewind = 0;                   // the rewind's reach in steps, 0 none
+  u32 resume_countdown = 0;         // steps
+  std::vector<BoardLine> board;     // the file's board lines, in its order: presentation only (mode_board.cpp)
   u32 players = 0;                  // bit i: a player drives seat i (the match start's player seats)
   std::vector<s32> globals, seat_words, team_words;  // their start values
   std::vector<Rule> rules;

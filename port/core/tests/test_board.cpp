@@ -77,7 +77,7 @@ void TestTheStatusBoardOfAPlainStart()
   Options o;
   o.board = path;
   Init(host, o);
-  CHECK(board::Taken() && host.notices.find("fzgx: board: taken (game.board, version 1)") != std::string::npos);
+  CHECK(board::Taken() && host.notices.find("fzgx: board: taken (game.board, version 2)") != std::string::npos);
   {
     Seen s(path);
     CHECK(s.view().HeaderRunnerVersion() == board::VERSION && s.view().HeaderRunnerPid() == board::ProcessId() &&
@@ -142,7 +142,7 @@ void TestABoardThatIsNotThisVersionsIsLeft()
   o.board = MakeBoard(dir, board::VERSION + 1);
   Init(host, o);
   CHECK(!board::Taken() && host.log.find("fzgx: board: game.board refused: the launcher's layout is another version (its "
-                                         "version 2, this game's 1") != std::string::npos);
+                                         "version 3, this game's 2") != std::string::npos);
   CHECK(Seen(o.board).view().HeaderRunnerVersion() == board::VERSION);
   board::Field();
   board::Stopped(board::StopReason::Escape);

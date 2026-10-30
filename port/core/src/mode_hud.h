@@ -66,6 +66,7 @@ constexpr std::array<u32, modes::PART_COUNT> PART_BITS = {0x20000, 0x1000, 0x8, 
 constexpr u32 STORY_BITS = 0x2 | 0x8 | 0x10 | 0x20 | 0x40 | 0x80 | 0x100 | 0x200 | 0x400 | 0x800 | 0x1000 | 0x2000 |
                            0x4000 | 0x20000;
 constexpr u32 STORY_GROUP = 0xBA;
+constexpr u32 PHASE_INTRO = 0x27;  // the course's intro: from it on the race's HUD and the block are there
 // The gap popup's part (fn_1_15EFEC's test of the mask, off in the default mask), for its 60 frames after a GAP.
 constexpr u32 GAP_PART = 0x400000;
 constexpr u32 GAP_STEPS = 60;
@@ -99,6 +100,10 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own);
 // The mode's HUD pass: once a frame, as the frame's drawing begins (after the frame routine's `hudstate` and
 // `spechud`), for the racer this game's picture follows. Nothing without a mode.
 void Hud(Guest& g);
+// The mode's values for the launcher's status board (mode_board.cpp; the language's section 10). Once a picture, after
+// Hud, for every start with a mode and a board that was taken. Reads the block, writes nothing of the game: nothing a
+// step reads comes from here. The first picture writes the head, each picture the values (a mode with lines).
+void Board(const Guest& g);
 // The course map's dots (minimap_frame.cpp): `you` the racer the map is drawn for, `racing` whether that is this
 // game's own seat in the race (a spectator's map and a replay's show every dot). Hides the dots map_hide hides from
 // it and colours the dots map_mark marks; `present` and `colour` as the map reads them.

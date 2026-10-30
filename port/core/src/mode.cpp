@@ -470,7 +470,7 @@ private:
         break;
       const u8* o = m_p.code.data() + at + 1;
       at += size;
-      if (++m_ops > BUDGET)
+      if (++m_ops > BUDGET || (op == OP_FSQRT && (m_ops += modes::FSQRT_COST - 1) > BUDGET))
       {
         Fail(FAULT_BUDGET);
         return false;
@@ -694,7 +694,18 @@ private:
           MODE_BINARY(OP_BITANDNOT);
           MODE_UNARY(OP_INEG);
           MODE_UNARY(OP_FNEG);
-          MODE_UNARY(OP_FSQRT);
+        case OP_FSQRT:  // (modes.toml's fsqrt_cost: counted before the stack is looked at, as the plain loop's)
+          ops += static_cast<u32>(modes::FSQRT_COST) - 1;
+          if (ops > static_cast<u32>(BUDGET))
+          {
+            Fail(FAULT_BUDGET);
+            goto done;
+          }
+          if (sp < 1)
+            goto slow;
+          stack[sp - 1] = Unary<OP_FSQRT>(stack[sp - 1]);
+          ++ip;
+          continue;
           MODE_UNARY(OP_ITOF);
           MODE_UNARY(OP_FLOOR);
           MODE_UNARY(OP_CEIL);

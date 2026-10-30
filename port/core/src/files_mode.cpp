@@ -213,6 +213,25 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             return Fail(why, "starts rolling at a speed outside 0 to 9000 km/h");
           p.rolling = static_cast<u32>(arg(0));
         }
+        else if (id == modes::SETUP_SOLO)
+        {
+          p.solo = true;
+        }
+        else if (id == modes::SETUP_PAUSE)
+        {
+          p.pause = true;
+        }
+        else if (id == modes::SETUP_SAVESTATE)
+        {
+          p.save_state = true;
+        }
+        else if (id == modes::SETUP_REWIND || id == modes::SETUP_RESUMECOUNTDOWN)
+        {
+          const s32 v = arg(0);
+          if (setup_args.size() != 1 || (id == modes::SETUP_REWIND ? v < 60 || v > 3600 : v < 0 || v > 300))
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          (id == modes::SETUP_REWIND ? p.rewind : p.resume_countdown) = static_cast<u32>(v);
+        }
         else if (id != modes::SETUP_CPUSALLOWED)  // (the coordinator's)
         {
           return Fail(why, std::format("has a setup word this build does not know ({})", id));
@@ -264,6 +283,33 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
     }
     if (s.bad)
       return Fail(why, std::format("has a {} section that does not read", tag));
+  }
+  // the board's lines, in a mode that has them; a package's end otherwise, as every package before the board
+  if (r.at < r.end)
+  {
+    if (!r.Has(8) || std::memcmp(r.at, "BORD", 4) != 0)
+      return Fail(why, "has something past its last section");
+    r.at += 4;
+    const u32 length = r.U32();
+    if (!r.Has(length) || length != static_cast<size_t>(r.end - r.at))
+      return Fail(why, "has a BORD section that does not end the package");
+    Reader s{r.at, r.end};
+    std::array<u32, 3> in_scope{};
+    for (u16 count = s.U16(); count > 0 && !s.bad; --count)
+    {
+      BoardLine line;
+      line.scope = s.U8();
+      line.type = s.U8();
+      line.word = s.U16();
+      line.label = s.Text();
+      const size_t words = line.scope == 0 ? p.globals.size() : line.scope == 1 ? p.seat_words.size() : p.team_words.size();
+      if (s.bad || line.scope > 2 || line.type > 4 || line.word >= words || line.label.empty() ||
+          line.label.size() > static_cast<size_t>(modes::BOARD_LABEL) || ++in_scope[line.scope] > static_cast<u32>(modes::BOARD))
+        return Fail(why, "has a board line this build cannot show");
+      p.board.push_back(std::move(line));
+    }
+    if (s.bad || s.at != s.end)
+      return Fail(why, "has a BORD section that does not read");
   }
   for (const Rule& rule : p.rules)
   {

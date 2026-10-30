@@ -430,6 +430,11 @@ std::optional<Match> ReadPractice(Match& m, const picojson::object& json, const 
     Error("fzgx: {}: a practice names one seat, seat 0, a player's, and no relay: refused", path);
     return std::nullopt;
   }
+  if (m.game_mode && !m.game_mode->solo)
+  {
+    Error("fzgx: {}: a practice's game mode says solo, and {} does not: refused", path, m.game_mode->name);
+    return std::nullopt;
+  }
   Put32(m.race.data() + RACE_FLOW, FLOW_GAME_OUT);
   Put32(m.race.data() + RACE_RUBBER_BAND_ON, 0);   // every driver at its own pace (0.4.0 on)
   m.seat = 0;
@@ -457,6 +462,12 @@ std::optional<Match> ReadMatch(const std::string& text, const std::string& path)
   if (!relay || !FromMatch(m, json, path))
   {
     Error("fzgx: {}: no match or relay", path);
+    return std::nullopt;
+  }
+  if (m.game_mode && m.game_mode->solo)
+  {
+    Error("fzgx: {}: the game mode {} is raced alone, and this match has a relay: refused (a mode error)", path,
+          m.game_mode->name);
     return std::nullopt;
   }
   // a race raced from here on is the game's flow, with no rubber band, and its recording says so (replay.cpp
