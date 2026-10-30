@@ -52,6 +52,9 @@ constexpr GuardWord WORDS[GUARD_WORDS] = {
     {"executable-generator", game::DOL_RNG, 4, false, false, 0},
     // the computer drivers' generator (.data 0x3D230)
     {"cpu-generator", game::REL_DATA_AT + 0x3D230, 4, false, false, 0},
+    // the simulation's own generator (the data window's SIM_GENERATOR: the computer drivers' scripted driver draws
+    // from it in a race with the race block's RACE_SIM_GENERATOR 1; port/image/sites_generator.py)
+    {"sim-generator", table::SIM_GENERATOR, 4, true, false, 0},
     // the sound queue's next place ([0x801A6C80] + 0x443): every command pushed (fn_80067898, fn_80067344)
     {"sound-queue-next", game::SOUND_QUEUE, 1, false, true, 0x443},
     // the mute routine's counts (control block +32 dropped, +36 every command: mute.py)

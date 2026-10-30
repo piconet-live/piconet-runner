@@ -75,7 +75,7 @@ using Row = std::array<u8, ROW>;
 // The last run of a step: what every machine started from and ended with, each job's locked-cache record, the
 // floating-point status it started from, its registers and cycles.
 // The guard's words (lanes_partial_guard.cpp): their values, and the course objects' first words.
-constexpr u32 GUARD_WORDS = 7;
+constexpr u32 GUARD_WORDS = 8;
 struct Guard
 {
   std::array<u32, GUARD_WORDS> words{};

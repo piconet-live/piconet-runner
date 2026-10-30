@@ -62,6 +62,8 @@ RESULTS_CAMERA	window	=CONTROL + 0xF60		u32		memmap.py:90	set by the image at th
 DRAW_ASK	window	=CONTROL + 0xF64		u32		memmap.py:117	set by the image: 1 when a race frame's drawing is about to begin, 2 when it has ended; each store is a call to the core, which times the drawing and answers in DRAW_SKIP
 DRAW_SKIP	window	=CONTROL + 0xF68		u32		memmap.py:119	set by the core when the image asks: not 0, this frame draws nothing and the next frame's begin copies no picture (the last one shown again); cleared at the next frame tick
 TRUE_ASPECT	window	=CONTROL + 0xF6C		u32		memmap.py:116	set by the core, for the picture only: 0, the game's own Wide Screen; a float's bits, true widescreen at that aspect (the race view keeps the whole vertical view; the aspect getter gives it)
+SIM_GENERATOR	window	=CONTROL + 0xF70		u32		memmap.py:242	the simulation's own generator word (sites_generator.py): seeded by the image before every step of a race with RACE_SIM_GENERATOR 1 from the step and the CPU seed, stepped by the race's own draws only (the computer drivers' scripted driver, the hazard objects); no rollback puts it back
+SIM_GENERATOR_SHIFT	window	=CONTROL + 0xF74		u32		memmap.py:242	set by the image: what the race's draws add to the executable's generator's address, 0 (the stock word 0x801A63C0) or SIM_GENERATOR - 0x801A63C0
 SPEC_MODE	window	=CONTROL + 0x3A0		u32		memmap.py:61	set by the image, for the picture only: what the spectator follows with, 0 automatic shots, 1 the course's cameras, 2 to 5 a manual shot, 6 the chase camera behind the watched racer
 SPEC_HEIGHT	window	=CONTROL + 0x3A4		u32		memmap.py:63	set by the image, for the picture only: the spectator's camera height, a manual shot's variant or the chase camera's view less 1
 SPEC_CHANGE	window	=CONTROL + 0x3A8		u32		memmap.py:64	set by the image, for the picture only: the step, plus 1, in which the spectator's last choice sets its shot up, run for the first time or again
@@ -151,6 +153,7 @@ RACE_FINISH_LIMIT	race	=rule_at_finish_limit	RACE	u32		protocol/rules.toml:146	t
 RACE_FLOW	race	304	RACE	u32		memmap.py:28	the race's flow: 1, out by the game's own verdict and the race waits for player seats only; 0, a recording made before
 RACE_MINE_REGEN	race	=rule_at_mine_regen	RACE	u32		protocol/rules.toml:163	the host's rule: the steps after which a mine that went off comes back (0: it stays gone, the game's own way)
 RACE_RUBBER_BAND_ON	race	100	RACE	u32		memmap.py:54	the rubber band: 1, the CPU drivers pace against the player seats (the game's own way, every recording made before 0.4.0); 0, every driver at its own pace (every race and practice from 0.4.0; the core writes it, a future lobby rule could set it from the server)
+RACE_SIM_GENERATOR	race	104	RACE	u32		memmap.py:78	the simulation's own generator: 1, the race's draws take SIM_GENERATOR (every race and practice from this build); 0, the executable's 0x801A63C0, shared with the effects and cameras (every recording made before)
 RACE_CUSTOM	race	320	RACE	u32		memmap.py:48	the seats' custom machines: 30 entries of 32 bytes (a used word, three part entries, the pilot)
 RACE_SIZE	race	1280		u32		memmap.py:52	bytes of the race block
 # ---- rel

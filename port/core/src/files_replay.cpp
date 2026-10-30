@@ -140,14 +140,20 @@ std::optional<Match> MatchOfHeader(const picojson::object& header, const std::st
   // the rubber band (files.h RACE_RUBBER_BAND_ON): a recording made before 0.4.0 names none and raced with it
   const auto band = header.find(h::RUBBER_BAND);
   const bool band_said = band != header.end();
-  if (!seat || !delay || !mask || !flow || (band_said && !band->second.is<bool>()))
+  // the simulation's own generator (files.h RACE_SIM_GENERATOR): a recording made before it names none and drew the
+  // race's random numbers from the executable's word, which it plays with
+  const auto sim = header.find(h::SIM_GENERATOR);
+  const bool sim_said = sim != header.end();
+  if (!seat || !delay || !mask || !flow || (band_said && !band->second.is<bool>()) ||
+      (sim_said && !sim->second.is<bool>()))
   {
     Error("fzgx: {}: the header's seat, input delay, player seats, flow or rubber band is not a number in its range "
-          "(the band: true or false): refused", path);
+          "(the band: true or false), or its generator is not true or false: refused", path);
     return std::nullopt;
   }
   Put32(m.race.data() + RACE_FLOW, *flow);
   Put32(m.race.data() + RACE_RUBBER_BAND_ON, band_said && !band->second.get<bool>() ? 0 : 1);
+  Put32(m.race.data() + RACE_SIM_GENERATOR, sim_said && sim->second.get<bool>() ? 1 : 0);
   m.seat = static_cast<int>(*seat);
   m.delay = *delay;
   m.player_mask = *mask;
