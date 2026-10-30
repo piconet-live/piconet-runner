@@ -66,6 +66,8 @@ bool ReadFileToBytes(const std::string& path, std::vector<u8>& out);
 
 // Lower-case hexadecimal SHA-1.
 std::string Sha1Hex(const u8* data, std::size_t size);
+// Lower-case hexadecimal SHA-256 (FIPS 180-4): a game mode's content hash (protocol/formats.md section 9).
+std::string Sha256Hex(const u8* data, std::size_t size);
 // The bytes a base64 text stands for (the usual alphabet, padded with '='); nothing when the text is not base64.
 std::optional<std::vector<u8>> Base64Bytes(std::string_view text);
 

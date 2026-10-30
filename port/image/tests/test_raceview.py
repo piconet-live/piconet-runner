@@ -77,8 +77,8 @@ class Cpu(Machine):
 
     def floating(self, w, op, d, a, b, base):
         """The single-precision instructions of the rivals' smoothing (smooth.py) and the mines' fade (sites_mines.py):
-        every result rounded to a float; and a register kept on the stack and taken back as the double it is
-        (sites_shadow.py)."""
+        every result rounded to a float; a register kept on the stack and taken back as the double it is
+        (sites_shadow.py); and the double steps of the game mode's speed hold (sites_mode.py)."""
         f = self.__dict__.setdefault("f", [0.0] * 32)
         single = lambda x: struct.unpack(">f", struct.pack(">f", x))[0]
         c, xo, at = (w >> 6) & 31, (w >> 1) & 0x3FF, (base + signed(w & 0xFFFF)) & 0xFFFFFFFF
@@ -93,6 +93,10 @@ class Cpu(Machine):
         elif op == 59 and xo & 31 == 29: f[d] = single(f[a] * f[c] + f[b])                    # fmadds
         elif op == 59 and xo & 31 == 30: f[d] = single(-(f[a] * f[c] - f[b]))                 # fnmsubs
         elif op == 63 and xo & 31 == 21: f[d] = f[a] + f[b]                                   # fadd (double)
+        elif op == 63 and xo & 31 == 18: f[d] = f[a] / f[b]                                   # fdiv (double)
+        elif op == 63 and xo & 31 == 25: f[d] = f[a] * f[c]                                   # fmul (double)
+        elif op == 63 and xo == 12: f[d] = single(f[b])                                       # frsp
+        elif op == 63 and xo == 40: f[d] = -f[b]                                              # fneg
         elif op == 63 and xo == 0: self.compare(f[a], f[b])                                   # fcmpu, field 0
         elif op == 63 and xo == 72: f[d] = f[b]                                               # fmr
         elif op == 63 and xo == 264: f[d] = abs(f[b])                                         # fabs

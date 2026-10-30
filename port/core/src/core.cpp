@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "internal.h"
+#include "mode.h"
 
 #include "fzgx/freeze.h"
 #include "fzgx/panel.h"
@@ -301,6 +302,22 @@ void NetSync()
     return;
   Guest g(*s_host, Data());
   net::Run(g);
+}
+
+void ModeCall()
+{
+  if (!s_host)
+    return;
+  Guest g(*s_host, Data());
+  mode::Step(g);
+}
+
+u32 ModeRecord(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Record(g, seat);
 }
 
 void Shutdown()

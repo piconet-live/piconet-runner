@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "net_internal.h"
+#include "mode.h"
 #include "out_test.h"
 #include "replay_file.g.h"
 
@@ -175,6 +176,18 @@ void MinesSummary(Guest& g)
     Notice("fzgx: mines: {} went off, {} came back (the rule: {} steps)", g.Read32(mines + 4), g.Read32(mines + 8),
            g.Read32(layout::RACE_MINE_REGEN_AT));
 }
+
+// The game mode's block (mode.h), when the race has one: its runs, the operations of the last and of the most costly,
+// and how the mode ended (0 not, 1 a mode error, 2 its own end); put back by the undo log, so the official race's.
+void ModeSummary(Guest& g)
+{
+  if (const u32 block = g.Read32(layout::MODES + 4); block != 0)
+    Notice("fzgx: game mode: {} runs, {} operations the last, {} the most; end word {}, fault {}",
+           g.Read32(block + mode::RUNS), g.Read32(block + mode::OPS), g.Read32(block + mode::OPS + 4),
+           g.Read32(block + mode::END), g.Read32(block + mode::FAULT));
+  else if (const u32 state = g.Read32(layout::MODES); state != 0)
+    Notice("fzgx: game mode: no block (state {})", state);
+}
 }  // namespace
 
 // What the player sees and hears through rollbacks, from the mod's own counters, once, when the race phase ends:
@@ -194,6 +207,7 @@ void ReportPresentation(Guest& g, Session& s)
          g.Read32(SMOOTH_GLOBALS + 8), g.Read32(SMOOTH_GLOBALS + 12), g.Read32(SMOOTH_GLOBALS + 20));
   HitsSummary(s);
   MinesSummary(g);
+  ModeSummary(g);
   ReportResultsPictures(g, "the race phase ends");
 }
 
@@ -213,6 +227,7 @@ void PlaybackSummary(Guest& g, Session& s)
                                        : !s.results_checked ? "not reached"
                                        : s.replay_results.empty() ? "not in the recording" : "the recording's");
   MinesSummary(g);
+  ModeSummary(g);
   ReportResultsPictures(g, "the playback ends");
 }
 

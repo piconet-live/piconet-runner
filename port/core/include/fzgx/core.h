@@ -376,6 +376,12 @@ void ControllerSetupTick();
 std::optional<bool> GameWidescreen();
 // The mod's network hook: before every simulation step and in every pass of the race-start gate's wait.
 void NetSync();
+// The race's game mode, once a step (the image's mode point, HOST_MODE: port/image/sites_mode.py): its rules run
+// (port/core/src/mode.h). Nothing to do without one.
+void ModeCall();
+// Seat `seat`'s record in the game mode's block (16 bytes, read by the machine's step: the per-machine rollback
+// compares it with the machine's records); 0 without a mode or before the block is taken.
+u32 ModeRecord(u32 seat);
 // The game wrote a word of the data window (the native form: every access of it passes the host). The replay
 // scrubber takes one of them as a call: the frame routine's "the extra steps are done" (control block +12 set to
 // 0), which is the only moment the host has after a frame's last step and before its picture. The image's two

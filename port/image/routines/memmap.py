@@ -46,6 +46,17 @@ MINES = _facts.MINES
 MINE_TABLE = 64
 MINE_COUNTS = 16
 MINE_BLOCK = MINE_COUNTS + 2 * MINE_TABLE
+# The race's game mode (sites_mode.py; the host's interpreter, port/core/src/mode.cpp): +0 the state of the mode's
+# block (0 not tried, 1 taken, 3 none: the race has no mode, or the heap had no room), +4 its address in the game's
+# main heap (0: no mode, and every site of the mode does what the game does). Written once, on the black frame before
+# the start gate, as MINES; the block itself is the undo log's and the checksum's (MODE_BLOCK bytes: MODE_SEATS, a
+# seat's record of MODE_SEAT bytes that the image's sites read, then the interpreter's state).
+MODES = _facts.MODES
+MODE_BLOCK = 0x3000
+MODE_ALLOC = MODE_BLOCK + 0x1000   # taken from the heap: the block starts on a page (the undo log's pages, mode.cpp)
+MODE_SEAT = 16
+MODE_SEATS = 0
+MODE_END = MODE_SEATS + 30 * MODE_SEAT   # the block's word: not 0, the mode ended the race (the step after which, plus 1)
 # The race's setup (written by the Dolphin fork from the match file before the game reaches the race; the built-in
 # codes read it, boot-to-race/racecodes.py): 'FZRC', then words: +4 course, +8 port 0's machine, +12 CPU opponents
 # (racers - 1), +16 laps, +20 race type (6 laps, 3 free run), +24 the DOL generator's value up to the race (SHUFFLE),
@@ -97,13 +108,13 @@ INPUTS = _facts.INPUTS    # input buffer: 1024 frames x 30 seats x 8 bytes (0x3C
 INPUTS_END = _facts.INPUTS_END
 assert IMAGE + 0x10000 <= CONTROL and CONTROL + 0x1000 <= CHECKSUMS and CHECKSUMS + 0x1000 <= SMOOTH
 assert SMOOTH + 0x1000 <= NAMES and NAMES + 30 * NAME_SIZE <= TAGS and TAGS + 0x200 <= MONITORS and MONITORS + 0x100 <= RACE and RACE + RACE_SIZE <= INPUTS
-assert MONITORS + 0x100 <= MINES and MINES + 8 <= RACE
+assert MONITORS + 0x100 <= MINES and MINES + 8 <= RACE and MINES + 8 <= MODES and MODES + 8 <= RACE
 # Tests: the rank icons' exclusion (follow.py `icon`), counted only in a game told to keep the logs (IMAGE_LOGS):
 # 30 words a racer, the drawn frames in which its icon was held back (the racer the HUD follows, or the local seat),
 # then 30 words, the frames in which it was let through to the icon's own tests. The picture's only: no step reads
 # them, no rollback puts them back, the checksum does not cover them.
 ICONS = _facts.ICONS
-assert MINES + 8 <= ICONS and ICONS + 2 * 30 * 4 <= RACE
+assert MODES + 8 <= ICONS and ICONS + 2 * 30 * 4 <= RACE
 # Each seat's own stats and constants (a stat pack a seat: sites_seats.py, sites_dash.py, sites_curve.py; the core writes
 # the block for every race and replay, handbook/stat-pack-constants.md). +0 a byte a seat: not 0, the seat's stock
 # machine takes its stats from its row below in place of the car data's block (racer creation and every step);
@@ -227,6 +238,7 @@ HOST_NET = _facts.HOST_NET        # the network hook (the frame routine: before 
 HOST_TICK = _facts.HOST_TICK      # every game frame of a race or replay start, at the mode machine's entry (fn_1_ECC)
 HOST_LINKED = _facts.HOST_LINKED  # main.rel is linked and none of its code has run: the host writes its patched words
 HOST_HFR = _facts.HOST_HFR        # the drawn frames between two steps (sites_hfr.py): r3 the operation, r4 its frame
+HOST_MODE = _facts.HOST_MODE      # the mode point (sites_mode.py): the game mode's rules, once a step
 REL = _facts.MAIN_REL       # main.rel's module header in every boot (the pin: main.dol 0x80005940, fze.sample.rel)
 REL_TEXT = _facts.REL_TEXT_AT
 REL_BSS = _facts.REL_BSS_AT

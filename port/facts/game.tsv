@@ -25,6 +25,7 @@ SMOOTH_GLOBALS	window	0x600	SMOOTH	u32		port/core/src/playback.cpp:169	the smoot
 NAMES	window	0x81813000		u32		memmap.py:7	the player names: 30 places of NAME_SIZE bytes, seat order; an empty one shows the pilot's name
 MONITORS	window	0x81813600		u32		memmap.py:21	the rejoin hand-back monitors' state (monitors.py), the picture's only: +0 the step control comes back, +4 the pictures (0 not tried, 1 trying, 2 read, 3 not read), +36 the picture in the texture plus 1 (0 none)
 MINES	window	0x81813700		u32		memmap.py:31	mines that come back (sites_mines.py): +0 the state of the countdowns' block (0 not tried, 1 taken, 3 none), +4 its address in the main heap (0 none)
+MODES	window	=MINES + 8		u32		memmap.py:47	the race's game mode (sites_mode.py, port/core/src/mode.cpp): +0 the state of the mode's block (0 not tried, 1 taken, 3 none), +4 its address in the main heap (0 none: no mode)
 ICONS	window	0x81813710		u32		memmap.py:82	tests: the rank icons' exclusion (rankicons.py): a word a racer, the drawn frames its icon was held back (the racer the HUD follows), then a word a racer at +120, the frames it was let through; counted only with IMAGE_LOGS
 COURSE_NAME	window	0x81813810		u32		memmap.py:236	a story stage's name, NAME_SIZE bytes with the ending zero, written by the core (protocol/courses.toml): the game's course name table points the stage's English entry here (COURSE_NAMES); the picture's only
 RACE	window	0x81814000		u32		memmap.py:18	the race block: what race to start (group race)
@@ -85,7 +86,8 @@ HOST_NET	window	=HOSTCALLS		u32		memmap.py:39	host call: the network hook, befor
 HOST_TICK	window	=HOSTCALLS + 4		u32		memmap.py:40	host call: every game frame of a race or replay start
 HOST_LINKED	window	=HOSTCALLS + 8		u32		memmap.py:41	host call: main.rel is linked and none of its code has run
 HOST_HFR	window	=HOSTCALLS + 12		u32		memmap.py:42	host call: the drawn frames between two steps (high refresh rate), from fn_1_37AA8's draw half
-HOSTCALLS_END	window	=HOST_HFR + 4		u32		port/moderngekko/src/adapter_internal.h:50	the first address after the four host calls
+HOST_MODE	window	=HOSTCALLS + 16		u32		memmap.py:43	host call: the mode point, once a step after the race pass's callbacks (sites_mode.py): the game mode's rules run
+HOSTCALLS_END	window	=HOST_MODE + 4		u32		port/moderngekko/src/adapter_internal.h:50	the first address after the five host calls
 # ---- control
 EXTRA_STEPS	control	8	CONTROL	u32		port/core/src/rollback.cpp:18	steps the frame routine runs in this displayed frame after the first; counts down
 RESIMULATING	control	12	CONTROL	u32		port/core/src/rollback.cpp:19	1 while the extra steps run
@@ -271,6 +273,7 @@ PROGRESS_DISTANCE	machine	0xF8	MACHINE_PROGRESS	u32		port/facts/machine-state.cs
 PROGRESS_LAP_LENGTH	machine	0xFC	MACHINE_PROGRESS	u32		port/facts/machine-state.csv:784	in a progress record: the lap's length (a float)
 PROGRESS_LAP_TIME	machine	0x160	MACHINE_PROGRESS	u32		port/facts/machine-state.csv:809	in a progress record: the current lap's time (frames)
 PROGRESS_RACE_TIME	machine	0x1E4	MACHINE_PROGRESS	u32		port/facts/machine-state.csv:842	in a progress record: the race time (frames)
+MACHINE_FLAG_RESTORE	machine	0x1		u32		port/facts/machine-state.csv:2	in a machine's flags: put back by the Restore regime: the rule sets it on every machine each step; a game mode's respawns, or story 8, on one machine
 MACHINE_FLAG_AIRBORNE	machine	0x2		u32		port/facts/machine-state.csv:2	in a machine's flags: airborne (every hover corner in the air; set at the step's start)
 MACHINE_FLAG_AIRBORNE_LONG	machine	0x4		u32		port/facts/machine-state.csv:2	in a machine's flags: airborne more than 10 steps
 MACHINE_FLAG_SPIN	machine	0x8		u32		port/facts/machine-state.csv:2	in a machine's flags: spinning (the spin attack)
