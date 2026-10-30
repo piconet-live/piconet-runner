@@ -17,6 +17,7 @@
 
 #include "files.h"
 #include "harness.h"
+#include "stat_packs.h"
 #include "mode.h"
 #include "parts.h"
 #include "fzgx/practice.h"
@@ -866,7 +867,7 @@ void TestPracticeIsAMode()
   if (!p)
     return;
   CHECK(p->solo && p->pause && p->save_state && p->rewind == practice::WINDOW && p->resume_countdown == practice::COUNTDOWN);
-  CHECK(p->laps == 0u && p->board.empty() && !p->restore && p->params.size() == 1 && p->params[0] == 0);
+  CHECK(p->laps == 0u && p->board.empty() && !p->restore && p->params.size() == 2 && p->params[0] == 0 && p->params[1] == 0);
   const std::optional<mode::Package> over = mode::Read(Vector("overdrive.mode.json"), &why);
   CHECK(over && !over->solo && !over->pause && over->rewind == 0 && over->board.empty());
 
@@ -927,6 +928,38 @@ void TestSoloModesAndTheRelay()
 
 // `sqrt` counts modes::FSQRT_COST, in both loops, and the budget's fault lands on the same operation with the same
 // memory in both, whether it is a square root that passes the budget or the operation after one.
+// A setup.mode field this build does not know (a later version's) is no refusal: a match reads it, a recording keeps it
+// in its header's match as it came, and a replay that holds it plays.
+void TestAnUnknownModeFieldPassesThrough()
+{
+  BEGIN_TEST();
+  TestHost host;
+  const std::string dir = Temp();
+  stat_packs::WriteABundle(dir);
+  picojson::value mode = Vector("overdrive.mode.json");
+  mode.get<picojson::object>()["fromLater"] = picojson::value(7.0);
+  const std::string member = "\"mode\": " + mode.serialize() + ", ";
+  Options options;
+  options.bundle_dir = dir;
+  Init(host, options);
+  const auto race = boot::ReadMatch(R"({"matchId": "m7", "seat": 0, "token": "1f2e3d4c5b6a7988", "relay": {"host": "127.0.0.1", "port": 47811},
+    "setup": {"course": 8, "laps": 3, "shuffleSeed": 1, "cpuSeed": 2, "seats": [{"seat": 0, "machine": 5, "playerId": "p1", "name": "A"},
+    {"seat": 1, "machine": 7}], )" + member.substr(0, member.size() - 2) + "}}", "test");
+  CHECK(race && race->game_mode);
+  Shutdown();
+  options.play_file = dir + "/later.fzrp";
+  WriteReplay(options.play_file, {1, 0}, member, ", \"simGenerator\": true");
+  std::string file;
+  CHECK(ReadFileToString(options.play_file, file) && file.find("\"fromLater\":7") != std::string::npos);
+  file[5] = 9;
+  WriteText(options.play_file, file);
+  Init(host, options);
+  CHECK(Active() && boot::Get() && boot::Get()->game_mode);
+  Shutdown();
+  Init(host, Options{});
+  std::filesystem::remove_all(dir);
+}
+
 void TestASquareRootsCostInBothLoops()
 {
   BEGIN_TEST();
@@ -1006,9 +1039,9 @@ void TestASquareRootsCostInBothLoops()
   CHECK(ends.size() > 1);  // (a sqrt's fault overshoots the budget by up to seven; another's by one)
 }
 
-// A mode without `cpus allowed`: a player seat that has driven and then has the "AI drives" record retires at that step
-// (flag set, its Restore cleared), once; a finished seat keeps its finish; a seat with that record from the start (never
-// ready, an autopilot) and a seat that is no player's stay as they are; `cpus allowed` and `solo` never retire anyone;
+// A mode without `cpus allowed`: a player seat with the "AI drives" record retires at that step (flag set, its Restore
+// cleared), once, a seat that has driven or one never ready from the start; a finished seat keeps its finish; an autopilot's
+// marked record and all zeros and a seat that is no player's stay as they are; `cpus allowed` and `solo` never retire anyone;
 // the same memory from a run again.
 void TestAGonePlayerRetires()
 {
@@ -1044,6 +1077,8 @@ void TestAGonePlayerRetires()
       row(g, step, 3, false);
       row(g, step, 4, true);
       mode::Run(g, q, BLOCK, MODULE);
+      if (step == 0 && !q.cpus_allowed && !q.solo)
+        CHECK(g.Read32(MachineAt(2)) & game::MACHINE_FLAG_RETIRED);   // never ready: out from the start
       if (step == 2)
         CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED));
       if (step == 3)
@@ -1058,7 +1093,7 @@ void TestAGonePlayerRetires()
       CHECK(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED);
       CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RESTORE));
       CHECK(!(g.Read32(MachineAt(1)) & game::MACHINE_FLAG_RETIRED));
-      CHECK(!(g.Read32(MachineAt(2)) & game::MACHINE_FLAG_RETIRED));
+      CHECK(g.Read32(MachineAt(2)) & game::MACHINE_FLAG_RETIRED);
       CHECK(!(g.Read32(MachineAt(3)) & game::MACHINE_FLAG_RETIRED));
       CHECK(!(g.Read32(MachineAt(4)) & game::MACHINE_FLAG_RETIRED));
     });
@@ -1067,6 +1102,28 @@ void TestAGonePlayerRetires()
   {
     TestHost host;
     ModData data;
-    race(*q, host, data, [](Guest& g) { CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED)); });
+    race(*q, host, data, [](Guest& g) {
+      CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED));
+      CHECK(!(g.Read32(MachineAt(2)) & game::MACHINE_FLAG_RETIRED));
+    });
+  }
+  // a test game's autopilot: the record with its last byte marked drives, and retires only when the relay's comes
+  {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    mode::Package q = *p;
+    q.players = 1;
+    FakeModeRace(g, 1, 100);
+    g.Write32(MachineAt(0), 0);
+    for (u32 step = 0; step < 4; ++step)
+    {
+      g.Write32(net::STEP, step);
+      row(g, step, 0, true);
+      if (step < 3)
+        g.Write8(layout::INPUTS + (step & 1023) * 30 * 8 + 5, 1);
+      mode::Run(g, q, BLOCK, MODULE);
+      CHECK(((g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED) != 0) == (step == 3));
+    }
   }
 }

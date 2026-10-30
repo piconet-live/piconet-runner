@@ -42,6 +42,8 @@ void SendChecksums(Guest& g, Session& s)
 // Tests: the "AI drives" record (steering 0x80, outside a stick's range): the mod's seat routine keeps the AI's own
 // controls for a seat whose record this is, so an autopilot game's own machine races like a CPU, the same everywhere.
 constexpr std::array<u8, RECORD> AI_DRIVES = {0, 0x80, 0, 0, 0, 0};
+// (with a last byte the seat routine does not read: a test game driving, which a mode without CPUs must tell from the
+// relay's record for a player gone or never ready: mode.cpp GonePlayers)
 
 // Lockstep catching up (NormalStep): the emulation speed and CPU clock while it does, and back.
 void SetCatchUp(Session& s, bool on)
@@ -58,7 +60,10 @@ void SendLocalInput(Guest& g, Session& s, u32 step, u32 module)
 {
   // the local pad now is the local seat's input for step + delay
   if (s.autopilot)
+  {
     s.pad = AI_DRIVES;
+    s.pad[5] = 1;
+  }
   else
     g.CopyFrom(s.pad.data(), (module + PAD_RECORD), RECORD);
   // Kept, when the step already has one: a frame that ran no new step (held, below) is followed by a frame that

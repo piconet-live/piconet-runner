@@ -1883,12 +1883,11 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
 }
 }  // namespace
 
-// A mode without `cpus allowed`: a player gone retires instead of being driven by the AI (the owner, 2026-10-30). The
-// relay closes a gone player's seat with the "AI drives" record, in every game and every replay alike, so this reads the
-// step's record and its result stands under a rollback with the rest of the block. Only a seat that has driven, a record
-// neither that one nor all zeros (the relay's rows before a seat's first input, and a pad left alone): a seat that never
-// got ready has only those from the start, and so has a test game's autopilot, whose every input is "AI drives"; both
-// stay the AI's.
+// A mode without `cpus allowed`: no CPU ever drives (the owner, 2026-10-30). The relay closes the seat of a player gone
+// or never ready with the "AI drives" record, in every game and every replay alike, so this reads the step's record and
+// its result stands under a rollback with the rest of the block: such a seat retires at that step, one never ready from
+// the start. All zeros (the relay's rows before a seat's first input, and a pad left alone) is nobody's verdict. A test
+// game's autopilot sends the record with a last byte of its own (frame.cpp) and counts as driving.
 void GonePlayers(Mem& g, const Package& p, u32 block, u32 module, u32 step, u32 count)
 {
   u32 driven = g.Read32(block + DRIVEN);
@@ -1913,11 +1912,11 @@ void GonePlayers(Mem& g, const Package& p, u32 block, u32 module, u32 step, u32 
         driven |= 1u << seat;
       continue;
     }
-    if (!(driven >> seat & 1))
-      continue;
     driven &= ~(1u << seat);
     const u32 machine = machines + seat * game::MACHINE_SIZE;
     const u32 flags = g.Read32(machine + game::MACHINE_FLAGS);
+    if (flags & F_RETIRED)
+      continue;
     g.Write32(block + RESPAWN, g.Read32(block + RESPAWN) & ~(1u << seat));
     if (!(flags & F_FINISHED))
       Retired(g, machine, flags);
