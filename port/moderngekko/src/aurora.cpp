@@ -33,6 +33,19 @@ std::filesystem::path RunnerFolder()
 #endif
 }
 
+// The main display's height in pixels, whatever its scaling setting; 0 when it cannot be read. The window's own display
+// is not known yet at this point of the start.
+u32 DisplayHeight()
+{
+#ifdef _WIN32
+  DEVMODEW mode{};
+  mode.dmSize = sizeof mode;
+  if (EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode))
+    return mode.dmPelsHeight;
+#endif
+  return 0;
+}
+
 std::string Utf8(const std::filesystem::path& p)
 {
   const std::u8string s = p.u8string();
@@ -63,13 +76,14 @@ void StartAurora()
   s.shot_prefix = d.aurora_log;
   s.shots.assign(d.aurora_shots.begin(), d.aurora_shots.end());
   s.log_path = d.aurora_log;
-  s.scale = d.aurora_scale;
+  s.scale = d.aurora_scale != 0 ? d.aurora_scale : fzgx::AutoAuroraScale(DisplayHeight());
   VideoCommon::AuroraPresent::Configure(s);
   s_core_host.Log(fzgx::LogLevel::Notice,
                   std::string("fzgx: aurora: ") +
                       (VideoCommon::AuroraPresent::On() ? "Aurora draws the pictures shown (presentation only)" :
                                                           "the library is missing: the emulator's own pictures") +
-                      ", data folder " + Utf8(folder));
+                      ", data folder " + Utf8(folder) + ", scale " + std::to_string(s.scale) +
+                      (d.aurora_scale != 0 ? " (asked for)" : " (Auto)"));
 }
 
 void StopAurora()

@@ -1,6 +1,6 @@
 tree	url	base	head	tree_id	work	omits
 dolrecomp	https://github.com/piconet-live/dolrecomp.git	71ce7f97419b1bb1ba9a9596c41507f6629e0fb0	2c5294a7aae54e4488c721a0ef77545a1c0d7b0f	317627d88e443669fc160031c7e1dc2bc67382bf	DolRecomp	-
-recompcore	https://github.com/piconet-live/recompcore.git	cf8ceb81b47d6172164cd0572f57aa7624719f33	d368765a6ecf301903af056c0ff333bcb2506f9d	761bf9b27988c297660556608aff9050670a90c3	ModernGekko/vendor/dolphin	-
+recompcore	https://github.com/piconet-live/recompcore.git	cf8ceb81b47d6172164cd0572f57aa7624719f33	6f446992c859a98102a6527527b2c4b8a01ea879	902538cd1965181e7b48fa7ddc0c36c720ed4bb5	ModernGekko/vendor/dolphin	-
 moderngekko	https://github.com/piconet-live/moderngekko.git	a2e4e2b026a68d4848f20ebf16f0e0ddeb573957	c14b65cfcb444e917455bc578c3cf1b22abe7512	8e35c608c8e34b3adb23d64c031a9fed1c9b2521	ModernGekko	-
 module-template	https://github.com/piconet-live/recompcore.git	cf8ceb81b47d6172164cd0572f57aa7624719f33:module-template	4f775899c02749808527fd6a43cef44fd79cf52e	9af083a6190d1dc9a7ba08ded2fc4626ac7a1305	work/module-template	generated
 dolrecomp-vendored	https://github.com/piconet-live/dolrecomp.git	71ce7f97419b1bb1ba9a9596c41507f6629e0fb0	871afc5a65d2e09667bb54f0c8bcecdb882ef922	49f0b5a7d7158ec82735ae6a85f4b61b77582036	ModernGekko/vendor/dolphin/DolRecomp	-
