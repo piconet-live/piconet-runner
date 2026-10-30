@@ -385,6 +385,7 @@ void BeforeBoot(StaticRecompModuleSource& source)
   }
   ApplyGameSettings();
   StartDrawnFrames();  // (before ApplyPresentation: the pictures' holds ask whether frames are drawn)
+  StartAurora();
   ApplyPresentation();
   WatchPictures();
   HostHooks::Hooks& hooks = HostHooks::Get();
@@ -461,6 +462,7 @@ void AfterStop()
   ReportRumble();
   if (s_state.native)
     ReportWindow(true);
+  StopAurora();
   StopDrawnFrames();
   StopWatchingPictures();
   lanes::Stop();
