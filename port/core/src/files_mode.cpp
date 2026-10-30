@@ -348,6 +348,7 @@ std::optional<Package> Read(const picojson::value& mode, std::string* why)
   }
   if (!ReadPackage(p, given, why))
     return std::nullopt;
+  Prepare(p);
   return p;
 }
 
