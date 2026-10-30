@@ -23,6 +23,7 @@
 //   +20 map_mark: 0x01000000 | 0xRRGGBB (0: the machine's own colour)
 //   +24 GAP's time, packed as the game's lap words (the seat's last lap line, P+0x1E0)
 //   +28 the race clock when +11 was asked: the HUD pass shows the gap popup's part and starts the wrong-way sign from it
+// At +TAGS_AT (after the records), a byte a seat: `tag`'s text, its number in the package's tag_texts from 1 (0: none).
 // The danger zone's display reads the race side's state (mode.h DANGER: its count, as story chapter 6's).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -42,7 +43,8 @@ constexpr u32 SEATS_AT = DISPLAY + 0x10, SEAT_DISPLAY = 0x20;
 constexpr u32 PARTS = 0, NUMBER = 4, LOOK = 8, OWN_LOOK = 9, BANNER = 10, COLOUR = 12, MAP_HIDE = 16, MAP_MARK = 20,
               ASKED = 11, GAP_TIME = 24, ASKED_AT = 28;
 constexpr u32 MARKED = 0x01000000;
-static_assert(SEATS_AT + 30 * SEAT_DISPLAY <= DISPLAY + 0x1000);
+constexpr u32 TAGS_AT = SEATS_AT + 30 * SEAT_DISPLAY;
+static_assert(TAGS_AT + 30 <= DISPLAY + 0x1000);
 
 // The window words the pass writes for the image (memmap.MODE_HUD; port/image/sites_modehud.py): +0 the image's
 // flags (POINTS_PAGE: the results go from their first page to the points page, the site at main.rel 0x14A37C;
@@ -61,6 +63,12 @@ static_assert(modes::RESULTS_TITLE + 1 <= WINDOW_TITLE_SIZE);  // (with its NUL:
 // +0xC8: not 0, the viewed racer's faces board is not drawn (the site at fn_1_D27B8's entry).
 constexpr u32 WINDOW_FACES = WINDOW_TITLE + WINDOW_TITLE_SIZE;
 static_assert(WINDOW_TINTS + 30 * 4 <= WINDOW_TITLE && WINDOW_FACES + 4 <= 0x100);
+// +0x100: `tag`, for the name tags (port/image/routines/nametags.py): a byte a seat, the page's tag byte, written by the
+// pass once a frame; +0x120 the package's texts, WINDOW_TAG_TEXT bytes each with the NUL, written at the start (boot.cpp).
+// A race without tags holds zeros, so the name tags draw what they always did.
+constexpr u32 WINDOW_TAGS = 0x100, WINDOW_TAG_TEXTS = 0x120, WINDOW_TAG_TEXT = 12;
+static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WINDOW_TAG_TEXTS &&
+              WINDOW_TAG_TEXTS + modes::TAG_TEXTS * WINDOW_TAG_TEXT <= 0x700);  // (0x700: RACE, the next in the window)
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
 // modes::PART_*: the drawers fn_1_CF5B0 (TIMER), fn_1_CDC8C (DISTANCE, SPEED_GAUGE, OBJECTS) and fn_1_CEB38 (the
@@ -109,6 +117,7 @@ struct Frame
   s32 digit = 0;                     // the DIGIT part's value (steps, as the story's: seconds = value / 60)
   std::array<u8, 30> looks{};        // the look each seat's machine is drawn with in this game
   std::array<u32, 30> colours{};     // each seat's seat.colour (0: its own)
+  std::array<u8, 30> tags{};         // each seat's `tag` text, from 1 (0: none): the same for every viewer
 };
 Frame Read(const Guest& g, u32 block, u32 viewed, u32 own);
 

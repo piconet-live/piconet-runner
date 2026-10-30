@@ -283,4 +283,7 @@ MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_
 MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING = 1, 2, 4, 8
 MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
 MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
+# `tag` (nametags.py; mode_hud.h): +0x100 a byte a seat, the text's number from 1 (0: none), +0x120 the texts
+MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HUD + 0x120, 12
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE
+assert MODE_HUD_TAGS + 30 <= MODE_HUD_TAG_TEXTS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= RACE

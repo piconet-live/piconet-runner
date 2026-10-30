@@ -43,6 +43,7 @@ fresh:
 f_seat:
     stw 0, 16(9)
     stw 0, 24(9)
+    stw 0, 28(9)
     addi 9, 9, 16
     addi 10, 10, 1
     cmpwi 10, 30
@@ -81,13 +82,14 @@ c_record:
 """
 
 
-def leaving(leaving, seat, record, consts):
+def leaving(leaving, record, consts):
     """A leaving seat's candidate: seat word | r`leaving` << 9 (0x200 off screen, 0x400 left the race), a score no
-    choice takes; to c_score. Others go on at c_chosen."""
+    choice takes; to c_score. Others go on at c_chosen. (The word already written keeps a mode tag's 0x800.)"""
     return f"""    cmpwi {leaving}, 0
     beq c_chosen
-    slwi 0, {leaving}, 9
-    or 0, 0, {seat}
+    lwz 0, 16({record})
+    slwi 10, {leaving}, 9
+    or 0, 0, 10
     stw 0, 16({record})
     lfs 6, 76({consts})
     b c_score

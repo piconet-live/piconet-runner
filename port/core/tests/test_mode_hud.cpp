@@ -57,6 +57,28 @@ u32 Record(u32 seat)
 }
 }  // namespace
 
+// `tag` and `tag off` on the page: a number the package cannot hold is no tag, and a word on one seat touches no other.
+void TestTheModeTagWords()
+{
+  BEGIN_TEST();
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  CHECK(hud::IsDisplay(modes::ACTION_TAG) && hud::IsDisplay(modes::ACTION_TAGOFF));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_TAG, 3, 2));
+  CHECK(g.Read8(BLOCK + hud::TAGS_AT + 3) == 2);
+  CHECK(hud::Read(g, BLOCK, 0, 0).tags[3] == 2);
+  CHECK(hud::Read(g, BLOCK, 0, 0).tags[2] == 0 && hud::Read(g, BLOCK, 0, 0).tags[4] == 0);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_TAG, 4, modes::TAG_TEXTS));
+  CHECK(g.Read8(BLOCK + hud::TAGS_AT + 4) == modes::TAG_TEXTS);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_TAG, 4, modes::TAG_TEXTS + 1));
+  CHECK(g.Read8(BLOCK + hud::TAGS_AT + 4) == 0);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_TAG, 4, 0xFFFFFFFF));
+  CHECK(g.Read8(BLOCK + hud::TAGS_AT + 4) == 0);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_TAGOFF, 3, 0));
+  CHECK(g.Read8(BLOCK + hud::TAGS_AT + 3) == 0);
+}
+
 // Every display word into the seat's record, run again from the same memory to the same memory; what a player, a
 // spectator and a course map read from it.
 void TestTheDisplayWordsRun()
@@ -91,6 +113,12 @@ void TestTheDisplayWordsRun()
   }
   CHECK(g.Read32(Record(OUT_SEAT) + hud::COLOUR) == 0xFF2020FF);
   CHECK(g.Read32(Record(OUT_SEAT) + hud::MAP_MARK) == (hud::MARKED | 0xFF0000));
+  // `tag`: the text's number on the out seat's byte (after `tag s off`), none on the others', and no other word moved
+  CHECK(g.Read8(BLOCK + hud::TAGS_AT + OUT_SEAT) == 1);
+  CHECK(p->tag_texts == std::vector<std::string>{"OUT"});
+  for (u32 seat = 0; seat < 30; ++seat)
+    if (seat != OUT_SEAT)
+      CHECK(g.Read8(BLOCK + hud::TAGS_AT + seat) == 0);
   CHECK(g.Read8(Record(OUT_SEAT) + hud::BANNER) == 1 + modes::BANNER_FINAL_LAP);
   CHECK(g.Read8(Record(0) + hud::BANNER) == 0);
   // the next run: no seat newly out, so no banner asked
@@ -167,6 +195,9 @@ void TestTheDisplayWordsRun()
   hud::Hud(g);
   CHECK(g.Read8(layout::MODE_HUD + hud::WINDOW_LOOKS + OUT_SEAT) == hud::COLOURED);
   CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_TINTS + 4 * OUT_SEAT) == 0xFF2020FF);
+  // the page's tags reach the window for the name tags, whoever is viewed
+  CHECK(g.Read8(layout::MODE_HUD + hud::WINDOW_TAGS + OUT_SEAT) == 1);
+  CHECK(g.Read8(layout::MODE_HUD + hud::WINDOW_TAGS + 1) == 0);
   CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_TINTS) == 0);
   g.Write8(Record(OUT_SEAT) + hud::LOOK, modes::LOOK_GHOST);
   g.Write32(MODULE + game::HUD_PARTS, 0);  // the HUD off (out, finished): it stays off

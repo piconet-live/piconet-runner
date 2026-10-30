@@ -42,6 +42,8 @@ bool IsDisplay(u8 id)
     case ACTION_SEATCOLOUR:
     case ACTION_MAPHIDE:
     case ACTION_MAPMARK:
+    case ACTION_TAG:
+    case ACTION_TAGOFF:
       return true;
     default:
       return false;
@@ -97,6 +99,13 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value)
       return true;
     case ACTION_MAPMARK:
       g.Write32(r + MAP_MARK, static_cast<s32>(value) < 0 ? 0 : MARKED | (value & 0xFFFFFF));
+      return true;
+    case ACTION_TAG:
+      // the compiler's number of a text the package holds; anything else: no tag
+      g.Write8(block + TAGS_AT + seat, value >= 1 && value <= TAG_TEXTS ? static_cast<u8>(value) : 0);
+      return true;
+    case ACTION_TAGOFF:
+      g.Write8(block + TAGS_AT + seat, 0);
       return true;
     default:
       return false;
@@ -161,6 +170,7 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
     const u8 look = seat == own && own_look != 0 ? own_look - 1 : g.Read8(r + LOOK);
     f.looks[seat] = look < LOOK_COUNT ? look : static_cast<u8>(LOOK_NORMAL);
     f.colours[seat] = g.Read32(r + COLOUR);
+    f.tags[seat] = g.Read8(block + TAGS_AT + seat);
   }
   if (viewed >= SEATS)
     return f;
@@ -246,6 +256,7 @@ void Hud(Guest& g)
     const bool coloured = f.looks[seat] == LOOK_NORMAL && f.colours[seat] != 0;
     g.Write8(window + WINDOW_LOOKS + seat, coloured ? COLOURED : f.looks[seat]);
     g.Write32(window + WINDOW_TINTS + 4 * seat, coloured ? f.colours[seat] : 0);
+    g.Write8(window + WINDOW_TAGS + seat, f.tags[seat]);
   }
 }
 

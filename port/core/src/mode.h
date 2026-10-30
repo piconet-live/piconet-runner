@@ -169,6 +169,7 @@ struct Package
   bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
   bool results_points = false;      // `results points`: the first results page passes by itself
   std::string results_title;        // `results_title "TEXT"`: the string for VS TOTAL RANKING; empty, the game's
+  std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
   bool cpus_allowed = false;        // `cpus on`: a player gone is driven by the AI; left out, their seat retires

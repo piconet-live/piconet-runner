@@ -178,6 +178,7 @@ void TestTheBoardsLinesAndValues();
 void TestPracticeIsAMode();
 void TestAnUnknownModeFieldPassesThrough();
 void TestAGonePlayerRetires();
+void TestTheModeTagWords();
 void TestTheCutRaceWords();
 void TestTheOnOffWordsByParameter();
 void TestASquareRootsCostInBothLoops();
@@ -527,6 +528,7 @@ int main(int argc, char** argv)
   TestPracticeIsAMode();
   TestAnUnknownModeFieldPassesThrough();
   TestAGonePlayerRetires();
+  TestTheModeTagWords();
   TestTheCutRaceWords();
   TestTheOnOffWordsByParameter();
   TestASquareRootsCostInBothLoops();

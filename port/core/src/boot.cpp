@@ -288,6 +288,15 @@ void Prepare(ModData& data)
         std::copy_n(m->game_mode->results_title.begin(), m->game_mode->results_title.size(), title.begin());
       data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TITLE, title.data(), title.size());
     }
+    {
+      // `tag`: no seat tagged yet (the HUD pass writes them from the block), and the package's texts
+      std::array<u8, mode::hud::WINDOW_TAG_TEXTS - mode::hud::WINDOW_TAGS + modes::TAG_TEXTS * mode::hud::WINDOW_TAG_TEXT> tags{};
+      if (m->game_mode)
+        for (size_t i = 0; i < m->game_mode->tag_texts.size(); ++i)
+          std::copy_n(m->game_mode->tag_texts[i].begin(), m->game_mode->tag_texts[i].size(),
+                      tags.begin() + (mode::hud::WINDOW_TAG_TEXTS - mode::hud::WINDOW_TAGS) + i * mode::hud::WINDOW_TAG_TEXT);
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TAGS, tags.data(), tags.size());
+    }
   }
   Notice("fzgx: native form: image {} ({} bytes), {} patched words, mode {}", b->image_sha1.substr(0, 8), image.size(),
          b->patches.size(), m ? m->mode : 0);

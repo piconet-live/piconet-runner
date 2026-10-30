@@ -236,6 +236,25 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
               p.results_title.back() == ' ')
             return Fail(why, "has a results title the game cannot draw");
         }
+        else if (id == modes::SETUP_TAGTEXTS)
+        {
+          // a value a byte and a 0 between texts, as the compiler's ModeTagTexts holds them: font 5's characters
+          p.tag_texts.assign(1, {});
+          for (const s32 c : setup_args)
+          {
+            if (c == 0)
+              p.tag_texts.emplace_back();
+            else if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ' || c == '.' || c == '-')
+              p.tag_texts.back().push_back(static_cast<char>(c));
+            else
+              return Fail(why, "has a tag text the game cannot draw");
+          }
+          if (p.tag_texts.size() > modes::TAG_TEXTS)
+            return Fail(why, "has more tag texts than the api's");
+          for (const std::string& text : p.tag_texts)
+            if (text.empty() || text.size() > modes::TAG_TEXT || text.front() == ' ' || text.back() == ' ')
+              return Fail(why, "has a tag text the game cannot draw");
+        }
         else if (id == modes::SETUP_ROLLINGSTART)
         {
           const float v = std::bit_cast<float>(arg(0));
