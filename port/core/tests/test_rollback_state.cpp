@@ -13,7 +13,7 @@ namespace
 {
 struct StateRow
 {
-  std::string id, space, within, step, restored, checksum, paired;
+  std::string id, space, within, step, restored, checksum, paired, writer, fix;
   u32 start = 0, end = 0;  // as the list gives them
   bool ranged = false;     // the list gives a range
   int line = 0;
@@ -32,12 +32,12 @@ std::vector<StateRow> ReadTheList(const std::string& path)
     std::stringstream cells(text);
     for (std::string cell; std::getline(cells, cell, '\t');)
       c.push_back(cell);
-    if (c.size() != 11)
+    if (c.size() != 13)
     {
-      std::printf("  rollback-state.tsv:%d: %zu columns, not 11\n", line, c.size());
+      std::printf("  rollback-state.tsv:%d: %zu columns, not 13\n", line, c.size());
       return {};
     }
-    StateRow row{c[0], c[1], c[4], c[5], c[6], c[7], c[8]};
+    StateRow row{c[0], c[1], c[4], c[5], c[6], c[7], c[8], c[9], c[10]};
     row.ranged = !c[2].empty() && !c[3].empty();
     if (row.ranged)
     {
@@ -53,6 +53,30 @@ std::vector<StateRow> ReadTheList(const std::string& path)
 bool OneOf(const std::string& value, std::initializer_list<const char*> allowed)
 {
   return std::any_of(allowed.begin(), allowed.end(), [&](const char* a) { return value == a; });
+}
+
+// A writer column: its words joined with +, each known and named once; whether one of them writes once a frame.
+struct Writers
+{
+  bool ok = true, once_a_frame = false;
+};
+
+Writers ReadTheWriters(const std::string& text)
+{
+  Writers w;
+  std::vector<std::string> seen;
+  std::stringstream words(text);
+  for (std::string word; std::getline(words, word, '+');)
+  {
+    if (!OneOf(word, {"step", "last-step", "frame", "drawing", "host", "none", "unknown"}) ||
+        std::find(seen.begin(), seen.end(), word) != seen.end())
+      w.ok = false;
+    seen.push_back(word);
+    w.once_a_frame |= OneOf(word, {"last-step", "frame", "drawing"});
+  }
+  if (seen.empty() || text.back() == '+' || (seen.size() > 1 && std::find(seen.begin(), seen.end(), "none") != seen.end()))
+    w.ok = false;
+  return w;
 }
 
 // One of the three spaces the undo log could reach, as bytes: before the step, and after the restore.
@@ -87,6 +111,8 @@ struct StateList
       {"car-presentation", {0x80C10C7A, 0x80C10C7C}},
       {"partial-guard-mines", {0x81000020, 0x81000420}},
       {"partial-guard-sound-queue", {0x8019407C, 0x80194080}},
+      {"allocator-blocks", {0x80574C40, 0x8058AD18}},
+      {"viewport-record", {0x813B5708, 0x813B5720}},
   };
   std::map<std::string, Space> spaces;
 
@@ -144,6 +170,18 @@ struct StateList
     // rule 4
     if (row.checksum != "no" && row.restored != "yes")
       Wrong(row, "the checksum covers it and the undo log does not put it back");
+    // rules 5 and 6: who writes it, and what a once-a-frame writer's state needs
+    const Writers writers = ReadTheWriters(row.writer);
+    if (!writers.ok || !OneOf(row.fix, {"-", "settled", "into-step", "rng-guard", "untrack", "open"}))
+      Wrong(row, "a writer or a fix the list does not have");
+    if (writers.once_a_frame && (row.step == "yes" || row.restored == "yes") && row.fix == "-")
+      Wrong(row, "written once a frame and read by a step or put back by the undo log, with no fix");
+    if (row.fix != "-" && !writers.once_a_frame)
+      Wrong(row, "a fix for a row no once-a-frame code writes");
+    if (row.fix == "untrack" && !OneOf(row.step, {"no", "writes"}))
+      Wrong(row, "to be left out of the undo log, and a step may read it");
+    if (row.fix == "rng-guard" && row.step != "yes")
+      Wrong(row, "a generator guard for a row no step reads");
   }
 
   // Where a row's bytes are.
