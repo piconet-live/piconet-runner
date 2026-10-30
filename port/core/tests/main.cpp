@@ -190,6 +190,7 @@ void TestWaitsRunInTheBlock();
 void TestTheLanguageVectorRuns();
 void TestTheRaceWordsRun();
 void TestTheKnockoutEndsWithItsPlaces();
+void TestARaceThatWaitsRanksTheOut();
 void TestTheLivesLibraryRuns();
 void TestTheDisplayWordsRun();
 void TestThePreparedInterpreterIsThePlainOne();
@@ -537,6 +538,7 @@ int main(int argc, char** argv)
   TestTheLanguageVectorRuns();
   TestTheRaceWordsRun();
   TestTheKnockoutEndsWithItsPlaces();
+  TestARaceThatWaitsRanksTheOut();
   TestTheLobbysRestoreStaysOut();
   TestTheLivesLibraryRuns();
   TestTheDisplayWordsRun();

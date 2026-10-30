@@ -280,6 +280,7 @@ assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE
 # from the mode's block, the image reads them in the drawing and at the race's set-up (the flags). Not read by a step.
 MODE_HUD = _facts.MODE_HUD
 MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
-MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY = 1, 2, 4
+MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING = 1, 2, 4, 8
+MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
 MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE

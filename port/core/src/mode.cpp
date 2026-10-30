@@ -1743,23 +1743,53 @@ void HoldOrder(Mem& g, u32 block, u32 module)
 // time and what fn_1_2E928 would have written, so no row stays RUNNING; an out seat keeps DISQUALIFIED (0xFE) unless
 // the mode placed it (a knockout's cut seats: their place and the time they went out); a finished seat keeps its time. Points into the record's +0x4 and this race's +0x9. The end word 2: the race is over
 // at this step's boundary (raceend.py), and every later run holds the order.
-void EndClause(Machine& m, Mem& g, u32 block, u32 module)
+// With `race_waits everyone` a seat out with no place from the mode is ranked too: below everyone still in, the latest
+// out highest, with its place and the time it went out, not DISQUALIFIED.
+void EndClause(Machine& m, Mem& g, u32 block, u32 module, bool ranks_the_out)
 {
   const u32 count = m.Count(), r = module + R_BASE, clock = g.Read32(module + game::RACE_CLOCK);
+  const u32 slot = g.Read8(r + R_SLOT);
+  const auto booked_out = [&](u32 seat) {
+    return ranks_the_out && g.Read8(r + R_RECORDS + R_RECORD * seat + 0xE + slot) == 0xFE;
+  };
+  // a place is a row: place p is row p - 1, and the seats it leaves to the standing fill the rows left
   std::array<u32, SEATS> order{};
-  u32 n = 0;
+  order.fill(NONE);
+  const auto put = [&](u32 from, u32 seat) {
+    u32 at = from;
+    while (at < count && order[at] != NONE)
+      ++at;
+    if (at < count)
+      order[at] = seat;
+  };
   for (u32 place = 1; place <= SEATS; ++place)
     for (u32 seat = 0; seat < count; ++seat)
       if (g.Read8(block + PLACES + seat) == place)
-        order[n++] = seat;
+        put(place - 1, seat);
+  std::array<bool, SEATS> taken{};
+  for (u32 at = 0; at < count; ++at)
+    if (order[at] != NONE)
+      taken[order[at]] = true;
   for (u32 rank = 0; rank < count; ++rank)
     for (u32 seat = 0; seat < count; ++seat)
-      if (m.Rank(seat) == rank && g.Read8(block + PLACES + seat) == 0)
-        order[n++] = seat;
-  for (u32 seat = 0; seat < count && n < count; ++seat)   // (a seat the standing does not name, last)
-    if (std::find(order.begin(), order.begin() + n, seat) == order.begin() + n)
-      order[n++] = seat;
-  const u32 slot = g.Read8(r + R_SLOT);
+      if (!taken[seat] && m.Rank(seat) == rank && !booked_out(seat))
+      {
+        put(0, seat);
+        taken[seat] = true;
+      }
+  // the out with no place: the latest out first (the same step: the better standing); a seat the standing does not
+  // name, last
+  std::array<u32, SEATS> out{};
+  u32 outs = 0;
+  for (u32 seat = 0; seat < count; ++seat)
+    if (!taken[seat])
+      out[outs++] = seat;
+  std::stable_sort(out.begin(), out.begin() + outs, [&](u32 a, u32 b) {
+    const u32 at_a = g.Read32(block + SeatState(a) + S_OUT_AT), at_b = g.Read32(block + SeatState(b) + S_OUT_AT);
+    return at_a != at_b ? at_a > at_b : m.Rank(a) < m.Rank(b);
+  });
+  for (u32 k = 0; k < outs; ++k)
+    put(0, out[k]);
   const auto time = [](u32 steps) {
     const u32 ms = static_cast<u32>(u64{steps} * 1000 / 60);
     return (ms / 60000 & 0xFF) << 20 | (ms / 1000 % 60) << 12 | ms % 1000;
@@ -1769,7 +1799,7 @@ void EndClause(Machine& m, Mem& g, u32 block, u32 module)
     const u32 seat = order[k], machine = m.MachineOf(seat), record = r + R_RECORDS + R_RECORD * seat;
     g.Write8(block + END_ORDER + k, static_cast<u8>(seat));
     const u32 state = g.Read8(record + 0xE + slot), out_at = g.Read32(block + SeatState(seat) + S_OUT_AT);
-    const bool placed = g.Read8(block + PLACES + seat) != 0;
+    const bool placed = g.Read8(block + PLACES + seat) != 0 || booked_out(seat);
     if (state == 0xFF || (state == 0xFE && placed))
     {
       // a seat racing: the race's time; a seat the mode put out and placed: its place and the time it went out
@@ -1855,7 +1885,7 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
       end = true;
   }
   if (end && m.Faulted() == FAULT_NONE)
-    EndClause(m, g, block, module);
+    EndClause(m, g, block, module, p.race_waits);
 }
 
 // The mode's first run (the first step after the start gate): the setup words that act on the race from its start.
@@ -1987,16 +2017,17 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
     GonePlayers(g, p, block, module, guest.Read32(net::STEP), m.Count());
   // the records: the setup words' every step, no speed held until a rule holds it (a frozen seat's at 0); the CPU
   // drives the seats handed to it, and every seat through a rolling start's countdown, the pedals held
+  // and every seat's speed exactly the rolling start's, whatever the pedals and a dash plate do, until GO
   const bool rolling = p.rolling.has_value() && !n.started;
   const u32 handed = g.Read32(block + HANDED), frozen = g.Read32(block + FROZEN);
   for (u32 seat = 0; seat < SEATS; ++seat)
   {
     const u32 record = block + RECORDS + seat * RECORD;
-    g.Write32(record, (p.pedals ? PEDALS : 0) | (p.boost_off ? BOOST_OFF : 0) | (frozen >> seat & 1 ? HELD : 0) |
+    g.Write32(record, (p.pedals ? PEDALS : 0) | (p.boost_off ? BOOST_OFF : 0) | (frozen >> seat & 1 || rolling ? HELD : 0) |
                           ((handed >> seat & 1) || rolling ? HAND : 0) | (rolling ? ROLL : 0));
     g.Write32(record + 4, p.pedals ? p.accel : 0);
     g.Write32(record + 8, p.pedals ? p.brake : 0);
-    g.Write32(record + 12, 0);
+    g.Write32(record + 12, rolling && !(frozen >> seat & 1) ? *p.rolling : 0);
     g.Write32(block + MOVES + 16 * seat, 0);
   }
   // the discrete events, in the language's order

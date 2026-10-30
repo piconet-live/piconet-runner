@@ -414,7 +414,8 @@ void TestTheRaceWordsRun()
   const u32 m0 = MachineAt(0);
   CHECK(RealAt(g, m0 + 0x224) == 5.0f && RealAt(g, m0 + 0x98) == 5000.0f);   // 1000 / 200; 1000 / 216 x 1080
   CHECK((g.Read32(m0 + game::MACHINE_FLAGS) & 0x8401) == 0x401 && g.Read8(m0 + 0x481) == 90);
-  CHECK(g.Read32(BLOCK + mode::RECORDS) == (mode::HAND | mode::ROLL));
+  CHECK(g.Read32(BLOCK + mode::RECORDS) == (mode::HELD | mode::HAND | mode::ROLL));  // and the speed held, to GO
+  CHECK(g.Read32(BLOCK + mode::RECORDS + 12) == 0x447A0000);  // 1000 km/h
   // race_start: cpu_mode 23 and hand_to_cpu on the CPUs only
   CHECK(g.Read8(0x80700000 + 0x32) == 0 && g.Read8(0x80700000 + 0x100 * 2 + 0x32) == 23);
   CHECK(g.Read32(BLOCK + mode::HANDED) == 0x3FFFFFFC);
@@ -552,6 +553,56 @@ void TestTheKnockoutEndsWithItsPlaces()
   }
   CHECK(g.Read32(R + 0xD4 + 0x24) == (15u << 12 | 16));                    // seat 0 out at step 901: 15.016 s
   CHECK(g.Read32(R + 0xD4 + 0xA0 * 3 + 0x24) == (45u << 12));              // the winner: the race's 2700 steps
+}
+
+// `race_waits everyone`: a seat that went out on its own, with no place from the mode, is ranked by when it went out and
+// below the racers still in, with that time, not DISQUALIFIED; and a place the mode gave is that row, whatever the rest.
+void TestARaceThatWaitsRanksTheOut()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("knockout.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  p->race_waits = true;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 4, 0);
+  for (u32 i = 0; i < 4; ++i)
+  {
+    g.Write32(MachineAt(i) + 0x8, std::bit_cast<u32>(1080.0f));
+    g.Write32(ProgressAt(i) + game::PROGRESS_LAP_LENGTH, std::bit_cast<u32>(3000.0f));
+    g.Write32(ProgressAt(i) + game::PROGRESS_DISTANCE, std::bit_cast<u32>(100.0f * static_cast<float>(i)));
+    g.Write8(R + 0xE + i, static_cast<u8>(3 - i));
+    for (u32 k = 0; k < 4; ++k)
+      g.Write8(R + 0xD4 + 0xA0 * i + 0xE + k, 0xFF);
+  }
+  for (u32 step = 0; step <= 2700 && g.Read32(BLOCK + mode::END) == 0; ++step)
+  {
+    g.Write32(MODULE + game::RACE_CLOCK, step);
+    if (step == 100)
+    {
+      Explode(g, 3);  // the leader dies on its own, long before any cut
+      g.Write8(R + 0xD4 + 0xA0 * 3 + 0xE, 0xFE);
+    }
+    mode::Run(g, *p, BLOCK, MODULE);
+    for (u32 seat = 0; seat < 4; ++seat)
+      if (g.Read32(BLOCK + mode::RECORDS + seat * mode::RECORD) & mode::EXPLODE)
+      {
+        Explode(g, seat);
+        g.Write8(R + 0xD4 + 0xA0 * seat + 0xE, 0xFE);
+      }
+  }
+  CHECK(g.Read32(BLOCK + mode::END) == 2);
+  mode::Run(g, *p, BLOCK, MODULE);  // the hold: a place the game booked out after the end put back
+  CHECK(g.Read8(R + 0xD4 + 0xA0 * 3 + 0xE) != 0xFE);  // ranked, not disqualified
+  // no seat is left without a row, and no two share one
+  u32 rows = 0;
+  for (u32 seat = 0; seat < 4; ++seat)
+    rows |= 1u << g.Read8(R + 0xD4 + 0xA0 * seat + 0xE);
+  CHECK(rows == 0xF);
 }
 
 // The lobby's restore rule never reaches a mode's race: rule 0x8000 is never asked for, and a mode's restore is its own

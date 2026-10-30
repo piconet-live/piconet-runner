@@ -13,7 +13,8 @@
 //
 // The page (DISPLAY, the block's seventh page): +0 its step stamp; a seat's record of SEAT_DISPLAY bytes at +0x10 +
 // 0x20 x seat:
-//   +0  the parts shown, bit p for modes::PART_* p (show / hide)
+//   +0  the parts, bit p for modes::PART_* p: the story's parts shown (show sets, hide clears), the standard parts
+//       (PART_RANK on) hidden (hide sets, show clears), so a page of zeros draws what the game draws
 //   +4  show_number's number + 1 (0: none shown)
 //   +8  seat.look (modes::LOOK_*), +9 seat.own_look + 1 (0: as seat.look), +10 stock_banner's banner + 1 asked at
 //       this run (0: none; every run begins with none, so a banner is asked once), +11 the last GAP or WRONG_WAY asked
@@ -52,17 +53,23 @@ static_assert(SEATS_AT + 30 * SEAT_DISPLAY <= DISPLAY + 0x1000);
 constexpr u32 WINDOW_FLAGS = 0, WINDOW_DIGIT = 4, WINDOW_WRONG = 0xC, WINDOW_LOOKS = 0x10, WINDOW_TINTS = 0x30;
 constexpr u8 COLOURED = modes::LOOK_COUNT;
 static_assert(WINDOW_TINTS + 30 * 4 <= 0x100);
-constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4;
+// ROLLING: rolling_start: the machines' tasks run from the countdown's first step (the site at main.rel 0x34988).
+constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
-static_assert(WINDOW_TINTS + 30 * 4 <= WINDOW_TITLE && WINDOW_TITLE + WINDOW_TITLE_SIZE <= 0x100);
+// +0xC8: not 0, the viewed racer's faces board is not drawn (the site at fn_1_D27B8's entry).
+constexpr u32 WINDOW_FACES = WINDOW_TITLE + WINDOW_TITLE_SIZE;
+static_assert(WINDOW_TINTS + 30 * 4 <= WINDOW_TITLE && WINDOW_FACES + 4 <= 0x100);
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
 // modes::PART_*: the drawers fn_1_CF5B0 (TIMER), fn_1_CDC8C (DISTANCE, SPEED_GAUGE, OBJECTS) and fn_1_CEB38 (the
 // others), read from their mask tests and the pictures each draws (group 0xBA, bmp_sto: 0xBA0A the digits 0 to 3,
 // 0xBA0B DANGER, 0xBA09 MISSION CLEAR!, 0xBA0C MISSION FAILED, 0xBA15 Time is up..., 0xBA0D the object icon).
+// From PART_RANK on the standard parts, read from the drawers' tests of the same mask (rank, laps and speed in their drawers; energy
+// fn_1_C8F34, race time 0xCBC24, lap times 0xCB424 and 0xCB028); FACES has no bit (WINDOW_FACES).
 constexpr std::array<u32, modes::PART_COUNT> PART_BITS = {0x20000, 0x1000, 0x8, 0x400, 0x200, 0x100, 0x80, 0x2000,
-                                                          0x4000};
+                                                          0x4000, 0x20000000, 0x04000000, 0x08000000, 0x40000000,
+                                                          0x01000000, 0x02000000, 0};
 // Every bit of the story's parts (the two drawers' tests and TIMER's), which the game's default mask 0xFF9FFFFF has
 // on: once group 0xBA is loaded they would draw, DIGIT a "0" from a source of none, so the pass clears every one
 // the mode does not show.
@@ -96,6 +103,8 @@ bool UsesClock(const Package& p);
 struct Frame
 {
   u32 parts = 0;                     // the part mask's mode bits to set
+  u32 hidden = 0;                    // the part mask's standard bits to clear
+  bool faces_hidden = false;         // the faces board, which has no bit
   s32 digit = 0;                     // the DIGIT part's value (steps, as the story's: seconds = value / 60)
   std::array<u8, 30> looks{};        // the look each seat's machine is drawn with in this game
   std::array<u32, 30> colours{};     // each seat's seat.colour (0: its own)

@@ -156,9 +156,13 @@ void LiveCameras(Guest& g, SpectatorState& st, const sp::Controls& c, const sp::
 {
   if (c.rule().kinds == 0 || f.follow >= sp::MOST)
     return;
-  const bool chase = sp::IsChase(f.kind);
-  ImageCameras(g, f, chase ? SPEC_CHASE : ImageMode(f.kind), chase ? sp::ChaseView(f.kind) - 1 : f.variant,
-               f.kind_changed || f.follow_changed || !st.tv);
+  // Behind the chase camera the game's HUD is the local seat's and the image keeps it off (`spechud`), so the game's HUD
+  // view, the watched racer's HUD, would show nothing: that view takes the automatic shots, which the HUD follows.
+  const bool wants_hud = f.view == sp::View::Game;
+  const bool chase = sp::IsChase(f.kind) && !wants_hud;
+  const u32 mode = chase ? SPEC_CHASE : sp::IsChase(f.kind) ? ImageMode(sp::Kind::Auto) : ImageMode(f.kind);
+  ImageCameras(g, f, mode, chase ? sp::ChaseView(f.kind) - 1 : f.variant,
+               f.kind_changed || f.follow_changed || !st.tv || std::exchange(st.camera_mode, mode) != mode);
   st.tv = true;
 }
 // The controls, at a watched race's first frame. A knocked-out racer goes on from the racer the image took at its

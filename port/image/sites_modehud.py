@@ -13,6 +13,7 @@ the game does. Native form only. sites.py calls add().
 
 | `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
 | `mode_only` | fn_1_14A328 0x14A368, the first results page's A (`extrwi. r0, r0, 1, 23`; its gate 0x14A358 stays) | the page waits for A | under `results points` as pressed |
+| `mode_faces` | fn_1_D27B8's entry, the faces board's task (`stwu r1, -0x150(r1)`) | the board | not drawn while the viewed racer's FACES is hidden |
 | `mode_title` | fn_1_1461C8 0x146304, VS TOTAL RANKING's string (`addi r3, r21, 0x404`) | the game's | the window's title, when there is one |
 | `tag_cell`, `tag_cpu` | fn_1_147188 0x1473D8 (`lwz r7, 0x4c(r30)`), 0x14740C (`lis r4, 1`); with follow.py's 0x147390 | row's tag: P1 to P4 by racer, CPU for the others | the local seat's row P1; a row with a name in memmap.NAMES no tag (as a player row, to 0x147494). Every race; drawing only |
 | `mode_clock_at`, `mode_clock_label` | fn_1_CF5B0's ten calls of fn_1_496FC (the digits' place, f2 its y) and 0xCF9EC (the TIME label's y, `stfs f0, 0x18(r1)`) | at the top, on the rank | in a race with a mode, below the rank: y 120 and 151 (the rank's own stay). Stock races never draw this clock |
@@ -39,11 +40,12 @@ WRONG_WAY_VOICE, TICK = (-0x56FA, 0x1800), (-0x56F7, 0x2700)  # 0xA9061800 (fn_1
 WRONG_SITE, WRONG_KNOWN, WRONG_SIGN = 0xCD560, 0x8003010C, 0xCD578  # fn_1_CD51C: lwz r0, 0x10c(r3); the sign's making
 ONLY, ONLY_KNOWN = 0x14A368, 0x5400C7FF        # fn_1_14A328: extrwi. r0, r0, 1, 23
 TITLE, TITLE_KNOWN = 0x146304, 0x38750404      # fn_1_1461C8: addi r3, r21, 0x404
+FACES, FACES_KNOWN = 0xD27B8, 0x9421FEB0       # fn_1_D27B8: stwu r1, -0x150(r1)
 TAG_CELL, TAG_CELL_KNOWN = 0x1473D8, 0x80FE004C  # fn_1_147188: lwz r7, 0x4c(r30)
 TAG_CPU, TAG_CPU_KNOWN, TAG_DONE = 0x14740C, 0x3C800001, 0x147494  # lis r4, 1; where a player row's tag ends
 CLOCK_PLACES = [0xCF6AC, 0xCF6E8, 0xCF73C, 0xCF784, 0xCF7C0, 0xCF854, 0xCF890, 0xCF8E4, 0xCF92C, 0xCF968]  # fn_1_CF5B0: bl fn_1_496FC
 TEXT_AT, CLOCK_LABEL, CLOCK_LABEL_KNOWN = 0x496FC, 0xCF9EC, 0xD0010018  # fn_1_496FC; stfs f0, 0x18(r1)
-CLOCK_Y, CLOCK_LABEL_Y = 0x42F00000, 0x43170000   # 120.0, 151.0: below the rank (its digits at y 49ish, "/30" at 80)
+CLOCK_Y = 0x43000000   # 128.0: below the rank (its digits at y 49ish, "/30" at 80)
 BEEP_SITE, BEEP_KNOWN = 0x3A448, 0x801D0030   # fn_1_3A330: lwz r0, 0x30(r29), where the timer's code ends on every path
 HUD_ENTRIES, BANNER_HEAP = 0x8FDA8, 0x25B88   # .bss: port 0's HUD entry (+0 the banners raised); the banners' heap word
 ONCE_BITS = {FINAL_LAP: 0x2, BOOST_POWER: 0x1, TIME_BONUS: 0x0}
@@ -210,7 +212,7 @@ mlk_tint:
     patch(site, word, 0, "mode_look")
     middle.append((site, ["r11", "r12", "cr0", "lr"], "mode_look"))
 
-    # the clock below the rank: the digits' y at each of the drawer's place calls, the label's y (nothing a step reads)
+    # the clock below the rank: the digits' y at each of the drawer's place calls; no TIME label (its draw, the next call, left out) (nothing a step reads)
     r.add("mode_clock_at", test + """    beq mca_stock
 """ + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
     cmplwi 12, 0
@@ -238,9 +240,7 @@ mca_stock:
 """ + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
     cmplwi 12, 0
     beq mcl_stock
-    lis 12, {CLOCK_LABEL_Y >> 16:#x}
-    stw 12, 0x18(1)
-    @b {site + 4:#x}
+    @b {site + 8:#x}
 mcl_stock:
     .long {word:#010x}
     @b {site + 4:#x}
@@ -292,6 +292,21 @@ mon_stock:
 """)
     patch(site, word, 0, "mode_only")
     middle.append((site, ["r12", "cr0"], "mode_only"))
+
+    # `hide FACES`: the faces board's task does nothing this frame; only drawing is in it
+    site = TEXT + FACES
+    word = stock(site, FACES_KNOWN)
+    r.add("mode_faces", test + """    beq mfc_stock
+""" + la(12, memmap.MODE_HUD_FACES) + f"""    lwz 12, 0(12)
+    cmpwi 12, 0
+    beq mfc_stock
+    blr
+mfc_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_faces")
+    middle.append((site, ["r12", "cr0"], "mode_faces"))
 
     # `results_title NAME`: the window's string for VS TOTAL RANKING
     site = TEXT + TITLE

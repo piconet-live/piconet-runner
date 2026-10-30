@@ -130,6 +130,32 @@ void TestTheDisplayWordsRun()
   g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
   hud::Hud(g);
   CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS) | 0x20000));
+  // the standard parts: hide clears the part's bit for the viewed seat only, show puts it back, the stock mask stays,
+  // FACES has no bit but the window's word; a seat not viewed holds nothing
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_FACES) == 0);
+  for (const u32 part : {modes::PART_RANK, modes::PART_LAPS, modes::PART_SPEED, modes::PART_ENERGY,
+                         modes::PART_LAP_TIMES, modes::PART_RACE_TIME})
+  {
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HIDE, 1, part));
+    g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+    hud::Hud(g);
+    CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS & ~hud::PART_BITS[part]) | 0x20000));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 1, part));
+    g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+    hud::Hud(g);
+    CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS) | 0x20000));
+  }
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_HIDE, 2, modes::PART_RANK));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_HIDE, 1, modes::PART_FACES));
+  g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+  hud::Hud(g);
+  CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS) | 0x20000));
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_FACES) == 1);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 1, modes::PART_FACES));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 2, modes::PART_RANK));
+  g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+  hud::Hud(g);
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_FACES) == 0);
   CHECK(g.Read32(MODULE + net::BSS + 0x84) == 0);  // no DIGIT shown: no digit source
   CHECK(g.Read32(MODULE + net::BSS + 0x84 + 8) == PROGRESS + game::PROGRESS_SIZE);
   CHECK(g.Read32(MODULE + net::BSS + 0x84 + 4) == MACHINES + game::MACHINE_SIZE + game::MACHINE_SPEED);
@@ -197,6 +223,6 @@ void TestTheDisplayWordsRun()
     picojson::parse(v, text.str());
     std::string why;
     const std::optional<mode::Package> race = mode::Read(v, &why);
-    CHECK(race.has_value() && hud::WindowFlags(*race) == (hud::STORY_PICTURES | hud::POINTS_PAGE));
+    CHECK(race.has_value() && hud::WindowFlags(*race) == (hud::STORY_PICTURES | hud::POINTS_PAGE | hud::ROLLING));
   }
 }

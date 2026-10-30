@@ -56,7 +56,8 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value)
     case ACTION_SHOW:
     case ACTION_HIDE:
       if (value < PART_COUNT)
-        g.Write32(r + PARTS, id == ACTION_SHOW ? g.Read32(r + PARTS) | 1u << value : g.Read32(r + PARTS) & ~(1u << value));
+        g.Write32(r + PARTS, (id == ACTION_SHOW) == (value < PART_RANK) ? g.Read32(r + PARTS) | 1u << value
+                                                                        : g.Read32(r + PARTS) & ~(1u << value));
       return true;
     case ACTION_SHOWNUMBER:
       // 0 to 99 shows; anything else hides (the icon draws two digits: 100 would read 00)
@@ -125,7 +126,7 @@ bool Uses(const std::vector<u8>& code, u8 id, bool part)
     if (part && op == OP_PUSH && i + 7 <= code.size() && code[i + 5] == OP_ACTION && code[i + 6] == id)
     {
       const u32 value = static_cast<u32>(code[i + 1]) << 24 | code[i + 2] << 16 | code[i + 3] << 8 | code[i + 4];
-      if (value != PART_TIMER)
+      if (value != PART_TIMER && value < PART_RANK)
         return true;
     }
     i += static_cast<size_t>(size);
@@ -147,7 +148,7 @@ bool UsesClock(const Package& p)
 u32 WindowFlags(const Package& p)
 {
   return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (Uses(p.code, ACTION_AWARD, false) ? POINTS_PAGE : 0) |
-         (p.results_points ? POINTS_ONLY : 0);
+         (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0);
 }
 
 Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
@@ -167,7 +168,8 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
   const u32 parts = g.Read32(r + PARTS);
   for (u32 p = 0; p < PART_COUNT; ++p)
     if (parts >> p & 1)
-      f.parts |= PART_BITS[p];
+      (p < PART_RANK ? f.parts : f.hidden) |= PART_BITS[p];
+  f.faces_hidden = (parts >> PART_FACES & 1) != 0;
   // the danger zone's display (vocabulary 4.4): while its count runs (the race side's, mode.h DANGER: from 60 x
   // seconds + 60 down, the machine exploding at 60) the big digit and the warning, as story chapter 6's, whose digit
   // is the count / 60; the sheet's digits go to 3
@@ -220,7 +222,8 @@ void Hud(Guest& g)
   }
   const u32 mask = g.Read32(module + game::HUD_PARTS);
   if (mask != 0)
-    g.Write32(module + game::HUD_PARTS, (mask & ~STORY_BITS) | f.parts | gap_part);
+    g.Write32(module + game::HUD_PARTS, (mask & ~STORY_BITS & ~f.hidden) | f.parts | gap_part);
+  g.Write32(layout::MODE_HUD + WINDOW_FACES, f.faces_hidden ? 1 : 0);
   // the source block, whole: the digit's value in the window; the viewed racer's speed and progress record; R
   const u32 window = layout::MODE_HUD;
   g.Write32(window + WINDOW_DIGIT, static_cast<u32>(f.digit));
