@@ -62,6 +62,7 @@ void TestALaunchFileOfTheLaunchers()
       ++races;
       const picojson::object& match = file.at("match").get<picojson::object>();
       CHECK(!o.match.empty() && o.replay_file == words(match, "record") && o.rejoin == (match.count("rejoin") != 0));
+      CHECK(o.camera == (match.count("camera") ? static_cast<u32>(match.at("camera").get<double>()) : 0u));
     }
     if (file.count("replay"))
     {

@@ -148,7 +148,8 @@ manager) in fn_1_37AA8 (main.rel offset 0x37C14) by the image's trampoline. Cont
       within 10-20 s. In the race phase (0x29 on) these presentation tasks are given flag bit 1 on entry, so they run in
       every step, re-simulated through a rollback with the race: the cameras (list 20: fn_1_90E0 the chase camera,
       fn_1_EE44 the TV cameras; put back and not re-run, the camera was a rollback's depth behind its machine for a
-      frame, which looked like the machine jolting forward) and the HUD's event countdown (list 13: fn_1_15E1E8, which
+      frame, which looked like the machine jolting forward; these two from the countdown on, phase 0x28, so that the
+      view a racer picks there with the camera button outlives a rollback: raceview.py) and the HUD's event countdown (list 13: fn_1_15E1E8, which
       runs the lap banner's timers), and fn_1_9A5CC (list 23), race state though flagged as presentation: it
       changes the machines' energy (+0x184) and surface flags (+0x218), so run only in a frame's last step, how often
       it ran depended on where the frames fell; a replay came out different from the first run and the games

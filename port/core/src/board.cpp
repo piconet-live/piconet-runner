@@ -228,6 +228,11 @@ void Desync(u32 step)
   Write(EventKind::Desync, step);
 }
 
+void Camera(u32 view, u32 before)
+{
+  Write(EventKind::Camera, view, before);
+}
+
 void Look()
 {
   Board& s = The();

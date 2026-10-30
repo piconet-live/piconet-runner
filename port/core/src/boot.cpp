@@ -30,7 +30,8 @@ constexpr u32 MODULE_LIST = game::MODULE_LIST;
 constexpr u32 SCREEN_OPTION = 0x229630;
 // The largest offset from main.rel's header that this file reads or writes at: the header must leave that much of
 // main memory after it, or nothing is touched.
-constexpr u32 FARTHEST = SCREEN_OPTION + 4;
+constexpr u32 FARTHEST = game::GAME_OPTIONS + 4;
+static_assert(SCREEN_OPTION + 4 <= FARTHEST);
 static_assert(game::OPTION_BINDINGS + 0x150 <= FARTHEST && game::OPTION_SCHEME + 4 <= FARTHEST);
 
 std::optional<Match> s_match;
@@ -123,6 +124,29 @@ void WriteControllerOptions(Guest& g)
   if (!written.empty() && ++s_controls_written <= LINES)
     Notice("fzgx: controller options written where the game held others: {}{}", written,
            s_controls_written == LINES ? " (no further lines)" : "");
+}
+
+// The player's camera (Options::camera, the launch file's "match.camera": the launcher's record of the view the
+// player last raced in). The game starts a chase camera in the view of its options record (GAME_OPTIONS +
+// SAVED_VIEW: a camera record's set-up, fn_1_8D08, takes it for one viewport outside the game's replay), which
+// these boots never load from the save. So the view is written there every frame until the relay's go: the race
+// start's camera set-up (fn_1_391F0, the frame after the go) then takes it, as a console takes the saved one. The
+// write stops at the go: from then on the game writes the byte itself (the chase camera, from its record) and a
+// step reads it only when it makes a camera record. Nothing of the race reads the view: the checksum leaves out the
+// cameras and the options record, so each game of a race starts in its own player's view. Not in a playback (the
+// recording's own view is the game's) and not with none given.
+void WriteStartView(Guest& g)
+{
+  const u32 view = TheOptions().camera;
+  if (view == 0 || !TheOptions().play_file.empty() || g.Read32(table::RUNNING_AT) != 0)
+    return;
+  const u32 module = MainRel(g);
+  if (module == 0)
+    return;
+  const u32 options = g.Read32(module + game::GAME_OPTIONS);
+  if (!g.Ram(options + game::SAVED_VIEW, 1) || g.Read8(options + game::SAVED_VIEW) == view)
+    return;
+  g.Write8(options + game::SAVED_VIEW, static_cast<u8>(view));
 }
 }  // namespace
 
@@ -239,6 +263,7 @@ void OnFrame(Guest& g)
   }
   g.Write32(TRUE_ASPECT, TrueAspectWord(TheOptions()));
   WriteControllerOptions(g);
+  WriteStartView(g);
   // the seats' constants every frame until the race runs (in the native form Prepare wrote them before the boot)
   if (g.Read32(table::RUNNING_AT) == 0 && m->seat_block.size() == table::SEAT_BLOCK_SIZE)
     g.CopyTo(table::SEAT_CONSTANTS_AT, m->seat_block.data() + table::SEAT_CONSTANTS, MAX_SEATS * table::SEAT_CONSTANT);

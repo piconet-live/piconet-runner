@@ -71,7 +71,10 @@ void SendLocalInput(Guest& g, Session& s, u32 step, u32 module)
   SendInputs(s);
   Ping(s);
   if (!s.playback)
+  {
     board::Race(g, step, s.my_seat);
+    board::CameraView(g, s.watch == Watch::Racing && !s.watcher && !TheOptions().spectate);
+  }
 }
 
 // The steps that are final by now: their count to the mod, their checksums to the relay, their rows to the replay.

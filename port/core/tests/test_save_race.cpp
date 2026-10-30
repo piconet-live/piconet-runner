@@ -212,6 +212,56 @@ void TestARaceTakesThePlayersControllerOptions()
   std::filesystem::remove_all(dir);
 }
 
+// The player's camera view ("match.camera", boot.cpp WriteStartView): written into the game's options record, where
+// the race start's camera set-up takes it, every frame until the relay's go and never after; not in a playback, and
+// not without a view given.
+void TestARaceStartsInThePlayersView()
+{
+  const std::string dir = Temp();
+  WriteARace(dir);
+  TestHost host;
+  Options race;
+  CHECK(!ReadLaunchFile(dir + "/launch.json", &race));
+  race.camera = 3;
+  Guest g(host, Data());
+  constexpr u32 RECORD = 0x80700000, VIEW = RECORD + game::SAVED_VIEW;
+  const auto start = [&](const Options& o) {
+    Init(host, o);
+    LinkMainRel(g);
+    g.Write32(table::RUNNING_AT, 0);
+    g.Write32(MODULE + game::GAME_OPTIONS, 0);
+    FrameTick();   // no record yet: nothing written
+    g.Write32(MODULE + game::GAME_OPTIONS, RECORD);
+    g.Write8(VIEW, 1);
+    g.Write8(VIEW + 1, 0xA5);
+    FrameTick();
+  };
+  start(race);
+  CHECK(g.Read8(VIEW) == 3 && g.Read8(VIEW - 1) == 0 && g.Read8(VIEW + 1) == 0xA5);
+  g.Write8(VIEW, 1);   // the game's own put back (the title's defaults): written again
+  FrameTick();
+  CHECK(g.Read8(VIEW) == 3);
+  g.Write32(table::RUNNING_AT, 1);   // the go: from here the game's own
+  g.Write8(VIEW, 2);
+  FrameTick();
+  CHECK(g.Read8(VIEW) == 2);
+  Shutdown();
+  race.camera = 0;     // none given
+  start(race);
+  CHECK(g.Read8(VIEW) == 1);
+  Shutdown();
+  WriteReplay(dir + "/two.fzrp", {1, 0});
+  Options playback;
+  playback.bundle_dir = dir;
+  playback.play_file = dir + "/two.fzrp";
+  playback.camera = 3;  // (no launch file gives a playback one; the playback's view is the game's all the same)
+  start(playback);
+  CHECK(g.Read8(VIEW) == 1);
+  Shutdown();
+  Init(host, Options{});
+  std::filesystem::remove_all(dir);
+}
+
 // The blocks a race writes, under rollback and the checksum: a rollback puts back what they held before the step it
 // goes back to, whoever changed them since (the undo log covers main.rel's .data and .bss whole), and no byte of
 // them is in the state checksum, so two games with other options keep equal checksums.
