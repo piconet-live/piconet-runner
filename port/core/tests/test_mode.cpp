@@ -543,6 +543,8 @@ void TestTheKnockoutEndsWithItsPlaces()
 // words alone.
 void TestTheLobbysRestoreStaysOut()
 {
+  BEGIN_TEST();
+  TestHost host;
   const auto match = [](const char* restore, const char* vector) {
     picojson::value mode = Vector(vector);
     const std::string json = R"({"matchId": "m7", "seat": 0, "token": "1f2e3d4c5b6a7988", "relay": {"host": "", "port": 47811},

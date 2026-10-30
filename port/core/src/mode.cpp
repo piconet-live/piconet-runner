@@ -20,7 +20,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <limits>
 
 #if defined(__x86_64__) || defined(_M_X64)
@@ -907,8 +906,10 @@ void Remember(Machine& m, Guest& g, u32 block, const Now& n)
 std::FILE* TraceFile()
 {
   static std::FILE* file = [] {
-    const char* path = std::getenv("FZGX_MODE_TRACE");
-    return path && *path ? std::fopen(path, "w") : nullptr;
+    for (const EmulatorSetting& given : TheOptions().debug.emulator)
+      if (given.name == "FZGX_MODE_TRACE" && !given.value.empty())
+        return std::fopen(given.value.c_str(), "w");
+    return static_cast<std::FILE*>(nullptr);
   }();
   return file;
 }
