@@ -1,5 +1,5 @@
 // The disc's files the core reads, from the host (the extracted game, not a disc image): a machine's stock texture
-// files under vehicle/, and where the textures lie in one, for paint.cpp; and the game's 24 by 24 font, for the
+// files under vehicle/, and where the textures lie in one, for paint.cpp; and the energy meter's textures, for the
 // panel before a race (fzgx/panel.h). Lifted from the Dolphin fork (dolphin-fzgx
 // Core/FzgxPaint.cpp at 5bdc7c640e).
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -69,16 +69,7 @@ std::optional<std::array<Bytes, 4>> ReadSet(const std::string& name, bool main)
 
 namespace fzgx::panel
 {
-bool LoadFromTheGame(Font* font, std::size_t* size_read)
-{
-  std::vector<u8> file;
-  const bool read = TheHost().ReadGameFile(FONT_FILE, &file);
-  if (size_read)
-    *size_read = read ? file.size() : 0;
-  return read && font->Load(file);
-}
-
-void LoadArtFromTheGame(Lettering* lettering, Meter* meter, std::string* problem)
+void LoadArtFromTheGame(Meter* meter, std::string* problem)
 {
   const auto unpacked = [&](const char* path) {
     std::vector<u8> file;
@@ -88,8 +79,6 @@ void LoadArtFromTheGame(Lettering* lettering, Meter* meter, std::string* problem
       *problem += std::string(problem->empty() ? "" : "; ") + path + " does not unpack";
     return file;
   };
-  if (const std::vector<u8> letters = unpacked(LETTERS_FILE); !letters.empty() && !lettering->Load(art::Texture(letters, 0)))
-    *problem += std::string(problem->empty() ? "" : "; ") + "the venue names' strips are not texture 0 of " + LETTERS_FILE;
   if (const std::vector<u8> hud = unpacked(METER_FILE); !hud.empty())
   {
     meter->frame = art::Texture(hud, METER_FRAME);

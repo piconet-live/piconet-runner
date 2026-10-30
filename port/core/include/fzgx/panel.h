@@ -4,9 +4,10 @@
 // is loaded, eight seconds or so, so the last start-up picture stood on the screen all that time; and at the gate
 // the game draws nothing either. The host draws the panel over whatever the game shows, on a black ground.
 // Here: what the panel shows and when (Board, written by the game's thread and read by the thread that presents),
-// the game's own 24 by 24 font read from the player's disc (Font), and the panel's text as a picture (Draw), in
-// the look of the course name in the course intro. Nothing here reads or writes the game's memory, nothing of it
-// is in a step, and once the race runs it costs the presenting thread one load of a flag a picture.
+// its lines (Lines), which the host writes in the launcher's display face (Saira Condensed ExtraBold, leaning, from
+// the Fonts folder beside the runner: port/moderngekko/src/overlay.h), and the game's energy meter from the player's
+// disc as the load's bar. Nothing here reads or writes the game's memory, nothing of it is in a step, and once the
+// race runs it costs the presenting thread one load of a flag a picture.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -96,35 +97,8 @@ bool Counting(Board& board, u32 figure);
 void Saved(Board& board, u32 along);
 
 // The panel's lines: "LOADING"; "WAITING FOR PLAYERS" and, when `of` is not 0, "3/5"; the countdown's figure
-// (`ready` holds it). Labels and values only.
+// (`ready` holds it). Labels and values only: the host writes them in the display face.
 std::vector<std::string> Lines(Shows shows, u32 ready, u32 of);
-
-// The game's 24 by 24 font: the disc's file font/fnt_asc_24x24.bin, 1,387 characters of 288 bytes each. A
-// character is 24 by 24 pixels of four bits (0 clear to 15 solid), stored as the console's I4 textures are: nine
-// blocks of 8 by 8 pixels, row by row, each block's pixels row by row, the left pixel of a pair in a byte's high
-// half. The characters are in the order of the game's own table: the space first, punctuation ("/" is the 19th),
-// then from the 59th the digits, A to Z and a to z, then kana and the rest. No width is stored: each fills its
-// cell as a full-width character does.
-constexpr u32 CELL = 24, GLYPH_BYTES = CELL * CELL / 2, GLYPHS = 1387;
-constexpr char FONT_FILE[] = "font/fnt_asc_24x24.bin";
-class Font
-{
-public:
-  // False when `file` is not the font file by its size: nothing is drawn from it then.
-  bool Load(const std::vector<u8>& file);
-  bool Loaded() const { return !m_cells.empty(); }
-  // The character's cell, 24 rows of 24 values of 0 to 15; a character the panel does not use (anything but A to
-  // Z, a to z, 0 to 9, "/" and the space) is the space.
-  const std::array<u8, CELL * CELL>& Cell(char character) const;
-
-private:
-  std::vector<std::array<u8, CELL * CELL>> m_cells;
-};
-
-// The font from the game's files, asked of the core's host (files_disc.cpp; after fzgx::Init, from any thread: the
-// host's reader is a plain file read). False when the file is not there or is not the font; `size_read`, when
-// given, is what the host read, for the log.
-bool LoadFromTheGame(Font* font, std::size_t* size_read = nullptr);
 
 // A picture of four bytes a pixel (red, green, blue, opacity 255), row by row from the top.
 struct Picture
@@ -133,53 +107,7 @@ struct Picture
   std::vector<u8> rgba;
 };
 
-// The look, measured on the course name in a course intro (a 16:9 picture of 2,334 by 1,344 pixels of Lightning,
-// Loop Cross): a character's cell is 18 of the picture's 448 lines high and 0.933 times as wide on the screen (the
-// console's pixels are narrower than high); the next character begins two thirds of a cell on, a space takes a
-// whole cell; the letters run from near white at the top of the cell to cyan at its bottom; around them a soft
-// grey-blue edge a sixth of a cell wide.
-constexpr u32 NAME_LINES = 18, PICTURE_LINES = 448;
-constexpr double CELL_ASPECT = 0.933, ADVANCE = 16.0 / 24.0, LINE_PITCH = 1.5;
-// The height in pixels of a character's cell in a picture `picture_height` pixels high (at least 8).
-u32 CellHeight(u32 picture_height);
-// The lines as one picture on black, each centred, a cell `cell_height` pixels high (8 to 512). Empty without a
-// loaded font, without lines, or outside that range.
-Picture Draw(const Font& font, const std::vector<std::string>& lines, u32 cell_height);
-
-// ---- The look: the venue name's lettering, and the energy meter as the load's bar.
-
-// The large lettering of the course intro: the venue's name there is no text but a picture, one of twelve strips
-// of 432 by 36 pixels in texture 0 of bmp_e/bmp_view.tpl.lz (white capitals 24 pixels high with a cyan-grey
-// glow). The letters are cut from the strips as they are, with no coordinates written down: in each strip the
-// connected regions of near-white solid pixels (opacity 200 or more, every colour 190 or more; at least 6 pixels;
-// a region inside another's box is part of it), from left to right, are the letters of that venue's name, and a
-// strip whose regions are not as many as its name's letters gives none. Each letter keeps the pixels within 5 of
-// it that are nearer to it than to its neighbours: its glow. The twelve names hold A B C D E F G H I L M N O P R
-// S T U W Y: every letter of the panel's two lines, no digit and no slash.
-constexpr u32 STRIP_WIDTH = 432, STRIP_HEIGHT = 36, STRIPS = 12;
-constexpr char LETTERS_FILE[] = "bmp_e/bmp_view.tpl.lz";
-class Lettering
-{
-public:
-  // The strips' texture (432 pixels wide, twelve strips high or more). False when no strip gave its letters.
-  bool Load(const art::Image& strips);
-  bool Has(char letter) const;
-  // Whether every character of the line is a letter the strips gave, or a space.
-  bool Writes(const std::string& line) const;
-  // The line at the strips' own size, 36 pixels high, on black: each letter where it stood in its strip's
-  // height, the next beginning one pixel short of the letter's width, a space 9 pixels, as the strips are set.
-  // Empty when the line cannot be written.
-  art::Image Line(const std::string& line) const;
-
-private:
-  struct Letter
-  {
-    art::Image cut;        // the letter with its glow
-    int left = 0, top = 0; // where the cut lies from the letter's own left edge, and from the strip's top
-    u32 width = 0;         // the letter's own width, without its glow
-  };
-  std::array<Letter, 26> m_letters;
-};
+// ---- The look: the energy meter as the load's bar.
 
 // The game's energy meter, from bmp_e/bmp_rac.tpl.lz: the frame is texture 23 (136 by 24, a steel edge 4 pixels
 // wide), the fill texture 22 (128 by 16, red at the left to magenta at the right), which lies 4 pixels inside the
@@ -192,18 +120,21 @@ struct Meter
   bool Loaded() const { return !frame.Empty() && !fill.Empty(); }
 };
 
-// The lettering and the meter from the game's files, asked of the core's host (files_disc.cpp; as
-// LoadFromTheGame). Each is left unloaded when its file or its texture is not as known; `problem` then says which.
-void LoadArtFromTheGame(Lettering* lettering, Meter* meter, std::string* problem);
+// The meter from the game's files, asked of the core's host (files_disc.cpp; after fzgx::Init, from any thread: the
+// host's reader is a plain file read). Left unloaded when its file or its textures are not as known; `problem` then
+// says why.
+void LoadArtFromTheGame(Meter* meter, std::string* problem);
 
 // A picture of the game's own size as the game's race display draws it in a picture `picture_height` pixels high,
 // on black, solid, times `scale`. Measured on the energy meter of a race picture (2,334 by 1,344, 16:9: its fill
 // of 128 by 16 is 350 by 45 pixels): the display is laid out on a screen of 640 by 480 whose pixel is a 480th of
 // the picture's height each way, in a 16:9 picture as in a 4:3 one.
-// The panel's sizes (the load's meter as large on the screen as the race's own; the words to suit it): the meter
-// at the game's size, 136 by 24 of that screen; the lettering at two thirds, capitals 16.
+// The panel's sizes (the load's meter as large on the screen as the race's own; the words to suit it), in that
+// screen's lines: the meter at the game's size, 136 by 24; the words' capitals WORDS_CAP high, the count's under
+// them COUNT_CAP (the display face's capitals stand CAP_OF_EM of its size).
 constexpr u32 SCREEN_LINES = 480;
-constexpr double METER_SCALE = 1.0, LETTERS_SCALE = 2.0 / 3.0;
+constexpr double METER_SCALE = 1.0;
+constexpr double WORDS_CAP = 20, COUNT_CAP = 13, CAP_OF_EM = 0.70;
 Picture ForThePicture(const art::Image& native, u32 picture_height, double scale);
 
 // How far the load is, from what the load itself shows (no total is kept from an earlier load, and nothing by

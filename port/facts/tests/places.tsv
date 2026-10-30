@@ -385,3 +385,7 @@ SEAT_CURVE	memmap.py	py	SEAT_CURVE
 SEAT_CURVE_DOUBLE	memmap.py	py	SEAT_CURVE_DOUBLE	
 SEAT_SETTING	memmap.py	py	SEAT_SETTING	
 LOCKED_CACHE	port/moderngekko/src/lanes_internal.h	use	game::LOCKED_CACHE	1
+COURSE_NAME	memmap.py	py	COURSE_NAME	
+COURSE_NAME	port/core/src/boot.cpp	use	table::COURSE_NAME	1
+COURSE_NAMES	port/core/src/boot.cpp	use	game::COURSE_NAMES	1
+COURSE_NAME_ENTRY	port/core/src/boot.cpp	use	game::COURSE_NAME_ENTRY	1
