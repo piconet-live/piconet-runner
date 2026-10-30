@@ -66,6 +66,12 @@ static_assert(MINE_REGEN_STEP_MS * STEPS_A_SECOND % 1000 == 0 && RACE_FLOW + 4 <
 // header's "rubberBand" (none: 1, every recording made before 0.4.0, which plays as it was raced).
 constexpr u32 RACE_RUBBER_BAND_ON = 100;
 static_assert(RACE_GRID + 30 <= RACE_RUBBER_BAND_ON && RACE_RUBBER_BAND_ON + 4 <= RACE_CPULEVEL);
+// the simulation's own generator: a word, 1 the race's random draws (the computer drivers' scripted driver, the hazard
+// objects) take a word of their own that the image seeds before every step, 0 they take the executable's 0x801A63C0,
+// which the effects and cameras draw from too (the image's sites_generator.py). A race or practice from a match is 1;
+// a replay's is its header's "simGenerator" (none: 0, every recording made before it, which plays as it was raced).
+constexpr u32 RACE_SIM_GENERATOR = 104;
+static_assert(RACE_RUBBER_BAND_ON + 4 <= RACE_SIM_GENERATOR && RACE_SIM_GENERATOR + 4 <= RACE_CPULEVEL);
 constexpr const char* GAME_ID = "GFZE01";  // the disc this core is for (NTSC-U)
 // What a race can be made of. A match is the coordinator's word and a replay is a file somebody sent: their numbers
 // go to the game's own set-up routines, which check nothing (a machine or a course the disc does not hold, a seat

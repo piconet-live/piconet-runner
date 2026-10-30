@@ -87,6 +87,7 @@ replay::Features FeaturesOf(const picojson::object& header)
     f.mines = setup.at("rules").get("mineRegenMs").get<double>() * 60 / 1000 >= 1;
   const bool band = !header.contains("rubberBand") || header.at("rubberBand").get<bool>();
   f.grid = setup.contains("grid") || !band;
+  f.mode = setup.contains("mode") || (header.contains("simGenerator") && header.at("simGenerator").get<bool>());
   return f;
 }
 
@@ -235,8 +236,8 @@ static void TestTheReplaySamplesOfEveryVersion()
     CHECK(std::equal(d.begin(), d.begin() + p.StepAt(0), back.begin()));
     CHECK(std::equal(d.begin() + p.steps_end, d.end(), back.begin() + p.steps_end));
   }
-  // the writer writes version 7 alone
-  CHECK(replay::EncodeStart("{}", 1, 0)[5] == replay::VERSION_GRID && replay::VERSION_WRITTEN == replay::VERSION_GRID);
+  // the writer writes version 9 alone
+  CHECK(replay::EncodeStart("{}", 1, 0)[5] == replay::VERSION_MODE && replay::VERSION_WRITTEN == replay::VERSION_MODE);
 }
 
 // FZGX_REPLAY_ROUND_TRIP=FILE: every replay FILE names (one path a line) written again by the generated writer's

@@ -70,8 +70,9 @@ void TheRaceInTheWindow(TestHost& host, Guest& g)
   CHECK(d.Read(RACE + RACE_MACHINES, 4) == 0x050C1E07);
   CHECK(d.Read(RACE + RACE_CPULEVEL, 4) == 2 && d.Read(RACE + RACE_BOOST, 4) == 1 && d.Read(RACE + RACE_RESTORE, 4) == 0);
   // (no end after the first finish: 0, as every race before the rule; a race from a match is the game's flow, with
-  // no rubber band)
+  // no rubber band and the simulation's own generator)
   CHECK(d.Read(RACE_FINISH_LIMIT_AT, 4) == 0 && d.Read(RACE + RACE_FLOW, 4) == 1 && d.Read(RACE + RACE_RUBBER_BAND_ON, 4) == 0);
+  CHECK(d.Read(RACE + RACE_SIM_GENERATOR, 4) == 1);
   CHECK(d.Read(RACE + RACE_SETTINGS, 1) == 70 && d.Read(RACE + RACE_SETTINGS + 1, 1) == 50);
   // names as the game's font draws them: upper case, & stored as a comma, other marks dropped, 16 at most; none
   // for a CPU seat or a seat without a player

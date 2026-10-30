@@ -130,7 +130,7 @@ class Bundle(unittest.TestCase):
         self.assertFalse(any((a, b) == old for a, b in zip(words, words[1:])))
 
     def test_every_patch_enters_the_image(self):
-        self.assertEqual(len(self.patches), 250)   # 250: the game mode's displays' three (sites_modehud.py); 247: the game mode's pair gate and timer; 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
+        self.assertEqual(len(self.patches), 252)   # 252: the simulation's own generator (2); 250: the game mode's displays' three (sites_modehud.py); 247: the game mode's pair gate and timer; 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
         executable = [a for a in self.patches if a < memmap.REL]
         # the last: frame begin's copy to the display buffer (sites_present.py)
         self.assertEqual(sorted(executable), [0x80005940, 0x800059A8, 0x80067898, 0x8006FDA4])
@@ -164,8 +164,9 @@ class Bundle(unittest.TestCase):
 
     def test_routines_test_the_mode_word_first(self):
         test = (0x3D800000 | memmap.hi(memmap.CONTROL), 0x818C0000 | (memmap.MODE - memmap.CONTROL))
-        # every start; a plain word; tests its own word (smooth.py); reached only after mine_shown, which tests it
-        untested = {"linked", "pin", "smooth_hook", "mine_fade"}
+        # every start; a plain word; tests its own word (smooth.py); reached only after mine_shown, which tests it;
+        # the simulation's own generator (sites_generator.py), whose shift word is 0 in a plain start: the stock word
+        untested = {"linked", "pin", "smooth_hook", "mine_fade", "simgen_cpu", "simgen_hazard"}
         for address, p in self.patches.items():
             if p["what"] in untested:
                 continue

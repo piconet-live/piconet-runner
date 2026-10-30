@@ -437,6 +437,7 @@ std::optional<Match> ReadPractice(Match& m, const picojson::object& json, const 
   }
   Put32(m.race.data() + RACE_FLOW, FLOW_GAME_OUT);
   Put32(m.race.data() + RACE_RUBBER_BAND_ON, 0);   // every driver at its own pace (0.4.0 on)
+  Put32(m.race.data() + RACE_SIM_GENERATOR, 1);    // the race's draws from a generator of their own
   m.seat = 0;
   m.delay = 0;
   m.other_sounds = OtherSoundsWord(TheOptions().other_sounds);
@@ -470,10 +471,11 @@ std::optional<Match> ReadMatch(const std::string& text, const std::string& path)
           m.game_mode->name);
     return std::nullopt;
   }
-  // a race raced from here on is the game's flow, with no rubber band, and its recording says so (replay.cpp
-  // StartReplay)
+  // a race raced from here on is the game's flow, with no rubber band and the simulation's own generator, and its
+  // recording says so (replay.cpp StartReplay)
   Put32(m.race.data() + RACE_FLOW, FLOW_GAME_OUT);
   Put32(m.race.data() + RACE_RUBBER_BAND_ON, 0);
+  Put32(m.race.data() + RACE_SIM_GENERATOR, 1);
   const std::optional<u32> seat = Whole(json, "seat", 0, 0, MAX_SEATS - 1);
   const std::optional<u32> port = Whole(*relay, "port", 0, 0, 65535);
   if (!seat || !port)

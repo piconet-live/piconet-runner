@@ -140,14 +140,20 @@ std::optional<Match> MatchOfHeader(const picojson::object& header, const std::st
   // the rubber band (files.h RACE_RUBBER_BAND_ON): a recording made before 0.4.0 names none and raced with it
   const auto band = header.find(h::RUBBER_BAND);
   const bool band_said = band != header.end();
-  if (!seat || !delay || !mask || !flow || (band_said && !band->second.is<bool>()))
+  // the simulation's own generator (files.h RACE_SIM_GENERATOR): a recording made before it names none and drew the
+  // race's random numbers from the executable's word, which it plays with
+  const auto sim = header.find(h::SIM_GENERATOR);
+  const bool sim_said = sim != header.end();
+  if (!seat || !delay || !mask || !flow || (band_said && !band->second.is<bool>()) ||
+      (sim_said && !sim->second.is<bool>()))
   {
     Error("fzgx: {}: the header's seat, input delay, player seats, flow or rubber band is not a number in its range "
-          "(the band: true or false): refused", path);
+          "(the band: true or false), or its generator is not true or false: refused", path);
     return std::nullopt;
   }
   Put32(m.race.data() + RACE_FLOW, *flow);
   Put32(m.race.data() + RACE_RUBBER_BAND_ON, band_said && !band->second.get<bool>() ? 0 : 1);
+  Put32(m.race.data() + RACE_SIM_GENERATOR, sim_said && sim->second.get<bool>() ? 1 : 0);
   m.seat = static_cast<int>(*seat);
   m.delay = *delay;
   m.player_mask = *mask;
@@ -213,13 +219,18 @@ std::optional<Match> ReadReplay(const std::string& path)
   // A race of 0.4.0's set-up (OfVersion7: on the coordinator's start grid, setup.grid, or with no rubber band, the
   // header's "rubberBand": false) is version 7 and no other is, whatever else it holds: a program from before would
   // start it from the game's own grid or race its CPU drivers with the band. Version 7 says nothing of the rest.
-  // A race of a game mode (the header's match names one, setup.mode) is version 9 and no other is, whatever else it
-  // holds: a program from before modes would race it on the host's rules alone. Version 9 says nothing of the rest.
+  // A race on the simulation's own generator (the header's "simGenerator" true, every race and practice from 0.6) or
+  // of a game mode (the header's match names one, setup.mode) is version 9 and no other is, whatever else it holds: a
+  // program from before would race it with the wrong draws, or on the host's rules alone. Version 9 says nothing of
+  // the rest. The generator a playback uses is the header's alone (MatchOfHeader).
   const bool version_9 = version == replay::VERSION_MODE;
-  if (version_9 != m.game_mode.has_value())
+  const u8* sim = m.race.data() + RACE_SIM_GENERATOR;
+  const bool own_generator = (sim[0] | sim[1] | sim[2] | sim[3]) != 0;
+  if (version_9 != (m.game_mode.has_value() || own_generator))
   {
     Error("fzgx: {}: a version {} replay {}: refused", path, version,
-          version_9 ? "names no game mode, and version 9 is a race of one" : "holds a game mode, which only version 9 does");
+          version_9 ? "names no game mode and no generator of the race's own, and version 9 is a race of one"
+                    : "holds a game mode or the race's own generator, which only version 9 does");
     return std::nullopt;
   }
   const bool version_7 = version == replay::VERSION_GRID;

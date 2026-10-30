@@ -74,7 +74,7 @@ assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_
 # (racers - 1), +16 laps, +20 race type (6 laps, 3 free run), +24 the DOL generator's value up to the race (SHUFFLE),
 # +28 the per-race CPU seed; +32 the 30 seats' machines (bytes, seat 0 first); +64 the start grid's word (1: the race
 # names its grid, sites_grid.py; 0: the game's own sort, every recording made before it), +68 the grid (30 bytes, the
-# seat of each slot, pole first); +98 and +99 unused, +100 the rubber band (RACE_RUBBER_BAND_ON, below), +104 to +256 unused; the race's rules: +256 the CPU level (0-3), +260 boost from the start (the fork
+# seat of each slot, pole first); +98 and +99 unused, +100 the rubber band (RACE_RUBBER_BAND_ON, below), +104 the simulation's own generator (RACE_SIM_GENERATOR, below), +108 to +256 unused; the race's rules: +256 the CPU level (0-3), +260 boost from the start (the fork
 # sets rule flag 0x10 through control block +520), +264 restore (words), +268 every seat's machine setting (30 bytes,
 # 0 acceleration to 100 top speed; standin.py), +300 the steps after the first finish at which the race ends for
 # everyone (a word; 0: no such end; raceend.py); +304 the race's flow (a word: 1, a machine is out by the game's own
@@ -95,6 +95,11 @@ RACE_GRID_ON, RACE_GRID = _facts.RACE_GRID_ON, _facts.RACE_GRID
 # +100 the rubber band (a word: 1, the CPU drivers pace against the player seats, the game's own way, every recording
 # made before 0.4.0; 0, every driver at its own pace, every race and practice from 0.4.0; sites_cpu.py)
 RACE_RUBBER_BAND_ON = _facts.RACE_RUBBER_BAND_ON
+# +104 the simulation's own generator (a word: 1, the race's draws take SIM_GENERATOR, every race and practice from
+# this build; 0, the executable's 0x801A63C0, shared with the effects and cameras, every recording made before; the
+# core reads a replay's from its header's "simGenerator"; sites_generator.py)
+RACE_SIM_GENERATOR = _facts.RACE_SIM_GENERATOR
+assert RACE_RUBBER_BAND_ON + 4 <= RACE_SIM_GENERATOR and RACE_SIM_GENERATOR + 4 <= RACE_CPULEVEL
 # The seats' custom machines (garage-built: three parts and a pilot; sites_custom.py): 30 entries of 32 bytes, seat
 # order. +0 a word, not 0 when the seat races its own parts (0xC0000000: a garage record's "used, parts" bits); +4,
 # +12, +20 the body's, cockpit's and booster's part id (bytes: 0-24, 25-49, 50-74) and +8, +16, +24 each part's
@@ -256,7 +261,12 @@ REL_TEXT = _facts.REL_TEXT_AT
 REL_BSS = _facts.REL_BSS_AT
 assert MODE + 4 <= PRELOAD and PRELOAD + 36 <= END_OFFICIAL and END_OVER + 4 == HANDBACK and HANDBACK + 4 <= FINISH_KIND
 assert FINISH_COUNT + 4 == RESULTS_KEEP and RESULTS_CAMERA + 4 == DRAW_ASK and DRAW_SKIP + 4 == TRUE_ASPECT
-assert TRUE_ASPECT + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
+# The simulation's own generator (sites_generator.py, frame_replay.py `simgen`). The image's own: no rollback puts
+# them back, the checksum does not cover them; the step wrapper writes both before every step of a race.
+SIM_GENERATOR = _facts.SIM_GENERATOR              # the word the race's draws step (seeded before every step)
+SIM_GENERATOR_SHIFT = _facts.SIM_GENERATOR_SHIFT  # 0 (the draws take 0x801A63C0) or SIM_GENERATOR - 0x801A63C0
+assert TRUE_ASPECT + 4 <= SIM_GENERATOR and SIM_GENERATOR + 4 == SIM_GENERATOR_SHIFT
+assert SIM_GENERATOR_SHIFT + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
 hi = lambda a: (a >> 16) & 0xFFFF
 lo = lambda a: a & 0xFFFF
 # A story stage's name (the core writes it, port/core/src/boot.cpp; the protocol's courses.toml): the course intro's

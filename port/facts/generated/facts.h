@@ -83,6 +83,8 @@ inline constexpr std::uint32_t RESULTS_CAMERA = 0x81810F60;  // set by the image
 inline constexpr std::uint32_t DRAW_ASK = 0x81810F64;  // set by the image: 1 when a race frame's drawing is about to begin, 2 when it has ended; each store is a call to the core, which times the drawing and answers in DRAW_SKIP
 inline constexpr std::uint32_t DRAW_SKIP = 0x81810F68;  // set by the core when the image asks: not 0, this frame draws nothing and the next frame's begin copies no picture (the last one shown again); cleared at the next frame tick
 inline constexpr std::uint32_t TRUE_ASPECT = 0x81810F6C;  // set by the core, for the picture only: 0, the game's own Wide Screen; a float's bits, true widescreen at that aspect (the race view keeps the whole vertical view; the aspect getter gives it)
+inline constexpr std::uint32_t SIM_GENERATOR = 0x81810F70;  // the simulation's own generator word (sites_generator.py): seeded by the image before every step of a race with RACE_SIM_GENERATOR 1 from the step and the CPU seed, stepped by the race's own draws only (the computer drivers' scripted driver, the hazard objects); no rollback puts it back
+inline constexpr std::uint32_t SIM_GENERATOR_SHIFT = 0x81810F74;  // set by the image: what the race's draws add to the executable's generator's address, 0 (the stock word 0x801A63C0) or SIM_GENERATOR - 0x801A63C0
 inline constexpr std::uint32_t SPEC_MODE = 0x818103A0;  // set by the image, for the picture only: what the spectator follows with, 0 automatic shots, 1 the course's cameras, 2 to 5 a manual shot, 6 the chase camera behind the watched racer
 inline constexpr std::uint32_t SPEC_HEIGHT = 0x818103A4;  // set by the image, for the picture only: the spectator's camera height, a manual shot's variant or the chase camera's view less 1
 inline constexpr std::uint32_t SPEC_CHANGE = 0x818103A8;  // set by the image, for the picture only: the step, plus 1, in which the spectator's last choice sets its shot up, run for the first time or again
@@ -217,6 +219,8 @@ inline constexpr std::uint32_t RACE_MINE_REGEN = 308;  // the host's rule: the s
 inline constexpr std::uint32_t RACE_MINE_REGEN_AT = 0x81814134;  // RACE + RACE_MINE_REGEN
 inline constexpr std::uint32_t RACE_RUBBER_BAND_ON = 100;  // the rubber band: 1, the CPU drivers pace against the player seats (the game's own way, every recording made before 0.4.0); 0, every driver at its own pace (every race and practice from 0.4.0; the core writes it, a future lobby rule could set it from the server)
 inline constexpr std::uint32_t RACE_RUBBER_BAND_ON_AT = 0x81814064;  // RACE + RACE_RUBBER_BAND_ON
+inline constexpr std::uint32_t RACE_SIM_GENERATOR = 104;  // the simulation's own generator: 1, the race's draws take SIM_GENERATOR (every race and practice from this build); 0, the executable's 0x801A63C0, shared with the effects and cameras (every recording made before)
+inline constexpr std::uint32_t RACE_SIM_GENERATOR_AT = 0x81814068;  // RACE + RACE_SIM_GENERATOR
 inline constexpr std::uint32_t RACE_CUSTOM = 320;  // the seats' custom machines: 30 entries of 32 bytes (a used word, three part entries, the pilot)
 inline constexpr std::uint32_t RACE_CUSTOM_AT = 0x81814140;  // RACE + RACE_CUSTOM
 }  // namespace fzgx::layout
