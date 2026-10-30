@@ -207,6 +207,10 @@ void TestALaunchFileThatIsRefused()
   CHECK(Says(Launch(R"({"lateSteps": 0})"), "\"debug.lateSteps\" is not a whole number from 1 to 20"));
   CHECK(Says(Launch(R"({"lateSteps": 21})"), "\"debug.lateSteps\" is not a whole number from 1 to 20"));
   CHECK(Says(Launch(R"({"alterStep": 0})"), "\"debug.alterStep\""));
+  // the player's camera view: 1 to 3 only
+  CHECK(Says(Launch("", "\"camera\": 0"), "\"match.camera\" is not a whole number from 1 to 3"));
+  CHECK(Says(Launch("", "\"camera\": 4"), "\"match.camera\" is not a whole number from 1 to 3"));
+  CHECK(Refused(Launch("", "\"camera\": 3")).empty());
   CHECK(Says(Launch(R"({"alterStep": 4294967296})"), "\"debug.alterStep\""));
   // a number too large to be one is refused before the parser, which ends the program on it, sees it
   CHECK(Says(Launch(R"({"jitterMs": 1e999})"), "a number too large to be one"));

@@ -8,7 +8,7 @@ import os, struct, sys, tempfile, unittest
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(here, ".."))
 import build, memmap
-import frame_spectate, native, raceview
+import frame_spectate, frame_tasks, native, raceview
 from test_race_end import Machine, BSS, MODULE, signed
 
 IMAGE, CONTROL, INPUTS, TEXT = memmap.IMAGE, memmap.CONTROL, memmap.INPUTS, memmap.REL_TEXT
@@ -216,11 +216,12 @@ class TheRacingView(Build):
         put(memory, CHASE + 2, 30, 2)
         self.assertEqual(self.bits(memory, 101), 0)
 
-    def test_no_change_outside_the_race_or_for_a_seat_the_ai_drives(self):
+    def test_no_change_before_the_countdown_or_for_a_seat_the_ai_drives(self):
         bits = {100: 0, 101: 2}
         self.assertEqual(self.bits(self.rows(3, bits), 101), 2)
         self.assertEqual(self.bits(self.rows(3, bits, running=0), 101), 0)
-        self.assertEqual(self.bits(self.rows(3, bits, phase=0x28), 101), 0)       # the countdown
+        self.assertEqual(self.bits(self.rows(3, bits, phase=0x28), 101), 2)       # the countdown: as a console
+        self.assertEqual(self.bits(self.rows(3, bits, phase=0x27), 101), 0)       # the course intro
         self.assertEqual(self.bits(self.rows(3, bits, steer=0x80), 101), 0)       # the row says the AI drives
         self.assertEqual(self.bits(self.rows(3, bits, out_frames=180), 101), 0)   # this game spectates
         self.assertEqual(self.bits(self.rows(3, bits, out_frames=179), 101), 2)
@@ -242,6 +243,39 @@ class TheRacingView(Build):
         # the press at 101 was a prediction; the official row has it at 102
         memory = self.rows(3, {100: 0, 101: 0, 102: 2, 103: 0})
         self.assertEqual(self.view(memory, range(101, 104), view=first[0]), [1, 2, 2])
+
+
+class TheCamerasStepFromTheCountdown(Build):
+    """frame_tasks.py `rt_cam`: the two cameras' tasks get flag bit 1 (they run in every step, and again in a
+    rollback's) from the countdown, phase 0x28, on; the race's other presentation tasks only from 0x29."""
+
+    MANAGER, TASKS = 0x80B20000, 0x80B30000
+    CHASE_FN, TV_FN = MODULE + 0x10000 - 0x6E44, MODULE + 0x10000 - 0x10E0   # fn_1_90E0, fn_1_EE44 (module + 0xDC)
+    HUD_FN = MODULE + 0x160000 - 0x1D3C                                      # fn_1_15E1E8
+
+    def flags(self, phase):
+        """The tasks' flags after `rt_cam`, the three of them in one list (offset 0x40 of the manager)."""
+        text = frame_tasks.asm()
+        part = text[text.index("rt_cam:"):text.index("stepclock:")]
+        from keystone import Ks, KS_ARCH_PPC, KS_MODE_PPC32, KS_MODE_BIG_ENDIAN
+        code = bytes(Ks(KS_ARCH_PPC, KS_MODE_PPC32 + KS_MODE_BIG_ENDIAN).asm(part)[0])
+        self.assertEqual(self.image.count(code), 1)
+        memory = {}
+        put(memory, 0x800030C8, MODULE); put(memory, PHASE, phase, 2); put(memory, BSS + 0xDAC, self.MANAGER)
+        put(memory, self.MANAGER + 0x40, self.MANAGER + 0x100)
+        tasks = [self.TASKS + 0x40 * i for i in range(3)]
+        put(memory, self.MANAGER + 0x100 + 8, tasks[0])
+        for task, fn, nxt in zip(tasks, (self.CHASE_FN, self.TV_FN, self.HUD_FN), tasks[1:] + [0]):
+            put(memory, task, fn); put(memory, task + 8, nxt); put(memory, task + 0x14, 0)
+        m = Cpu(self.image, memory)
+        m.r[30], m.r[31] = BSS, CONTROL
+        m.run(IMAGE + self.image.index(code))
+        return [get(m.mem, t + 0x14) & 1 for t in tasks]
+
+    def test_the_cameras_from_the_countdown_the_rest_from_the_race(self):
+        self.assertEqual(self.flags(0x27), [0, 0, 0])      # the course intro: the cameras are the course's
+        self.assertEqual(self.flags(0x28), [1, 1, 0])      # the countdown: the cameras only
+        self.assertEqual(self.flags(0x29), [1, 1, 1])      # the race
 
 
 if __name__ == "__main__":

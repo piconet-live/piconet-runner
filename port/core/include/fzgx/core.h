@@ -217,6 +217,9 @@ struct Options
                              // stays up until the game has caught up with a race already running, as a rejoin's
   bool practice = false;     // "match.practice": a solo practice with rewind and no relay (practice_session.cpp):
                              // the match names one seat and no relay; the pad gives each step's row
+  u32 camera = 0;            // "match.camera": the chase camera's view (1 to 3) the local racer's race starts in, the
+                             // player's last (boot.cpp WriteStartView; the launcher keeps it from the board's Camera
+                             // events); 0: the game's own. The picture only: no step reads it
   // "replay": a replay's playback
   std::string play_file;     // "replay.file"
   std::string other_sounds;  // "match.otherSounds", "replay.otherSounds": other racers' sounds: full, quieter, off

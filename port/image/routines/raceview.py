@@ -16,15 +16,19 @@ ours (also a replay, which plays as the race):
   the step that is running (control block +124) and-not the row of the step before, as standin_inputs.py makes
   "newly pressed". Every step run again reads the same rows, so a rollback makes the change again by itself, and a
   row corrected by the official inputs corrects the view with it. Not .bss 0xCC0[0]: it is stale after a restore,
-  and every step of a frame would see the same press. No bits before the race phase (the cameras' tasks run in
-  every step only from phase 0x29 on), for a row whose steering byte says the AI drives, or while this game
-  spectates (the cameras are the spectator's then: frame_spectate.py);
+  and every step of a frame would see the same press. Bits from the countdown on (phase 0x28, the race start, as a
+  console takes the button there: the cameras' tasks run in every step from that phase on, frame_tasks.py
+  `rt_cam`), none before it (the course intro, whose cameras are the course's), for a row whose steering byte says
+  the AI drives, or while this game spectates (the cameras are the spectator's then: frame_spectate.py);
 - 0xAD3C, `li r31, 0` (the view's lowest): `low`, 1. View 0 is drawn by the pad port's slot (machine +0x475, seat
   0's in every game: the car's own drawing at 0x86A78 and the effects' sites ask "view 0?" for that machine), so on
   any seat but 0 it would hide seat 0's car, not the racer's own: views 1 to 3 only, for every seat alike. A view 0
   a player's save file starts the camera with becomes 1 the first time the routine runs.
 The view stays where the game keeps it (the camera record's +0xA4, in memory a rollback puts back; the checksum does
 not cover it). Nothing here writes a machine's block: +0x474 and +0x475 are in the checksum and stay as they are.
+The view a race starts in is the player's last (the launch file's "match.camera"): the core writes it into the
+game's options record before the go, where the race start's camera set-up takes it (port/core/src/boot.cpp
+WriteStartView), and tells the launcher each view chosen (board_race.cpp CameraView).
 
 `bits` needs two registers besides its result: it keeps r3 and r4 in the control block (memmap.VIEW_SCRATCH) and
 puts them back, since the second site's own instruction reads them in a plain start. Control block +0x3BC: the
@@ -69,7 +73,7 @@ HELPERS = {
     lwz 4, 0x30C8(4)
     addis 4, 4, 0x1C
     lha 4, -0x2396(4)
-    cmpwi 4, 0x29
+    cmpwi 4, 0x28
     blt vb_out
     lha 4, 2(29)
     cmplwi 4, 30

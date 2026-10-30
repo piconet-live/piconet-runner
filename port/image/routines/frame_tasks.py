@@ -2,7 +2,9 @@
 the control block's words): `netsync` calls the network hook; `racetasks` (on entry, in a session) sets the
 no-pause rule flag and keeps viewport 0's camera record on the local seat, then, from `rt_cam`, which `manager`
 also calls inside every step, sets the tests' lap-1 boost flag and flag bit 1 of the presentation tasks that are
-race state; `stepclock` sets the executable's frame counters from the step; `leave` marks the player done at the
+race state (from the race phase, 0x29) and of the two cameras' tasks (fn_1_90E0, fn_1_EE44: from the countdown,
+0x28, so that a camera button pressed in the countdown is taken in the step that has it and taken again by a
+rollback: raceview.py); `stepclock` sets the executable's frame counters from the step; `leave` marks the player done at the
 results screens' end."""
 
 
@@ -41,8 +43,20 @@ rt_cam:
     lis 7, 0x8000
     lwz 7, 0x30C8(7)
     lha 9, 0x3C2A(30)
-    cmpwi 9, 0x29
+    cmpwi 9, 0x28
     bltlr
+    addis 11, 7, 1
+    addi 11, 11, -0x6E44
+    addis 12, 7, 1
+    addi 12, 12, -0x10E0
+    cmpwi 9, 0x29
+    bge rt_race
+    mr 6, 11
+    mr 4, 11
+    mr 3, 11
+    mr 7, 11
+    b rt_scan
+rt_race:
     lwz 9, 520(31)
     cmpwi 9, 0
     beq rt_noboost
@@ -50,11 +64,6 @@ rt_cam:
     ori 9, 9, 0x10
     stw 9, 0x3C30(30)
 rt_noboost:
-    lwz 9, 0xDAC(30)
-    addis 11, 7, 1
-    addi 11, 11, -0x6E44
-    addis 12, 7, 1
-    addi 12, 12, -0x10E0
     addis 6, 7, 0x16
     addi 6, 6, -0x1D3C
     addis 4, 7, 0xA
@@ -63,6 +72,8 @@ rt_noboost:
     addi 3, 3, -0x7890
     addis 7, 7, 0xA
     addi 7, 7, -0x7CF4
+rt_scan:
+    lwz 9, 0xDAC(30)
     li 5, 0x40
 rt_list:
     lwzx 10, 9, 5

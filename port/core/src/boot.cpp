@@ -45,7 +45,8 @@ static_assert(courses::LONGEST < NAME_SIZE);
 static_assert(courses::FIRST_STORY_STAGE + courses::STORY_CHAPTERS <= static_cast<int>(COURSE_COUNT));
 // The largest offset from main.rel's header that this file reads or writes at: the header must leave that much of
 // main memory after it, or nothing is touched.
-constexpr u32 FARTHEST = SCREEN_OPTION + 4;
+constexpr u32 FARTHEST = game::GAME_OPTIONS + 4;
+static_assert(SCREEN_OPTION + 4 <= FARTHEST);
 static_assert(game::OPTION_BINDINGS + 0x150 <= FARTHEST && game::OPTION_SCHEME + 4 <= FARTHEST);
 static_assert(COURSE_NAMES + COURSE_COUNT * COURSE_NAME_ENTRY <= FARTHEST);
 
@@ -174,6 +175,31 @@ void PointCourseName(Guest& g, const Match& m)
   g.Write32(entry, COURSE_NAME);
   Notice("fzgx: course name: course {}'s is {} (the game's table had another)", course, courses::StoryName(static_cast<int>(course)));
 }
+
+// The player's camera (Options::camera, the launch file's "match.camera": the launcher's record of the view the
+// player last raced in). The game starts a chase camera in the view of its options record (GAME_OPTIONS +
+// SAVED_VIEW: a camera record's set-up, fn_1_8D08, takes it for one viewport outside the game's replay), which
+// these boots never load from the save. So the view is written there every frame until the relay's go: the race
+// start's camera set-up (fn_1_391F0, the frame after the go) then takes it, as a console takes the saved one. The
+// write stops at the go: from then on the game writes the byte itself (the chase camera, from its record) and a
+// step reads it only when it makes a camera record. Nothing of the race reads the view: the checksum leaves out the
+// cameras and the options record, so each game of a race starts in its own player's view. Not in a playback (the
+// recording's own view is the game's), not in a spectator's game (the launcher's Watch: the spectator's controls
+// choose its views, frame_spectate.py, and the chase camera would write a view the spectator picked back as the
+// player's) and not with none given.
+void WriteStartView(Guest& g)
+{
+  const u32 view = TheOptions().camera;
+  if (view == 0 || !TheOptions().play_file.empty() || TheOptions().spectate || g.Read32(table::RUNNING_AT) != 0)
+    return;
+  const u32 module = MainRel(g);
+  if (module == 0)
+    return;
+  const u32 options = g.Read32(module + game::GAME_OPTIONS);
+  if (!g.Ram(options + game::SAVED_VIEW, 1) || g.Read8(options + game::SAVED_VIEW) == view)
+    return;
+  g.Write8(options + game::SAVED_VIEW, static_cast<u8>(view));
+}
 }  // namespace
 
 // The head of the system's module list is taken for main.rel only when it is: the loader links fze.sample.rel
@@ -292,6 +318,7 @@ void OnFrame(Guest& g)
   g.Write32(TRUE_ASPECT, TrueAspectWord(TheOptions()));
   WriteControllerOptions(g);
   PointCourseName(g, *m);
+  WriteStartView(g);
   // the seats' constants every frame until the race runs (in the native form Prepare wrote them before the boot)
   if (g.Read32(table::RUNNING_AT) == 0 && m->seat_block.size() == table::SEAT_BLOCK_SIZE)
     g.CopyTo(table::SEAT_CONSTANTS_AT, m->seat_block.data() + table::SEAT_CONSTANTS, MAX_SEATS * table::SEAT_CONSTANT);

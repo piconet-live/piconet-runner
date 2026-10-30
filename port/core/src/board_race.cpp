@@ -21,6 +21,7 @@ namespace
 std::array<u32, 30> s_kos{};
 std::array<u8, 30> s_attack{};
 Snapshot s_snapshot;
+u32 s_view = 0;  // the view last said (CameraView): 0, none yet in this race
 }  // namespace
 
 // The race for the launcher, every displayed race frame (60 a second), every racer, as the launcher's race page
@@ -85,8 +86,33 @@ void Race(Guest& g, u32 step, int local_seat)
   PutSnapshot(s);
 }
 
+// The view of viewport 0's chase camera record ([.bss 0xF6C] +0xA4), which follows the local racer while it races
+// (frame_tasks.py `racetasks`): the game's camera button changes it in the step (raceview.py), from the input rows,
+// so a rollback makes the change again and the value read after a frame's steps is the player's. Read only while
+// the racer races and this game does not spectate (control block +248 below 180: from there the spectator's
+// controls write the record's view, frame_spectate.py), and only a view a player can choose (1 to 3: 5 is the
+// retired view the game sets while the followed machine is out). The launcher keeps the last one said for the next
+// race (protocol/formats.md section 2, "match.camera"). Picture only: reads the game, writes nothing of it.
+void CameraView(Guest& g, bool racing)
+{
+  if (!Taken() || !racing || g.Read32(table::SPECTATE_FRAMES_AT) >= 180)
+    return;
+  const u32 module = g.Read32(net::MODULE_POINTER);
+  if (module == 0)
+    return;
+  const u32 record = g.Read32(module + game::CHASE_RECORD);
+  if (!g.Ram(record + game::CHASE_VIEW, 2))
+    return;
+  const u32 view = g.Read16(record + game::CHASE_VIEW);
+  if (view < 1 || view > 3 || view == s_view)
+    return;
+  Camera(view, s_view);
+  s_view = view;
+}
+
 void ResetRace()
 {
+  s_view = 0;
   s_kos = {};
   s_attack = {};
   s_snapshot = {};

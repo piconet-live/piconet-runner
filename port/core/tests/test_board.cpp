@@ -215,6 +215,44 @@ void TestTheRaceOnTheBoard()
   board::Close();
 }
 
+// The local racer's camera view for the launcher: a Camera event at the first view read and at each change, only
+// a view a player chooses (1 to 3), only while the racer races and this game does not spectate.
+void TestTheCameraViewOnTheBoard()
+{
+  const std::string dir = Temp();
+  const std::string path = MakeBoard(dir);
+  TestHost host;
+  Options o;
+  o.board = path;
+  Init(host, o);
+  Guest g(host, Data());
+  LinkMainRel(g);
+  constexpr u32 RECORD = 0x80800000;
+  // no record yet: nothing
+  board::CameraView(g, true);
+  g.Write32(MODULE + game::CHASE_RECORD, RECORD);
+  const auto view = [&](u16 v, bool racing) {
+    g.Write16(RECORD + game::CHASE_VIEW, v);
+    board::CameraView(g, racing);
+  };
+  view(2, true);    // the start's: said, none before it
+  view(2, true);    // unchanged: nothing
+  view(3, true);    // the button: said
+  view(5, true);    // the retired view: not a choice
+  view(1, false);   // the racer finished or is out: not the player's
+  g.Write32(table::SPECTATE_FRAMES_AT, 180);
+  view(1, true);    // spectating: the spectator's controls write the view
+  g.Write32(table::SPECTATE_FRAMES_AT, 0);
+  view(1, true);    // the player's again
+  std::vector<std::pair<u32, u32>> said;
+  for (const board::Event& e : Seen(path).events())
+    if (e.kind == board::EventKind::Camera)
+      said.emplace_back(e.a, e.b);
+  CHECK((said == std::vector<std::pair<u32, u32>>{{2, 0}, {3, 2}, {1, 3}}));
+  Shutdown();
+  board::Close();
+}
+
 // Where the session is, as the board's phase says it.
 void TestTheSessionsPhasesOnTheBoard()
 {
