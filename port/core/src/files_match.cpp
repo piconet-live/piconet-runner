@@ -236,21 +236,18 @@ void RulesIntoRace(Match& m, const picojson::object* rules)
 
 // A game mode's setup words over the host's rules (a mode's word wins over the lobby's: modes.toml's setup rows).
 // The finish limit is the mode's or none (the mode owns its ending); mine regeneration and the CPUs' level are the
-// mode's when it states them; the restore rule never reaches a mode's race (rule 0x8000 would put flag 0x1 on every
-// seat every step, over a seat's own respawns): the lobby's restore becomes the mode's `restore on` unless the mode
-// states restore on or off itself.
+// mode's when it states them; the lobby's restore rule never reaches a mode's race (rule 0x8000 would put flag 0x1 on
+// every seat every step, over a seat's own respawns): restore comes only from the mode's own words, `restore on` and
+// `respawns`.
 void ModeIntoRace(Match& m)
 {
   mode::Package& p = *m.game_mode;
   u8* r = m.race.data();
-  const auto word = [&](u32 at) { return u32(r[at]) << 24 | u32(r[at + 1]) << 16 | u32(r[at + 2]) << 8 | u32(r[at + 3]); };
   Put32(r + RACE_FINISH_LIMIT, p.finish_limit.value_or(0) * STEPS_A_SECOND);
   if (p.mine_regen)
     Put32(r + RACE_MINE_REGEN, *p.mine_regen * STEPS_A_SECOND / 1000);
   if (p.cpu_level)
     Put32(r + RACE_CPULEVEL, *p.cpu_level);
-  if (!p.restore)
-    p.restore = word(RACE_RESTORE) != 0;
   Put32(r + RACE_RESTORE, 0);
 }
 

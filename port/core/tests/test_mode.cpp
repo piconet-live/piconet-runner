@@ -5,12 +5,14 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "files.h"
 #include "harness.h"
 #include "mode.h"
 #include "parts.h"
@@ -352,6 +354,13 @@ void SetFlags(Guest& g, u32 seat, u32 set, u32 clear = 0)
 {
   g.Write32(MachineAt(seat) + game::MACHINE_FLAGS, (g.Read32(MachineAt(seat) + game::MACHINE_FLAGS) | set) & ~clear);
 }
+// What fn_1_25004 leaves once the machine's next step has begun: flag 0x40000000 is gone by then (fn_1_289B4), the
+// record +0x58C 0x10 stays, and the flags 0x800, 0x80, 0x00800000 with it.
+void Explode(Guest& g, u32 seat)
+{
+  SetFlags(g, seat, 0x800 | 0x80 | 0x00800000);
+  g.Write32(MachineAt(seat) + 0x58C, g.Read32(MachineAt(seat) + 0x58C) | 0x10);
+}
 float RealAt(Guest& g, u32 at)
 {
   return std::bit_cast<float>(g.Read32(at));
@@ -510,7 +519,7 @@ void TestTheKnockoutEndsWithItsPlaces()
       {
         // the image's explode: destroyed, out by the game's verdict; the game books it DISQUALIFIED
         CHECK(step == 900 * (seat + 1));
-        SetFlags(g, seat, 0x40000000);
+        Explode(g, seat);
         g.Write8(R + 0xD4 + 0xA0 * seat + 0xE, 0xFE);
       }
     }
@@ -538,8 +547,132 @@ void TestTheKnockoutEndsWithItsPlaces()
   CHECK(g.Read32(R + 0xD4 + 0xA0 * 3 + 0x24) == (45u << 12));              // the winner: the race's 2700 steps
 }
 
+// The lobby's restore rule never reaches a mode's race: rule 0x8000 is never asked for, and a mode's restore is its own
+// words alone.
+void TestTheLobbysRestoreStaysOut()
+{
+  BEGIN_TEST();
+  TestHost host;
+  const std::string dir = (std::filesystem::temp_directory_path() / "fzgx-test-restore").string();
+  std::filesystem::create_directories(dir);
+  std::string image(0x100, '\0');
+  image.replace(0, 4, "FZMD");
+  image.replace(0x10, 4, "FZSI");
+  WriteText(dir + "/mod.bin", image);
+  WriteText(dir + "/manifest.json", "{\"commit\": \"abc1234\"}");
+  WriteText(dir + "/codes.txt", "$Boot to race\n48000000 800030C8\n$Race setup\nC0000000 00000001\n4E800020 00000000\n");
+  Options options;
+  options.bundle_dir = dir;
+  Init(host, options);
+  const auto match = [](const char* restore, const char* vector) {
+    picojson::value mode = Vector(vector);
+    const std::string json = R"({"matchId": "m7", "seat": 0, "token": "1f2e3d4c5b6a7988", "relay": {"host": "127.0.0.1", "port": 47811},
+      "setup": {"course": 8, "laps": 3, "shuffleSeed": 1, "cpuSeed": 2, "rules": {"restore": )" + std::string(restore) +
+                             R"(}, "seats": [{"seat": 0, "machine": 5, "playerId": "p1", "name": "A"},
+      {"seat": 1, "machine": 7}], "mode": )" + mode.serialize() + "}}";
+    return boot::ReadMatch(json, "test");
+  };
+  const auto word = [](const boot::Match& m) {
+    const u8* r = m.race.data() + boot::RACE_RESTORE;
+    return u32(r[0]) << 24 | u32(r[1]) << 16 | u32(r[2]) << 8 | u32(r[3]);
+  };
+  for (const char* restore : {"true", "false"})
+  {
+    // a mode that says nothing: no restore, whatever the lobby's rule says
+    const auto plain = match(restore, "overdrive.mode.json");
+    CHECK(plain && plain->game_mode && !plain->game_mode->restore && word(*plain) == 0);
+    // a mode that says `restore on`: the seats' own Restore (Begin), never the rule
+    const auto own = match(restore, "race.mode.json");
+    CHECK(own && own->game_mode && own->game_mode->restore == true && word(*own) == 0);
+  }
+  Shutdown();
+  std::filesystem::remove_all(dir);
+}
+
 // Lives 3: every seat respawns; each restore costs a life; the wreck that leaves one life turns the seat's Restore off
 // once its restore is done (never during the wreck), and a finished seat's Restore is never touched.
+// How a seat's end is told: the explosion by the game's record +0x58C 0x10, whoever ran the routine (the pulse
+// 0x40000000 alone is nothing, and a mode's explode never shows it); a fall is the flag 0x800 alone, and the routine
+// under the fall planes only ends it; a wreck touched later still explodes; a restore's exit opens a new life.
+void TestDestroyedAndOutTellAnEndApart()
+{
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("wrecks.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 8, 3000);
+  g.Write16(MODULE + game::PHASE, game::PHASE_RACE);
+  constexpr u32 COURSE = 0x80440000, HEIGHTS = 0x80440100;
+  g.Write32(MODULE + 0x1BDC20, COURSE);
+  g.Write32(COURSE + 0x24, HEIGHTS);
+  g.Write32(HEIGHTS, std::bit_cast<u32>(-100.0f));                         // the course's floor: its plane at -1000
+  const auto run = [&] { mode::Run(g, *p, BLOCK, MODULE); };
+  const auto blown = [&](u32 seat) { return g.Read32(BLOCK + mode::SeatWord(seat, 0)); };
+  const auto fell = [&](u32 seat) { return g.Read32(BLOCK + mode::SeatWord(seat, 1)); };
+  const auto cause = [&](u32 seat) { return g.Read32(BLOCK + mode::SeatWord(seat, 2)); };
+  const auto height = [&](u32 seat, float y) { g.Write32(MachineAt(seat) + game::MACHINE_POSITION_X + 4, std::bit_cast<u32>(y)); };
+  for (u32 seat = 0; seat < 8; ++seat)
+    height(seat, 10.0f);
+  run();
+  // the pulse alone: nothing
+  SetFlags(g, 0, 0x40000000);
+  run();
+  CHECK(blown(0) == 0 && fell(0) == 0);
+  SetFlags(g, 0, 0, 0x40000000);
+  // a mode's explode: the record and 0x800 with no pulse, the next run: once, the read true in its rule, out by 2
+  Explode(g, 1);
+  run();
+  run();
+  CHECK(blown(1) == 1 && fell(1) == 0 && cause(1) == 2);
+  CHECK(g.Read32(BLOCK + mode::SeatWord(1, 3)) == 1);
+  // a fall: 0x800 alone (lost course), out by 3; the routine under the plane much later is no explosion
+  SetFlags(g, 2, 0x800);
+  run();
+  CHECK(blown(2) == 0 && fell(2) == 1 && cause(2) == 3);
+  height(2, -1000.5f);
+  Explode(g, 2);
+  run();
+  CHECK(blown(2) == 0 && fell(2) == 1 && cause(2) == 3);
+  // the machine that reaches the plane with no flag before it: a fall, once, out by 3; at -5000 under any floor too
+  height(3, -1000.5f);
+  Explode(g, 3);
+  run();
+  CHECK(blown(3) == 0 && fell(3) == 1 && cause(3) == 3);
+  g.Write32(HEIGHTS, std::bit_cast<u32>(-4900.0f));
+  height(4, -5000.5f);
+  Explode(g, 4);
+  run();
+  g.Write32(HEIGHTS, std::bit_cast<u32>(-100.0f));
+  CHECK(blown(4) == 0 && fell(4) == 1 && cause(4) == 3);
+  // energy: at rest, out by 1; a wreck touched later explodes, its cause stays
+  SetFlags(g, 5, 0x80 | 0x800000);
+  g.Write32(MachineAt(5) + game::MACHINE_SPEED, 0);
+  run();
+  CHECK(cause(5) == 1 && blown(5) == 0);
+  Explode(g, 5);
+  run();
+  CHECK(cause(5) == 1 && blown(5) == 1 && fell(5) == 0);
+  // retired, and time over: their own
+  SetFlags(g, 6, 0x08000000);
+  SetFlags(g, 7, 0x10000000);
+  run();
+  CHECK(cause(6) == 4 && cause(7) == 5);
+  // a restore's exit clears the record: the next explosion counts again, a second run of the same one does not
+  run();
+  CHECK(blown(1) == 1);
+  g.Write32(MachineAt(1) + 0x58C, 0);
+  SetFlags(g, 1, 0, 0x800 | 0x80 | 0x00800000);
+  run();
+  CHECK(g.Read32(BLOCK + mode::SeatWord(1, 3)) == 1);
+  Explode(g, 1);
+  run();
+  CHECK(blown(1) == 2);
+}
+
 void TestTheLivesLibraryRuns()
 {
   BEGIN_TEST();

@@ -11,7 +11,8 @@ one test each. The race side's words (mode.h's record flags): a seat handed to t
 through a rolling start's countdown) keeps the CPU's controls, as a record that says "the AI drives"; through the
 rolling start's countdown (64) the CPU's steering and strafe are saved before the hook and put back after it, with
 the game's own 0.6 accelerator and no brake (the hook's pre-GO hold keeps boosts and attacks off); a seat whose
-record says "boost" (8) has its boost request set after the hook (the mode's `boost seat`)."""
+record says "boost" (8) has its boost request set before the hook (the mode's `boost seat`), so the game's whole path
+judges it: the hook's start hold and lap-1 rule, then "boost off" after it."""
 import memmap
 
 MODE_SEAT_SHIFT = 4       # a seat's record in the mode's block: 16 bytes
@@ -222,6 +223,12 @@ co_call:
     lwz 0, 0x1F8(31)
     stw 0, {ROLL_AT + 4:#x}(12)
 co_pedals:
+    andi. 0, 9, {BOOST}
+    beq co_pedals_lock
+    lwz 0, 0(31)
+    ori 0, 0, 0x40
+    stw 0, 0(31)
+co_pedals_lock:
     andi. 0, 9, 1
     beq co_plain
     lwz 0, 4(11)
@@ -264,15 +271,9 @@ co_plain:
     b co_boost
 co_off:
     andi. 0, 9, 2
-    beq co_on
-    lwz 0, 0(31)
-    rlwinm 0, 0, 0, 26, 24
-    stw 0, 0(31)
-co_on:
-    andi. 0, 9, {BOOST}
     beq co_boost
     lwz 0, 0(31)
-    ori 0, 0, 0x40
+    rlwinm 0, 0, 0, 26, 24
     stw 0, 0(31)
 co_boost:
     lwz 0, 36(30)
