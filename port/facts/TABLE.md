@@ -7,7 +7,10 @@
 Tab-separated, one row a fact: `name`, `group`, `value`, `of`, `type`, `manifest`, `source`, `meaning`.
 - `value`: a number, a text in single quotes, or `=` and an expression over the names above it. The wire rows take
   theirs from the relay's schema, `protocol/relay.toml`, by its names (`=relay_version`, `=relay_len_pong`: every
-  name in `generate.py`'s `schema_names`); such a row needs no place, and its `source` is the schema's line.
+  name in `generate.py`'s `schema_names`); such a row needs no place, and its `source` is the schema's line. The
+  host's rules' rows (their race block words, `RACE_CPULEVEL` and the like, and their limits) take theirs from
+  `protocol/rules.toml` the same way (`=rule_at_mine_regen`, `=rule_most_finish_limit`), as the replay file's
+  versions take theirs from `protocol/replay.toml`.
 - `of`: the row this offset counts from. A base with an address gives `NAME_AT`, the offset's own address. A base of
   type `ptr` is a pointer: the offset counts from where it points, so it has no address.
 - `type`: `u8 u16 s16 u32 int`, `ptr`, `mark` (2 to 4 bytes of a file or packet; 4 also give `NAME_WORD`), `str`.

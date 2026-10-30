@@ -7,7 +7,7 @@ header, a Python module and a C# class, so that no number is typed twice (README
   generate.py --value NAME  prints one value (for shell scripts); NAME_AT is the address of a row that has a base
 
 The table: tab-separated, columns name, group, value, of, type, manifest, source, meaning. `value` is a number, a
-quoted text, or `=` and an expression over the names above it and the protocol schemas' (relay_*, replay_*:
+quoted text, or `=` and an expression over the names above it and the protocol schemas' (relay_*, replay_*, rule_*:
 schema_names). `of`
 names the row an offset counts from. A row that breaks a rule is an error with its line. Standard library only."""
 import ast
@@ -109,7 +109,8 @@ def schema_names(path=SCHEMA):
         spec.loader.exec_module(module)
         protocol, packets = module.load(path)
         replay = module.replay.load(os.path.join(folder, "replay.toml"), protocol["record_size"])
-    except (module.SchemaError, module.replay.SchemaError) as e:
+        rules = module.rules.names(module.rules.load(os.path.join(folder, "rules.toml")))
+    except (module.SchemaError, module.replay.SchemaError, module.rules.SchemaError) as e:
         raise FactsError(f"{os.path.basename(path)}: {e}") from None
     finally:
         sys.path.remove(folder)
@@ -134,6 +135,9 @@ def schema_names(path=SCHEMA):
                 "replay_lineup_mark": replay["lineup_mark"], "replay_results_mark": replay["results_mark"],
                 "replay_lineup_size": replay["lineup_size"], "replay_version_written": replay["written"]})
     out.update({f"replay_version_{snake(v['name'])}": v["number"] for v in replay["versions"]})
+    # the host's rules' (rules.toml): rule_at_NAME (a rule's word in the race block), rule_least_NAME,
+    # rule_most_NAME, rule_step_NAME, rule_race_size, rule_steps_a_second
+    out.update(rules)
     return out
 
 
@@ -180,8 +184,9 @@ def load(path=TABLE):
             fail(f"the source {row.source!r} is not one path and line (path:line)")
         if not row.meaning:
             fail("no meaning")
-        # its value is a protocol schema's (which one: "relay", "replay"; else None): no source types it
-        row.schema = "replay" if "replay_" in row.value else "relay" if "relay_" in row.value else None
+        # its value is a protocol schema's (which one: "relay", "replay", "rules"; else None): no source types it
+        row.schema = ("replay" if "replay_" in row.value else "rules" if "rule_" in row.value
+                      else "relay" if "relay_" in row.value else None)
         if row.schema and schema is None:
             schema = schema_names()
         if row.number:

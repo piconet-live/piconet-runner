@@ -14,6 +14,7 @@
 #include "game_facts.h"
 #include "internal.h"
 #include "picojson.h"
+#include "race_rules.g.h"   // the host's rules the games apply (protocol/rules.toml): their words
 #include "replay_file.g.h"  // the replay file (protocol/replay.toml): its versions
 
 namespace fzgx::boot
@@ -33,24 +34,25 @@ constexpr u32 RACE_SIZE = 1280;
 // entries; +28 the pilot (the stock machine 0-40 whose pilot drives it). A custom seat's machine is CUSTOM_MACHINE.
 constexpr u32 RACE_CUSTOM = 320, CUSTOM_ENTRY = 32;
 constexpr u32 CUSTOM_MACHINE = 0x32;
-// the race's rules: CPU level, boost from the start, restore (words), every seat's machine setting (bytes)
-constexpr u32 RACE_CPULEVEL = 256, RACE_BOOST = 260, RACE_RESTORE = 264, RACE_SETTINGS = 268;
-// the rule that ends a race for everyone so long after the first finish: a word, in steps; 0: no such end (the
-// image's raceend.py). A match start names it in seconds, at most MAX_FINISH_LIMIT.
-constexpr u32 RACE_FINISH_LIMIT = 300;
+// the host's rules the games apply (protocol/rules.toml: their words, ranges and reader, race_rules.g.h): the CPU
+// level, boost from the start, restore, the race's end for everyone so long after the first finish (in steps; the
+// image's raceend.py; 0: no such end), a mine's coming back so long after it went off (in steps; the image's
+// sites_mines.py; 0: a mine stays gone, the game's own way, and every recording made before the rule). A match start
+// names the finish limit in seconds and the mines' delay in milliseconds, which are whole steps.
+constexpr u32 RACE_CPULEVEL = race_rules::RACE_CPULEVEL, RACE_BOOST = race_rules::RACE_BOOST,
+              RACE_RESTORE = race_rules::RACE_RESTORE, RACE_FINISH_LIMIT = race_rules::RACE_FINISH_LIMIT,
+              RACE_MINE_REGEN = race_rules::RACE_MINE_REGEN;
+constexpr u32 MAX_FINISH_LIMIT = race_rules::FINISH_LIMIT_MOST;
+constexpr u32 MAX_MINE_REGEN_MS = race_rules::MINE_REGEN_MOST, MINE_REGEN_STEP_MS = race_rules::MINE_REGEN_STEP;
+static_assert(RACE_SIZE == race_rules::RACE_SIZE);
+// every seat's machine setting (bytes)
+constexpr u32 RACE_SETTINGS = 268;
 // the race's flow: 1, a machine is out by the game's own verdict and the race waits for the player seats alone (the
 // image's outtest.py, raceend.py); 0, every recording made before them, which play as they were raced. A race from a
 // match is 1; a replay's is its header's "flow" (none: 0).
 constexpr u32 RACE_FLOW = 304;
 constexpr u32 FLOW_GAME_OUT = 1;
-constexpr u32 STEPS_A_SECOND = 60;
-constexpr u32 MAX_FINISH_LIMIT = 600;
-// the rule that brings a mine back so long after it went off: a word, in steps; 0, a mine stays gone, the game's own
-// way, and every recording made before the rule (the image's sites_mines.py). A match start names it in milliseconds,
-// 0 or MINE_REGEN_STEP_MS to MAX_MINE_REGEN_MS, which are whole steps (50 ms is 3).
-constexpr u32 RACE_MINE_REGEN = 308;
-constexpr u32 MAX_MINE_REGEN_MS = 5000;
-constexpr u32 MINE_REGEN_STEP_MS = 50;
+constexpr u32 STEPS_A_SECOND = race_rules::STEPS_A_SECOND;
 // the start grid (RaceSetup.Grid): a word, 1 when the race names its grid; then the seat of each slot (30 bytes, pole
 // first). 0: the game's own sort (the CPUs ahead of seat 0), every match and recording without one (the image's
 // sites_grid.py).
