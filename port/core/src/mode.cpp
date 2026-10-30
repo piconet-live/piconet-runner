@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 
 #if defined(__x86_64__) || defined(_M_X64)
@@ -49,7 +50,19 @@ constexpr u32 M_LAST_HIT = 0x4AC, M_SETTLED = 0x481, M_KOS = 0x482, M_CPU = 0x48
 constexpr u32 M_CONTACT = 0x58C, M_KO_WAIT = 0x593, M_MAX_ENERGY = 0x5DA;     // (u8 at 0x593; u16 at 0x5DA)
 constexpr u32 F_RESTORE = 0x1, F_AIRBORNE = 0x2, F_SPIN = 0x8, F_BOOSTING = 0x20, F_BROKEN = 0x80, F_DRIVEN = 0x400,
               F_FALLEN = 0x800, F_FROZEN = 0x8000, F_FINISHED = 0x10000, F_SIDE = 0x20000, F_WALL = 0x00800000,
-              F_RETIRED = 0x08000000, F_TIME_OVER = 0x10000000, F_DESTROYED = 0x40000000;
+              F_RETIRED = 0x08000000, F_TIME_OVER = 0x10000000;
+// M+0x58C 0x10: the game's lasting record that its destroy routine ran on this machine (fn_1_25004 and its inline
+// copies in fn_1_2A694, fn_1_2A8D0), until a restore's exit. Flag 0x40000000, which the routine sets too, is gone at
+// the machine's next step start (fn_1_289B4), so a mode's own `explode`, run after the step, never shows it.
+constexpr u32 M_DESTROY_RECORD = 0x10;
+// A bit of ReadNow's flags, not the game's meaning of it: this machine exploded (Wreck below), for the events' edges.
+constexpr u32 F_DESTROYED = 0x40000000;
+// The course's floor (.bss 0x3BE0 -> +0x24 -> +0x0) and the two planes under which fn_1_24A4C 0x24BDC calls the destroy
+// routine on a machine that has fallen: at -5000, or 900 under the floor (.rodata 0x99C, 0x9A0).
+constexpr u32 BSS_COURSE = 0x1BDC20, COURSE_HEIGHTS = 0x24;
+constexpr float FALL_PLANE = -5000.0f, FALL_BELOW_FLOOR = 900.0f;
+// A seat's S_WRECK: what the destroy record of this life was
+constexpr u32 WRECK_NONE = 0, WRECK_FELL = 1, WRECK_EXPLODED = 2;
 // a progress record's
 constexpr u32 P_FRACTION = 0xE8, P_LAP_DISTANCE = 0x100, P_WRONG_WAY = 0x10C, P_STANDING = 0x115, P_CHECKPOINT = 0x140,
               P_LAP_STEPS = 0x160;
@@ -199,8 +212,8 @@ u32 Bit(u32 binding)
 // a seat's state at the last run, which its events compare with (mode.h SEAT_STATE), and the mode's own counts
 constexpr u32 S_FLAGS = 0x0, S_LAP = 0x4, S_CHECKPOINT = 0x8, S_ENERGY = 0xC, S_KOS = 0x10, S_RESTORING = 0x14,
               S_WRONG = 0x18, S_SURFACE = 0x1C, S_LAP_START = 0x20, S_BEST_LAP = 0x24, S_FINISH = 0x28, S_HITS = 0x2C,
-              S_DAMAGE = 0x30, S_WALL = 0x34, S_OUT_AT = 0x38;   // (S_FINISH, S_OUT_AT: the step + 1)
-static_assert(S_OUT_AT + 4 <= SEAT_STATE_SIZE);
+              S_DAMAGE = 0x30, S_WALL = 0x34, S_OUT_AT = 0x38, S_WRECK = 0x3C;   // (S_FINISH, S_OUT_AT: the step + 1)
+static_assert(S_WRECK + 4 <= SEAT_STATE_SIZE);
 constexpr u32 SeatState(u32 seat)
 {
   return SEAT_STATE + SEAT_STATE_SIZE * seat;
@@ -356,7 +369,7 @@ private:
       case SEAT_LAP: return m_g.Read32(progress + game::PROGRESS_LAPS);
       case SEAT_INDEX: return seat;
       case SEAT_BROKEN: return (flags & game::MACHINE_FLAG_BROKEN_DOWN) != 0;
-      case SEAT_DESTROYED: return (flags & 0x40000000) != 0;
+      case SEAT_DESTROYED: return m_g.Read32(m_block + SeatState(seat) + S_WRECK) == WRECK_EXPLODED;
       case SEAT_DISTANCE: return m_g.Read32(progress + game::PROGRESS_DISTANCE);
       case SEAT_TEAM: return m_p.teams[seat];
       case SEAT_LAPLENGTH: return m_g.Read32(progress + game::PROGRESS_LAP_LENGTH);
@@ -852,14 +865,38 @@ struct Now
   bool started = false;
 };
 
-Now ReadNow(Machine& m, Guest& g, u32 module)
+// What this seat's destroy record says, kept in the block for this life of the machine: the record newly there is an
+// explosion unless the machine is under the fall planes, where the routine only ends a fall. A wreck that has fallen
+// keeps its word. Written at once: `seat.destroyed` reads it in this run's rules.
+u32 Wreck(Guest& g, u32 block, u32 module, u32 seat, u32 machine, u32 contact)
+{
+  const u32 at = block + SeatState(seat) + S_WRECK;
+  u32 wreck = WRECK_NONE;
+  if (contact & M_DESTROY_RECORD)
+  {
+    wreck = g.Read32(at);
+    if (wreck == WRECK_NONE)
+    {
+      const float y = Real(g.Read32(machine + game::MACHINE_POSITION_X + 4));
+      const float floor = Real(g.Read32(g.Read32(g.Read32(module + BSS_COURSE) + COURSE_HEIGHTS)));
+      wreck = y < FALL_PLANE || floor - FALL_BELOW_FLOOR > y ? WRECK_FELL : WRECK_EXPLODED;
+    }
+  }
+  g.Write32(at, wreck);
+  return wreck;
+}
+
+Now ReadNow(Machine& m, Guest& g, u32 block, u32 module)
 {
   Now n;
   n.started = static_cast<s16>(g.Read16(module + game::PHASE)) >= s16{game::PHASE_RACE};
   for (u32 seat = 0; seat < m.Count(); ++seat)
   {
     const u32 machine = m.MachineOf(seat), progress = m.Progress(seat);
-    n.flags[seat] = g.Read32(machine + game::MACHINE_FLAGS);
+    const u32 contact = g.Read32(machine + M_CONTACT);
+    n.flags[seat] = g.Read32(machine + game::MACHINE_FLAGS) & ~F_DESTROYED;
+    if (Wreck(g, block, module, seat, machine, contact) == WRECK_EXPLODED)
+      n.flags[seat] |= F_DESTROYED;
     n.lap[seat] = g.Read32(progress + game::PROGRESS_LAPS);
     n.checkpoint[seat] = g.Read32(progress + P_CHECKPOINT);
     n.energy[seat] = g.Read32(machine + game::MACHINE_ENERGY);
@@ -868,7 +905,6 @@ Now ReadNow(Machine& m, Guest& g, u32 module)
     n.wrong[seat] = g.Read32(progress + P_WRONG_WAY) != 0;
     n.surface[seat] = g.Read32(machine + M_SURFACE);
     // the race map's "touched a wall": pushed by a wall this step, on the ground, not fallen
-    const u32 contact = g.Read32(machine + M_CONTACT);
     n.wall[seat] = (n.flags[seat] & F_WALL) && (contact & 0x8) && !(contact & 0x10);
     n.out |= m.Out(seat) ? 1u << seat : 0;
   }
@@ -914,10 +950,22 @@ std::FILE* TraceFile()
   return file;
 }
 
+// (debug "modeTraceEvery": the seats' lines every so many runs, 10 by default)
+u32 TraceEvery()
+{
+  static const u32 every = [] {
+    for (const EmulatorSetting& given : TheOptions().debug.emulator)
+      if (given.name == "FZGX_MODE_TRACE_EVERY" && !given.value.empty())
+        return std::max<u32>(1, static_cast<u32>(std::strtoul(given.value.c_str(), nullptr, 10)));
+    return u32{10};
+  }();
+  return every;
+}
+
 void TraceSeats(Machine& m, Guest& g, u32 block, u32 module, u32 runs, bool started, const Now& n)
 {
   std::FILE* t = TraceFile();
-  if (!t || (started && runs % 10 != 0))
+  if (!t || (started && runs % TraceEvery() != 0))
     return;
   const u32 r = module + R_BASE, slot = g.Read8(r + R_SLOT);
   std::fprintf(t, "T %u clock %u rule %08x timer %u phase %d end %u\n", runs, g.Read32(module + game::RACE_CLOCK),
@@ -927,7 +975,8 @@ void TraceSeats(Machine& m, Guest& g, u32 block, u32 module, u32 runs, bool star
     const u32 a = m.MachineOf(seat), pr = m.Progress(seat), rec = r + R_RECORDS + R_RECORD * seat;
     std::fprintf(t,
                  "S %u %u was %08x flags %08x v %.1f e %.2f lap %d dist %.0f x %.1f y %.1f z %.1f p %.1f %.1f %.1f steer %.3f "
-                 "accel %.2f brake %.2f restoring %u kos %u rank %u out %u place %u time %08x cb %u\n",
+                 "accel %.2f brake %.2f restoring %u kos %u rank %u out %u place %u time %08x cb %u contact %08x wreck %u base %.3f "
+                 "boost %u\n",
                  runs, seat, n.flags[seat], g.Read32(a + game::MACHINE_FLAGS), Real(g.Read32(a + game::MACHINE_SPEED)),
                  Real(g.Read32(a + game::MACHINE_ENERGY)), Int(g.Read32(pr + game::PROGRESS_LAPS)),
                  Real(g.Read32(pr + 0xF8)), Real(g.Read32(a + game::MACHINE_POSITION_X)),
@@ -936,7 +985,8 @@ void TraceSeats(Machine& m, Guest& g, u32 block, u32 module, u32 runs, bool star
                  Real(g.Read32(a + M_STEER)), Real(g.Read32(a + M_ACCEL)), Real(g.Read32(a + M_BRAKE)),
                  g.Read16(a + M_RESTORING), g.Read8(a + M_KOS), m.Rank(seat), m.Out(seat) ? 1 : 0,
                  g.Read8(rec + 0xE + slot), g.Read32(rec + 0x24 + 4 * slot),
-                 g.Read32(a + M_CPU) ? g.Read8(g.Read32(a + M_CPU) + 0x32) : 0);
+                 g.Read32(a + M_CPU) ? g.Read8(g.Read32(a + M_CPU) + 0x32) : 0, g.Read32(a + M_CONTACT),
+                 g.Read32(block + SeatState(seat) + S_WRECK), Real(g.Read32(a + M_BASE_SPEED)), g.Read8(a + 0x18A));
   }
   std::fflush(t);
 }
@@ -1424,7 +1474,7 @@ void Run(Guest& g, const Package& p, u32 block, u32 module)
   }
   Stamp(g, block, runs + 1);
   Machine m(g, p, block, module);
-  const Now n = ReadNow(m, g, module);
+  const Now n = ReadNow(m, g, block, module);
   if (runs == 0)
   {
     // the first run's events compare the step with itself (race_start; and out for a seat already out, as before)

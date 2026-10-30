@@ -174,6 +174,7 @@ void TestTheStartGrid();
 void TestTheOutTestsCases();
 void TestTheOutTestReadsTheGame();
 void TestTheModeVectorsRead();
+void TestDestroyedAndOutTellAnEndApart();
 void TestOverdriveRunsInTheBlock();
 void TestEveryWordRuns();
 void TestTheGamesSquareRootIsTheCompilers();
@@ -511,6 +512,7 @@ int main(int argc, char** argv)
   TestTheOutTestsCases();
   TestTheOutTestReadsTheGame();
   TestTheModeVectorsRead();
+  TestDestroyedAndOutTellAnEndApart();
   TestOverdriveRunsInTheBlock();
   TestEveryWordRuns();
   TestTheGamesSquareRootIsTheCompilers();
