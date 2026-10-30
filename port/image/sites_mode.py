@@ -525,20 +525,25 @@ mpair_stock:
 
     # the timer (fn_1_3A330's countdown of the timed rule, 0x40000: R+0xA4 down a step, the beeps, time over at 0):
     # under a clock limit the mode keeps the timer (from the race clock: mode.cpp) and ends the race itself, so the
-    # game's countdown is skipped as it is without the rule. cr0 holds the rule's test on entry.
+    # game's countdown is skipped as it is without the rule. r0 holds the rule word's timed bit on entry (the site's
+    # rlwinm.), which the routine tests again after the mode test.
     site = TEXT + TIMER
     word = stock(site, TIMER_KNOWN)
     skip = TEXT + TIMER_SKIP
-    r.add("mode_timer", f"""    bne mtim_rule
-    @b {skip:#x}
-mtim_rule:
-""" + test + """    beq mtim_count
+    r.add("mode_timer", test + """    beq mtim_stock
+    cmpwi 0, 0
+    beq mtim_skip
 """ + la(12, MODES) + f"""    lwz 12, 4(12)
     cmplwi 12, 0
     beq mtim_count
     lwz 12, {memmap.MODE_CLOCK:#x}(12)
     cmpwi 12, 0
     beq mtim_count
+mtim_skip:
+    @b {skip:#x}
+mtim_stock:
+    cmpwi 0, 0
+    bne mtim_count
     @b {skip:#x}
 mtim_count:
     @b {site + 4:#x}
