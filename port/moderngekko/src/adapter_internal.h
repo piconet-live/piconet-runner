@@ -151,6 +151,9 @@ fzgx::u32 TakePictureIntervals(fzgx::u32* out, fzgx::u32 most);
 // the stop.
 void StartDrawnFrames();
 void StopDrawnFrames();
+// aurora.cpp: Aurora as the presenter (the launch file's "debug.renderer"), its data folder and its line at the stop.
+void StartAurora();
+void StopAurora();
 // freeze_watch.cpp: a thread that says in the log when a race's game stands still, and where (fzgx/freeze.h),
 // and the emulator's lines (below): both start at the game's first picture (StartWatches, from the picture's hook:
 // one flag read a picture after the first), so that a boot that fails has started neither. Every way the game is

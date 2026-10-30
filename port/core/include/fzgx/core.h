@@ -163,6 +163,13 @@ struct Debug
   bool user_settings = false;  // "userSettings": the emulator's settings are the user folder's (Config/Dolphin.ini,
                                // GFX.ini: a test's speed limit, clock and the like); without it the runner sets every
                                // setting that decides what the game computes or how fast it runs, whatever they say
+  // "renderer": who draws the picture shown, "dolphin" (the emulator) or "aurora" (Aurora beside it, presentation
+  // only: aurora.cpp in the adapter); "auroraShots", "auroraLog": its test pictures (XFB copies, 1 the first) and its
+  // logs' file prefix
+  std::string renderer = "dolphin";
+  std::vector<u32> aurora_shots;
+  u32 aurora_scale = 0;  // "auroraScale": its render scale, 1 to 8; 0 (or none): AutoAuroraScale of the display's height
+  std::string aurora_log;
   std::vector<EmulatorSetting> emulator;  // every other key of the emulator's side that was given (files_launch.cpp
                                           // holds the table: "pad", "poke", "probe", "paceLog", ...)
 };
@@ -267,6 +274,20 @@ std::vector<std::string> DebugSettingsOn(const Debug& debug);
 
 // The input delay a race starts with unless its player chose less, and the most a race takes (each player picks 0,
 // 1 or 2 for their own game; never above 2). A launch file that asks for more is refused.
+// Aurora's render scale when the launch file gives none: the smallest whole number whose picture (448 lines of the
+// game's, each drawn this many times) covers the display's height, at most 4 (720 lines: 2, 1080: 3, 1440 and more: 4).
+// A height not known (0) is 1, the game's own size.
+constexpr u32 AUTO_AURORA_SCALE_LINES = 448;
+constexpr u32 AUTO_AURORA_SCALE_MOST = 4;
+constexpr u32 AutoAuroraScale(u32 display_height)
+{
+  // (with the height at its top the sum would wrap: anything that tall is at the cap anyway)
+  if (display_height > (AUTO_AURORA_SCALE_MOST - 1) * AUTO_AURORA_SCALE_LINES)
+    return AUTO_AURORA_SCALE_MOST;
+  const u32 scale = (display_height + AUTO_AURORA_SCALE_LINES - 1) / AUTO_AURORA_SCALE_LINES;
+  return scale == 0 ? 1 : scale;
+}
+
 constexpr u32 PLAYERS_INPUT_DELAY = 2;
 // The ways of showing a picture that are kept for comparison and are on in a start, a sentence each for the log
 // "present" as "field" or "copy". None: a start as players have it.
