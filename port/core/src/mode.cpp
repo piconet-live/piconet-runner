@@ -25,6 +25,7 @@
 #include "out_test.h"
 #include "rollback.h"
 #include "files.h"
+#include "host_timers.h"
 #include "util.h"
 
 namespace fzgx::mode
@@ -587,7 +588,10 @@ void Step(Guest& g)
   const u32 block = g.Read32(layout::MODES + 4);
   if (!m || !m->game_mode || block == 0)
     return;
-  Run(g, *m->game_mode, block, g.Read32(net::MODULE_POINTER));
+  {
+    FZGX_TIME(Mode);
+    Run(g, *m->game_mode, block, g.Read32(net::MODULE_POINTER));
+  }
   // the log, once a run of the game (a step run again says nothing new); the block holds what the race is
   static bool said = false;
   if (!said && g.Read32(block + END) == 1)
