@@ -134,11 +134,13 @@ void WriteControllerOptions(Guest& g)
 // write stops at the go: from then on the game writes the byte itself (the chase camera, from its record) and a
 // step reads it only when it makes a camera record. Nothing of the race reads the view: the checksum leaves out the
 // cameras and the options record, so each game of a race starts in its own player's view. Not in a playback (the
-// recording's own view is the game's) and not with none given.
+// recording's own view is the game's), not in a spectator's game (the launcher's Watch: the spectator's controls
+// choose its views, frame_spectate.py, and the chase camera would write a view the spectator picked back as the
+// player's) and not with none given.
 void WriteStartView(Guest& g)
 {
   const u32 view = TheOptions().camera;
-  if (view == 0 || !TheOptions().play_file.empty() || g.Read32(table::RUNNING_AT) != 0)
+  if (view == 0 || !TheOptions().play_file.empty() || TheOptions().spectate || g.Read32(table::RUNNING_AT) != 0)
     return;
   const u32 module = MainRel(g);
   if (module == 0)

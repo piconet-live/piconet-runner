@@ -213,8 +213,8 @@ void TestARaceTakesThePlayersControllerOptions()
 }
 
 // The player's camera view ("match.camera", boot.cpp WriteStartView): written into the game's options record, where
-// the race start's camera set-up takes it, every frame until the relay's go and never after; not in a playback, and
-// not without a view given.
+// the race start's camera set-up takes it, every frame until the relay's go and never after; not in a playback, not
+// in a spectator's game, and not without a view given.
 void TestARaceStartsInThePlayersView()
 {
   const std::string dir = Temp();
@@ -248,6 +248,14 @@ void TestARaceStartsInThePlayersView()
   Shutdown();
   race.camera = 0;     // none given
   start(race);
+  CHECK(g.Read8(VIEW) == 1);
+  Shutdown();
+  Options watch = race;  // a spectator's start (the launcher's Watch) given a view all the same: not written
+  watch.camera = 3;
+  watch.spectate = true;
+  start(watch);
+  CHECK(g.Read8(VIEW) == 1);
+  FrameTick();
   CHECK(g.Read8(VIEW) == 1);
   Shutdown();
   WriteReplay(dir + "/two.fzrp", {1, 0});
