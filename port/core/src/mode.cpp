@@ -1,13 +1,15 @@
 // The game mode's interpreter (mode.h): the rules of the race's package, once a step at the image's mode point, in
 // the order protocol/formats.md section 9 gives. Every state it keeps between two steps is in the block (mode.h's
-// layout), so a step run again after a rollback runs from what the undo log put back; within a run it has only its
-// stack, the rule's locals, the sort buffers and the queue, all made anew at every run.
+// layout: the variables, the edges, the waiting rules with their locals, the generator), so a step run again after a
+// rollback runs from what the undo log put back; within a run it has only its stack, the rule's locals, the sort
+// buffers and the queue, all made anew at every run.
 //
 // Exactness: the operations count, never time (the budget is the same in every game); the reals are binary32, one
 // operation at a time (no expression for the compiler to contract), with the host's floating-point control set to
 // round to nearest with denormals kept for the run (the emulator's may differ); a NaN result is 0x7FC00000, as
-// modes.toml says. Where a value meets the game (the held speed) the game's own routines do the arithmetic (the
-// image's mode_hold, with the game's square root).
+// modes.toml says. The square root is the game's own (GameSqrt, the compiler's ModeOperators.GameSqrt step for
+// step). Where a value meets the game (the held speed) the game's own routines do the arithmetic (the image's
+// mode_hold, with the game's square root).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mode.h"
@@ -16,6 +18,7 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 
 #if defined(__x86_64__) || defined(_M_X64)
@@ -70,6 +73,83 @@ u32 Word(s32 v)
   return static_cast<u32>(v);
 }
 
+// The game's square root (main.dol 0x8006D0B4): x times 1/sqrt(x), from the processor's estimate (frsqrte) and two
+// Newton steps y = y (1.5 - 0.5 x y y), in the processor's single-precision operations: fmuls takes its second operand
+// rounded to 25 bits, fnmsubs is fused and rounded once to single. A NaN stays one, infinity itself; zero, a negative
+// number or a denormal give 0. The estimate's table is Dolphin's (Common/FloatUtils.cpp, GPL-2.0-or-later), as the
+// recomp's runtime has it.
+double Force25Bit(double d)
+{
+  const u64 bits = std::bit_cast<u64>(d);
+  return std::bit_cast<double>((bits & 0xFFFFFFFFF8000000ull) + (bits & 0x0000000008000000ull));
+}
+
+double ApproximateRsqrt(double value)
+{
+  struct Entry
+  {
+    s32 base, dec;
+  };
+  static constexpr Entry TABLE[32] = {
+      {0x1a7e800, -0x568}, {0x17cb800, -0x4f3}, {0x1552800, -0x48d}, {0x130c000, -0x435},
+      {0x10f2000, -0x3e7}, {0x0eff000, -0x3a2}, {0x0d2e000, -0x365}, {0x0b7c000, -0x32e},
+      {0x09e5000, -0x2fc}, {0x0867000, -0x2d0}, {0x06ff000, -0x2a8}, {0x05ab800, -0x283},
+      {0x046a000, -0x261}, {0x0339800, -0x243}, {0x0218800, -0x226}, {0x0105800, -0x20b},
+      {0x3ffa000, -0x7a4}, {0x3c29000, -0x700}, {0x38aa000, -0x670}, {0x3572000, -0x5f2},
+      {0x3279000, -0x584}, {0x2fb7000, -0x524}, {0x2d26000, -0x4cc}, {0x2ac0000, -0x47e},
+      {0x2881000, -0x43a}, {0x2665000, -0x3fa}, {0x2468000, -0x3c2}, {0x2287000, -0x38e},
+      {0x20c1000, -0x35e}, {0x1f12000, -0x332}, {0x1d79000, -0x30a}, {0x1bf4000, -0x2e6},
+  };
+  const u64 bits = std::bit_cast<u64>(value);  // (a positive normal number: GameSqrt's)
+  const u64 mantissa = bits & 0x000FFFFFFFFFFFFFull;
+  std::int64_t exponent = static_cast<std::int64_t>(bits & 0x7FF0000000000000ull);
+  const u64 lsb = static_cast<u64>(exponent) & 0x0010000000000000ull;
+  exponent = (0x3FF0000000000000ll - (exponent - 0x3FE0000000000000ll) / 2) & 0x7FF0000000000000ll;
+  const u32 i = static_cast<u32>((lsb | mantissa) >> 37);
+  const Entry& e = TABLE[i / 2048];
+  return std::bit_cast<double>(static_cast<u64>(exponent) |
+                               static_cast<u64>(e.base + e.dec * static_cast<s32>(i % 2048)) << 26);
+}
+
+// a x c + addend, fused and rounded once to single (to nearest): the double fma, its tie at single settled by the
+// exact error
+float SingleFma(double a, double c, double addend)
+{
+  c = Force25Bit(c);
+  double result = std::fma(a, c, addend);
+  const u64 bits = std::bit_cast<u64>(result);
+  if ((bits & 0x1FFFFFFFull) == 0x10000000ull)
+  {
+    const double a_prime = addend - result;
+    const double b_prime = result + a_prime;
+    const double error = std::fma(a, c, a_prime) + (addend - b_prime);
+    if (error != 0.0)
+      result = std::bit_cast<double>((error > 0.0) == (result > 0.0) ? bits + 1 : bits - 1);
+  }
+  return static_cast<float>(result);
+}
+
+}  // namespace
+
+float GameSqrt(float x)
+{
+  if (std::isnan(x) || x == std::numeric_limits<float>::infinity())
+    return x;
+  if (!(x > 0.0f) || !std::isnormal(x))
+    return 0.0f;
+  const float half = static_cast<float>(0.5 * x);
+  double y = ApproximateRsqrt(x);
+  for (int i = 0; i < 2; ++i)
+  {
+    const float square = static_cast<float>(y * Force25Bit(y));
+    const float step = -SingleFma(square, half, -1.5);
+    y = static_cast<float>(y * step);
+  }
+  return static_cast<float>(y * x);
+}
+
+namespace
+{
 // A real to an int, saturating at the int's ends; NaN 0.
 u32 ToInt(float f)
 {
@@ -80,6 +160,12 @@ u32 ToInt(float f)
   if (f >= 2147483648.0f)
     return Word(std::numeric_limits<s32>::max());
   return Word(static_cast<s32>(f));
+}
+
+// an instance's bit in a rule's words (edges, waiting): its seat's, bit 0 for a rule on no seat
+u32 Bit(u32 binding)
+{
+  return 1u << (binding < SEATS ? binding : 0);
 }
 
 struct Action
@@ -108,6 +194,7 @@ public:
   {
     m_machines = g.Read32(module + net::MACHINES);
     m_count = std::min<u32>(g.Read8(module + net::MACHINE_COUNT), SEATS);
+    m_runs = g.Read32(block + RUNS);
   }
 
   u32 Count() const { return m_count; }
@@ -122,11 +209,18 @@ public:
       m_fault = f;
   }
 
-  // Runs the code at `at` with `binding` as local 0: a condition's value, or true for a body that came to its end.
-  bool Run(u32 at, const Rule& rule, u32 binding)
+  // Runs the code at `at` of rule `index` for its instance on `binding` (local 0), or with the `live` locals a wait
+  // kept (`kept`): a condition's value, or true for a body that came to its end or to a wait.
+  bool Run(u32 at, u32 index, u32 binding, const u32* kept = nullptr, u32 live = 0)
   {
+    const Rule& rule = m_p.rules[index];
     m_locals.fill(0);
     m_locals[0] = binding;
+    for (u32 i = 0; i < live && i < LOCALS; ++i)
+      m_locals[i] = kept[i];
+    m_index = index;
+    m_binding = binding;
+    m_waited = false;
     m_sp = 0;
     while (m_fault == FAULT_NONE)
     {
@@ -148,6 +242,8 @@ public:
       if (op == OP_RET)
         return Pop() != 0 && m_fault == FAULT_NONE;
       Do(op, o, rule, &at);
+      if (m_waited)
+        return m_fault == FAULT_NONE;
     }
     Fail(FAULT_CODE);
     return false;
@@ -193,8 +289,68 @@ private:
       case SEAT_BROKEN: return (flags & game::MACHINE_FLAG_BROKEN_DOWN) != 0;
       case SEAT_DESTROYED: return (flags & 0x40000000) != 0;
       case SEAT_DISTANCE: return m_g.Read32(progress + game::PROGRESS_DISTANCE);
+      case SEAT_TEAM: return m_p.teams[seat];
+      case SEAT_LAPLENGTH: return m_g.Read32(progress + game::PROGRESS_LAP_LENGTH);
       default: Fail(FAULT_CODE); return 0;
     }
+  }
+  // a read of type vec: its three words, x first (none: zeros)
+  void SeatVec(u32 id, u32 seat)
+  {
+    const u32 at = id == SEAT_POSITION ? game::MACHINE_POSITION_X : 0;
+    if (at == 0)
+      return Fail(FAULT_CODE);
+    for (u32 k = 0; k < 3; ++k)
+      Push(IsSeat(seat) ? m_g.Read32(MachineOf(seat) + at + 4 * k) : 0);
+  }
+  u32 TeamWord(u32 seat, u32 word) const { return m_block + mode::TeamWord(m_p.teams[seat], word); }
+
+  // xoshiro128**, its state in the block
+  u32 Draw()
+  {
+    std::array<u32, 4> s;
+    for (u32 k = 0; k < 4; ++k)
+      s[k] = m_g.Read32(m_block + RANDOM + 4 * k);
+    const u32 result = std::rotl(s[1] * 5, 7) * 9;
+    const u32 t = s[1] << 9;
+    s[2] ^= s[0];
+    s[3] ^= s[1];
+    s[1] ^= s[2];
+    s[0] ^= s[3];
+    s[2] ^= t;
+    s[3] = std::rotl(s[3], 11);
+    for (u32 k = 0; k < 4; ++k)
+      m_g.Write32(m_block + RANDOM + 4 * k, s[k]);
+    return result;
+  }
+
+  // the instance waits `steps` steps (formats.md section 9: Wait): a free record takes it, with its `live` locals
+  void Wait(u32 steps, u32 live, u32 kind, u32 condition, u32 resume)
+  {
+    if (Int(steps) <= 0)
+      return;
+    if (live > WAIT_LOCALS || live > m_p.rules[m_index].locals)
+      return Fail(FAULT_CODE);
+    for (u32 i = 0; i < modes::WAITS; ++i)
+    {
+      const u32 r = m_block + WAIT_RECORDS + i * WAIT;
+      if (m_g.Read32(r) != 0)
+        continue;
+      m_g.Write32(r, m_index + 1);
+      m_g.Write32(r + 4, m_binding);
+      m_g.Write32(r + 8, kind | live << 8);
+      m_g.Write32(r + 12, m_runs + steps);
+      m_g.Write32(r + 16, steps);
+      m_g.Write32(r + 20, resume);
+      m_g.Write32(r + 24, condition);
+      for (u32 k = 0; k < live; ++k)
+        m_g.Write32(r + 28 + 4 * k, m_locals[k]);
+      const u32 bits = m_block + WAITING + 4 * m_index;
+      m_g.Write32(bits, m_g.Read32(bits) | Bit(m_binding));
+      m_waited = true;
+      return;
+    }
+    Fail(FAULT_WAITS);
   }
   u32 RaceRead(u32 id)
   {
@@ -279,8 +435,24 @@ private:
         return;
       }
       case OP_PARAM: return U8(o) < m_p.params.size() ? Push(Word(m_p.params[U8(o)])) : Fail(FAULT_CODE);
-      case OP_SEATREAD: return Push(SeatRead(U8(o), Pop()));
+      case OP_SEATREAD: return U8(o) == SEAT_POSITION ? SeatVec(U8(o), Pop()) : Push(SeatRead(U8(o), Pop()));
       case OP_RACEREAD: return Push(RaceRead(U8(o)));
+      case OP_LOADTEAMVAR:
+      {
+        const u32 seat = Pop();
+        if (U16(o) >= m_p.team_words.size())
+          return Fail(FAULT_CODE);
+        return Push(IsSeat(seat) ? m_g.Read32(TeamWord(seat, U16(o))) : 0);
+      }
+      case OP_STORETEAMVAR:
+      {
+        const u32 value = Pop(), seat = Pop();
+        if (U16(o) >= m_p.team_words.size())
+          return Fail(FAULT_CODE);
+        if (IsSeat(seat))
+          m_g.Write32(TeamWord(seat, U16(o)), value);
+        return;
+      }
       case OP_IADD: return Two([](u32 a, u32 b) { return a + b; });
       case OP_ISUB: return Two([](u32 a, u32 b) { return a - b; });
       case OP_IMUL: return Two([](u32 a, u32 b) { return a * b; });
@@ -296,7 +468,7 @@ private:
       case OP_FMUL: return Reals([](float a, float b) { return a * b; });
       case OP_FDIV: return Reals([](float a, float b) { return a / b; });
       case OP_FNEG: return One([](u32 a) { return a ^ 0x80000000u; });
-      case OP_FSQRT: return One([](u32 a) { return Bits(std::sqrt(Real(a))); });
+      case OP_FSQRT: return One([](u32 a) { return Bits(GameSqrt(Real(a))); });
       case OP_ITOF: return One([](u32 a) { return Bits(static_cast<float>(Int(a))); });
       case OP_FLOOR: return One([](u32 a) { return ToInt(std::floor(Real(a))); });
       case OP_CEIL: return One([](u32 a) { return ToInt(std::ceil(Real(a))); });
@@ -330,6 +502,18 @@ private:
         if (Pop() != 0)
           Jump(U32(o), at);
         return;
+      case OP_WAIT: return Wait(Pop(), U8(o), U8(o + 1), U32(o + 2), *at);
+      case OP_SEATBIT: return One([&](u32 a) { return IsSeat(a) ? 1u << a : 0u; });
+      case OP_ALLSEATS: return Push(m_count >= 32 ? ~0u : (1u << m_count) - 1);
+      case OP_BITAND: return Two([](u32 a, u32 b) { return a & b; });
+      case OP_BITOR: return Two([](u32 a, u32 b) { return a | b; });
+      case OP_BITANDNOT: return Two([](u32 a, u32 b) { return a & ~b; });
+      case OP_RANDOM:
+      {
+        const u32 n = Pop();
+        return Push(Int(n) <= 0 ? 0u : static_cast<u32>((u64{Draw()} * n) >> 32));
+      }
+      case OP_RANDOMREAL: return Push(std::bit_cast<u32>(static_cast<float>(Draw() >> 8) * 0x1p-24f));
       case OP_SORTBEGIN:
         if (U8(o) >= SORTS)
           return Fail(FAULT_CODE);
@@ -416,7 +600,9 @@ private:
 
   Guest& m_g;
   const Package& m_p;
-  u32 m_block, m_module, m_machines = 0, m_count = 0, m_ops = 0, m_sp = 0;
+  u32 m_block, m_module, m_machines = 0, m_count = 0, m_ops = 0, m_sp = 0, m_runs = 0;
+  u32 m_index = 0, m_binding = NONE;  // the rule instance running
+  bool m_waited = false;              // its code came to a wait
   Fault m_fault = FAULT_NONE;
   std::array<u32, STACK> m_stack{};
   std::array<u32, LOCALS> m_locals{};
@@ -429,8 +615,8 @@ private:
 void Stamp(Guest& g, u32 block, u32 runs)
 {
   g.Write32(block + RUNS, runs);
-  g.Write32(block + PAGE, runs);
-  g.Write32(block + 2 * PAGE, runs);
+  for (u32 page = PAGE; page < BLOCK; page += PAGE)
+    g.Write32(block + page, runs);
 }
 
 // The rule's condition for this event and binding: `when` on its edge (kept in the block, a bit a seat), `while`
@@ -440,10 +626,10 @@ bool Holds(Machine& m, Guest& g, const Rule& rule, u32 index, u32 block, u32 bin
   bool go = true;
   if (rule.when != NONE)
   {
-    const bool now = m.Run(rule.when, rule, binding);
+    const bool now = m.Run(rule.when, index, binding);
     if (edge)
     {
-      const u32 bit = 1u << (binding < SEATS ? binding : 0);
+      const u32 bit = Bit(binding);
       const u32 was = g.Read32(block + EDGES + 4 * index);
       g.Write32(block + EDGES + 4 * index, now ? was | bit : was & ~bit);
       go = now && (was & bit) == 0;
@@ -454,8 +640,61 @@ bool Holds(Machine& m, Guest& g, const Rule& rule, u32 index, u32 block, u32 bin
     }
   }
   if (go && rule.during != NONE)
-    go = m.Run(rule.during, rule, binding);
+    go = m.Run(rule.during, index, binding);
   return go;
+}
+
+// Whether rule `index`'s instance on `binding` waits: then it does not fire, nor are its conditions tested.
+bool Waiting(const Guest& g, u32 block, u32 index, u32 binding)
+{
+  return (g.Read32(block + WAITING + 4 * index) & Bit(binding)) != 0;
+}
+
+// The waits (the step's third part): every waiting instance in rule order, then seat order. A condition is tested
+// from the step after the wait began: `abort when` true drops the rest of the instance's code, `restart when` true
+// begins the wait again. A wait whose step has come is freed and its instance goes on from it, with its locals.
+void Waits(Machine& m, Guest& g, const Package& p, u32 block)
+{
+  const u32 runs = g.Read32(block + RUNS);
+  std::array<std::pair<u32, u32>, modes::WAITS> order;  // (rule x 32 + its seat's place, record)
+  u32 count = 0;
+  for (u32 i = 0; i < modes::WAITS; ++i)
+  {
+    const u32 r = block + WAIT_RECORDS + i * WAIT;
+    if (const u32 rule = g.Read32(r); rule != 0)
+      order[count++] = {(rule - 1) * 32 + std::countr_zero(Bit(g.Read32(r + 4))), r};
+  }
+  std::sort(order.begin(), order.begin() + count);
+  for (u32 n = 0; n < count && m.Faulted() == FAULT_NONE; ++n)
+  {
+    const u32 r = order[n].second;
+    const u32 index = g.Read32(r) - 1, binding = g.Read32(r + 4), kind = g.Read32(r + 8) & 0xFF;
+    const u32 live = g.Read32(r + 8) >> 8, due = g.Read32(r + 12), length = g.Read32(r + 16);
+    if (index >= p.rules.size())
+      return m.Fail(FAULT_CODE);
+    std::array<u32, WAIT_LOCALS> kept{};
+    for (u32 k = 0; k < live && k < WAIT_LOCALS; ++k)
+      kept[k] = g.Read32(r + 28 + 4 * k);
+    const auto free = [&] {
+      g.Write32(r, 0);
+      const u32 bits = block + WAITING + 4 * index;
+      g.Write32(bits, g.Read32(bits) & ~Bit(binding));
+    };
+    if (kind != 0 && due - length < runs && m.Run(g.Read32(r + 24), index, binding, kept.data(), live))
+    {
+      if (kind == 1)
+      {
+        free();
+        continue;
+      }
+      g.Write32(r + 12, runs + length);
+      continue;
+    }
+    if (static_cast<s32>(due - runs) > 0)
+      continue;
+    free();
+    m.Run(g.Read32(r + 20), index, binding, kept.data(), live);
+  }
 }
 
 bool Finite(u32 bits)
@@ -504,6 +743,11 @@ void Run(Guest& g, const Package& p, u32 block, u32 module)
     for (u32 seat = 0; seat < SEATS; ++seat)
       for (size_t w = 0; w < p.seat_words.size(); ++w)
         g.Write32(block + SeatWord(seat, static_cast<u32>(w)), Word(p.seat_words[w]));
+    for (u32 team = 0; team < modes::TEAMS; ++team)
+      for (size_t w = 0; w < p.team_words.size(); ++w)
+        g.Write32(block + TeamWord(team, static_cast<u32>(w)), Word(p.team_words[w]));
+    for (u32 k = 0; k < 4; ++k)
+      g.Write32(block + RANDOM + 4 * k, p.seed[k]);
   }
   Stamp(g, block, runs + 1);
   Machine m(g, p, block, module);
@@ -526,27 +770,31 @@ void Run(Guest& g, const Package& p, u32 block, u32 module)
   {
     if ((newly >> seat & 1) == 0)
       continue;
-    for (const Rule& rule : p.rules)
+    for (u32 i = 0; i < p.rules.size() && m.Faulted() == FAULT_NONE; ++i)
     {
-      if (rule.event == EVENT_OUT && Holds(m, g, rule, 0, block, seat, false))
-        m.Run(rule.body, rule, seat);
+      const Rule& rule = p.rules[i];
+      if (rule.event == EVENT_OUT && !Waiting(g, block, i, seat) && Holds(m, g, rule, i, block, seat, false))
+        m.Run(rule.body, i, seat);
     }
   }
+  // the waits whose time has come
+  if (m.Faulted() == FAULT_NONE)
+    Waits(m, g, p, block);
   // the continuous rules in the file's order (each seat: by seat)
   for (u32 i = 0; i < p.rules.size() && m.Faulted() == FAULT_NONE; ++i)
   {
     const Rule& rule = p.rules[i];
     if (rule.event == EVENT_EVERYSTEP)
     {
-      if (Holds(m, g, rule, i, block, NONE, true))
-        m.Run(rule.body, rule, NONE);
+      if (!Waiting(g, block, i, NONE) && Holds(m, g, rule, i, block, NONE, true))
+        m.Run(rule.body, i, NONE);
     }
     else if (rule.event == EVENT_EACHSEAT)
     {
       for (u32 seat = 0; seat < m.Count() && m.Faulted() == FAULT_NONE; ++seat)
       {
-        if (Holds(m, g, rule, i, block, seat, true))
-          m.Run(rule.body, rule, seat);
+        if (!Waiting(g, block, i, seat) && Holds(m, g, rule, i, block, seat, true))
+          m.Run(rule.body, i, seat);
       }
     }
   }
@@ -576,6 +824,7 @@ const char* FaultText(u32 fault)
     case FAULT_QUEUE: return "the step queued more actions than the api's";
     case FAULT_REAL: return "a real for the game is not finite";
     case FAULT_CODE: return "the code does what it may not";
+    case FAULT_WAITS: return "more rules waited at once than the api's";
     default: return "the game had no room for the mode's block";
   }
 }

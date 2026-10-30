@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <string>
 
 #include "util.h"
 
@@ -187,6 +188,14 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         p.globals.push_back(static_cast<s32>(s.U32()));
       for (u16 i = 0; i < seat_words; ++i)
         p.seat_words.push_back(static_cast<s32>(s.U32()));
+      if (s.at < s.end)  // a mode with words a team: their count and start values (none: nothing, as before teams)
+      {
+        const u16 team_words = s.U16();
+        if (team_words == 0 || team_words > modes::TEAM_WORDS)
+          return Fail(why, "keeps more words a team than the api's");
+        for (u16 i = 0; i < team_words; ++i)
+          p.team_words.push_back(static_cast<s32>(s.U32()));
+      }
     }
     else if (name == "RULE")
     {
@@ -203,7 +212,7 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         rule.when = s.U32();
         rule.during = s.U32();
         rule.body = s.U32();
-        if (rule.event > modes::EVENT_OUT || rule.locals < 1 || rule.locals > modes::LOCALS)
+        if (rule.event >= modes::EVENT_COUNT || rule.locals < 1 || rule.locals > modes::LOCALS)
           return Fail(why, std::format("has a rule this build cannot run (\"{}\")", rule.label));
         p.rules.push_back(std::move(rule));
       }
@@ -270,6 +279,26 @@ std::optional<Package> Read(const picojson::value& mode, std::string* why)
     *why = "has no package, or one larger than the api's";
     return std::nullopt;
   }
+  if (const auto teams = o.find("teams"); teams != o.end() && !teams->second.is<picojson::null>())
+  {
+    const bool list = teams->second.is<picojson::array>();
+    const picojson::array& given_teams = list ? teams->second.get<picojson::array>() : picojson::array{};
+    if (!list || given_teams.size() > p.teams.size())
+    {
+      *why = "names its seats' teams otherwise than a list, a team a seat";
+      return std::nullopt;
+    }
+    for (size_t i = 0; i < given_teams.size(); ++i)
+    {
+      const double t = given_teams[i].is<double>() ? given_teams[i].get<double>() : -1;
+      if (!(t >= 0 && t < modes::TEAMS) || t != static_cast<double>(static_cast<u32>(t)))
+      {
+        *why = std::format("gives seat {} a team that is not 0 to {}", i, modes::TEAMS - 1);
+        return std::nullopt;
+      }
+      p.teams[i] = static_cast<u8>(t);
+    }
+  }
   p.bytes = std::move(*bytes);
   p.hash = Sha256Hex(p.bytes.data(), p.bytes.size());
   if (p.hash != text("hash"))
@@ -280,5 +309,25 @@ std::optional<Package> Read(const picojson::value& mode, std::string* why)
   if (!ReadPackage(p, given, why))
     return std::nullopt;
   return p;
+}
+
+std::array<u32, 4> Seed(const std::string& match_id, const std::string& hash)
+{
+  std::vector<u8> text(match_id.begin(), match_id.end());
+  for (size_t i = 0; i + 1 < hash.size(); i += 2)
+    text.push_back(static_cast<u8>(std::stoul(hash.substr(i, 2), nullptr, 16)));
+  const std::string digest = Sha256Hex(text.data(), text.size());
+  std::array<u32, 4> state{};
+  for (size_t i = 0; i < state.size(); ++i)
+  {
+    // SplitMix32, one step from the word
+    u32 z = static_cast<u32>(std::stoul(digest.substr(8 * i, 8), nullptr, 16)) + 0x9E3779B9u;
+    z = (z ^ (z >> 16)) * 0x85EBCA6Bu;
+    z = (z ^ (z >> 13)) * 0xC2B2AE35u;
+    state[i] = z ^ (z >> 16);
+  }
+  if ((state[0] | state[1] | state[2] | state[3]) == 0)
+    state[0] = 1;  // (xoshiro's one state it never leaves)
+  return state;
 }
 }  // namespace fzgx::mode

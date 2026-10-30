@@ -2,9 +2,13 @@
 // compiler's own packages) read as the match start carries them, and Overdrive run on a fake race.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <array>
 #include <bit>
+#include <cmath>
 #include <fstream>
+#include <optional>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include "harness.h"
@@ -151,4 +155,184 @@ void TestEveryWordRuns()
   host.ram = before;
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(host.ram == after);
+}
+
+// The game's square root: the protocol's sqrt.tsv, which the compiler's ModeMaths.GameSqrt wrote (its folds and these
+// runs give the same bits).
+void TestTheGamesSquareRootIsTheCompilers()
+{
+  BEGIN_TEST();
+  std::ifstream file(ProtocolFile("protocol/tests/vectors/modes") / "sqrt.tsv");
+  std::string line;
+  int rows = 0;
+  while (std::getline(file, line))
+  {
+    if (line.empty() || line[0] == '#')
+      continue;
+    const u32 in = static_cast<u32>(std::stoul(line.substr(0, 8), nullptr, 16));
+    const u32 out = static_cast<u32>(std::stoul(line.substr(9, 8), nullptr, 16));
+    const float root = mode::GameSqrt(std::bit_cast<float>(in));
+    CHECK((std::isnan(root) ? 0x7FC00000u : std::bit_cast<u32>(root)) == out);
+    ++rows;
+  }
+  CHECK(rows > 200);
+}
+
+// The generator's first state from the match id and the hash, as the protocol's random.json (an independent
+// reference) has it; a mode's draw is its next().
+void TestTheGeneratorIsTheReferences()
+{
+  BEGIN_TEST();
+  const picojson::value v = Vector("random.json");
+  for (const picojson::value& c : v.get("cases").get<picojson::array>())
+  {
+    std::array<u32, 4> state{};
+    for (size_t k = 0; k < 4; ++k)
+      state[k] = static_cast<u32>(c.get("state").get<picojson::array>()[k].get<double>());
+    CHECK(mode::Seed(c.get("matchId").get<std::string>(), c.get("hash").get<std::string>()) == state);
+  }
+  // the waits vector's Restart rule draws once, random(1000) + 1, at step 4 (TestWaitsRunInTheBlock)
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("waits.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  const picojson::value& first = v.get("cases").get<picojson::array>()[0];
+  p->seed = mode::Seed(first.get("matchId").get<std::string>(), first.get("hash").get<std::string>());
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 4, 100);
+  for (int run = 0; run < 4; ++run)
+    mode::Run(g, *p, BLOCK, MODULE);
+  const u64 next = static_cast<u64>(first.get("next").get<picojson::array>()[0].get<double>());
+  CHECK(g.Read32(BLOCK + mode::GLOBALS) == static_cast<u32>((next * 1000) >> 32) + 1);
+  CHECK(g.Read32(BLOCK + mode::RANDOM) != 0);
+}
+
+// The waits vector on four seats in two teams, step by step: a rule's locals kept across its waits in the block, the
+// waiting bits and the records freed as they end, abort and restart; and a step run again from the same memory gives
+// the same memory (a rollback).
+void TestWaitsRunInTheBlock()
+{
+  BEGIN_TEST();
+  picojson::array teams{picojson::value(0.0), picojson::value(0.0), picojson::value(1.0), picojson::value(1.0)};
+  const std::optional<mode::Package> p = ReadWith("waits.mode.json", "teams", picojson::value(teams));
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(!ReadWith("waits.mode.json", "teams", picojson::value(picojson::array{picojson::value(30.0)})));
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 4, 100);
+  const auto kept = [&](u32 seat) { return g.Read32(BLOCK + mode::SeatWord(seat, 0)); };
+  const auto done = [&](u32 seat) { return g.Read32(BLOCK + mode::SeatWord(seat, 1)); };
+  const auto draw = [&] { return g.Read32(BLOCK + mode::GLOBALS); };
+  mode::Run(g, *p, BLOCK, MODULE);  // run 1: Plain waits 2 on every seat, Restart waits 3
+  CHECK(g.Read32(BLOCK + mode::WAITING) == 0xF && g.Read32(BLOCK + mode::WAITING + 8) == 1);
+  CHECK(g.Read32(BLOCK + mode::TeamWord(0, 0)) == 2 && g.Read32(BLOCK + mode::TeamWord(1, 0)) == 2);
+  mode::Run(g, *p, BLOCK, MODULE);  // run 2
+  CHECK(kept(3) == 0 && done(3) == 0);
+  const auto before = host.ram;
+  mode::Run(g, *p, BLOCK, MODULE);  // run 3: Plain goes on, its local kept; waits 1 again
+  for (u32 seat = 0; seat < 4; ++seat)
+    CHECK(kept(seat) == seat + 10 && done(seat) == 0);
+  CHECK(g.Read32(BLOCK + mode::WAITING) == 0xF && draw() == 0);
+  mode::Run(g, *p, BLOCK, MODULE);  // run 4: Plain ends, Restart draws
+  for (u32 seat = 0; seat < 4; ++seat)
+    CHECK(done(seat) == 1);
+  CHECK(g.Read32(BLOCK + mode::WAITING) == 0 && g.Read32(BLOCK + mode::WAITING + 8) == 0);
+  CHECK(draw() >= 1 && draw() <= 1000 && g.Read32(BLOCK + mode::TeamWord(1, 0)) == 8);
+  for (u32 i = 0; i < static_cast<u32>(modes::WAITS); ++i)
+    CHECK(g.Read32(BLOCK + mode::WAIT_RECORDS + i * mode::WAIT) == 0);
+  // runs 3 and 4 again from the memory before them: the same memory
+  const auto after = host.ram;
+  host.ram = before;
+  mode::Run(g, *p, BLOCK, MODULE);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(host.ram == after);
+  // seat 3 out at run 5 (broken down, at rest): Abort waits 3; racing again at run 6 drops it
+  const u32 m3 = MACHINES + 3 * game::MACHINE_SIZE;
+  g.Write32(m3, game::MACHINE_FLAG_BROKEN_DOWN);
+  g.Write32(m3 + game::MACHINE_SPEED, 0);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::WAITING + 4) == 8);
+  g.Write32(m3, 0);
+  g.Write32(m3 + game::MACHINE_SPEED, std::bit_cast<u32>(400.0f));
+  mode::Run(g, *p, BLOCK, MODULE);  // run 6: aborted
+  CHECK(g.Read32(BLOCK + mode::WAITING + 4) == 0 && done(3) == 1);
+  // Plain again on seat 3 (racing anew at run 6: its edge), out again at run 7 for good: Abort ends at run 10
+  g.Write32(m3, game::MACHINE_FLAG_BROKEN_DOWN);
+  g.Write32(m3 + game::MACHINE_SPEED, 0);
+  for (int run = 7; run <= 10; ++run)
+    mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(done(3) == 100 && g.Read32(BLOCK + mode::WAITING + 4) == 0);
+  CHECK(g.Read32(BLOCK + mode::END) == 0 && g.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
+
+  // Restart: a seat broken down during the wait starts it again; once none is, 3 steps more
+  TestHost host2;
+  ModData data2;
+  Guest g2(host2, data2);
+  FakeModeRace(g2, 4, 100);
+  mode::Run(g2, *p, BLOCK, MODULE);  // run 1: waits until run 4
+  const u32 m0 = MACHINES;
+  g2.Write32(m0, game::MACHINE_FLAG_BROKEN_DOWN);
+  mode::Run(g2, *p, BLOCK, MODULE);  // run 2: broken: until run 5
+  mode::Run(g2, *p, BLOCK, MODULE);  // run 3: still: until run 6
+  g2.Write32(m0, 0);
+  for (int run = 4; run <= 5; ++run)
+  {
+    mode::Run(g2, *p, BLOCK, MODULE);
+    CHECK(g2.Read32(BLOCK + mode::GLOBALS) == 0);
+  }
+  mode::Run(g2, *p, BLOCK, MODULE);  // run 6
+  CHECK(g2.Read32(BLOCK + mode::GLOBALS) != 0 && g2.Read32(BLOCK + mode::WAITING + 8) == 0);
+}
+
+// The language vector (subs, waits, teams, sets, vecs, random numbers, the library's every, at, gap_to and dist) on
+// thirty seats past its at(10s), with no mode error, and a step run again from the same memory to the same memory.
+void TestTheLanguageVectorRuns()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("language.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  p->seed = mode::Seed("a match", p->hash);
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 30, 540);
+  for (u32 i = 0; i < 30; ++i)
+  {
+    const u32 m = MACHINES + i * game::MACHINE_SIZE;
+    g.Write32(m + game::MACHINE_POSITION_X, std::bit_cast<u32>(10.0f * static_cast<float>(i)));
+    g.Write32(m + game::MACHINE_POSITION_Z, std::bit_cast<u32>(-3.0f));
+    g.Write32(PROGRESS + i * game::PROGRESS_SIZE + game::PROGRESS_LAP_LENGTH, std::bit_cast<u32>(3000.0f));
+    g.Write32(PROGRESS + i * game::PROGRESS_SIZE + game::PROGRESS_DISTANCE, std::bit_cast<u32>(100.0f * static_cast<float>(i)));
+  }
+  for (u32 steps = 540; steps <= 900; ++steps)
+  {
+    g.Write32(MODULE + game::RACE_CLOCK, steps);
+    if (steps == 700)
+    {
+      const auto before = host.ram;
+      mode::Run(g, *p, BLOCK, MODULE);
+      const auto after = host.ram;
+      host.ram = before;
+      mode::Run(g, *p, BLOCK, MODULE);
+      CHECK(host.ram == after);
+      continue;
+    }
+    mode::Run(g, *p, BLOCK, MODULE);
+  }
+  CHECK(g.Read32(BLOCK + mode::END) == 0 && g.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
+  CHECK(g.Read32(BLOCK + mode::OPS + 4) <= static_cast<u32>(modes::BUDGET));
+  CHECK(g.Read32(BLOCK + mode::GLOBALS) > 0);                  // draws: every(1s) at 600, 660, ...
+  CHECK(g.Read32(BLOCK + mode::GLOBALS + 8) == 1);             // marked: seat 0, by at(10s)'s mark
+  CHECK(g.Read32(BLOCK + mode::SeatWord(0, 0)) == 3);          // waited: Restart's 2, then 1 more
+  const float reach = std::bit_cast<float>(g.Read32(BLOCK + mode::GLOBALS + 20));
+  CHECK(std::isfinite(reach));
 }
