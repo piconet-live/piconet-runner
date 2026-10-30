@@ -301,33 +301,26 @@ class TheEasedFrame(MonitorsBuild):
         race = Race(self)
         race.frame(self.START)
         self.at_target(race, race.m)                                     # a hand-back's first frame: as drawn
-        keep = 1.0 - monitors_ease.ALPHA
         move = (20.0, 3.0, -50.0)                                        # sideways, up, and ahead
         m = posed(0.6, 0.3, [100.0 + move[0], 5.0 + move[1], -30.0 + move[2]])
         race.place(m)
         tp, tb = column(m, 3), column(m, 2)
-        error = [-x for x in move]
-        along = dot(error, tb)
-        side = [e - along * b for e, b in zip(error, tb)]                # ahead follows at once, the rest eases
-        last_d, last_b, last_turn = apart(side, (0, 0, 0)), math.pi, math.pi
+        last_b, last_turn = math.pi, math.pi
         for k in range(1, 91):
             race.frame(self.START + k)
             self.orthonormal(race)
             p, b, u = race.eased()
-            d = apart(p, tp)
+            self.assertLess(apart(p, tp), 1e-3)                          # the position follows at once
             gone_b = angle(b, tb)
             rows = race.turn()                                           # the whole turn still to go
             off = math.sqrt(sum(apart(rows[i], m[i][:3]) ** 2 for i in range(3)))   # |E - T| = 2.83 sin(a / 2)
             gone = 2 * math.asin(min(1.0, off / 8 ** 0.5))
             if k == 1:
-                self.assertAlmostEqual(d, keep * last_d, delta=1e-3)
                 self.assertGreater(gone_b, 0.4)                          # eased, not snapped
-            self.assertLessEqual(d, last_d + 1e-4)
             self.assertLessEqual(gone_b, last_b + 1e-5)
             self.assertLessEqual(gone, last_turn + 1e-5)
             self.assertGreaterEqual(b[2] * tb[0] - b[0] * tb[2], -1e-5)  # turning toward it, never past it
-            last_d, last_b, last_turn = d, gone_b, gone
-        self.assertLess(last_d, 0.05)                                    # 1.5 s: 7.5 time constants
+            last_b, last_turn = gone_b, gone
         self.assertLess(last_b, 0.01)
         self.assertLess(last_turn, 0.01)
 

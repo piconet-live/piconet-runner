@@ -1,9 +1,11 @@
 """The hand-back monitors' frame, eased (monitors.py's part: fixed rigidly to the car's movement, the frame looks
-stiff). The monitors stay placed in front of the followed racer, but
-from a frame that follows the racer's drawn matrix (block +0x14C) softly instead of being that matrix: an eased
-position, back vector (the matrix's third column: forward negated) and up vector (its second column), kept in the
+stiff). The monitors stay placed in front of the followed racer, at the racer's drawn position (block +0x14C's
+matrix), but
+from a direction that follows that matrix softly instead of being it: an eased
+back vector (the matrix's third column: forward negated) and up vector (its second column), kept in the
 monitors' state (memmap.MONITORS +EASED) and moved toward the drawn matrix's every drawn frame by the exponential
-step ALPHA = 1 - exp(-1 / (60 TAU)) (TAU seconds at 60 drawn frames a second).
+step ALPHA = 1 - exp(-1 / (60 TAU)) (TAU seconds at 60 drawn frames a second). TAU was 0.2 s with the position eased
+too: at 1000 km/h on a loop the monitors fell well behind the machine's turn.
 
 - The back and up vectors are each eased toward the matrix's, then made unit again and square to each other: the
   right vector is up x back made unit, and up is back x right; so the machine's roll and pitch jitter (banking,
@@ -13,14 +15,12 @@ step ALPHA = 1 - exp(-1 / (60 TAU)) (TAU seconds at 60 drawn frames a second).
   half turn would otherwise be a resting point of the easing), both are put back to the matrix's and the frame is
   built again from them.
   A matrix that fails the same tests (not a number) is used as it is, as before the easing.
-- The position is eased except along the machine's own forward (the matrix's back column): that part follows at once,
-  or at race speed the monitors, 40 units ahead, would fall behind the camera (0.2 s at 1000 km/h is about 55 units).
-  What is eased is the rest: a side hit, a bump, a drift's sideways slide.
+- The position is the machine's own, every drawn frame.
 - The frame snaps to the matrix's (no easing): on the first drawn frame of a hand-back (monitors.py clears +FOLLOW
   for a new one), when the followed racer is not the one the frame was eased for (a viewport or spectate change),
   when the step word (control block +124) is not 0 to GAP steps on from the last drawn frame's (a scrub, a restore,
-  frames not drawn in between), and when the eased position is SNAP units or more from the machine's (a respawn, a
-  fall-out), or not a number. A rollback's correction (smooth.py moves the drawn matrix through it) is eased.
+  frames not drawn in between), and when the last position is SNAP units or more from the machine's (a respawn, a
+  fall-out), or not a number. A rollback's correction (smooth.py moves the drawn matrix through it) is followed.
 
 Picture only: the state is in the data window, no step reads it, no random value, no rule flag. The record's turn
 (+0x48, rows: right, up, back, 0) and the points (position + a forward + b up) come from the eased frame.
@@ -31,7 +31,7 @@ import math, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import memmap
 
-TAU = 0.2                                # seconds: the time constant of the position's and the turn's easing
+TAU = 0.08                               # seconds: the time constant of the turn's easing
 ALPHA = 1.0 - math.exp(-1.0 / (60.0 * TAU))   # the share of the way eased in a drawn frame (60 a second)
 SNAP = 300.0                             # units: a machine this far from the eased frame snaps it (a respawn)
 GAP = 30                                 # steps: a drawn frame further from the last one snaps
@@ -90,8 +90,6 @@ def asm():
                    for dst, src in ((BACK, TB), (UP, TU)) for i, s in enumerate(src))
     error = "".join(f"    lfs {i}, {POS + 4 * i}(27)\n    lfs 3, {s:#x}(24)\n    fsubs {i}, {i}, 3\n"
                     for i, s in enumerate(TP))
-    place = "".join(f"    lfs 1, {s:#x}(24)\n    fmadds {i + 6}, {i + 6}, 13, 1\n"
-                    f"    stfs {i + 6}, {POS + 4 * i}(27)\n" for i, s in enumerate(TP))
     turn = "".join(f"    stfs {6 + i}, {0x48 + 16 * i}(28)\n    stfs {3 + i}, {0x4C + 16 * i}(28)\n"
                    f"    stfs {i}, {0x50 + 16 * i}(28)\n    stfs 9, {0x54 + 16 * i}(28)\n" for i in range(3))
     raw = "".join(f"    lwz 0, {0x14C + 16 * i + 4 * j:#x}(24)\n    stw 0, {0x48 + 16 * i + 4 * j}(28)\n"
@@ -118,14 +116,7 @@ mn_snap:
     stw 22, {FOLLOW}(27)
 """ + copy(POS, TP) + """    b mn_reset
 mn_ease:
-""" + "".join(f"    lfs {3 + i}, {s:#x}(24)\n" for i, s in enumerate(TB)) + f"""    fmuls 9, 0, 3
-    fmadds 9, 1, 4, 9
-    fmadds 9, 2, 5, 9
-    fnmsubs 6, 9, 3, 0
-    fnmsubs 7, 9, 4, 1
-    fnmsubs 8, 9, 5, 2
-    lfs 13, {K:#x}(1)
-""" + place + f"    lfs 3, {K + 20:#x}(1)\n" + turned + ease + """    b mn_frame
+""" + copy(POS, TP) + f"    lfs 13, {K:#x}(1)\n    lfs 3, {K + 20:#x}(1)\n" + turned + ease + """    b mn_frame
 mn_reset:
     cmpwi 21, 0
     bne mn_raw

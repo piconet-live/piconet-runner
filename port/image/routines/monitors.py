@@ -16,7 +16,7 @@ step within SAME steps of the last one is the same hand-back (the sounds and the
 
 Where (Starter, fn_1_1049E0, and fn_1_104730, with the start's first layout always; .rodata 0x78D0): from the
 followed racer's (fn_1_6B48) drawn matrix (block +0x14C, which smooth.py moves through a rollback's correction),
-eased every drawn frame (monitors_ease.py: the frame follows the machine softly, about 0.2 s behind, and snaps where
+with its direction eased every drawn frame (monitors_ease.py: it follows the machine softly, about 0.08 s behind, and snaps where
 the picture is not continuous): forward f (the eased frame's back vector, negated), up u (its up), the point p (its
 position); the key points p + 1040f + 9.5u, p + 40f + 9.5u, p + 140f + 109.5u. Between the start's thresholds 420, 360, 300,
 40, 0: from the first key point to the second with a spin (yaw 600 a step, left to 0 at 360); a tilt from -20 to
