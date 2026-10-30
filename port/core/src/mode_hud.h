@@ -52,7 +52,10 @@ static_assert(SEATS_AT + 30 * SEAT_DISPLAY <= DISPLAY + 0x1000);
 constexpr u32 WINDOW_FLAGS = 0, WINDOW_DIGIT = 4, WINDOW_WRONG = 0xC, WINDOW_LOOKS = 0x10, WINDOW_TINTS = 0x30;
 constexpr u8 COLOURED = modes::LOOK_COUNT;
 static_assert(WINDOW_TINTS + 30 * 4 <= 0x100);
-constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2;
+constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4;
+// +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
+constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
+static_assert(WINDOW_TINTS + 30 * 4 <= WINDOW_TITLE && WINDOW_TITLE + WINDOW_TITLE_SIZE <= 0x100);
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
 // modes::PART_*: the drawers fn_1_CF5B0 (TIMER), fn_1_CDC8C (DISTANCE, SPEED_GAUGE, OBJECTS) and fn_1_CEB38 (the
@@ -85,6 +88,8 @@ u32 WindowFlags(const Package& p);
 // Whether a package's code uses a word that shows a story part (the picture group 0xBA must then be loaded): any
 // show of a part other than TIMER, or danger_zone (its digit and warning).
 bool NeedsStoryPictures(const std::vector<u8>& code);
+// Whether the package's code uses show_clock: the timed rule from the race's start, with the game's count off.
+bool UsesClock(const Package& p);
 
 // What the HUD pass asks of the race, read from the block for one viewer (`viewed`: the racer the picture follows;
 // `own`: the seat whose own look applies, or none): pure, for the tests.

@@ -139,9 +139,15 @@ bool NeedsStoryPictures(const std::vector<u8>& code)
   return Uses(code, ACTION_SHOW, true) || Uses(code, ACTION_DANGERZONE, false);
 }
 
+bool UsesClock(const Package& p)
+{
+  return Uses(p.code, ACTION_SHOWCLOCK, false);
+}
+
 u32 WindowFlags(const Package& p)
 {
-  return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (Uses(p.code, ACTION_AWARD, false) ? POINTS_PAGE : 0);
+  return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (Uses(p.code, ACTION_AWARD, false) ? POINTS_PAGE : 0) |
+         (p.results_points ? POINTS_ONLY : 0);
 }
 
 Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)

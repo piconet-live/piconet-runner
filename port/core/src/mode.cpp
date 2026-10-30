@@ -1152,6 +1152,13 @@ private:
       a.seat = Pop();
     // a display word writes the block's display page at once, as a variable is written: no game field, nothing a
     // read of the step sees, so it takes no place in the queue (a display on every seat each step fits)
+    if (a.id == ACTION_SHOWCLOCK)
+    {
+      // (its one cell is the number: `seat` holds it) the clock's word, never 0: the game's zero paths never run
+      m_g.Plain().Write16(m_module + R_BASE + R_TIMER,
+                          static_cast<u16>(std::clamp<std::int64_t>(static_cast<s32>(a.seat), 1, 65535)));
+      return;
+    }
     if (hud::IsDisplay(a.id))
     {
       if (a.seat < m_count)
@@ -1621,6 +1628,17 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         if (!finished)
           Retired(g, machine, flags);
         break;
+      case ACTION_BREAKDOWN:
+        // fn_1_24F10's end, as a last hit (0x24FB0-0x24FEC): no second breakdown, no wait on a finished machine
+        if (!finished && g.Read16(machine + M_RESTORING) == 0)
+        {
+          if (!(flags & (F_FINISHED | game::MACHINE_FLAG_BROKEN_DOWN)))
+            g.Write8(machine + M_KO_WAIT, 60);
+          g.Write32(machine + game::MACHINE_FLAGS, flags | game::MACHINE_FLAG_BROKEN_DOWN);
+          g.Write32(machine + game::MACHINE_ENERGY, 0);
+          g.Write32(machine + M_BASE_SPEED, 0);
+        }
+        break;
       case ACTION_EXPLODE:
         if (!finished && g.Read16(machine + M_RESTORING) == 0 && !(g.Read32(machine + M_CONTACT) & 0x10) &&
             !(flags & F_DESTROYED))
@@ -1851,15 +1869,18 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
   if (p.restore.value_or(false))
     g.Write32(block + RESPAWN, all);
   g.Write8(module + STORY_LEVEL, 0);   // (the CPU modes' difficulty: never another game's story state)
-  g.Write32(block + CLOCK, p.clock_limit);   // (the image's timer site reads it)
-  if (p.clock_limit != 0)
+  // (the image's timer site reads CLOCK; show_clock's value is past any race clock, so the tick site stays quiet)
+  const bool clock_shown = hud::UsesClock(p);
+  g.Write32(block + CLOCK, clock_shown ? 0x7FFFFFFFu : p.clock_limit);
+  g.Write32(block + WAITS, p.race_waits ? 1 : 0);
+  if (p.clock_limit != 0 || clock_shown)
   {
-    const u32 r = module + R_BASE;
+    const u32 r = module + R_BASE, shown = clock_shown ? 65535 : std::min<u32>(p.clock_limit, 65535);
     g.Write32(r, g.Read32(r) | RULE_TIMED);
-    g.Write16(r + R_TIME_LIMIT, static_cast<u16>(std::min<u32>(p.clock_limit, 65535)));
+    g.Write16(r + R_TIME_LIMIT, static_cast<u16>(shown));
     for (u32 at = R_BONUS; at < R_BONUS_END; ++at)
       g.Write8(r + at, 0);
-    g.Write16(r + R_TIMER, static_cast<u16>(std::min<u32>(p.clock_limit, 65535)));
+    g.Write16(r + R_TIMER, static_cast<u16>(shown));
   }
   if (p.rolling)
   {

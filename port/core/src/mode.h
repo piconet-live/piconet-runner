@@ -51,6 +51,7 @@ constexpr u32 PEDALS = 1, BOOST_OFF = 2, HELD = 4, BOOST = 8, EXPLODE = 16, HAND
 // The engine page (the race side, wave 2A). The image reads CLOCK (the timer site), NC_ANY and NC (the pair gate),
 // writes TOUCH (the pair gate, a contact answered), reads MOVES (site L) and ROLL_SAVE (the stand-in routine).
 constexpr u32 ENGINE = 5 * PAGE;
+constexpr u32 WAITS = ENGINE + 0x0;       // race_waits: not 0, the race-over test counts every seat
 constexpr u32 CLOCK = ENGINE + 0x4;       // clock_limit in steps (0: none)
 constexpr u32 FLAGS = ENGINE + 0x8;       // 1 race.started at the last run; 2 rolling start written
 constexpr u32 NC_ANY = ENGINE + 0xC;      // the OR of the no-contact rows: 0, the pair gate takes the stock path
@@ -165,6 +166,9 @@ struct Package
   std::optional<bool> restore;      // restore on / off; unstated, no restore (the lobby's rule never reaches a mode's race)
   bool contact_off = false;
   u32 clock_limit = 0;              // steps, 0 none
+  bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
+  bool results_points = false;      // `results points`: the first results page passes by itself
+  const char* results_title = nullptr;  // `results_title NAME`: the fixed string for VS TOTAL RANKING
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
   bool cpus_allowed = false;        // `cpus allowed`: a player gone is driven by the AI; left out, their seat retires

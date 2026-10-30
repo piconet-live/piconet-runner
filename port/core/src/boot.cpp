@@ -282,6 +282,12 @@ void Prepare(ModData& data)
     data.Write(layout::MODES + 4, 0, 4);
     data.Write(layout::MODE_HUD, m->game_mode ? mode::hud::WindowFlags(*m->game_mode) : 0, 4);
     data.Write(layout::MODE_HUD + 8, 0, 4);  // (the story's pictures not loaded yet: sites_modehud.py mode_story)
+    {
+      std::array<u8, mode::hud::WINDOW_TITLE_SIZE> title{};
+      if (m->game_mode && m->game_mode->results_title)
+        std::copy_n(m->game_mode->results_title, std::strlen(m->game_mode->results_title), title.begin());
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TITLE, title.data(), title.size());
+    }
   }
   Notice("fzgx: native form: image {} ({} bytes), {} patched words, mode {}", b->image_sha1.substr(0, 8), image.size(),
          b->patches.size(), m ? m->mode : 0);

@@ -22,7 +22,8 @@ every player seat's finish counts); with it, as above.
 
 With a game mode (memmap.MODES +4, the mode's block: sites_mode.py) whose block's end word (memmap.MODE_END) is not
 0, the race is over at once: the mode ended it (a fault, D6 of the modes' design: "mode error"), with the results as
-they stand. The word is the block's, so a rollback puts it back with the rest; nothing is latched. A mode whose block
+they stand. A block whose race_waits word (memmap.MODE_WAITS) is not 0 has every seat counted as a player seat in the flow's
+test, so the last player out ends nothing: the mode's own end, or every machine finished or out. The word is the block's, so a rollback puts it back with the rest; nothing is latched. A mode whose block
 found no room in the heap (MODES +0 is 3) is a mode error from the start: never a race on the stock rules.
 
 What it reads, at a step boundary, and nothing else:
@@ -130,7 +131,16 @@ def clause(bss, prefix, yes, no, behind=None):
     lis 7, {memmap.hi(PLAYERS)}
     lwz 8, {memmap.lo(PLAYERS)}(7)
     cmpwi 8, 0
-    bne {p}f_seats
+    bne {p}f_waits
+    li 8, -1
+{p}f_waits:
+    lis 9, {memmap.hi(memmap.MODES)}
+    lwz 9, {memmap.lo(memmap.MODES) + 4}(9)
+    cmplwi 9, 0
+    beq {p}f_seats
+    lwz 9, {memmap.MODE_WAITS}(9)
+    cmpwi 9, 0
+    beq {p}f_seats
     li 8, -1
 {p}f_seats:
     li 12, 0

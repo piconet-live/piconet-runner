@@ -12,6 +12,9 @@ the game does. Native form only. sites.py calls add().
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
 
 | `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
+| `mode_only` | fn_1_14A328 0x14A368, the first results page's A (`extrwi. r0, r0, 1, 23`; its gate 0x14A358 stays) | the page waits for A | under `results points` as pressed |
+| `mode_title` | fn_1_1461C8 0x146304, VS TOTAL RANKING's string (`addi r3, r21, 0x404`) | the game's | the window's title, when there is one |
+| `tag_cell`, `tag_cpu` | fn_1_147188 0x1473D8 (`lwz r7, 0x4c(r30)`), 0x14740C (`lis r4, 1`); with follow.py's 0x147390 | row's tag: P1 to P4 by racer, CPU for the others | the local seat's row P1; a row with a name in memmap.NAMES no tag (as a player row, to 0x147494). Every race; drawing only |
 | `mode_beep` | fn_1_3A330 0x3A448, where the timed mode's countdown ends on every path (`lwz r0, 0x30(r29)`) | — | under clock_limit (whose timer the game no longer counts) the countdown's own tick: 0xA9092700 when the time left is a whole second below ten, including 0, as the code it skips does. Only a sound: the mute of a step run again (mute.py) as for the game's |
 
 Registers: each routine replaces a call (`mode_spare`, `mode_look`), so the volatile registers are free there; or a
@@ -33,6 +36,10 @@ GAP_POPUP = 0x15E330                          # fn_1_15E330(port, the time, heap
 PLAY_SOUND = 0xA2D84                          # fn_1_A2D84: a sound, as the game's voices start
 WRONG_WAY_VOICE, TICK = (-0x56FA, 0x1800), (-0x56F7, 0x2700)  # 0xA9061800 (fn_1_A4BC8's), 0xA9092700 (fn_1_3A330's)
 WRONG_SITE, WRONG_KNOWN, WRONG_SIGN = 0xCD560, 0x8003010C, 0xCD578  # fn_1_CD51C: lwz r0, 0x10c(r3); the sign's making
+ONLY, ONLY_KNOWN = 0x14A368, 0x5400C7FF        # fn_1_14A328: extrwi. r0, r0, 1, 23
+TITLE, TITLE_KNOWN = 0x146304, 0x38750404      # fn_1_1461C8: addi r3, r21, 0x404
+TAG_CELL, TAG_CELL_KNOWN = 0x1473D8, 0x80FE004C  # fn_1_147188: lwz r7, 0x4c(r30)
+TAG_CPU, TAG_CPU_KNOWN, TAG_DONE = 0x14740C, 0x3C800001, 0x147494  # lis r4, 1; where a player row's tag ends
 BEEP_SITE, BEEP_KNOWN = 0x3A448, 0x801D0030   # fn_1_3A330: lwz r0, 0x30(r29), where the timer's code ends on every path
 HUD_ENTRIES, BANNER_HEAP = 0x8FDA8, 0x25B88   # .bss: port 0's HUD entry (+0 the banners raised); the banners' heap word
 ONCE_BITS = {FINAL_LAP: 0x2, BOOST_POWER: 0x1, TIME_BONUS: 0x0}
@@ -198,6 +205,66 @@ mlk_tint:
 """)
     patch(site, word, 0, "mode_look")
     middle.append((site, ["r11", "r12", "cr0", "lr"], "mode_look"))
+
+    # the results row's tag: only actual CPUs say CPU, the local seat's row P1 (follow.py's 0x147390 picks the branch)
+    site = TEXT + TAG_CELL
+    word = stock(site, TAG_CELL_KNOWN)
+    r.add("tag_cell", test + """    beq tcl_stock
+    li 7, 0
+    @b """ + f"""{site + 4:#x}
+tcl_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "tag_cell")
+    middle.append((site, ["r12", "cr0"], "tag_cell"))
+    site = TEXT + TAG_CPU
+    word = stock(site, TAG_CPU_KNOWN)
+    r.add("tag_cpu", test + """    beq tcp_stock
+""" + la(12, memmap.NAMES) + f"""    lwz 0, 0x4C(30)
+    slwi 0, 0, 5
+    lbzx 0, 12, 0
+    cmpwi 0, 0
+    beq tcp_stock
+    @b {TEXT + TAG_DONE:#x}
+tcp_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "tag_cpu")
+    middle.append((site, ["r0", "r12", "cr0"], "tag_cpu"))
+
+    # `results points`: the first page's A as pressed (r0 and cr0 are the test's)
+    site = TEXT + ONLY
+    word = stock(site, ONLY_KNOWN)
+    r.add("mode_only", test + """    beq mon_stock
+""" + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {memmap.MODE_POINTS_ONLY}
+    beq mon_stock
+    li 0, 1
+    cmpwi 0, 0
+    @b {site + 4:#x}
+mon_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_only")
+    middle.append((site, ["r12", "cr0"], "mode_only"))
+
+    # `results_title NAME`: the window's string for VS TOTAL RANKING
+    site = TEXT + TITLE
+    word = stock(site, TITLE_KNOWN)
+    r.add("mode_title", test + """    beq mtt_stock
+""" + la(12, memmap.MODE_HUD_TITLE) + f"""    lbz 12, 0(12)
+    cmpwi 12, 0
+    beq mtt_stock
+""" + la(3, memmap.MODE_HUD_TITLE) + f"""    @b {site + 4:#x}
+mtt_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_title")
+    middle.append((site, ["r12", "cr0"], "mode_title"))
 
     # the results' points page: rule 0x04000000 read as clear while the core says the mode awards points
     site = TEXT + POINTS
@@ -389,6 +456,11 @@ mbn_5:
     addi 3, 3, {WRONG_WAY_VOICE[1]:#x}
     @bl {FN(PLAY_SOUND)}
     b mbn_out
+mbn_6:
+    lis 3, {TICK[0]}
+    addi 3, 3, {TICK[1]:#x}
+    @bl {FN(PLAY_SOUND)}
+    b mbn_out
 """
     r.add("mode_banners", la(12, memmap.MODES) + f"""    lwz 12, 4(12)
     cmplwi 12, 0
@@ -401,7 +473,7 @@ mbn_5:
     lbz 0, {SEATS_AT + BANNER:#x}(12)
     cmpwi 0, 0
     beqlr
-    cmpwi 0, 5
+    cmpwi 0, 6
     bgtlr
     stwu 1, -0x20(1)
     mflr 3
@@ -416,7 +488,9 @@ mbn_5:
     beq mbn_3
     cmpwi 0, 4
     beq mbn_4
-    b mbn_5
+    cmpwi 0, 5
+    beq mbn_5
+    b mbn_6
 """ + raise_ + """mbn_out:
     lwz 30, 0x18(1)
     lwz 31, 0x1C(1)

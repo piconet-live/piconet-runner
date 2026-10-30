@@ -59,6 +59,7 @@ MODE_SEATS = 0
 MODE_END = MODE_SEATS + 30 * MODE_SEAT   # the block's word: not 0, the mode ended the race (the step after which, plus 1)
 # the engine page's words the image reads and writes (port/core/src/mode.h: the same offsets)
 MODE_ENGINE = 0x5000
+MODE_WAITS = MODE_ENGINE                 # race_waits: not 0, the race-over test counts every seat (raceend.py)
 MODE_NC_ANY = MODE_ENGINE + 0xC          # the OR of the no-contact rows: 0, the pair gate takes the stock path
 MODE_NC = MODE_ENGINE + 0x10             # a seat's no-contact row (bit 0x80000000 >> j)
 MODE_TOUCH = MODE_ENGINE + 0x88          # a seat's contact answers this step, the same order (the pair gate ORs them)
@@ -279,5 +280,6 @@ assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE
 # from the mode's block, the image reads them in the drawing and at the race's set-up (the flags). Not read by a step.
 MODE_HUD = _facts.MODE_HUD
 MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
-MODE_POINTS_PAGE, MODE_STORY_PICTURES = 1, 2
+MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY = 1, 2, 4
+MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE

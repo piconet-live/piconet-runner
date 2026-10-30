@@ -203,6 +203,20 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.restore = id == modes::SETUP_RESTOREON;
         }
+        else if (id == modes::SETUP_RACEWAITSEVERYONE)
+        {
+          p.race_waits = true;
+        }
+        else if (id == modes::SETUP_RESULTSPOINTS)
+        {
+          p.results_points = true;
+        }
+        else if (id >= modes::SETUP_RESULTSTITLEKNOCKOUT && id <= modes::SETUP_RESULTSTITLEPOINTS)
+        {
+          // the fixed list (modes.toml's order): font 0x1D draws A to Z and the space
+          static constexpr const char* TITLES[] = {"KNOCKOUT", "LIVES", "OVERDRIVE", "TEAMS", "SURVIVORS", "POINTS"};
+          p.results_title = TITLES[id - modes::SETUP_RESULTSTITLEKNOCKOUT];
+        }
         else if (id == modes::SETUP_CONTACTOFF)
         {
           p.contact_off = true;
