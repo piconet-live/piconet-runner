@@ -15,6 +15,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_only` | fn_1_14A328 0x14A368, the first results page's A (`extrwi. r0, r0, 1, 23`; its gate 0x14A358 stays) | the page waits for A | under `results points` as pressed |
 | `mode_title` | fn_1_1461C8 0x146304, VS TOTAL RANKING's string (`addi r3, r21, 0x404`) | the game's | the window's title, when there is one |
 | `tag_cell`, `tag_cpu` | fn_1_147188 0x1473D8 (`lwz r7, 0x4c(r30)`), 0x14740C (`lis r4, 1`); with follow.py's 0x147390 | row's tag: P1 to P4 by racer, CPU for the others | the local seat's row P1; a row with a name in memmap.NAMES no tag (as a player row, to 0x147494). Every race; drawing only |
+| `mode_clock_at`, `mode_clock_label` | fn_1_CF5B0's ten calls of fn_1_496FC (the digits' place, f2 its y) and 0xCF9EC (the TIME label's y, `stfs f0, 0x18(r1)`) | at the top, on the rank | in a race with a mode, below the rank: y 120 and 151 (the rank's own stay). Stock races never draw this clock |
 | `mode_beep` | fn_1_3A330 0x3A448, where the timed mode's countdown ends on every path (`lwz r0, 0x30(r29)`) | — | under clock_limit (whose timer the game no longer counts) the countdown's own tick: 0xA9092700 when the time left is a whole second below ten, including 0, as the code it skips does. Only a sound: the mute of a step run again (mute.py) as for the game's |
 
 Registers: each routine replaces a call (`mode_spare`, `mode_look`), so the volatile registers are free there; or a
@@ -40,6 +41,9 @@ ONLY, ONLY_KNOWN = 0x14A368, 0x5400C7FF        # fn_1_14A328: extrwi. r0, r0, 1,
 TITLE, TITLE_KNOWN = 0x146304, 0x38750404      # fn_1_1461C8: addi r3, r21, 0x404
 TAG_CELL, TAG_CELL_KNOWN = 0x1473D8, 0x80FE004C  # fn_1_147188: lwz r7, 0x4c(r30)
 TAG_CPU, TAG_CPU_KNOWN, TAG_DONE = 0x14740C, 0x3C800001, 0x147494  # lis r4, 1; where a player row's tag ends
+CLOCK_PLACES = [0xCF6AC, 0xCF6E8, 0xCF73C, 0xCF784, 0xCF7C0, 0xCF854, 0xCF890, 0xCF8E4, 0xCF92C, 0xCF968]  # fn_1_CF5B0: bl fn_1_496FC
+TEXT_AT, CLOCK_LABEL, CLOCK_LABEL_KNOWN = 0x496FC, 0xCF9EC, 0xD0010018  # fn_1_496FC; stfs f0, 0x18(r1)
+CLOCK_Y, CLOCK_LABEL_Y = 0x42F00000, 0x43170000   # 120.0, 151.0: below the rank (its digits at y 49ish, "/30" at 80)
 BEEP_SITE, BEEP_KNOWN = 0x3A448, 0x801D0030   # fn_1_3A330: lwz r0, 0x30(r29), where the timer's code ends on every path
 HUD_ENTRIES, BANNER_HEAP = 0x8FDA8, 0x25B88   # .bss: port 0's HUD entry (+0 the banners raised); the banners' heap word
 ONCE_BITS = {FINAL_LAP: 0x2, BOOST_POWER: 0x1, TIME_BONUS: 0x0}
@@ -205,6 +209,44 @@ mlk_tint:
 """)
     patch(site, word, 0, "mode_look")
     middle.append((site, ["r11", "r12", "cr0", "lr"], "mode_look"))
+
+    # the clock below the rank: the digits' y at each of the drawer's place calls, the label's y (nothing a step reads)
+    r.add("mode_clock_at", test + """    beq mca_stock
+""" + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq mca_stock
+    lis 0, {CLOCK_Y >> 16:#x}
+    stwu 1, -0x10(1)
+    stw 0, 0x8(1)
+    lfs 2, 0x8(1)
+    addi 1, 1, 0x10
+mca_stock:
+    @b {FN(TEXT_AT)}
+""")
+    for at in CLOCK_PLACES:
+        site = TEXT + at
+        word = stock(site, 0x48000000 | ((TEXT_AT - at) & 0x03FFFFFC) | 1)
+        name = f"mode_clock_{at:x}"
+        r.add(name, f"""    bl mode_clock_at
+    @b {site + 4:#x}
+""")
+        patch(site, word, 0, name)
+        middle.append((site, ["lr"], name))
+    site = TEXT + CLOCK_LABEL
+    word = stock(site, CLOCK_LABEL_KNOWN)
+    r.add("mode_clock_label", test + """    beq mcl_stock
+""" + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq mcl_stock
+    lis 12, {CLOCK_LABEL_Y >> 16:#x}
+    stw 12, 0x18(1)
+    @b {site + 4:#x}
+mcl_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_clock_label")
+    middle.append((site, ["r12", "cr0"], "mode_clock_label"))
 
     # the results row's tag: only actual CPUs say CPU, the local seat's row P1 (follow.py's 0x147390 picks the branch)
     site = TEXT + TAG_CELL

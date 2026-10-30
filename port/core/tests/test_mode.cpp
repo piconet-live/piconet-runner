@@ -19,6 +19,7 @@
 #include "harness.h"
 #include "stat_packs.h"
 #include "mode.h"
+#include "mode_hud.h"
 #include "parts.h"
 #include "fzgx/practice.h"
 #include "mode_board.h"
