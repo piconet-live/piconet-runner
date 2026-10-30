@@ -284,8 +284,8 @@ void Prepare(ModData& data)
     data.Write(layout::MODE_HUD + 8, 0, 4);  // (the story's pictures not loaded yet: sites_modehud.py mode_story)
     {
       std::array<u8, mode::hud::WINDOW_TITLE_SIZE> title{};
-      if (m->game_mode && m->game_mode->results_title)
-        std::copy_n(m->game_mode->results_title, std::strlen(m->game_mode->results_title), title.begin());
+      if (m->game_mode)
+        std::copy_n(m->game_mode->results_title.begin(), m->game_mode->results_title.size(), title.begin());
       data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TITLE, title.data(), title.size());
     }
   }

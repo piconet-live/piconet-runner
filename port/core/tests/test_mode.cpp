@@ -156,7 +156,7 @@ void TestEveryWordRuns()
   ModData data;
   Guest g(host, data);
   FakeModeRace(g, 30, 3000);
-  const auto before = host.ram;  // (its eliminate changes the machines too: the whole memory)
+  const auto before = host.ram;  // (its retire changes the machines too: the whole memory)
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(g.Read32(BLOCK + mode::END) == 0 && g.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
   CHECK(g.Read32(BLOCK + mode::OPS) > 0 && g.Read32(BLOCK + mode::OPS) <= static_cast<u32>(modes::BUDGET));
@@ -1108,16 +1108,37 @@ void TestTheCutRaceWords()
   if (!p)
     return;
   CHECK(p->race_waits && p->results_points);
-  CHECK(p->results_title != nullptr && std::string(p->results_title) == "KNOCKOUT");
+  CHECK(p->results_title == "KNOCKOUT");
   CHECK(mode::hud::UsesClock(*p));
   CHECK((mode::hud::WindowFlags(*p) & mode::hud::POINTS_ONLY) != 0);
   std::optional<mode::Package> old = mode::Read(Vector("overdrive.mode.json"), &why);
-  CHECK(old && !old->race_waits && !old->results_points && !old->results_title && !mode::hud::UsesClock(*old));
+  CHECK(old && !old->race_waits && !old->results_points && old->results_title.empty() && !mode::hud::UsesClock(*old));
 }
 
-// A mode without `cpus allowed`: a player seat with the "AI drives" record retires at that step (flag set, its Restore
+// The on/off setup words as a switch parameter gives them, and the title with its space.
+void TestTheOnOffWordsByParameter()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("switches.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->boost_off && p->contact_off && p->restore == true && p->cpus_allowed);
+  CHECK(p->mine_regen == static_cast<u32>(modes::SETUP_MINEREGEN_ON));
+  CHECK(p->results_title == "A B");
+  picojson::array flipped = {picojson::value(1.0), picojson::value(0.0)};
+  std::optional<mode::Package> q = ReadWith("switches.mode.json", "params", picojson::value(flipped));
+  CHECK(q.has_value());
+  if (!q)
+    return;
+  CHECK(!q->boost_off && !q->contact_off && q->restore == false && !q->cpus_allowed);
+  CHECK(q->mine_regen == 0u);
+}
+
+// A mode without `cpus on`: a player seat with the "AI drives" record retires at that step (flag set, its Restore
 // cleared), once, a seat that has driven or one never ready from the start; a finished seat keeps its finish; an autopilot's
-// marked record and all zeros and a seat that is no player's stay as they are; `cpus allowed` and `solo` never retire anyone;
+// marked record and all zeros and a seat that is no player's stay as they are; `cpus on` and `solo` never retire anyone;
 // the same memory from a run again.
 void TestAGonePlayerRetires()
 {

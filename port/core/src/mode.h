@@ -168,10 +168,10 @@ struct Package
   u32 clock_limit = 0;              // steps, 0 none
   bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
   bool results_points = false;      // `results points`: the first results page passes by itself
-  const char* results_title = nullptr;  // `results_title NAME`: the fixed string for VS TOTAL RANKING
+  std::string results_title;        // `results_title "TEXT"`: the string for VS TOTAL RANKING; empty, the game's
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
-  bool cpus_allowed = false;        // `cpus allowed`: a player gone is driven by the AI; left out, their seat retires
+  bool cpus_allowed = false;        // `cpus on`: a player gone is driven by the AI; left out, their seat retires
   bool solo = false, pause = false, save_state = false;
   u32 rewind = 0;                   // the rewind's reach in steps, 0 none
   u32 resume_countdown = 0;         // steps

@@ -1142,7 +1142,7 @@ private:
 
   void Queue(u32 id)
   {
-    if (id >= ACTION_COUNT)
+    if (id >= ACTION_COUNT || ActionArguments(static_cast<u8>(id)) < 0)  // (a word taken out leaves its id empty)
       return Fail(FAULT_CODE);
     Action a{static_cast<u8>(id), NONE, {}};
     const u32 cells = ActionCells(id);
@@ -1622,7 +1622,6 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         g.Write32(record + 12, std::bit_cast<u32>(v + 0.0f));  // (-0 as 0)
         break;
       }
-      case ACTION_ELIMINATE:
       case ACTION_RETIRE:
         mask(RESPAWN, seat, false);
         if (!finished)
@@ -1934,7 +1933,7 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
 }
 }  // namespace
 
-// A mode without `cpus allowed`: no CPU ever drives (the owner, 2026-10-30). The relay closes the seat of a player gone
+// A mode without `cpus on`: no CPU ever drives (the owner, 2026-10-30). The relay closes the seat of a player gone
 // or never ready with the "AI drives" record, in every game and every replay alike, so this reads the step's record and
 // its result stands under a rollback with the rest of the block: such a seat retires at that step, one never ready from
 // the start. All zeros (the relay's rows before a seat's first input, and a pad left alone) is nobody's verdict. A test

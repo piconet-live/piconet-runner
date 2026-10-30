@@ -57,6 +57,7 @@ static_assert(WINDOW_TINTS + 30 * 4 <= 0x100);
 constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
+static_assert(modes::RESULTS_TITLE + 1 <= WINDOW_TITLE_SIZE);  // (with its NUL: the api's limit fits the window)
 // +0xC8: not 0, the viewed racer's faces board is not drawn (the site at fn_1_D27B8's entry).
 constexpr u32 WINDOW_FACES = WINDOW_TITLE + WINDOW_TITLE_SIZE;
 static_assert(WINDOW_TINTS + 30 * 4 <= WINDOW_TITLE && WINDOW_FACES + 4 <= 0x100);

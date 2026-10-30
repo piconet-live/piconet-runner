@@ -170,17 +170,41 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
           p.accel = static_cast<u32>(arg(0));
           p.brake = static_cast<u32>(arg(1));
         }
-        else if (id == modes::SETUP_BOOSTOFF)
+        else if (id == modes::SETUP_BOOST || id == modes::SETUP_RESTORE || id == modes::SETUP_CONTACT ||
+                 id == modes::SETUP_CPUS || id == modes::SETUP_SOLO || id == modes::SETUP_PAUSE || id == modes::SETUP_SAVESTATE)
         {
-          p.boost_off = true;
+          // on, off or a switch parameter's value (a package from before these took a value has none: refused)
+          if (setup_args.size() != 1 || (arg(0) != 0 && arg(0) != 1))
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          const bool on = arg(0) != 0;
+          if (id == modes::SETUP_BOOST)
+            p.boost_off = !on;
+          else if (id == modes::SETUP_RESTORE)
+            p.restore = on;
+          else if (id == modes::SETUP_CONTACT)
+            p.contact_off = !on;
+          else if (id == modes::SETUP_CPUS)
+            p.cpus_allowed = on;
+          else if (id == modes::SETUP_SOLO)
+            p.solo = on;
+          else if (id == modes::SETUP_PAUSE)
+            p.pause = on;
+          else
+            p.save_state = on;
         }
-        else if (id == modes::SETUP_FINISHLIMIT || id == modes::SETUP_MINEREGEN || id == modes::SETUP_CPULEVEL ||
-                 id == modes::SETUP_CLOCKLIMIT)
+        else if (id == modes::SETUP_MINEREGEN)
+        {
+          // off (0), on (1 from a switch parameter; from the file its value) or milliseconds, modes.toml's range
+          const s32 v = arg(0);
+          if (setup_args.size() != 1 || (v != 0 && v != 1 && (v < 50 || v > 5000)))
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          p.mine_regen = static_cast<u32>(v == 1 ? modes::SETUP_MINEREGEN_ON : v);
+        }
+        else if (id == modes::SETUP_FINISHLIMIT || id == modes::SETUP_CPULEVEL || id == modes::SETUP_CLOCKLIMIT)
         {
           // (the ranges are modes.toml's: the compiler holds a value to them, a package from elsewhere is refused)
           const s32 v = arg(0);
           const bool in = id == modes::SETUP_FINISHLIMIT ? v >= 0 && v <= 600
-                          : id == modes::SETUP_MINEREGEN ? v >= 50 && v <= 5000
                           : id == modes::SETUP_CPULEVEL  ? v >= 0 && v <= 3
                                                          : v >= 60 && v <= 65535;
           if (setup_args.size() != 1 || !in)
@@ -188,20 +212,10 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
           const u32 value = static_cast<u32>(v);
           if (id == modes::SETUP_FINISHLIMIT)
             p.finish_limit = value;
-          else if (id == modes::SETUP_MINEREGEN)
-            p.mine_regen = value;
           else if (id == modes::SETUP_CPULEVEL)
             p.cpu_level = value;
           else
             p.clock_limit = value;
-        }
-        else if (id == modes::SETUP_MINEREGENOFF)
-        {
-          p.mine_regen = 0;
-        }
-        else if (id == modes::SETUP_RESTOREON || id == modes::SETUP_RESTOREOFF)
-        {
-          p.restore = id == modes::SETUP_RESTOREON;
         }
         else if (id == modes::SETUP_RACEWAITSEVERYONE)
         {
@@ -211,15 +225,16 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.results_points = true;
         }
-        else if (id >= modes::SETUP_RESULTSTITLEKNOCKOUT && id <= modes::SETUP_RESULTSTITLEPOINTS)
+        else if (id == modes::SETUP_RESULTSTITLE)
         {
-          // the fixed list (modes.toml's order): font 0x1D draws A to Z and the space
-          static constexpr const char* TITLES[] = {"KNOCKOUT", "LIVES", "OVERDRIVE", "TEAMS", "SURVIVORS", "POINTS"};
-          p.results_title = TITLES[id - modes::SETUP_RESULTSTITLEKNOCKOUT];
-        }
-        else if (id == modes::SETUP_CONTACTOFF)
-        {
-          p.contact_off = true;
+          // a value a byte, as the compiler's ModeResultsTitle holds it: font 0x1D draws A to Z and the space
+          p.results_title.clear();
+          for (const s32 c : setup_args)
+            p.results_title.push_back(static_cast<char>(c >= 'A' && c <= 'Z' ? c : c == ' ' ? ' ' : '\0'));
+          if (p.results_title.empty() || p.results_title.size() > modes::RESULTS_TITLE ||
+              p.results_title.find('\0') != std::string::npos || p.results_title.front() == ' ' ||
+              p.results_title.back() == ' ')
+            return Fail(why, "has a results title the game cannot draw");
         }
         else if (id == modes::SETUP_ROLLINGSTART)
         {
@@ -227,22 +242,6 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
           if (setup_args.size() != 1 || !(v >= 0.0f && v <= MOST_SPEED))
             return Fail(why, "starts rolling at a speed outside 0 to 9000 km/h");
           p.rolling = static_cast<u32>(arg(0));
-        }
-        else if (id == modes::SETUP_CPUSALLOWED)
-        {
-          p.cpus_allowed = true;
-        }
-        else if (id == modes::SETUP_SOLO)
-        {
-          p.solo = true;
-        }
-        else if (id == modes::SETUP_PAUSE)
-        {
-          p.pause = true;
-        }
-        else if (id == modes::SETUP_SAVESTATE)
-        {
-          p.save_state = true;
         }
         else if (id == modes::SETUP_REWIND || id == modes::SETUP_RESUMECOUNTDOWN)
         {

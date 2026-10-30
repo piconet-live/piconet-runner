@@ -308,7 +308,7 @@ mfc_stock:
     patch(site, word, 0, "mode_faces")
     middle.append((site, ["r12", "cr0"], "mode_faces"))
 
-    # `results_title NAME`: the window's string for VS TOTAL RANKING
+    # `results_title "TEXT"`: the window's string for VS TOTAL RANKING
     site = TEXT + TITLE
     word = stock(site, TITLE_KNOWN)
     r.add("mode_title", test + """    beq mtt_stock
