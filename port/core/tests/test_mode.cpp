@@ -7,6 +7,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -990,4 +991,69 @@ void TestASquareRootsCostInBothLoops()
     ends.insert(ops_plain);
   }
   CHECK(ends.size() > 1);  // (a sqrt's fault overshoots the budget by up to seven; another's by one)
+}
+
+// A mode without `cpus allowed`: a player seat that has driven and then has the "AI drives" record retires at that step
+// (flag set, its Restore cleared), once; a finished seat keeps its finish; a seat with that record from the start (never
+// ready, an autopilot) and a seat that is no player's stay as they are; `cpus allowed` and `solo` never retire anyone;
+// the same memory from a run again.
+void TestAGonePlayerRetires()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("board.mode.json"), &why);
+  std::optional<mode::Package> with_cpus = mode::Read(Vector("overdrive.mode.json"), &why);
+  std::optional<mode::Package> solo = mode::Read(Vector("practice.mode.json"), &why);
+  CHECK(p && with_cpus && solo);
+  if (!p || !with_cpus || !solo)
+    return;
+  CHECK(!p->cpus_allowed && with_cpus->cpus_allowed && !solo->cpus_allowed);
+  const auto row = [](Guest& g, u32 step, u32 seat, bool ai) {
+    const u32 at = layout::INPUTS + ((step & 1023) * 30 + seat) * 8;
+    const std::array<u8, 6> real = {0, 0, 0x80, 0x80, 0, 0}, gone = {0, 0x80, 0, 0, 0, 0};
+    for (u32 k = 0; k < 6; ++k)
+      g.Write8(at + k, ai ? gone[k] : real[k]);
+  };
+  const auto race = [&](mode::Package q, TestHost& host, ModData& data, std::function<void(Guest&)> check) {
+    q.players = 0xF;  // seats 0 to 3 are players', 4 is no player's
+    Guest g(host, data);
+    FakeModeRace(g, 5, 100);
+    for (u32 seat = 0; seat < 5; ++seat)
+      g.Write32(MachineAt(seat), 0);
+    g.Write32(MachineAt(1), game::MACHINE_FLAG_FINISHED);
+    for (u32 step = 0; step < 6; ++step)
+    {
+      g.Write32(net::STEP, step);
+      // seat 0 and 1 drive to step 2 and are gone from 3; seat 2 is the AI's from the start; seat 3 drives on; seat 4 no player's
+      row(g, step, 0, step >= 3);
+      row(g, step, 1, step >= 3);
+      row(g, step, 2, true);
+      row(g, step, 3, false);
+      row(g, step, 4, true);
+      mode::Run(g, q, BLOCK, MODULE);
+      if (step == 2)
+        CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED));
+      if (step == 3)
+        check(g);
+    }
+    check(g);
+  };
+  {
+    TestHost host;
+    ModData data;
+    race(*p, host, data, [](Guest& g) {
+      CHECK(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED);
+      CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RESTORE));
+      CHECK(!(g.Read32(MachineAt(1)) & game::MACHINE_FLAG_RETIRED));
+      CHECK(!(g.Read32(MachineAt(2)) & game::MACHINE_FLAG_RETIRED));
+      CHECK(!(g.Read32(MachineAt(3)) & game::MACHINE_FLAG_RETIRED));
+      CHECK(!(g.Read32(MachineAt(4)) & game::MACHINE_FLAG_RETIRED));
+    });
+  }
+  for (const mode::Package* q : {&*with_cpus, &*solo})
+  {
+    TestHost host;
+    ModData data;
+    race(*q, host, data, [](Guest& g) { CHECK(!(g.Read32(MachineAt(0)) & game::MACHINE_FLAG_RETIRED)); });
+  }
 }

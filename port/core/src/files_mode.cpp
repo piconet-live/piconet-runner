@@ -213,6 +213,10 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             return Fail(why, "starts rolling at a speed outside 0 to 9000 km/h");
           p.rolling = static_cast<u32>(arg(0));
         }
+        else if (id == modes::SETUP_CPUSALLOWED)
+        {
+          p.cpus_allowed = true;
+        }
         else if (id == modes::SETUP_SOLO)
         {
           p.solo = true;
@@ -232,7 +236,7 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
           (id == modes::SETUP_REWIND ? p.rewind : p.resume_countdown) = static_cast<u32>(v);
         }
-        else if (id != modes::SETUP_CPUSALLOWED)  // (the coordinator's)
+        else
         {
           return Fail(why, std::format("has a setup word this build does not know ({})", id));
         }

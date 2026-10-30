@@ -60,6 +60,7 @@ constexpr u32 TOUCH_PREV = ENGINE + 0x100;  // the same, the step before
 constexpr u32 RESPAWN = ENGINE + 0x178;   // bit i: seat i respawns (flag 0x1 kept on while it is not finished)
 constexpr u32 HANDED = ENGINE + 0x17C;    // bit i: the CPU drives seat i (hand_to_cpu)
 constexpr u32 FROZEN = ENGINE + 0x180;    // bit i: seat i is held at speed 0 (freeze)
+constexpr u32 DRIVEN = ENGINE + 0x184;    // bit i: a player seat i has driven (a record not "AI drives") and not retired since
 constexpr u32 TEAM_NC = ENGINE + 0x188;   // a seat's no-contact bits from team T no contact (what ghost off goes back to)
 constexpr u32 END_ORDER = ENGINE + 0x200;  // the end clause's order, a seat a byte (held every step after the end)
 constexpr u32 PLACES = ENGINE + 0x220;    // seat.place, a byte a seat (0: none)
@@ -165,6 +166,7 @@ struct Package
   u32 clock_limit = 0;              // steps, 0 none
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
+  bool cpus_allowed = false;        // `cpus allowed`: a player gone is driven by the AI; left out, their seat retires
   bool solo = false, pause = false, save_state = false;
   u32 rewind = 0;                   // the rewind's reach in steps, 0 none
   u32 resume_countdown = 0;         // steps

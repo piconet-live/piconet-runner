@@ -176,6 +176,7 @@ void TestTheOutTestReadsTheGame();
 void TestTheModeVectorsRead();
 void TestTheBoardsLinesAndValues();
 void TestPracticeIsAMode();
+void TestAGonePlayerRetires();
 void TestASquareRootsCostInBothLoops();
 void TestSoloModesAndTheRelay();
 void TestDestroyedAndOutTellAnEndApart();
@@ -520,6 +521,7 @@ int main(int argc, char** argv)
   TestTheModeVectorsRead();
   TestTheBoardsLinesAndValues();
   TestPracticeIsAMode();
+  TestAGonePlayerRetires();
   TestASquareRootsCostInBothLoops();
   TestSoloModesAndTheRelay();
   TestDestroyedAndOutTellAnEndApart();
