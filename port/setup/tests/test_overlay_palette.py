@@ -1,6 +1,7 @@
-"""The game window's palette (port/moderngekko/src/overlay.h) is the launcher's theme, value for value: the header is
-a copy by hand of net/src/Launcher.App/Theme/Theme.axaml (the two programs share no file), and this test holds every colour of the header's palette to the theme's key it copies. The
-launcher's checkout is port/setup/pins.tsv's REPO_LAUNCHER, so the test reads it wherever the launcher is."""
+"""The game window's palette (port/moderngekko/src/overlay.h) is the design tokens every program shares: each colour of
+the header's palette names a token of the protocol's theme_palette.g.h (generated from protocol/theme.tokens.json,
+as the launcher's Theme.g.axaml and the site's and the service's CSS are), and types no value of its own. The
+protocol's checkout is port/setup/pins.tsv's REPO_PROTOCOL."""
 
 import os
 import re
@@ -12,40 +13,41 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
 OVERLAY = os.path.join(ROOT, "port", "moderngekko", "src", "overlay.h")
 sys.path.insert(0, os.path.join(ROOT, "port", "setup"))
 import parts  # noqa: E402
-THEME = "net/src/Launcher.App/Theme/Theme.axaml"   # in the launcher's checkout
-# every colour of the header's palette and the theme's key it is (a Color or a SolidColorBrush's Color)
-KEYS = {"GROUND": "GroundColor", "BAR": "ColumnColor", "SURFACE": "WellColor", "RAISED": "RaisedColor",
-        "HOVER": "HoverColor", "ROW_LINE": "RowLineBrush", "SELECT": "SelectBrush", "TEXT": "TextColor",
-        "SECONDARY": "DimColor", "FAINT": "FaintColor", "OFF_TONE": "OffColor", "ACCENT": "AccentColor",
-        "ACCENT_OVER": "AccentOverBrush", "ACCENT_DOWN": "AccentDownBrush", "ON_ACCENT": "OnAccentColor",
-        "GOLD": "GoldColor", "WARN": "WarnColor", "DANGER": "DangerColor", "CLOSE_OVER": "CloseOverBrush",
-        "ON_CLOSE": "OnCloseBrush"}
+PALETTE = "protocol/generated/theme_palette.g.h"   # in the protocol's checkout
+# every colour of the header's palette and the token it is (the launcher's key in the comment's place)
+TOKENS = {"GROUND": "GROUND", "BAR": "COLUMN", "SURFACE": "WELL", "RAISED": "RAISED", "HOVER": "HOVER",
+          "ROW_LINE": "ROW_LINE", "SELECT": "SELECT", "TEXT": "TEXT", "SECONDARY": "DIM", "FAINT": "FAINT",
+          "OFF_TONE": "OFF", "ACCENT": "ACCENT", "ACCENT_OVER": "ACCENT_OVER", "ACCENT_DOWN": "ACCENT_DOWN",
+          "ON_ACCENT": "ON_ACCENT", "GOLD": "GOLD", "WARN": "WARN", "DANGER": "DANGER", "CLOSE_OVER": "CLOSE_OVER",
+          "ON_CLOSE": "ON_CLOSE"}
+
+
+def block():
+    with open(OVERLAY, encoding="utf-8") as f:
+        return f.read().split("// The palette, 0xRRGGBB")[1].split("\n\n")[0]
 
 
 def palette():
-    """The header's palette: its block's `constexpr std::uint32_t NAME = 0xRRGGBB` (several to a line too)."""
-    with open(OVERLAY, encoding="utf-8") as f:
-        block = f.read().split("// The palette, 0xRRGGBB")[1].split("\n\n")[0]
-    return {name: int(value, 16) for name, value in re.findall(r"\b([A-Z_]+) = 0x([0-9A-Fa-f]{6})\b", block)}
+    """The header's palette: its block's `constexpr std::uint32_t NAME = fzgx::theme::TOKEN` (several to a line too)."""
+    return dict(re.findall(r"\b([A-Z_]+) = fzgx::theme::([A-Z_0-9]+)\b", block()))
 
 
-def theme():
-    """The theme's colours by key: `<Color x:Key="K">#RRGGBB</Color>` and `<SolidColorBrush x:Key="K" Color="#RRGGBB" />`."""
-    with open(parts.path_in("REPO_LAUNCHER", THEME), encoding="utf-8") as f:
-        text = f.read()
-    found = dict(re.findall(r'<Color x:Key="(\w+)">#([0-9A-Fa-f]{6})</Color>', text))
-    found.update(re.findall(r'<SolidColorBrush x:Key="(\w+)" Color="#([0-9A-Fa-f]{6})"', text))
-    return {key: int(value, 16) for key, value in found.items()}
+def generated():
+    """The generated palette's tokens: `constexpr std::uint32_t TOKEN = 0xRRGGBB;`."""
+    with open(parts.path_in("REPO_PROTOCOL", PALETTE), encoding="utf-8") as f:
+        return dict(re.findall(r"\b([A-Z_0-9]+) = 0x([0-9A-F]{6});", f.read()))
 
 
 class OverlayPaletteTest(unittest.TestCase):
-    def test_every_colour_of_the_window_is_the_launchers(self):
-        ours, theirs = palette(), theme()
-        self.assertEqual(sorted(ours), sorted(KEYS), "overlay.h's palette and this test's list of keys")
-        for name, key in KEYS.items():
-            with self.subTest(name=name, key=key):
-                self.assertIn(key, theirs, f"{THEME} has no colour {key}")
-                self.assertEqual(f"{ours[name]:06X}", f"{theirs[key]:06X}", f"overlay.h's {name} is not {key}")
+    def test_every_colour_of_the_window_is_a_design_token(self):
+        ours, tokens = palette(), generated()
+        self.assertEqual(ours, TOKENS, "overlay.h's palette and this test's list of tokens")
+        for name, token in TOKENS.items():
+            with self.subTest(name=name):
+                self.assertIn(token, tokens, f"{PALETTE} has no colour {token}")
+
+    def test_the_palette_types_no_colour_of_its_own(self):
+        self.assertNotRegex(block(), r"0x[0-9A-Fa-f]{6}")
 
 
 if __name__ == "__main__":
