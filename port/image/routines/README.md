@@ -20,7 +20,8 @@ native form: every routine at a patched site tests the mode word, and the instal
    `frame_spectate.py` (with `frame_speccontrols.py`, `frame_specwatch.py`), `frame_replay.py`, `frame_checksum.py`, then `follow.py` (with `rankicons.py`), `banners.py`, `effects.py`,
    `raceview.py`, `othersound.py`, `playernames.py`, `smooth.py`, `untracked.py`. Each gives its text with `asm()`.
 4. `FZNT` and the name tags, `nametags.py`, entered through a call to `monitors.py` (the rejoin hand-back's 3, 2, 1
-   on the start's floating monitors, `memmap.HANDBACK`; their pictures are read by `../sites_monitors.py`).
+   on the start's floating monitors, `memmap.HANDBACK`, and a rolling start's count; the hand-back's pictures are read
+   by `../sites_monitors.py`).
 5. In the native form only: `FZPT` and the patched sites' routines, added by `../build.py` from `../sites.py`.
 
 `netframe.py`'s docstring lists every word of the control block; `standin.py`'s the slot and the input buffer.

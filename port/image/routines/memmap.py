@@ -22,8 +22,8 @@ EFFECTS = _facts.EFFECTS_AT  # tests: the effects' counters (sites_effects.py), 
 NAMES = _facts.NAMES      # player names (playernames.py): 30 x 32 bytes, NUL-terminated, seat order; empty: the pilot's
 NAME_SIZE = _facts.NAME_SIZE
 TAGS = NAMES + 0x400       # the name tags' state (nametags.py): a frame count, then 30 x 16 bytes; the picture's only
-# The rejoin hand-back's 3, 2, 1 on the start's floating monitors (monitors.py; port/image/sites_monitors.py reads
-# the pictures). The picture's only: no step reads it, no rollback puts it back, the checksum does not cover it.
+# The rejoin hand-back's 3, 2, 1 and a rolling start's count on the start's floating monitors (monitors.py;
+# port/image/sites_monitors.py reads the hand-back's pictures). The picture's only: no step reads it, no rollback puts it back, the checksum does not cover it.
 # The host's counter is HANDBACK (steps left, below). +0 the step at which control comes back (control block +124
 # plus HANDBACK, worked out while HANDBACK runs and kept, so that GO stays up after it reaches 0). +4 the pictures
 # (sites_monitors.py, the gate's black frame): 0 not tried, 1 trying, 2 read, 3 not read (no room, no file). +8

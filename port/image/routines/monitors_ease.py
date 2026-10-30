@@ -1,4 +1,4 @@
-"""The hand-back monitors' frame, eased (monitors.py's part: fixed rigidly to the car's movement, the frame looks
+"""The monitors' frame (a hand-back's, a rolling start's), eased (monitors.py's part: fixed rigidly to the car's movement, the frame looks
 stiff). The monitors stay placed in front of the followed racer, at the racer's drawn position (block +0x14C's
 matrix), but
 from a direction that follows that matrix softly instead of being it: an eased
@@ -16,8 +16,8 @@ too: at 1000 km/h on a loop the monitors fell well behind the machine's turn.
   built again from them.
   A matrix that fails the same tests (not a number) is used as it is, as before the easing.
 - The position is the machine's own, every drawn frame.
-- The frame snaps to the matrix's (no easing): on the first drawn frame of a hand-back (monitors.py clears +FOLLOW
-  for a new one), when the followed racer is not the one the frame was eased for (a viewport or spectate change),
+- The frame snaps to the matrix's (no easing): on the first drawn frame of a hand-back or a rolling start (monitors.py clears
+  +FOLLOW for a new one), when the followed racer is not the one the frame was eased for (a viewport or spectate change),
   when the step word (control block +124) is not 0 to GAP steps on from the last drawn frame's (a scrub, a restore,
   frames not drawn in between), and when the last position is SNAP units or more from the machine's (a respawn, a
   fall-out), or not a number. A rollback's correction (smooth.py moves the drawn matrix through it) is followed.

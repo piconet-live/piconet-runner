@@ -1,11 +1,29 @@
-"""The rejoin hand-back's 3, 2, 1 on the start's own floating countdown monitors, for the mod image (nametags.py's
-part: `wrap` puts a call to it before the name tags, at the HUD's call in fn_1_37AA8's per-viewport loop, which runs
+"""The start's own floating countdown monitors, drawn by the image: the rejoin hand-back's 3, 2, 1 and a rolling
+start's whole count, for the mod image (nametags.py's part: `wrap` puts a call to it before the name tags, at the HUD's call in fn_1_37AA8's per-viewport loop, which runs
 before the draw manager's tasks with the viewport's camera and projection set by fn_1_5948). Picture only: it
 writes its record and state in the data window (memmap.MONITORS), the screen models' texture objects (model data
 no step reads) and the GX pipe; it takes no random value, runs none of the game's countdown tasks and sets no rule
 flag.
 
-When: a hand-back is on (memmap.HANDBACK, the host's: steps left until control comes back; while it is not 0 the
+When, a rolling start (memmap.MODE_ROLLING in MODE_HUD_FLAGS, the game mode's): while the start's count is running,
+0 < count < 420 (the word of start_countdown, fn_1_34924: .bss 0x26C68, which the race's set-up gives 420 at main.rel 0x39B34; 420
+itself is the count not begun yet). c = that word as the drawing finds it, after the frame's steps: the value
+start_countdown has just given fn_1_A4F18 (the "three", "two", "one", "go"), so the picture's 3 and GO come on the
+game's own count (Starter, which runs before start_countdown, places its record a count earlier). As StarterDisp:
+camera status (camera_get_status) 1, no game replay playing (fn_1_F2F34), viewport 0. The hand-back's own words are
+not used, nor its pictures: mn_count takes the end step + c - 59 (constant while the count runs, for the SEEN test
+below), and from there the placing, the easing and the draw are the same code. Differences, each tested on r16 (1 in a
+rolling start, kept through the routine): no sounds (the game's Starter and start_countdown still play them), and no
+picture chosen or bound (the screens' texture objects are still on the movie's buffer, where fn_1_10688C put them;
+the game's movie stream, Starter's ARAM copies and the decoder thread, go on as ever into that buffer, frame by
+frame, so the picture is the game's and does not depend on the read below; nothing else re-binds them). So that the
+monitors are not drawn twice, sites_mode.py's `mode_starter_disp` skips StarterDisp for viewport 0 in such a race;
+another viewport (none in a race of ours) keeps the stock's, with the stock's fixed turn. At count 0 the game frees
+the movie and the source ends: a hand-back after it, the only one a rolling race has, is the path below. In a
+playback of ours the game runs as a race (fn_1_F2F34 is 0): a rolling start's monitors show there, as StarterDisp's
+do in any other race's.
+
+When, a hand-back: a hand-back is on (memmap.HANDBACK, the host's: steps left until control comes back; while it is not 0 the
 step of the hand-back, control block +124 plus it, is kept at MONITORS +0, so that GO stays up after it reaches 0),
 the pictures are read (+4 = 2, sites_monitors.py), the start's movie is freed (.bss 0x85280 +0x248 = 2: the start
 countdown is over, its texture objects are free to take), viewport 0. The countdown c = steps left + 59, the
@@ -75,6 +93,8 @@ SOUNDS = ((360, (0xA9091800,)), (239, (0xA9091A00, 0xA9060000)), (179, (0xA9091A
 END, STATE, BLOCK, SEEN, SHOWN, LAST, CHECK, RECORD = 0, 4, 8, 32, 36, 40, 44, 0x40
 FRAME, GPRS = 0x100, 0xB0
 SAME = 30                           # steps: a hand-back step this close to the last one is the same hand-back
+COUNT = 0x26C68                     # .bss: the start's count (u16, start_countdown's argument, main.rel 0x39B74)
+CAMERA_STATUS, GAME_REPLAY = 0x64C0, 0xF2F34   # camera_get_status, fn_1_F2F34: StarterDisp's own tests
 assert GPRS + 18 * 4 <= FRAME and RECORD + 0x88 <= 0x100
 
 
@@ -145,6 +165,34 @@ def sounds():
     return out
 
 
+def rolling():            # a rolling start's count: to mn_count with r16 = 1 and its end in r26; else r16 = 0, on
+    return f"""    li 16, 0
+    lis 9, {memmap.hi(memmap.MODE_HUD_FLAGS)}
+    ori 9, 9, {memmap.lo(memmap.MODE_HUD_FLAGS)}
+    lwz 0, 0(9)
+    andi. 0, 0, {memmap.MODE_ROLLING}
+    beq mn_handback
+""" + at(9, 23, COUNT) + f"""    lhz 25, 0(9)
+    cmpwi 25, 0
+    beq mn_handback
+    cmpwi 25, 420
+    bge mn_out
+""" + rel(CAMERA_STATUS) + """    extsh 3, 3
+    cmpwi 3, 1
+    bne mn_out
+""" + rel(GAME_REPLAY) + """    cmpwi 3, 0
+    bne mn_out
+""" + rel(0x5910) + f"""    cmpwi 3, 0
+    bne mn_out
+    li 16, 1
+    lis 9, {memmap.hi(memmap.CONTROL)}
+    lwz 10, 124(9)
+    add 26, 10, 25
+    addi 26, 26, -59
+    b mn_count
+"""
+
+
 def asm():
     hb = f"    lis 27, {memmap.hi(memmap.MONITORS)}\n    ori 27, 27, {memmap.lo(memmap.MONITORS)}\n"
     return f"""monitors:
@@ -152,12 +200,13 @@ def asm():
     mflr 0
     stw 0, {FRAME + 4:#x}(1)
     stmw 14, {GPRS:#x}(1)
-{hb}    lwz 0, {STATE}(27)
+{hb}    lis 12, 0x8000
+    lwz 29, 0x30C8(12)
+""" + at(23, 29, BSS) + at(30, 29, RODATA) + rolling() + f"""mn_handback:
+    lwz 0, {STATE}(27)
     cmpwi 0, 2
     bne mn_out
-    lis 12, 0x8000
-    lwz 29, 0x30C8(12)
-""" + at(23, 29, BSS) + at(30, 29, RODATA) + at(9, 23, 0x85280 + 0x248) + f"""    lwz 0, 0(9)
+""" + at(9, 23, 0x85280 + 0x248) + f"""    lwz 0, 0(9)
     cmpwi 0, 2
     bne mn_out
 """ + rel(0x5910) + f"""    cmpwi 3, 0
@@ -270,6 +319,8 @@ mn_point:
     blt mn_point
     lwz 22, {LAST}(27)
     stw 25, {LAST}(27)
+    cmpwi 16, 0
+    bne mn_bind
 """ + sounds() + f"""    li 20, 0
     cmpwi 25, 240
     bge mn_pick
@@ -300,6 +351,8 @@ mn_bind:
 """ + at(31, 23, 0x38460) + f"""    lwz 9, 8(31)
     cmpwi 9, 0
     beq mn_out
+    cmpwi 16, 0
+    bne mn_draw
     lwz 9, 8(9)
     li 19, 0x30
 mn_models:
@@ -332,6 +385,7 @@ mn_model_done:
     addi 19, 19, 8
     cmpwi 19, 0x38
     ble mn_models
+mn_draw:
     li 3, 0
 """ + rel(0x7BEAC) + MATRIX + dol(0x80072558) + dol(0x800724C8) + "    li 3, 0x200\n" + dol(0x8007245C) + \
         "    li 3, 1\n" + dol(0x80073678) + "    li 3, 0\n    li 4, 0xFF\n    li 5, 0xFF\n    li 6, 0xFF\n" + \
