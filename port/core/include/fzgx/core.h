@@ -163,6 +163,12 @@ struct Debug
   bool user_settings = false;  // "userSettings": the emulator's settings are the user folder's (Config/Dolphin.ini,
                                // GFX.ini: a test's speed limit, clock and the like); without it the runner sets every
                                // setting that decides what the game computes or how fast it runs, whatever they say
+  // "renderer": who draws the picture shown, "dolphin" (the emulator) or "aurora" (Aurora beside it, presentation
+  // only: aurora.cpp in the adapter); "auroraShots", "auroraLog": its test pictures (XFB copies, 1 the first) and its
+  // logs' file prefix
+  std::string renderer = "dolphin";
+  std::vector<u32> aurora_shots;
+  std::string aurora_log;
   std::vector<EmulatorSetting> emulator;  // every other key of the emulator's side that was given (files_launch.cpp
                                           // holds the table: "pad", "poke", "probe", "paceLog", ...)
 };
