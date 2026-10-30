@@ -44,6 +44,7 @@ enum Id : int
   UndoStore,       // the undo log: the entry into the map
   Restore,         // the undo log: memory back to an earlier step
   Final,           // the undo log: final steps' entries dropped
+  Mode,            // the game mode's run at the image's mode point (mode.cpp)
   Count
 };
 
