@@ -183,24 +183,24 @@ void TestTheRaceOnTheBoard()
   g.Write8(MODULE + net::MACHINE_COUNT, 3);
   for (u32 i = 0; i < 3; ++i)
   {
-    const u32 base = BLOCKS + i * 0x620, m = PROGRESS + i * 0x200;
-    g.Write32(base + 0x49C, m);
-    g.Write32(base + 0x17C, std::bit_cast<u32>(300.5f + static_cast<float>(i)));  // speed
-    g.Write32(base + 0x184, std::bit_cast<u32>(80.0f));                           // energy
-    g.Write16(base + 0x5DA, 100);                                                  // maximum energy
-    g.Write32(base + 0x7C, std::bit_cast<u32>(-12.5f));                            // x
-    g.Write8(m + 0x115, static_cast<u8>(i + 1));                                   // rank
-    g.Write32(m + 0x118, i);                                                       // laps
-    g.Write8(m + 0x160 + 8, 1), g.Write8(m + 0x160 + 9, 2), g.Write16(m + 0x160 + 10, 345);  // lap 1'02"345
-    g.Write8(m + 0x1CC + 9, 59), g.Write16(m + 0x1CC + 10, 999);                   // best lap 59"999
-    g.Write32(m + 0xF8, std::bit_cast<u32>(1000.0f * static_cast<float>(i)));      // distance
+    const u32 base = BLOCKS + i * game::MACHINE_SIZE, m = PROGRESS + i * 0x200;
+    g.Write32(base + game::MACHINE_PROGRESS, m);
+    g.Write32(base + game::MACHINE_SPEED, std::bit_cast<u32>(300.5f + static_cast<float>(i)));  // speed
+    g.Write32(base + game::MACHINE_ENERGY, std::bit_cast<u32>(80.0f));                           // energy
+    g.Write16(base + game::MACHINE_MAX_ENERGY, 100);                                                  // maximum energy
+    g.Write32(base + game::MACHINE_POSITION_X, std::bit_cast<u32>(-12.5f));                            // x
+    g.Write8(m + game::PROGRESS_RANK, static_cast<u8>(i + 1));                                   // rank
+    g.Write32(m + game::PROGRESS_LAPS, i);                                                       // laps
+    g.Write8(m + game::PROGRESS_LAP_TIME + 8, 1), g.Write8(m + game::PROGRESS_LAP_TIME + 9, 2), g.Write16(m + game::PROGRESS_LAP_TIME + 10, 345);  // lap 1'02"345
+    g.Write8(m + game::PROGRESS_BEST_LAP + 9, 59), g.Write16(m + game::PROGRESS_BEST_LAP + 10, 999);                   // best lap 59"999
+    g.Write32(m + game::PROGRESS_DISTANCE, std::bit_cast<u32>(1000.0f * static_cast<float>(i)));      // distance
   }
-  g.Write32(BLOCKS, 0x10000);                    // racer 0 finished
-  g.Write32(BLOCKS + 0x620 * 2, 0x10000000);     // racer 2 out (its time over)
-  g.Write32(BLOCKS + 0x620 * 2 + 0x17C, std::bit_cast<u32>(std::numeric_limits<float>::infinity()));
-  g.Write8(BLOCKS + 0x620 + 0x212, 2);           // racer 1: two knockouts in its attack
+  g.Write32(BLOCKS, game::MACHINE_FLAG_FINISHED);                // racer 0 finished
+  g.Write32(BLOCKS + game::MACHINE_SIZE * 2, game::MACHINE_FLAG_TIME_OVER);// racer 2 out (its time over)
+  g.Write32(BLOCKS + game::MACHINE_SIZE * 2 + game::MACHINE_SPEED, std::bit_cast<u32>(std::numeric_limits<float>::infinity()));
+  g.Write8(BLOCKS + game::MACHINE_SIZE + game::MACHINE_ATTACK_KOS, 2); // racer 1: two knockouts in its attack
   board::Race(g, 600, 1);
-  g.Write8(BLOCKS + 0x620 + 0x212, 3);           // and a third
+  g.Write8(BLOCKS + game::MACHINE_SIZE + game::MACHINE_ATTACK_KOS, 3); // and a third
   board::Race(g, 601, 1);
   Seen s(path);
   board::Snapshot snap;

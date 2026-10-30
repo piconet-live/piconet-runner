@@ -21,7 +21,6 @@ from places import generate, root  # noqa: E402
 
 CHECKSUM = "port/core/src/checksum.cpp"
 MANIFEST = "recomp/manifest.toml"
-STATE_MAP_TODAY = "research/machine-state-map.csv"
 
 
 def read(path):
@@ -45,13 +44,13 @@ class Proof(unittest.TestCase):
 
     def test_every_generated_file_says_what_the_table_says(self):
         """Read back from the files, as a compiler would: the header and the module hold every name, the C# class
-        its three groups."""
+        its four groups."""
         everything = {**self.table, **self.masks}
         self.assertEqual(self.made["cxx"], {k: v for k, v in everything.items() if self.in_header(k)})
         self.assertEqual(self.made["python"], {k: v for k, v in everything.items() if not k.endswith("_WORD")})
         sharp = {generate.pascal(r.name): r.value for r in self.rows if generate.GROUPS[r.group][1]}
         self.assertEqual(self.made["csharp"], sharp)
-        self.assertEqual({r.group for r in self.rows if generate.GROUPS[r.group][1]}, {"limit", "wire", "file"})
+        self.assertEqual({r.group for r in self.rows if generate.GROUPS[r.group][1]}, {"limit", "wire", "file", "rel"})
 
     def in_header(self, name):
         owner = next((r for r in self.rows if name in (r.name, r.name + "_AT", r.name + "_WORD")), None)
@@ -87,11 +86,11 @@ class Proof(unittest.TestCase):
             places._texts[file] = kept
             places._constants.clear()
         changed = made()
-        changed["cxx"]["MACHINE_SIZE"] += 4
+        changed["cxx"]["SEATS"] += 1
         changed["csharp"]["NameShown"] = 17
         places.generated_values = lambda: changed
         problems, _ = places.check(self.rows)
-        self.assertTrue(any("says 0x620, the table's MACHINE_SIZE is 0x624" in p for p in problems))
+        self.assertTrue(any("says 0x1E, the table's SEATS is 0x1F" in p for p in problems))
         self.assertTrue(any("net/src/Online.Protocol/PlayerNames.cs" in p and "the table's NAME_SHOWN is 0x11" in p
                             for p in problems))
 
@@ -167,10 +166,8 @@ class Proof(unittest.TestCase):
             exec(compile(ast.Module(wanted, []), path, "exec"), space)
         self.assertEqual({"BLOCK_SKIP": space["BLOCK"], "PROGRESS_SKIP": space["PROG"]}, self.masks)
 
-    def test_the_state_map_is_todays(self):
-        """The annex is a copy until the map itself moves here; then this test goes."""
-        if os.path.exists(os.path.join(root, STATE_MAP_TODAY)):
-            self.assertEqual(read("port/facts/machine-state.csv"), read(STATE_MAP_TODAY))
+    def test_the_state_map_is_whole(self):
+        """The map is here alone (piconet-docs' research/machine-state-map.md points at it): every row of it."""
         with open(generate.STATE_MAP, newline="") as f:
             self.assertEqual(sum(1 for _ in f), 847)
 

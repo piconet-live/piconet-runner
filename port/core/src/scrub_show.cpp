@@ -12,8 +12,8 @@ namespace fzgx::net
 {
 namespace
 {
-constexpr u32 PROGRESS = 0x49C;             // a machine's progress record pointer
-constexpr u32 LAPS_DONE = 0x118;            // ... its laps completed
+constexpr u32 PROGRESS = game::MACHINE_PROGRESS;  // a machine's progress record pointer
+constexpr u32 LAPS_DONE = game::PROGRESS_LAPS;     // ... its laps completed
 }  // namespace
 
 // The racers after the step just run at the front edge, read only, at the boundary before step `t`: the leader's laps
@@ -28,13 +28,13 @@ void ReadRacers(Guest& g, Session& s, u32 t)
   u32 most = 0;
   for (u32 i = 0; machines != 0 && i < count; ++i)
   {
-    if (const u32 progress = g.Read32(machines + i * 0x620 + PROGRESS); progress != 0)
+    if (const u32 progress = g.Read32(machines + i * game::MACHINE_SIZE + PROGRESS); progress != 0)
       most = std::max(most, g.Read32(progress + LAPS_DONE));
-    const u32 flags = g.Read32(machines + i * 0x620);
-    if ((flags & 0x10000) != 0 && ends.finish[i] == NONE_STEP)
+    const u32 flags = g.Read32(machines + i * game::MACHINE_SIZE);
+    if ((flags & game::MACHINE_FLAG_FINISHED) != 0 && ends.finish[i] == NONE_STEP)
       ends.finish[i] = t;
     // out by the game's own verdict, as the image's finish watch and spectator count it (never finished)
-    if (ends.out[i] == NONE_STEP && out_test::Out(g, module, machines + i * 0x620))
+    if (ends.out[i] == NONE_STEP && out_test::Out(g, module, machines + i * game::MACHINE_SIZE))
       ends.out[i] = t;
   }
   const u32 step = t - 1;

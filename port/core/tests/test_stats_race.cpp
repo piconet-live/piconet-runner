@@ -135,7 +135,7 @@ void Step(Guest& g, u32 racers)
   {
     const u32 block = RACERS + i * game::MACHINE_SIZE;
     g.Write32(block + game::MACHINE_WEIGHT, Word(g, g.Read16(block + game::MACHINE_ID), 4));
-    g.Write32(block + 0x7C, g.Read32(block + 0x7C) * 1664525 + g.Read32(block + game::MACHINE_WEIGHT));
+    g.Write32(block + game::MACHINE_POSITION_X, g.Read32(block + game::MACHINE_POSITION_X) * 1664525 + g.Read32(block + game::MACHINE_WEIGHT));
   }
 }
 }  // namespace

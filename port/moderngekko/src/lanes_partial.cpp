@@ -90,9 +90,9 @@ void LayOut(const CPUState* cpu, u32 count, Layout* layout)
     add(block, game::MACHINE_SIZE, BLOCK);
     add(Read32(block + game::MACHINE_PROGRESS), game::PROGRESS_SIZE, PROGRESS);
     for (u32 k = 0; k < 4; ++k)
-      add(Read32(block + 0x488 + 4 * k), 0xC0, static_cast<u8>(TRACK0 + k));
-    add(Read32(block + 0x498), 0x194, SEGMENT);
-    add(Read32(block + 0x484), 0x88, DRIVER);
+      add(Read32(block + game::MACHINE_WALL_QUERY + 4 * k), 0xC0, static_cast<u8>(TRACK0 + k));
+    add(Read32(block + game::MACHINE_PATH), 0x194, SEGMENT);
+    add(Read32(block + game::MACHINE_CPU), 0x88, DRIVER);
     const u32 car = cars + i * game::CAR_SIZE, after = CAR_PRESENTATION + CAR_PRESENTATION_SIZE;
     add(car, CAR_PRESENTATION, CAR);
     add(car + after, game::CAR_SIZE - after, CAR, after);

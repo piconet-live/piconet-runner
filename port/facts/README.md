@@ -4,7 +4,7 @@ One table of the game's and the mod's addresses, offsets, masks and limits: `gam
 image generators and the C# server and launcher get the same numbers from it, generated. A number typed twice can
 drift, and a wrong offset desyncs a race without a word.
 
-**The adapter (`port/moderngekko/src`) takes its addresses from `facts.h`, and so does the core for every game address (`port/core/src/game_facts.h`: `table::NAME`, `game::NAME`); the core's offsets, the image generators, the server and the launcher still type theirs.** `tests/` proves that every value equals the constant it will replace.
+**The adapter (`port/moderngekko/src`) takes its addresses from `facts.h`, and so does the core for every game address (`port/core/src/game_facts.h`: `table::NAME`, `game::NAME`); so do the image's data window (`port/image/routines/memmap.py` takes every name the table has from `generated/facts.py`) and a machine's block, its progress record and their flag bits (the `machine` group: `game::MACHINE_SPEED`, `memmap.MACHINE_SPEED`), wherever the core and the image's routines read them; the core's other offsets, the image generators' other numbers and the server still type theirs.** The `machine` group's rows are each proven against their row of `machine-state.csv` (`tests/places.tsv`), so a field's name and the map's meaning stay one. `tests/` proves that every value equals the constant it will replace.
 
 ## The files
 
@@ -29,4 +29,4 @@ rolled back to the same rows. Both run in the full check (`scripts/check.sh`), a
 `generate.py` (standard library) writes them; `--check` fails when one is stale; `--value NAME` prints one value.
 - `generated/facts.h`: `fzgx::layout` (the names `layout.h` had first), `fzgx::game`, `fzgx::limits`, `fzgx::wire`, `fzgx::file`.
 - `generated/facts.py`: every name.
-- `protocol/generated/GameFacts.g.cs`: the groups `limit`, `wire`, `file` (Online.Protocol compiles it).
+- `protocol/generated/GameFacts.g.cs`: the groups `limit`, `wire`, `file` and `rel` (Online.Protocol compiles it).

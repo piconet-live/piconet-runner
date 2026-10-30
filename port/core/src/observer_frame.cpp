@@ -37,9 +37,10 @@ namespace
 namespace ob = observer;
 namespace sp = spectator;
 constexpr u32 SPECTATING = CONTROL + 56, HUD_KEPT = CONTROL + 60;  // (spectator_frame.cpp, minimap_frame.cpp)
-constexpr u32 BLOCK = 0x620, PROGRESS = 0x49C, FINISHED = 0x10000;
-constexpr u32 SPEED = 0x17C;  // in a racer's block
-constexpr u32 LAP_LENGTH = 0xFC, LAPS_DONE = 0x118, LAP_TIME = 0x160, LAPS_SUM = 0x1D8;  // in a progress record
+constexpr u32 BLOCK = game::MACHINE_SIZE, PROGRESS = game::MACHINE_PROGRESS, FINISHED = game::MACHINE_FLAG_FINISHED;
+constexpr u32 SPEED = game::MACHINE_SPEED;  // in a racer's block
+constexpr u32 LAP_LENGTH = game::PROGRESS_LAP_LENGTH, LAPS_DONE = game::PROGRESS_LAPS, LAP_TIME = game::PROGRESS_LAP_TIME,
+              LAPS_SUM = game::PROGRESS_LAP_SUM;  // in a progress record
 constexpr u32 RACE_LAPS = 16, RACE_MACHINES = 32;  // in the race block: the laps; the seats' machines (files_match.cpp)
 
 // A time record (frames, fraction, minutes, seconds, milliseconds: port/facts/machine-state.csv) in milliseconds.

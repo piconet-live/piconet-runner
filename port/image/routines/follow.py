@@ -174,7 +174,7 @@ def pick(keep, p):
     beq @say
     cmplw 4, 8
     bge @say
-    mulli 10, 4, 0x620
+    mulli 10, 4, 0x{memmap.MACHINE_SIZE:X}
     add 10, 9, 10
 OUT_LOCAL
 @out:
@@ -197,15 +197,15 @@ OUT_LOCAL
 @find:
     cmplw 5, 8
     bge @found
-    mulli 10, 5, 0x620
+    mulli 10, 5, 0x{memmap.MACHINE_SIZE:X}
     add 10, 9, 10
-    lwz 7, 0x49C(10)
+    lwz 7, 0x{memmap.MACHINE_PROGRESS:X}(10)
     cmpwi 7, 0
     beq @next
 OUT_OTHER
 @in:
-    lwz 7, 0x49C(10)
-    lbz 7, 0x115(7)
+    lwz 7, 0x{memmap.MACHINE_PROGRESS:X}(10)
+    lbz 7, 0x{memmap.PROGRESS_RANK:X}(7)
     cmplw 7, 6
     bge @next
     mr 6, 7
@@ -327,7 +327,7 @@ HELPERS = {
     beqlr
     lis 12, {H}
     lwz 12, 0x14(12)
-    mulli 12, 12, 0x620
+    mulli 12, 12, 0x{memmap.MACHINE_SIZE:X}
     add 3, 3, 12
     blr
 """,

@@ -10,7 +10,6 @@ SEATS	port/core/src/instruments.cpp	re	std::min<u32>\([^;]*?, (\d+)\)	1
 SEATS	port/core/src/paint.cpp	re	std::array<[\w:<> ]+, (30)\b	11
 SEATS	port/core/src/paint.cpp	re	racer < (\d+)\b	4
 SEATS	port/core/src/internal.h	re	std::array<[\w:<> ]+, (30)\b	2
-SEATS	memmap.py	re	INPUTS \+ \d+ \* (\d+) \* \d+	1
 RACERS_MIN	port/core/src/files_match.cpp	re	Put32\(r \+ 12, racers - (\d+)\)	1
 NAME_SIZE	memmap.py	py	NAME_SIZE	
 NAME_SIZE	port/core/src/files.h	cxx	NAME_SIZE	
@@ -19,8 +18,6 @@ NAME_SHOWN	port/core/src/files_match.cpp	cxx	MAX_NAME
 RECORD	port/core/src/net_internal.h	cxx	RECORD	
 RECORD	port/core/src/rollback.cpp	cxx	RECORD	
 INPUT_SLOT	port/core/src/rollback.cpp	re	\) \* (\d+), (?:records|RECORD)	2
-INPUT_SLOT	memmap.py	re	INPUTS \+ \d+ \* \d+ \* (\d+)	1
-RING_STEPS	memmap.py	re	INPUTS \+ (\d+) \* \d+ \* \d+	1
 RING_STEPS - 1	port/core/src/rollback.cpp	re	\((?:t|step) & (\d+)\)	4
 LAPS_MIN	port/core/src/files_match.cpp	re	"laps", \d+, (\d+), MAX_LAPS\)	1
 LAPS_MAX	port/core/src/files.h	cxx	MAX_LAPS	
@@ -240,18 +237,9 @@ OPTION_SCHEME	port/core/src/boot.cpp	use	game::OPTION_SCHEME	2
 GAME_ID	port/core/src/files.h	cxx	GAME_ID	
 MACHINES	port/core/src/rollback.h	cxx	MACHINES	
 MACHINE_COUNT	port/core/src/rollback.h	cxx	MACHINE_COUNT	
-MACHINE_SIZE	port/core/src/checksum.cpp	re	\b(0x620)\b	4
 MACHINE_SIZE	port/core/src/replay.cpp	use	game::MACHINE_SIZE	2
-MACHINE_SIZE	port/core/src/playback.cpp	re	\b(0x620)\b	2
-MACHINE_SIZE	port/core/src/instruments.cpp	re	\b(0x620)\b	11
-MACHINE_PROGRESS	port/core/src/checksum.cpp	re	\b(0x49C)\b	1
 MACHINE_PROGRESS	port/core/src/replay.cpp	use	game::MACHINE_PROGRESS	2
-MACHINE_PROGRESS	port/core/src/playback.cpp	re	\b(0x49C)\b	1
-MACHINE_PROGRESS	port/core/src/instruments.cpp	re	\b(0x49C)\b	1
-PROGRESS_SIZE	port/core/src/checksum.cpp	re	\b(0x1FC)\b	3
-PROGRESS_SIZE	port/core/src/instruments.cpp	re	\b(0x1FC)\b	5
 PROGRESS_RANK	port/core/src/replay.cpp	use	game::PROGRESS_RANK	2
-PROGRESS_RANK	port/core/src/playback.cpp	re	\b(0x115)\b	1
 PROGRESS_LAPS	port/core/src/replay.cpp	use	game::PROGRESS_LAPS	1
 PROGRESS_BEST_LAP	port/core/src/replay.cpp	use	game::PROGRESS_BEST_LAP	1
 PROGRESS_LAP_SUM	port/core/src/replay.cpp	use	game::PROGRESS_LAP_SUM	1
@@ -329,7 +317,6 @@ CAR_DATA_MAPPED	port/core/src/stat_pack.cpp	use	game::CAR_DATA_MAPPED	4
 MACHINE_ID	port/core/src/stat_pack.cpp	use	game::MACHINE_ID	1
 MACHINE_WEIGHT	port/core/src/stat_pack.cpp	use	game::MACHINE_WEIGHT	1
 CAR_BLOCK	port/core/src/stat_ranges.h	use	file::CAR_BLOCK	1
-CAR_BLOCK	net/src/Launcher.Core/Files/MachineStatFile.cs	cs	BlockSize	
 CAR_MACHINES	port/core/src/stat_ranges.h	use	file::CAR_MACHINES	2
 CAR_NAMES_AT	port/core/src/stat_pack.cpp	use	file::CAR_NAMES_AT	2
 CAR_PARTS_AT	port/core/src/stat_ranges.h	use	file::CAR_PARTS_AT	1
@@ -389,3 +376,138 @@ GAME_OPTIONS	port/core/src/boot.cpp	use	game::GAME_OPTIONS	2
 SAVED_VIEW	port/core/src/boot.cpp	use	game::SAVED_VIEW	3
 CHASE_RECORD	port/core/src/board_race.cpp	use	game::CHASE_RECORD	1
 CHASE_VIEW	port/core/src/board_race.cpp	use	game::CHASE_VIEW	2
+MACHINE_FLAGS	port/core/src/out_test.h	use	game::MACHINE_FLAGS	1
+MACHINE_FLAGS2	port/core/src/out_test.h	use	game::MACHINE_FLAGS2	1
+MACHINE_FLAGS2_FALLEN	port/core/src/out_test.h	use	game::MACHINE_FLAGS2_FALLEN	1
+MACHINE_FLAG_BROKEN_DOWN	port/core/src/out_test.h	use	game::MACHINE_FLAG_BROKEN_DOWN	1
+MACHINE_FLAG_CPU	port/core/src/out_test.h	use	game::MACHINE_FLAG_CPU	1
+MACHINE_FLAG_OUT	port/core/src/out_test.h	use	game::MACHINE_FLAG_OUT	1
+MACHINE_FLAG_FINISHED	port/core/src/out_test.h	use	game::MACHINE_FLAG_FINISHED	1
+MACHINE_FLAG_RETIRED	port/core/src/out_test.h	use	game::MACHINE_FLAG_RETIRED	1
+MACHINE_FLAG_TIME_OVER	port/core/src/out_test.h	use	game::MACHINE_FLAG_TIME_OVER	1
+MACHINE_SPEED	port/core/src/out_test.h	use	game::MACHINE_SPEED	1
+MACHINE_ATTACK_KOS	port/core/src/board_race.cpp	use	game::MACHINE_ATTACK_KOS	1
+MACHINE_ENERGY	port/core/src/board_race.cpp	use	game::MACHINE_ENERGY	1
+MACHINE_MAX_ENERGY	port/core/src/board_race.cpp	use	game::MACHINE_MAX_ENERGY	1
+MACHINE_POSITION_X	port/core/src/board_race.cpp	use	game::MACHINE_POSITION_X	1
+MACHINE_POSITION_Y	port/core/src/board_race.cpp	use	game::MACHINE_POSITION_Y	1
+MACHINE_POSITION_Z	port/core/src/board_race.cpp	use	game::MACHINE_POSITION_Z	1
+MACHINE_SPEED	port/core/src/board_race.cpp	use	game::MACHINE_SPEED	1
+MACHINE_TOP_SPEED	port/core/src/board_race.cpp	use	game::MACHINE_TOP_SPEED	1
+PROGRESS_DISTANCE	port/core/src/board_race.cpp	use	game::PROGRESS_DISTANCE	1
+PROGRESS_LAP_TIME	port/core/src/board_race.cpp	use	game::PROGRESS_LAP_TIME	1
+PROGRESS_RACE_TIME	port/core/src/board_race.cpp	use	game::PROGRESS_RACE_TIME	1
+MACHINES_AT	port/core/src/hfr.cpp	use	game::MACHINES_AT	1
+MACHINE_BUMP_COUNTDOWN	port/core/src/hfr.cpp	use	game::MACHINE_BUMP_COUNTDOWN	1
+MACHINE_COUNT_AT	port/core/src/hfr.cpp	use	game::MACHINE_COUNT_AT	1
+MACHINE_FLAGS	port/core/src/hfr.cpp	use	game::MACHINE_FLAGS	1
+MACHINE_FLAGS2	port/core/src/hfr.cpp	use	game::MACHINE_FLAGS2	1
+MACHINE_FLAGS2_FALLEN	port/core/src/hfr.cpp	use	game::MACHINE_FLAGS2_FALLEN	1
+MACHINE_FLAG_BROKEN_DOWN	port/core/src/hfr.cpp	use	game::MACHINE_FLAG_BROKEN_DOWN	1
+MACHINE_FLAG_RETIRED	port/core/src/hfr.cpp	use	game::MACHINE_FLAG_RETIRED	1
+MACHINE_SINCE	port/core/src/hfr.cpp	use	game::MACHINE_SINCE	1
+MACHINE_SIZE	port/core/src/hfr.cpp	use	game::MACHINE_SIZE	1
+MACHINE_SPEED	port/core/src/hfr.cpp	use	game::MACHINE_SPEED	1
+MACHINE_UP_X	port/core/src/hfr.cpp	use	game::MACHINE_UP_X	1
+MACHINE_WALL_HITS	port/core/src/hfr.cpp	use	game::MACHINE_WALL_HITS	1
+MACHINE_PROGRESS	port/core/src/checksum.cpp	use	game::MACHINE_PROGRESS	1
+MACHINE_SIZE	port/core/src/checksum.cpp	use	game::MACHINE_SIZE	4
+PROGRESS_SIZE	port/core/src/checksum.cpp	use	game::PROGRESS_SIZE	3
+MACHINE_PROGRESS	port/core/src/playback.cpp	use	game::MACHINE_PROGRESS	1
+MACHINE_SIZE	port/core/src/playback.cpp	use	game::MACHINE_SIZE	2
+PROGRESS_RANK	port/core/src/playback.cpp	use	game::PROGRESS_RANK	1
+MACHINE_POSITION_X	port/core/src/instruments.cpp	use	game::MACHINE_POSITION_X	1
+MACHINE_PROGRESS	port/core/src/instruments.cpp	use	game::MACHINE_PROGRESS	1
+MACHINE_SIZE	port/core/src/instruments.cpp	use	game::MACHINE_SIZE	11
+PROGRESS_SIZE	port/core/src/instruments.cpp	use	game::PROGRESS_SIZE	5
+MACHINE_FLAG_FINISHED	port/core/src/scrub_show.cpp	use	game::MACHINE_FLAG_FINISHED	1
+MACHINE_PROGRESS	port/core/src/scrub_show.cpp	use	game::MACHINE_PROGRESS	1
+MACHINE_SIZE	port/core/src/scrub_show.cpp	use	game::MACHINE_SIZE	3
+PROGRESS_LAPS	port/core/src/scrub_show.cpp	use	game::PROGRESS_LAPS	1
+MACHINE_ENERGY	port/core/src/spectator_frame.cpp	use	game::MACHINE_ENERGY	1
+MACHINE_FLAGS2	port/core/src/spectator_frame.cpp	use	game::MACHINE_FLAGS2	1
+MACHINE_FLAG_FINISHED	port/core/src/spectator_frame.cpp	use	game::MACHINE_FLAG_FINISHED	1
+MACHINE_MAX_ENERGY	port/core/src/spectator_frame.cpp	use	game::MACHINE_MAX_ENERGY	1
+MACHINE_PROGRESS	port/core/src/spectator_frame.cpp	use	game::MACHINE_PROGRESS	2
+MACHINE_SIZE	port/core/src/spectator_frame.cpp	use	game::MACHINE_SIZE	3
+PROGRESS_DISTANCE	port/core/src/spectator_frame.cpp	use	game::PROGRESS_DISTANCE	1
+PROGRESS_LAPS	port/core/src/spectator_frame.cpp	use	game::PROGRESS_LAPS	1
+PROGRESS_RANK	port/core/src/spectator_frame.cpp	use	game::PROGRESS_RANK	1
+MACHINE_APPROACHED	port/core/src/timeline.cpp	use	game::MACHINE_APPROACHED	1
+MACHINE_ENERGY	port/core/src/timeline.cpp	use	game::MACHINE_ENERGY	1
+MACHINE_FLAG_BROKEN_DOWN	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_BROKEN_DOWN	1
+MACHINE_FLAG_OUT	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_OUT	1
+MACHINE_FLAG_FINISHED	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_FINISHED	4
+MACHINE_FLAG_RETIRED	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_RETIRED	1
+MACHINE_MAX_ENERGY	port/core/src/timeline.cpp	use	game::MACHINE_MAX_ENERGY	1
+MACHINE_PROGRESS	port/core/src/timeline.cpp	use	game::MACHINE_PROGRESS	2
+MACHINE_SIZE	port/core/src/timeline.cpp	use	game::MACHINE_SIZE	1
+MACHINE_SKULLS	port/core/src/timeline.cpp	use	game::MACHINE_SKULLS	2
+PROGRESS_DISTANCE	port/core/src/timeline.cpp	use	game::PROGRESS_DISTANCE	2
+PROGRESS_LAPS	port/core/src/timeline.cpp	use	game::PROGRESS_LAPS	2
+PROGRESS_LAP_SUM	port/core/src/timeline.cpp	use	game::PROGRESS_LAP_SUM	1
+PROGRESS_RACE_TIME	port/core/src/timeline.cpp	use	game::PROGRESS_RACE_TIME	2
+MACHINE_FLAG_FINISHED	port/core/src/observer_frame.cpp	use	game::MACHINE_FLAG_FINISHED	1
+MACHINE_PROGRESS	port/core/src/observer_frame.cpp	use	game::MACHINE_PROGRESS	1
+MACHINE_SIZE	port/core/src/observer_frame.cpp	use	game::MACHINE_SIZE	1
+MACHINE_SPEED	port/core/src/observer_frame.cpp	use	game::MACHINE_SPEED	1
+PROGRESS_LAPS	port/core/src/observer_frame.cpp	use	game::PROGRESS_LAPS	1
+PROGRESS_LAP_LENGTH	port/core/src/observer_frame.cpp	use	game::PROGRESS_LAP_LENGTH	1
+PROGRESS_LAP_SUM	port/core/src/observer_frame.cpp	use	game::PROGRESS_LAP_SUM	1
+PROGRESS_LAP_TIME	port/core/src/observer_frame.cpp	use	game::PROGRESS_LAP_TIME	1
+MACHINE_FLAGS2	port/core/src/hits.cpp	use	game::MACHINE_FLAGS2	1
+MACHINE_FLAGS2_FALLEN	port/core/src/hits.cpp	use	game::MACHINE_FLAGS2_FALLEN	1
+MACHINE_PAD	port/core/src/hits.cpp	use	game::MACHINE_PAD	1
+MACHINES_AT	port/moderngekko/src/lanes_partial.cpp	use	game::MACHINES_AT	2
+MACHINE_CPU	port/moderngekko/src/lanes_partial.cpp	use	game::MACHINE_CPU	1
+MACHINE_PATH	port/moderngekko/src/lanes_partial.cpp	use	game::MACHINE_PATH	1
+MACHINE_PROGRESS	port/moderngekko/src/lanes_partial.cpp	use	game::MACHINE_PROGRESS	1
+MACHINE_SIZE	port/moderngekko/src/lanes_partial.cpp	use	game::MACHINE_SIZE	5
+MACHINE_WALL_QUERY	port/moderngekko/src/lanes_partial.cpp	use	game::MACHINE_WALL_QUERY	1
+PROGRESS_SIZE	port/moderngekko/src/lanes_partial.cpp	use	game::PROGRESS_SIZE	1
+MACHINE_FLAGS	port/facts/machine-state.csv	hex	(?m)^block,0x(000),u32 bits,\"flags \(	1
+MACHINE_POSITION_X	port/facts/machine-state.csv	hex	(?m)^block,0x0*(7C),	1
+MACHINE_POSITION_Y	port/facts/machine-state.csv	hex	(?m)^block,0x0*(80),	1
+MACHINE_POSITION_Z	port/facts/machine-state.csv	hex	(?m)^block,0x0*(84),	1
+MACHINE_TOP_SPEED	port/facts/machine-state.csv	hex	(?m)^block,0x0*(D8),	1
+MACHINE_SPEED	port/facts/machine-state.csv	hex	(?m)^block,0x0*(17C),	1
+MACHINE_ENERGY	port/facts/machine-state.csv	hex	(?m)^block,0x0*(184),	1
+MACHINE_UP_X	port/facts/machine-state.csv	hex	(?m)^block,0x0*(1BC),	1
+MACHINE_ATTACK_KOS	port/facts/machine-state.csv	hex	\+(212) KOs during the current attack	1
+MACHINE_WALL_HITS	port/facts/machine-state.csv	hex	\+(213) wall / out-of-bounds hit count	1
+MACHINE_PAD	port/facts/machine-state.csv	hex	\+(474) pad port	1
+MACHINE_SINCE	port/facts/machine-state.csv	hex	(?m)^block,0x0*(47C),	1
+MACHINE_SKULLS	port/facts/machine-state.csv	hex	\+(482) skull \(KO\) count	1
+MACHINE_CPU	port/facts/machine-state.csv	hex	(?m)^block,0x0*(484),	1
+MACHINE_WALL_QUERY	port/facts/machine-state.csv	hex	(?m)^block,0x0*(488),	1
+MACHINE_PATH	port/facts/machine-state.csv	hex	(?m)^block,0x0*(498),	1
+MACHINE_APPROACHED	port/facts/machine-state.csv	hex	\+(4C1) last machine approached	1
+MACHINE_BUMP_COUNTDOWN	port/facts/machine-state.csv	hex	\+(4C4) countdown after machine collision	1
+MACHINE_IMMUNITY	port/facts/machine-state.csv	hex	(?m)^block,0x0*(514),	1
+MACHINE_FLAGS2	port/facts/machine-state.csv	hex	(?m)^block,0x0*(58C),	1
+MACHINE_MAX_ENERGY	port/facts/machine-state.csv	hex	\+(5DA) maximum energy	1
+PROGRESS_DISTANCE	port/facts/machine-state.csv	hex	(?m)^\+0x49C,0x0*(F8),	1
+PROGRESS_LAP_LENGTH	port/facts/machine-state.csv	hex	(?m)^\+0x49C,0x0*(FC),	1
+PROGRESS_LAP_TIME	port/facts/machine-state.csv	hex	(?m)^\+0x49C,0x0*(160),	1
+PROGRESS_RACE_TIME	port/facts/machine-state.csv	hex	(?m)^\+0x49C,0x0*(1E4),	1
+MACHINE_FLAG_AIRBORNE	port/facts/machine-state.csv	re	"flags \([^"]*\bairborne (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_AIRBORNE_LONG	port/facts/machine-state.csv	re	"flags \([^"]*\bairborne over 10 steps (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_SPIN	port/facts/machine-state.csv	re	"flags \([^"]*\bspin (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_LANDED	port/facts/machine-state.csv	re	"flags \([^"]*\blanded this step (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_BOOSTING	port/facts/machine-state.csv	re	"flags \([^"]*\bboosting (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_BOOST_REQUEST	port/facts/machine-state.csv	re	"flags \([^"]*\bboost req (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_BROKEN_DOWN	port/facts/machine-state.csv	re	"flags \([^"]*\bbroken down (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_CPU	port/facts/machine-state.csv	re	"flags \([^"]*\bCPU (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_DRIVEN	port/facts/machine-state.csv	re	"flags \([^"]*\bdriven since start or restore (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_OUT	port/facts/machine-state.csv	re	"flags \([^"]*\bout of the course (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_STRAFE_LATCH	port/facts/machine-state.csv	re	"flags \([^"]*\bstrafe latch (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_FINISHED	port/facts/machine-state.csv	re	"flags \([^"]*\bfinished (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_SIDE_ATTACK	port/facts/machine-state.csv	re	"flags \([^"]*\bside attack (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_LAP	port/facts/machine-state.csv	re	"flags \([^"]*\blap event (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_CONTACT	port/facts/machine-state.csv	re	"flags \([^"]*\bcontact this step (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_AI	port/facts/machine-state.csv	re	"flags \([^"]*\bAI-driven (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_RETIRED	port/facts/machine-state.csv	re	"flags \([^"]*\bretired (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_TIME_OVER	port/facts/machine-state.csv	re	"flags \([^"]*\btime over (0x[0-9A-F]+)\b	1
+MACHINE_FLAGS2_PIT	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) used a pit	1
+MACHINE_FLAGS2_STEPPED	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) stepped this frame	1
+MACHINE_FLAGS2_FALLEN	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) destroyed/out of contact	1

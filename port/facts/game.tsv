@@ -6,7 +6,7 @@ NAME_SIZE	limit	32		u32		memmap.py:8	bytes of one player name's place in the win
 NAME_SHOWN	limit	16		int		net/src/Online.Protocol/PlayerNames.cs:11	characters of a player name the results screens show: longer names are cut
 RECORD	limit	6		int		port/core/src/net_internal.h:65	bytes of the game's control record: one seat's input for one step
 INPUT_SLOT	limit	8		u32		port/core/src/rollback.cpp:81	bytes one seat's record takes in the input buffer (a 6-byte record in an 8-byte place)
-RING_STEPS	limit	1024		u32		memmap.py:25	steps the input buffer and the checksum ring keep: step s is at s & 1023
+RING_STEPS	limit	1024		u32		port/core/src/rollback.cpp:215	steps the input buffer and the checksum ring keep: step s is at s & 1023
 LAPS_MIN	limit	0		int		port/core/src/files_match.cpp:174	the fewest laps the game takes: 0 is a free run, with no lap count
 LAPS_MAX	limit	99		int		port/core/src/files.h:39	the most laps the game takes: two digits, as its lap counter shows
 CPU_LEVEL_MAX	limit	=rule_most_cpu_level		int		protocol/rules.toml:103	the highest CPU level: 0 Novice, 1 Standard, 2 Expert, 3 Master
@@ -243,6 +243,52 @@ MACHINE_WEIGHT	machine	0x8	MACHINES	u32		port/core/src/stat_pack.cpp:133	in a ma
 MACHINE_DRAWN_X	machine	0x158	MACHINES	u32		port/core/src/minimap_frame.cpp:110	in a machine's block: the translation of its drawn matrix (+0x14C), x: where the body is drawn, rollback smoothing included (a float; y at +0x168, z at +0x178)
 MACHINE_DRAWN_Y	machine	0x168	MACHINES	u32		port/core/src/minimap_frame.cpp:110	in a machine's block: the drawn matrix's translation, y (a float)
 MACHINE_DRAWN_Z	machine	0x178	MACHINES	u32		port/core/src/minimap_frame.cpp:110	in a machine's block: the drawn matrix's translation, z (a float)
+MACHINE_FLAGS	machine	0x0	MACHINES	u32		port/facts/machine-state.csv:2	in a machine's block: its flags (a word; the bits MACHINE_FLAG_*)
+MACHINE_POSITION_X	machine	0x7C	MACHINES	u32		port/facts/machine-state.csv:33	in a machine's block: its position, x (a float; y at +0x80, z at +0x84)
+MACHINE_POSITION_Y	machine	0x80	MACHINES	u32		port/facts/machine-state.csv:34	in a machine's block: its position, y (a float)
+MACHINE_POSITION_Z	machine	0x84	MACHINES	u32		port/facts/machine-state.csv:35	in a machine's block: its position, z (a float)
+MACHINE_TOP_SPEED	machine	0xD8	MACHINES	u32		port/facts/machine-state.csv:56	in a machine's block: the top speed it reached in the race, km/h (a float)
+MACHINE_SPEED	machine	0x17C	MACHINES	u32		port/facts/machine-state.csv:97	in a machine's block: its speed, km/h: 216 x |momentum| / weight, written at its step's start (a float)
+MACHINE_ENERGY	machine	0x184	MACHINES	u32		port/facts/machine-state.csv:99	in a machine's block: its energy (a float, up to MACHINE_MAX_ENERGY)
+MACHINE_UP_X	machine	0x1BC	MACHINES	u32		port/facts/machine-state.csv:113	in a machine's block: its up vector (the road's normal under it), x; y and z follow (floats; written only when the ground query hits)
+MACHINE_ATTACK_KOS	machine	0x212	MACHINES	u32		port/facts/machine-state.csv:134	in a machine's block: the knockouts of its current attack (a byte)
+MACHINE_WALL_HITS	machine	0x213	MACHINES	u32		port/facts/machine-state.csv:134	in a machine's block: its wall and out-of-bounds hits (a byte, at most 180)
+MACHINE_PAD	machine	0x474	MACHINES	u32		port/facts/machine-state.csv:287	in a machine's block: the pad port that drives it (a signed byte; -1 none)
+MACHINE_SINCE	machine	0x47C	MACHINES	u32		port/facts/machine-state.csv:289	in a machine's block: the frames since its start or its last restore
+MACHINE_SKULLS	machine	0x482	MACHINES	u32		port/facts/machine-state.csv:290	in a machine's block: its skull (knockout) count (a byte; a restore keeps it)
+MACHINE_CPU	machine	0x484	MACHINES	u32		port/facts/machine-state.csv:291	in a machine's block: the pointer to its CPU driver's block (0x88 bytes; 0 for a player)
+MACHINE_WALL_QUERY	machine	0x488	MACHINES	u32		port/facts/machine-state.csv:292	in a machine's block: the pointer to wall corner 0's track-query record (0xC0 bytes; corners 1 to 3 follow, a word each)
+MACHINE_PATH	machine	0x498	MACHINES	u32		port/facts/machine-state.csv:296	in a machine's block: the pointer to its track-segment path record (0x194 bytes)
+MACHINE_APPROACHED	machine	0x4C1	MACHINES	u32		port/facts/machine-state.csv:306	in a machine's block: the last machine it approached (a racer index, a byte)
+MACHINE_BUMP_COUNTDOWN	machine	0x4C4	MACHINES	u32		port/facts/machine-state.csv:307	in a machine's block: the countdown after a collision with a machine (a byte)
+MACHINE_IMMUNITY	machine	0x514	MACHINES	u32		port/facts/machine-state.csv:327	in a machine's block: its contact immunity mask: bit 0x80000000 >> j, no contact response with racer j (a restore sets every bit); not a record of who touched whom
+MACHINE_FLAGS2	machine	0x58C	MACHINES	u32		port/facts/machine-state.csv:357	in a machine's block: its second flags word (a word; the bits MACHINE_FLAGS2_*)
+MACHINE_MAX_ENERGY	machine	0x5DA	MACHINES	u32		port/facts/machine-state.csv:376	in a machine's block: its maximum energy (16 bits; 100)
+PROGRESS_DISTANCE	machine	0xF8	MACHINE_PROGRESS	u32		port/facts/machine-state.csv:783	in a progress record: the distance covered over all laps (a float; it orders the racers still racing)
+PROGRESS_LAP_LENGTH	machine	0xFC	MACHINE_PROGRESS	u32		port/facts/machine-state.csv:784	in a progress record: the lap's length (a float)
+PROGRESS_LAP_TIME	machine	0x160	MACHINE_PROGRESS	u32		port/facts/machine-state.csv:809	in a progress record: the current lap's time (frames)
+PROGRESS_RACE_TIME	machine	0x1E4	MACHINE_PROGRESS	u32		port/facts/machine-state.csv:842	in a progress record: the race time (frames)
+MACHINE_FLAG_AIRBORNE	machine	0x2		u32		port/facts/machine-state.csv:2	in a machine's flags: airborne (every hover corner in the air; set at the step's start)
+MACHINE_FLAG_AIRBORNE_LONG	machine	0x4		u32		port/facts/machine-state.csv:2	in a machine's flags: airborne more than 10 steps
+MACHINE_FLAG_SPIN	machine	0x8		u32		port/facts/machine-state.csv:2	in a machine's flags: spinning (the spin attack)
+MACHINE_FLAG_LANDED	machine	0x10		u32		port/facts/machine-state.csv:2	in a machine's flags: landed this step (the corners touched down after air time)
+MACHINE_FLAG_BOOSTING	machine	0x20		u32		port/facts/machine-state.csv:2	in a machine's flags: a boost is active (fn_1_26F34 sets and clears it; not a ground state)
+MACHINE_FLAG_BOOST_REQUEST	machine	0x40		u32		port/facts/machine-state.csv:2	in a machine's flags: a boost is asked for (the input stage sets it; the lap-1 rule clears it)
+MACHINE_FLAG_BROKEN_DOWN	machine	0x80		u32		port/facts/machine-state.csv:2	in a machine's flags: broken down, its energy out (its controls are zeroed)
+MACHINE_FLAG_CPU	machine	0x200		u32		port/facts/machine-state.csv:2	in a machine's flags: the CPU rules (damage, contact, immunity: fn_1_83070 sets it); the uniform race clears it each frame (standin.py)
+MACHINE_FLAG_DRIVEN	machine	0x400		u32		port/facts/machine-state.csv:2	in a machine's flags: it has driven since the start or a restore (the first throttle, a contact or a restore sets it); never a per-step contact bit
+MACHINE_FLAG_OUT	machine	0x800		u32		port/facts/machine-state.csv:2	in a machine's flags: out of the course (destroyed, out of bounds or off the course; the destruction itself is 0x40000000)
+MACHINE_FLAG_STRAFE_LATCH	machine	0x4000		u32		port/facts/machine-state.csv:2	in a machine's flags: the strafe latch
+MACHINE_FLAG_FINISHED	machine	0x10000		u32		port/facts/machine-state.csv:2	in a machine's flags: it has finished the race
+MACHINE_FLAG_SIDE_ATTACK	machine	0x20000		u32		port/facts/machine-state.csv:2	in a machine's flags: a side attack
+MACHINE_FLAG_LAP	machine	0x40000		u32		port/facts/machine-state.csv:2	in a machine's flags: a lap event this step (set in the step, cleared at the next step's start)
+MACHINE_FLAG_CONTACT	machine	0x02000000		u32		port/facts/machine-state.csv:2	in a machine's flags: in contact with a machine this step
+MACHINE_FLAG_AI	machine	0x04000000		u32		port/facts/machine-state.csv:2	in a machine's flags: inputs from the CPU driver (a vanilla seat with it keeps its creation stats); set on every seat in our races, so never a CPU marker (standin.py hides it for the stats)
+MACHINE_FLAG_RETIRED	machine	0x08000000		u32		port/facts/machine-state.csv:2	in a machine's flags: retired, out of the race for good
+MACHINE_FLAG_TIME_OVER	machine	0x10000000		u32		port/facts/machine-state.csv:2	in a machine's flags: out at a timed mode's or the time limit's end
+MACHINE_FLAGS2_PIT	machine	0x1		u32		port/facts/machine-state.csv:357	in a machine's second flags: it used a pit (set by the pit detection, not while broken down)
+MACHINE_FLAGS2_STEPPED	machine	0x8		u32		port/facts/machine-state.csv:357	in a machine's second flags: stepped this frame
+MACHINE_FLAGS2_FALLEN	machine	0x10		u32		port/facts/machine-state.csv:357	in a machine's second flags: out of contact (a fall or a destruction)
 # ---- site
 DOL_PIN	site	0x80005940		u32	pin[name=sample-alloc-pad].writes[0].address	port/image/build.py:44	patched site in the executable: the call that made main.rel's address vary
 DOL_PIN_STOCK	site	0x4800BAE5		u32		port/image/build.py:44	the game's instruction at DOL_PIN (a call of the tick reader)

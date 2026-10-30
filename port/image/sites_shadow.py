@@ -71,9 +71,9 @@ def add(k, r, patch, stock, test, la, middle):
     stfd 3, 16(1)
     stfd 4, 24(1)
     stfd 5, 32(1)
-    lfs 3, 0x1BC(30)
-    lfs 4, 0x1C0(30)
-    lfs 5, 0x1C4(30)
+    lfs 3, 0x{memmap.MACHINE_UP_X:X}(30)
+    lfs 4, 0x{memmap.MACHINE_UP_X + 4:X}(30)
+    lfs 5, 0x{memmap.MACHINE_UP_X + 8:X}(30)
     lis 12, {k.C}
     lwz 0, 456(12)
     andi. 0, 0, 4
