@@ -167,7 +167,7 @@ else()
     OUTPUT "${BUNDLE}/mod.bin" "${BUNDLE}/patches.json" "${BUNDLE}/symbols.json" "${BUNDLE}/manifest.json"
     COMMAND "${PY}" "${CMAKE_CURRENT_SOURCE_DIR}/port/image/build.py" "${BUNDLE}" --rel "${W}/derived/main.rel"
             --dol "${GAME_DIR}/sys/main.dol.orig" --commit-file "${commit_file}"
-    DEPENDS ${image_sources} ${DISC_INPUTS}
+    DEPENDS ${image_sources} "${CMAKE_CURRENT_SOURCE_DIR}/port/facts/generated/facts.py" ${DISC_INPUTS}
     COMMENT "The image, into ${BUNDLE}"
     VERBATIM)
   add_custom_target(image DEPENDS "${BUNDLE}/mod.bin")

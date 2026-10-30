@@ -1,5 +1,14 @@
 """The mod's memory: the fork's RAM above the game's 24 MiB (0x81800000 on; dolphin-fzgx maps it for the mod and
 never tells the game). One place for every address the builders and the harness use."""
+import importlib.util
+import os
+
+# The facts table's generated module (port/facts/generated/facts.py, from port/facts/game.tsv): the race block's words
+# of the host's rules come from there, which takes them from the protocol's rules.toml.
+_spec = importlib.util.spec_from_file_location(
+    "port_facts", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "facts", "generated", "facts.py"))
+_facts = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_facts)
 IMAGE = 0x81800000        # mod image (modbuild.py), up to 64 KiB
 CONTROL = 0x81810000      # control block (netframe.py): park target, extra steps, flags, gate, timings, counters
 CHECKSUMS = 0x81811000    # checksum ring: 1024 x u32, entry race frame & 1023
@@ -48,10 +57,11 @@ MINE_BLOCK = MINE_COUNTS + 2 * MINE_TABLE
 RACE = 0x81814000
 RACE_COURSE, RACE_MACHINE0, RACE_OPPONENTS, RACE_LAPS, RACE_TYPE, RACE_SHUFFLE, RACE_CPUSEED, RACE_MACHINES = (
     4, 8, 12, 16, 20, 24, 28, 32)
-RACE_CPULEVEL, RACE_BOOST, RACE_RESTORE, RACE_SETTINGS = 256, 260, 264, 268
-RACE_FINISH_LIMIT = 300
+# the host's rules the games apply (the protocol's rules.toml, through the facts table): their words
+RACE_CPULEVEL, RACE_BOOST, RACE_RESTORE = _facts.RACE_CPULEVEL, _facts.RACE_BOOST, _facts.RACE_RESTORE
+RACE_FINISH_LIMIT, RACE_MINE_REGEN = _facts.RACE_FINISH_LIMIT, _facts.RACE_MINE_REGEN
+RACE_SETTINGS = 268
 RACE_FLOW = 304
-RACE_MINE_REGEN = 308
 RACE_GRID_ON, RACE_GRID = 64, 68
 # +100 the rubber band (a word: 1, the CPU drivers pace against the player seats, the game's own way, every recording
 # made before 0.4.0; 0, every driver at its own pace, every race and practice from 0.4.0; sites_cpu.py)
