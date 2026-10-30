@@ -47,8 +47,11 @@ static_assert(SEATS_AT + 30 * SEAT_DISPLAY <= DISPLAY + 0x1000);
 // The window words the pass writes for the image (memmap.MODE_HUD; port/image/sites_modehud.py): +0 the image's
 // flags (POINTS_PAGE: the results go from their first page to the points page, the site at main.rel 0x14A37C;
 // STORY_PICTURES: the story's picture group 0xBA is loaded at the race's set-up), +4 the DIGIT part's value (the
-// source block's +0 points here), +0x10 a byte a seat: the look this game draws the seat's machine with.
-constexpr u32 WINDOW_FLAGS = 0, WINDOW_DIGIT = 4, WINDOW_LOOKS = 0x10;
+// source block's +0 points here), +0x10 a byte a seat: the look this game draws the seat's machine with (a
+// modes::LOOK_*, or COLOURED: normal, tinted by the seat's word at +0x30, seat.colour's 0xRRGGBBAA).
+constexpr u32 WINDOW_FLAGS = 0, WINDOW_DIGIT = 4, WINDOW_LOOKS = 0x10, WINDOW_TINTS = 0x30;
+constexpr u8 COLOURED = modes::LOOK_COUNT;
+static_assert(WINDOW_TINTS + 30 * 4 <= 0x100);
 constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2;
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
@@ -92,6 +95,7 @@ struct Frame
   u32 parts = 0;                     // the part mask's mode bits to set
   s32 digit = 0;                     // the DIGIT part's value (steps, as the story's: seconds = value / 60)
   std::array<u8, 30> looks{};        // the look each seat's machine is drawn with in this game
+  std::array<u32, 30> colours{};     // each seat's seat.colour (0: its own)
 };
 Frame Read(const Guest& g, u32 block, u32 viewed, u32 own);
 

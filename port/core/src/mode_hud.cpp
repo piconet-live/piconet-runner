@@ -129,6 +129,7 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
     const u8 own_look = g.Read8(r + OWN_LOOK);
     const u8 look = seat == own && own_look != 0 ? own_look - 1 : g.Read8(r + LOOK);
     f.looks[seat] = look < LOOK_COUNT ? look : static_cast<u8>(LOOK_NORMAL);
+    f.colours[seat] = g.Read32(r + COLOUR);
   }
   if (viewed >= SEATS)
     return f;
@@ -186,8 +187,13 @@ void Hud(Guest& g)
   g.Write32(module + SRC + 8, progress);
   g.Write32(module + SRC + 0xC, progress ? module + R : 0);
   g.Write32(module + SRC + 0x10, 0);
+  // a seat's colour tints its machine drawn normally (a ghost keeps the ghost's tint)
   for (u32 seat = 0; seat < SEATS; ++seat)
-    g.Write8(window + WINDOW_LOOKS + seat, f.looks[seat]);
+  {
+    const bool coloured = f.looks[seat] == LOOK_NORMAL && f.colours[seat] != 0;
+    g.Write8(window + WINDOW_LOOKS + seat, coloured ? COLOURED : f.looks[seat]);
+    g.Write32(window + WINDOW_TINTS + 4 * seat, coloured ? f.colours[seat] : 0);
+  }
   // the results' points page, once the mode has awarded points (its flag on the page)
   const u32 flags = g.Read32(window + WINDOW_FLAGS);
   g.Write32(window + WINDOW_FLAGS, (g.Read32(block + FLAGS) & POINTS_USED) ? flags | POINTS_PAGE : flags & ~POINTS_PAGE);

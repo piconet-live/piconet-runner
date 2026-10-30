@@ -123,6 +123,14 @@ void TestTheDisplayWordsRun()
   CHECK(g.Read32(MODULE + net::BSS + 0x84 + 4) == MACHINES + game::MACHINE_SIZE + game::MACHINE_SPEED);
   CHECK(g.Read8(layout::MODE_HUD + hud::WINDOW_LOOKS + 1) == modes::LOOK_NORMAL);
   CHECK(g.Read8(layout::MODE_HUD + hud::WINDOW_LOOKS + 4) == modes::LOOK_GHOST);
+  // the out seat's colour (0xFF2020FF) only tints a machine drawn normally: as a ghost it is not drawn so
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_TINTS + 4 * OUT_SEAT) == 0);
+  g.Write8(Record(OUT_SEAT) + hud::LOOK, modes::LOOK_NORMAL);
+  hud::Hud(g);
+  CHECK(g.Read8(layout::MODE_HUD + hud::WINDOW_LOOKS + OUT_SEAT) == hud::COLOURED);
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_TINTS + 4 * OUT_SEAT) == 0xFF2020FF);
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_TINTS) == 0);
+  g.Write8(Record(OUT_SEAT) + hud::LOOK, modes::LOOK_GHOST);
   g.Write32(MODULE + game::HUD_PARTS, 0);  // the HUD off (out, finished): it stays off
   hud::Hud(g);
   CHECK(g.Read32(MODULE + game::HUD_PARTS) == 0);

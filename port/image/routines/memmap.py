@@ -256,6 +256,6 @@ assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE
 # The game mode's displays (sites_modehud.py; port/core/src/mode_hud.h): the core writes them at every frame's drawing
 # from the mode's block, the image reads them in the drawing and at the race's set-up (the flags). Not read by a step.
 MODE_HUD = _facts.MODE_HUD
-MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10
+MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
 MODE_POINTS_PAGE, MODE_STORY_PICTURES = 1, 2
-assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD + 0x100 <= RACE
+assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE
