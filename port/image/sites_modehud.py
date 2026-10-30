@@ -34,7 +34,7 @@ GHOST_TINT = 0x3F333333                       # 0.7: Time Attack's (1.0, 1.0, 0.
 ONE = 0x3F800000
 BYTE_SCALE = 0x3B808081                       # 1 / 255: seat.colour's bytes to the tint's floats
 GHOST_ALPHA = 0x3F000000                      # 0.5 at most (the stock alpha, a near-camera fade, if lower)
-DISPLAY, SEATS_AT, SEAT_DISPLAY, NUMBER, BANNER = 0x5000, 0x5010, 0x20, 4, 10   # mode_hud.h
+DISPLAY, SEATS_AT, SEAT_DISPLAY, NUMBER, BANNER = 0x6000, 0x6010, 0x20, 4, 10   # mode_hud.h
 assert SEATS_AT + 30 * SEAT_DISPLAY <= memmap.MODE_BLOCK and SEATS_AT + NUMBER < 0x8000
 SLOT_SEAT = memmap.IMAGE + 0x14               # the slot 'FZSI' +4: the local seat (frame_hud.py)
 

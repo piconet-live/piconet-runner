@@ -95,29 +95,40 @@ void BeginRun(Guest& g, u32 block)
     g.Write8(Seat(block, seat) + BANNER, 0);
 }
 
-u32 WindowFlags(const Package& p)
+namespace
 {
-  return NeedsStoryPictures(p.code) ? STORY_PICTURES : 0;
-}
-
-bool NeedsStoryPictures(const std::vector<u8>& code)
+// Whether the code holds the action `id` (with `part`: a show of a part other than TIMER, the compiler writing a
+// choice as a Push right before the action: ModeEmitter). Code the compiler did not write: yes, rather than miss it.
+bool Uses(const std::vector<u8>& code, u8 id, bool part)
 {
-  // a Push of a part's number right before the show action (the compiler writes a choice as Push n: ModeEmitter)
-  for (size_t i = 0; i + 7 <= code.size();)
+  for (size_t i = 0; i < code.size();)
   {
     const u8 op = code[i];
     const int size = OpSize(op);
     if (size <= 0)
-      return true;  // (not code the compiler wrote: load the pictures rather than miss them)
-    if (op == OP_PUSH && i + 5 + 2 <= code.size() && code[i + 5] == OP_ACTION && code[i + 6] == ACTION_SHOW)
+      return true;
+    if (!part && op == OP_ACTION && i + 1 < code.size() && code[i + 1] == id)
+      return true;
+    if (part && op == OP_PUSH && i + 7 <= code.size() && code[i + 5] == OP_ACTION && code[i + 6] == id)
     {
-      const u32 part = static_cast<u32>(code[i + 1]) << 24 | code[i + 2] << 16 | code[i + 3] << 8 | code[i + 4];
-      if (part != PART_TIMER)
+      const u32 value = static_cast<u32>(code[i + 1]) << 24 | code[i + 2] << 16 | code[i + 3] << 8 | code[i + 4];
+      if (value != PART_TIMER)
         return true;
     }
     i += static_cast<size_t>(size);
   }
   return false;
+}
+}  // namespace
+
+bool NeedsStoryPictures(const std::vector<u8>& code)
+{
+  return Uses(code, ACTION_SHOW, true) || Uses(code, ACTION_DANGERZONE, false);
+}
+
+u32 WindowFlags(const Package& p)
+{
+  return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (Uses(p.code, ACTION_AWARD, false) ? POINTS_PAGE : 0);
 }
 
 Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
@@ -138,12 +149,14 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
   for (u32 p = 0; p < PART_COUNT; ++p)
     if (parts >> p & 1)
       f.parts |= PART_BITS[p];
-  // the danger zone's display (vocabulary 4.4): its count shows as the big digit and the warning, as story chapter
-  // 6's: the seconds left rounded up (the story counts 239 down to 60: 3, 2, 1)
-  if (const u32 left = g.Read32(r + DANGER); left != 0)
+  // the danger zone's display (vocabulary 4.4): while its count runs (the race side's, mode.h DANGER: from 60 x
+  // seconds + 60 down, the machine exploding at 60) the big digit and the warning, as story chapter 6's, whose digit
+  // is the count / 60; the sheet's digits go to 3
+  const u32 d = block + mode::DANGER + 16 * viewed, state = g.Read32(d + 12);
+  if (const s32 left = static_cast<s32>(g.Read32(d + 8)); (state & DANGER_ON) && !(state & DANGER_DONE) && left > 60)
   {
     f.parts |= PART_BITS[PART_DIGIT] | PART_BITS[PART_WARNING];
-    f.digit = std::clamp(static_cast<s32>(std::min<u32>(left, 0x7FFFFFFF)) + 59, 0, DIGIT_MOST);
+    f.digit = std::min(left, DIGIT_MOST);
   }
   return f;
 }
@@ -194,20 +207,6 @@ void Hud(Guest& g)
     g.Write8(window + WINDOW_LOOKS + seat, coloured ? COLOURED : f.looks[seat]);
     g.Write32(window + WINDOW_TINTS + 4 * seat, coloured ? f.colours[seat] : 0);
   }
-  // the results' points page, once the mode has awarded points (its flag on the page)
-  const u32 flags = g.Read32(window + WINDOW_FLAGS);
-  g.Write32(window + WINDOW_FLAGS, (g.Read32(block + FLAGS) & POINTS_USED) ? flags | POINTS_PAGE : flags & ~POINTS_PAGE);
-}
-
-void UsePoints(Guest& g, u32 block)
-{
-  g.Write32(block + FLAGS, g.Read32(block + FLAGS) | POINTS_USED);
-}
-
-void WritePoints(Guest& g, u32 module, u32 seat, u32 points)
-{
-  // the record of the seat (R+0xD4 + 0xA0 x seat), +0x4: the total the points pages show ("%04d") and sort by
-  g.Write16(module + R + 0xD4 + 0xA0 * seat + 4, static_cast<u16>(std::min<u32>(points, 9999)));
 }
 
 void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour)

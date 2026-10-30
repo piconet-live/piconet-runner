@@ -11,8 +11,8 @@
 // icon's getter (show_number), the machine's draw (the looks), the results' page choice (the points page) and the
 // banners raised after the mode point (port/image/sites_modehud.py).
 //
-// The page (DISPLAY, the block's sixth page): +0 its step stamp; +4 the page's flags (POINTS_USED); a seat's record
-// of SEAT_DISPLAY bytes at +0x10 + 0x20 x seat:
+// The page (DISPLAY, the block's seventh page): +0 its step stamp; a seat's record of SEAT_DISPLAY bytes at +0x10 +
+// 0x20 x seat:
 //   +0  the parts shown, bit p for modes::PART_* p (show / hide)
 //   +4  show_number's number + 1 (0: none shown)
 //   +8  seat.look (modes::LOOK_*), +9 seat.own_look + 1 (0: as seat.look), +10 stock_banner's banner + 1 asked at
@@ -20,8 +20,8 @@
 //   +12 seat.colour, 0xRRGGBBAA (0: the machine's own)
 //   +16 map_hide's seats: the course maps of these seats leave the seat's dot off (bit i: seat i)
 //   +20 map_mark: 0x01000000 | 0xRRGGBB (0: the machine's own colour)
-//   +24 the danger zone's count: steps left of its countdown (0: none running), +28 bit 0 armed. Written by the
-//       danger_zone word (the race side's: its state is its own, this is what it shows), read by the HUD pass
+//   +24 to +31 0
+// The danger zone's display reads the race side's state (mode.h DANGER: its count, as story chapter 6's).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -35,12 +35,9 @@
 
 namespace fzgx::mode::hud
 {
-constexpr u32 DISPLAY = 0x5000;          // the block's display page (mode.h BLOCK holds it)
-constexpr u32 FLAGS = DISPLAY + 4;       // the page's flags
-constexpr u32 POINTS_USED = 1;           // the mode awards points: the results show the game's points page
+constexpr u32 DISPLAY = 0x6000;          // the block's display page (mode.h BLOCK holds it)
 constexpr u32 SEATS_AT = DISPLAY + 0x10, SEAT_DISPLAY = 0x20;
-constexpr u32 PARTS = 0, NUMBER = 4, LOOK = 8, OWN_LOOK = 9, BANNER = 10, COLOUR = 12, MAP_HIDE = 16, MAP_MARK = 20,
-              DANGER = 24, DANGER_FLAGS = 28;
+constexpr u32 PARTS = 0, NUMBER = 4, LOOK = 8, OWN_LOOK = 9, BANNER = 10, COLOUR = 12, MAP_HIDE = 16, MAP_MARK = 20;
 constexpr u32 MARKED = 0x01000000;
 static_assert(SEATS_AT + 30 * SEAT_DISPLAY <= DISPLAY + 0x1000);
 
@@ -74,19 +71,13 @@ bool IsDisplay(u8 id);
 bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value);
 // The start of every run: the banners asked at the last one are gone.
 void BeginRun(Guest& g, u32 block);
-// The window's flags for a race of package `p` (the core writes them with the block's request, boot.cpp): the
-// story's pictures when its code shows a story part.
+// The window's flags for a race of package `p` (the core writes them with the block's request, boot.cpp; nothing
+// changes them in the race): the story's pictures when its code shows a story part; the points page when it awards
+// points (`award`: the race side writes each record's +0x4 at the end, mode.cpp).
 u32 WindowFlags(const Package& p);
 // Whether a package's code uses a word that shows a story part (the picture group 0xBA must then be loaded): any
-// show of a part other than TIMER.
+// show of a part other than TIMER, or danger_zone (its digit and warning).
 bool NeedsStoryPictures(const std::vector<u8>& code);
-
-// The points (the race side's `award`, at the mode point): the mode uses points, so the results go to the game's
-// points page (VS TOTAL RANKING) after their first page; and a seat's total as that page shows it, its results
-// record's +0x4 (0 to 9999). Open: whether the race reads +0x4 (a test that poked it from mid-race on saw the
-// racer's own result DISQUALIFIED, lap 1 at 0'00"000): until that is known, write it once the race has ended.
-void UsePoints(Guest& g, u32 block);
-void WritePoints(Guest& g, u32 module, u32 seat, u32 points);
 
 // What the HUD pass asks of the race, read from the block for one viewer (`viewed`: the racer the picture follows;
 // `own`: the seat whose own look applies, or none): pure, for the tests.

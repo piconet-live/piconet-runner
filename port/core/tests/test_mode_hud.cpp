@@ -102,15 +102,25 @@ void TestTheDisplayWordsRun()
   CHECK(player.parts == hud::PART_BITS[modes::PART_TIMER] && player.digit == 0);
   CHECK(player.looks[1] == modes::LOOK_NORMAL && player.looks[4] == modes::LOOK_GHOST && player.looks[0] == modes::LOOK_NORMAL);
   CHECK(watcher.looks[1] == modes::LOOK_GHOST && watcher.looks[4] == modes::LOOK_GHOST);
-  // the danger zone's count: the big digit and the warning, seconds rounded up (120 steps: 179, the digit 2)
-  g.Write32(Record(1) + hud::DANGER, 120);
+  // the danger zone's count (the race side's: mode.h DANGER, 60 x seconds + 60 down to 60): the big digit and the
+  // warning, the count as the story's digit value (179: the digit 2); the sheet's last digit, 3, at most; none once
+  // done or at 60
+  const u32 d = BLOCK + mode::DANGER + 16 * 1;
+  g.Write32(d + 12, mode::DANGER_ON | mode::DANGER_ARMED);
+  g.Write32(d + 8, 179);
   const hud::Frame danger = hud::Read(g, BLOCK, 1, 1);
   CHECK(danger.parts == (hud::PART_BITS[modes::PART_TIMER] | hud::PART_BITS[modes::PART_DIGIT] |
                          hud::PART_BITS[modes::PART_WARNING]));
   CHECK(danger.digit == 179);
-  g.Write32(Record(1) + hud::DANGER, 100000);
-  CHECK(hud::Read(g, BLOCK, 1, 1).digit == 239);  // the sheet's last digit, 3
-  g.Write32(Record(1) + hud::DANGER, 0);
+  g.Write32(d + 8, 600);
+  CHECK(hud::Read(g, BLOCK, 1, 1).digit == 239);
+  g.Write32(d + 8, 60);
+  CHECK(hud::Read(g, BLOCK, 1, 1).parts == hud::PART_BITS[modes::PART_TIMER]);
+  g.Write32(d + 8, 179);
+  g.Write32(d + 12, mode::DANGER_ON | mode::DANGER_DONE);
+  CHECK(hud::Read(g, BLOCK, 1, 1).parts == hud::PART_BITS[modes::PART_TIMER]);
+  g.Write32(d + 12, 0);
+  g.Write32(d + 8, 0);
 
   // the HUD pass for the player in seat 1: the mask's story bits off but TIMER, the source block, the looks
   g.Write32(layout::MODES + 4, BLOCK);
@@ -148,6 +158,17 @@ void TestTheDisplayWordsRun()
   hud::MapRacers(g, 1, false, present, colour);
   CHECK(present[1] && present[OUT_SEAT] && present[7]);
 
-  // the story's pictures: the vector shows DISTANCE; Overdrive shows nothing
+  // the story's pictures: the vector shows DISTANCE
   CHECK(hud::NeedsStoryPictures(p->code) && hud::WindowFlags(*p) == hud::STORY_PICTURES);
+  // the race vector awards points and runs danger zones: the points page and the story's pictures
+  {
+    std::ifstream file(ProtocolFile("protocol/tests/vectors/modes") / "race.mode.json");
+    std::stringstream text;
+    text << file.rdbuf();
+    picojson::value v;
+    picojson::parse(v, text.str());
+    std::string why;
+    const std::optional<mode::Package> race = mode::Read(v, &why);
+    CHECK(race.has_value() && hud::WindowFlags(*race) == (hud::STORY_PICTURES | hud::POINTS_PAGE));
+  }
 }
