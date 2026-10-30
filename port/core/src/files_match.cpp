@@ -323,6 +323,7 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
       Error("fzgx: {}: the race's game mode {}: refused (a mode error)", path, why);
       return false;
     }
+    m.game_mode->seed = mode::Seed(Text(json, "matchId"), m.game_mode->hash);
   }
   const u32 racers = static_cast<u32>(std::min<size_t>(seats.size(), MAX_SEATS));
   // a game mode's `laps` is the race's, over the match's (its setup words win)

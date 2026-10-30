@@ -52,7 +52,7 @@ MINE_BLOCK = MINE_COUNTS + 2 * MINE_TABLE
 # the start gate, as MINES; the block itself is the undo log's and the checksum's (MODE_BLOCK bytes: MODE_SEATS, a
 # seat's record of MODE_SEAT bytes that the image's sites read, then the interpreter's state).
 MODES = _facts.MODES
-MODE_BLOCK = 0x3000
+MODE_BLOCK = 0x5000
 MODE_ALLOC = MODE_BLOCK + 0x1000   # taken from the heap: the block starts on a page (the undo log's pages, mode.cpp)
 MODE_SEAT = 16
 MODE_SEATS = 0

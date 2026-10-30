@@ -176,6 +176,10 @@ void TestTheOutTestReadsTheGame();
 void TestTheModeVectorsRead();
 void TestOverdriveRunsInTheBlock();
 void TestEveryWordRuns();
+void TestTheGamesSquareRootIsTheCompilers();
+void TestTheGeneratorIsTheReferences();
+void TestWaitsRunInTheBlock();
+void TestTheLanguageVectorRuns();
 // test_stats_race.cpp
 void TestAStatPackIsLaidOverTheCarData();
 void TestAStatPackUnderRollback();
@@ -505,6 +509,10 @@ int main(int argc, char** argv)
   TestTheModeVectorsRead();
   TestOverdriveRunsInTheBlock();
   TestEveryWordRuns();
+  TestTheGamesSquareRootIsTheCompilers();
+  TestTheGeneratorIsTheReferences();
+  TestWaitsRunInTheBlock();
+  TestTheLanguageVectorRuns();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);
   return s_failed == 0 ? 0 : 1;
 }
