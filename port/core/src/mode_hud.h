@@ -83,8 +83,8 @@ bool NeedsStoryPictures(const std::vector<u8>& code);
 
 // The points (the race side's `award`, at the mode point): the mode uses points, so the results go to the game's
 // points page (VS TOTAL RANKING) after their first page; and a seat's total as that page shows it, its results
-// record's +0x4 (0 to 9999), written at every run so that the game's own Grand Prix points (added at a finish, in a
-// race type 6 as in a Grand Prix) never stand there.
+// record's +0x4 (0 to 9999). Open: whether the race reads +0x4 (a test that poked it from mid-race on saw the
+// racer's own result DISQUALIFIED, lap 1 at 0'00"000): until that is known, write it once the race has ended.
 void UsePoints(Guest& g, u32 block);
 void WritePoints(Guest& g, u32 module, u32 seat, u32 points);
 
