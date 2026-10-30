@@ -131,10 +131,10 @@ void LoadArtFromTheGame(Meter* meter, std::string* problem);
 // the picture's height each way, in a 16:9 picture as in a 4:3 one.
 // The panel's sizes (the load's meter as large on the screen as the race's own; the words to suit it), in that
 // screen's lines: the meter at the game's size, 136 by 24; the words' capitals WORDS_CAP high, the count's under
-// them COUNT_CAP (the display face's capitals stand CAP_OF_EM of its size).
+// them COUNT_CAP.
 constexpr u32 SCREEN_LINES = 480;
 constexpr double METER_SCALE = 1.0;
-constexpr double WORDS_CAP = 20, COUNT_CAP = 13, CAP_OF_EM = 0.70;
+constexpr double WORDS_CAP = 20, COUNT_CAP = 13;
 Picture ForThePicture(const art::Image& native, u32 picture_height, double scale);
 
 // How far the load is, from what the load itself shows (no total is kept from an earlier load, and nothing by

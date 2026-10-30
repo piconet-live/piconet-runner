@@ -65,8 +65,13 @@ bool s_art_asked = false;
 ImTextureData *s_figure = nullptr, *s_frame = nullptr, *s_fill = nullptr;
 fzgx::u32 s_shows = 0, s_ready = 0, s_of = 0, s_height = 0;
 std::vector<std::string> s_lines;
-// The words' shadow: black, this opaque, this far down and its softness (a second pass further down), in ems.
-constexpr float SHADOW = 0.5f, SHADOW_DROP = 0.03f, SHADOW_SOFT = 0.06f;
+// The words' shadow: black, this opaque, this far down and its softness (a second pass further down), in the
+// capitals' height.
+constexpr float SHADOW = 0.5f, SHADOW_DROP = 0.07f, SHADOW_SOFT = 0.14f;
+// Where the display face's capitals stand in a line of the overlay's type (ImGui's size of a font is its ascent to its
+// descent: Saira's 1.135 and 0.439 of the em, its capitals 0.688 of the em): from CAP_TOP of the size below the line's
+// top, CAP_OF_SIZE of it high.
+constexpr float CAP_OF_SIZE = 0.688f / 1.574f, CAP_TOP = (1.135f - 0.688f) / 1.574f;
 std::vector<ImTextureData*> s_old;
 // The meter as it is shown: it follows the board's progress, at most a whole bar in half a second.
 constexpr float FILL_A_SECOND = 2.0f;
@@ -179,20 +184,22 @@ void MakeTextures(panel::Shows shows, fzgx::u32 ready, fzgx::u32 of, fzgx::u32 h
 // pixels high.
 ov::Type Face(double cap, fzgx::u32 height)
 {
-  return ov::Display(static_cast<float>(cap / panel::CAP_OF_EM * height / panel::SCREEN_LINES));
+  return ov::Display(static_cast<float>(cap * height / panel::SCREEN_LINES / CAP_OF_SIZE));
 }
 
-// A line of the display face centred on `middle`, its box's top at `top` (its lean's reach counted in the centring),
-// white over a soft shadow. Its box's height comes back.
+// A line of the display face centred on `middle`, its capitals' top at `top` (its lean's reach counted in the
+// centring), white over a soft shadow. Where its capitals end comes back.
 float Words(ImDrawList* list, const ov::Type& type, float middle, float top, const std::string& line, float opacity = 1)
 {
-  const float reach = type.lean ? type.size * panel::CAP_OF_EM * ov::LEAN : 0.0f;
+  const float cap = type.size * CAP_OF_SIZE;
+  const float reach = type.lean ? cap * ov::LEAN : 0.0f;
   const float left = std::floor(middle - (ov::Width(type, line.c_str()) + reach) / 2);
+  const float at = std::floor(top - type.size * CAP_TOP);
   const int shadow = static_cast<int>(std::lround(SHADOW * opacity * 255));
-  ov::Draw(list, type, left, top + type.size * SHADOW_SOFT, IM_COL32(0, 0, 0, shadow / 2), line.c_str());
-  ov::Draw(list, type, left, top + type.size * SHADOW_DROP, IM_COL32(0, 0, 0, shadow), line.c_str());
-  ov::Draw(list, type, left, top, ov::Colour(ov::TEXT, opacity), line.c_str());
-  return type.size;
+  ov::Draw(list, type, left, at + cap * SHADOW_SOFT, IM_COL32(0, 0, 0, shadow / 2), line.c_str());
+  ov::Draw(list, type, left, at + cap * SHADOW_DROP, IM_COL32(0, 0, 0, shadow), line.c_str());
+  ov::Draw(list, type, left, at, ov::Colour(ov::TEXT, opacity), line.c_str());
+  return top + cap;
 }
 
 void Image(ImDrawList* list, ImTextureData* texture, float left, float top, float share = 1.0f)
@@ -239,12 +246,12 @@ bool Draw(panel::Shows shows, bool full)
   else if (!s_lines.empty())
   {
     // the first line over the picture's middle, in the display face; the count under it, smaller
-    const ov::Type words = Face(panel::WORDS_CAP, height);
-    const float top = std::floor(picture.top + (picture.GetHeight() - words.size) / 2.0f);
+    // (the capitals centred on the picture's middle)
+    const float top = std::floor(picture.top + (picture.GetHeight() - panel::WORDS_CAP * line) / 2.0f);
     const float opacity = shows == panel::Shows::Countdown ? EaseOut(Since(s_figure_since) / FIGURE_IN_S) : 1.0f;
-    below = top + Words(list, words, middle, top, s_lines[0], opacity);
+    below = Words(list, Face(panel::WORDS_CAP, height), middle, top, s_lines[0], opacity);
     if (s_lines.size() > 1)
-      Words(list, Face(panel::COUNT_CAP, height), middle, std::floor(below + panel::METER_GAP * line), s_lines[1]);
+      Words(list, Face(panel::COUNT_CAP, height), middle, std::floor(below + 2 * panel::METER_GAP * line), s_lines[1]);
   }
   if (s_frame && s_fill)
   {
