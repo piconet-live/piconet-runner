@@ -31,8 +31,8 @@ TAGS = NAMES + 0x400       # the name tags' state (nametags.py): a frame count, 
 # five JPEGs' sizes. +32 the hand-back the words below are for (+0 when they were set). +36 the picture in the
 # texture, plus 1 (0 none). +40 the countdown at the last drawn frame (the sounds' edge). +44 the texture's words as
 # the last decode left them (a rollback can put the texture back). +48 the followed racer + 1 and +52 the step word
-# the eased frame is for (monitors_ease.py). +0x40 the monitors' record (0x88 bytes, the game's own layout: the point,
-# the eased turn, the tilt, the yaw). +0xC8 the eased frame: position, back, up (36 bytes, floats; to +0xEC).
+# (unused). +0x40 the monitors' record (0x88 bytes, the game's own layout: the point,
+# the turn, the tilt, the yaw). +0xC8 the frame's position (12 bytes, floats).
 MONITORS = _facts.MONITORS
 MONITORS_BLOCK = 0x19000
 # Mines that come back (sites_mines.py; the host's rule RACE_MINE_REGEN): +0 the state of the countdowns' block (0 not

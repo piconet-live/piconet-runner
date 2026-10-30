@@ -15,13 +15,12 @@ starts at c = 299: the monitors are in place with the blank screen, then 3, 2, 1
 step within SAME steps of the last one is the same hand-back (the sounds and the picture go on).
 
 Where (Starter, fn_1_1049E0, and fn_1_104730, with the start's first layout always; .rodata 0x78D0): from the
-followed racer's (fn_1_6B48) drawn matrix (block +0x14C, which smooth.py moves through a rollback's correction),
-with its direction eased every drawn frame (monitors_ease.py: it follows the machine softly, about 0.08 s behind, and snaps where
-the picture is not continuous): forward f (the eased frame's back vector, negated), up u (its up), the point p (its
-position); the key points p + 1040f + 9.5u, p + 40f + 9.5u, p + 140f + 109.5u. Between the start's thresholds 420, 360, 300,
-40, 0: from the first key point to the second with a spin (yaw 600 a step, left to 0 at 360); a tilt from -20 to
-15 degrees; held; off to the third key point, spinning away. The record's matrix is the eased frame's turn (right,
-up, back; no translation), so the monitors keep their place in front of the racer through bends.
+followed racer's (fn_1_6B48) drawn matrix (block +0x14C, which smooth.py moves through a rollback's correction), as it
+is every drawn frame, as the game's own oriented placing is: forward f (the back column, negated), up u (the up
+column), the point p (its position); the key points p + 1040f + 9.5u, p + 40f + 9.5u, p + 140f + 109.5u. Between the
+start's thresholds 420, 360, 300, 40, 0: from the first key point to the second with a spin (yaw 600 a step, left to 0
+at 360); a tilt from -20 to 15 degrees; held; off to the third key point, spinning away. The record's matrix is the
+drawn matrix's turn (right, up, back; no translation), so the monitors keep their place in front of the racer.
 
 How (StarterDisp, fn_1_1050D0, with one viewport): fn_1_7BEAC(0) and its GX state, then three passes over the
 common model list's monitor models (.bss 0x38460 +8, +8): the spinning parts (+0x08 to +0x28, turned by the frame
@@ -62,12 +61,18 @@ only, each once, when c passes its count since the last drawn frame: 360 0xA9091
 ("three"), 179 + 0xA9060100, 119 + 0xA9060200, 59 + 0xA9060300 ("go"), 40 0xA9091900 (the take-off)."""
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import memmap, monitors_ease
+import memmap
 
 TEXT = 0xDC
 RODATA = 0x15F710 + 0x78D0          # main.rel .rodata 0x78D0 from the module's header
 BSS = 0x1BA040
 FRAMES = (66, 90, 120, 150, 180)    # the movie's frames: blank, 3, 2, 1, GO
+POS = 0xC8                          # state: the frame's position, 12 bytes, floats
+TP = (0x158, 0x168, 0x178)          # the drawn matrix's translation (block offsets)
+DRAWN = ("".join(f"    lwz 0, {o:#x}(24)\n    stw 0, {POS + 4 * i}(27)\n" for i, o in enumerate(TP)) +
+         "".join(f"    lwz 0, {0x14C + 16 * i + 4 * j:#x}(24)\n    stw 0, {0x48 + 16 * i + 4 * j}(28)\n"
+                 for i in range(3) for j in range(3)) +
+         "    lfs 9, 0x18(30)\n" + "".join(f"    stfs 9, {0x54 + 16 * i}(28)\n" for i in range(3)))
 TEXTURE, WORK, JPEGS, JPEG_SLOT = 0, 0x10000, 0x14000, 0x1000
 assert JPEGS + len(FRAMES) * JPEG_SLOT == memmap.MONITORS_BLOCK
 SOUNDS = ((360, (0xA9091800,)), (239, (0xA9091A00, 0xA9060000)), (179, (0xA9091A00, 0xA9060100)),
@@ -191,7 +196,6 @@ mn_new:
     stw 26, {SEEN}(27)
     li 0, 0
     stw 0, {SHOWN}(27)
-    stw 0, {monitors_ease.FOLLOW}(27)
     addi 0, 25, 1
     stw 0, {LAST}(27)
 mn_same:
@@ -204,7 +208,7 @@ mn_same:
 """ + at(9, 23, 0x6D838) + f"""    lwz 9, 0(9)
     add 24, 24, 9
     addi 28, 27, {RECORD}
-""" + monitors_ease.asm() + f"""    lfs 7, 0xE4(30)
+""" + DRAWN + f"""    lfs 7, 0xE4(30)
     lfs 8, 0xE0(30)
     lfs 9, 0x18(30)
     lfs 10, 0x10(30)
@@ -259,7 +263,7 @@ mn_point:
     add 10, 10, 28
     slwi 11, 9, 2
     add 11, 11, 28
-    lfs 0, {monitors_ease.POS - RECORD}(11)
+    lfs 0, {POS - RECORD}(11)
     lfs 1, 0x50(10)
     fnmsubs 0, 1, 7, 0
     lfs 1, 0x4C(10)
