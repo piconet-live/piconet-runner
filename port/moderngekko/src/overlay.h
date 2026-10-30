@@ -2,9 +2,10 @@
 // or around the game's picture (the strip, frame_paint.cpp; the replay bar and its lanes, replay_bar.cpp,
 // replay_lanes.cpp; the observer HUD, observer_hud*.cpp; the panel and the countdown figure, panel.cpp,
 // panel_figure.cpp; the course map's rim, minimap_draw.cpp). It is the launcher's own look, value for value
-// (direction D, white on black: net/src/Launcher.App/Theme/Theme.axaml and the site's global.css); a change there
-// is made here too, by hand: the two programs share no file. port/setup/tests/test_overlay_palette.py holds every
-// colour of the palette to the theme's key it copies (the launcher's checkout: port/setup/pins.tsv, REPO_LAUNCHER).
+// (direction D, white on black): its colours are the design tokens every program shares, the protocol's
+// protocol/theme.tokens.json, written out as theme_palette.g.h (fzgx::theme; the protocol's generated folder, as
+// status_board.g.h is): the palette below names them, it types no value. port/setup/tests/test_overlay_palette.py
+// holds every colour of the palette to a token.
 //   - Colour: tones, not strokes. The ground is black and the tones step apart and stay neutral; text is white;
 //     one accent (green) is what is active or yours and may fill, with black text on it; gold is the mark only
 //     (first place, your own row); amber warns, red is danger and knock-outs. Nothing is outlined; a hairline only
@@ -29,29 +30,32 @@
 
 #include <imgui.h>
 
+#include "theme_palette.g.h"
+
 namespace fzgx_port::overlay
 {
-// The palette, 0xRRGGBB, under the theme's names.
-constexpr std::uint32_t GROUND = 0x000000;     // GroundColor: the window; a panel's ground over the picture
-constexpr std::uint32_t BAR = 0x0D0E0D;        // ColumnColor: the strip's ground; the replay bar's and the lanes'
-constexpr std::uint32_t SURFACE = 0x171917;    // WellColor: a card, a box, a button's ground
-constexpr std::uint32_t RAISED = 0x232623;     // RaisedColor: a plate on a surface; a track's ground; the line under
-                                               // the strip and the window's border (LineBrush); a strip button under
-                                               // the pointer (ChromeOverBrush)
-constexpr std::uint32_t HOVER = 0x2F332F;      // HoverColor: one tone up under the pointer
-constexpr std::uint32_t ROW_LINE = 0x2A2E2A;   // RowLineBrush: a hairline between rows inside a surface
-constexpr std::uint32_t SELECT = 0x4D534D;     // SelectBrush: the replay's track where it is buffered, not yet shown
-constexpr std::uint32_t TEXT = 0xFFFFFF;       // TextColor
-constexpr std::uint32_t SECONDARY = 0xBCC2BC;  // DimColor: the small text, a button's drawing
-constexpr std::uint32_t FAINT = 0x9BA29B;      // FaintColor: a label, a gap
-constexpr std::uint32_t OFF_TONE = 0x5C615C;        // OffColor: what cannot be pressed; a racer who is out
-constexpr std::uint32_t ACCENT = 0x3DFF6A;     // AccentColor: active, yours, played; it may fill
-constexpr std::uint32_t ACCENT_OVER = 0x7AFF96, ACCENT_DOWN = 0x2BE356;  // under the pointer, pressed
-constexpr std::uint32_t ON_ACCENT = 0x000000;  // text on the accent and on gold
-constexpr std::uint32_t GOLD = 0xFFD500;       // GoldColor: the mark only (first place)
-constexpr std::uint32_t WARN = 0xFF9F1A;       // WarnColor
-constexpr std::uint32_t DANGER = 0xFF4D4D;     // DangerColor: out, knocked out, a scrub beyond the buffer
-constexpr std::uint32_t CLOSE_OVER = 0xC42B1C, ON_CLOSE = 0xFFFFFF;  // the close button under the pointer
+// The palette, 0xRRGGBB, under the window's names: each a design token (theme_palette.g.h, fzgx::theme).
+constexpr std::uint32_t GROUND = fzgx::theme::GROUND;          // the window; a panel's ground over the picture
+constexpr std::uint32_t BAR = fzgx::theme::COLUMN;             // the strip's ground; the replay bar's and the lanes'
+constexpr std::uint32_t SURFACE = fzgx::theme::WELL;           // a card, a box, a button's ground
+constexpr std::uint32_t RAISED = fzgx::theme::RAISED;          // a plate on a surface; a track's ground; the line under
+                                                               // the strip and the window's border (the launcher's
+                                                               // LineBrush); a strip button under the pointer
+                                                               // (ChromeOverBrush)
+constexpr std::uint32_t HOVER = fzgx::theme::HOVER;            // one tone up under the pointer
+constexpr std::uint32_t ROW_LINE = fzgx::theme::ROW_LINE;      // a hairline between rows inside a surface
+constexpr std::uint32_t SELECT = fzgx::theme::SELECT;          // the replay's track where it is buffered, not yet shown
+constexpr std::uint32_t TEXT = fzgx::theme::TEXT;
+constexpr std::uint32_t SECONDARY = fzgx::theme::DIM;          // the small text, a button's drawing
+constexpr std::uint32_t FAINT = fzgx::theme::FAINT;            // a label, a gap
+constexpr std::uint32_t OFF_TONE = fzgx::theme::OFF;           // what cannot be pressed; a racer who is out
+constexpr std::uint32_t ACCENT = fzgx::theme::ACCENT;          // active, yours, played; it may fill
+constexpr std::uint32_t ACCENT_OVER = fzgx::theme::ACCENT_OVER, ACCENT_DOWN = fzgx::theme::ACCENT_DOWN;  // under the pointer, pressed
+constexpr std::uint32_t ON_ACCENT = fzgx::theme::ON_ACCENT;    // text on the accent and on gold
+constexpr std::uint32_t GOLD = fzgx::theme::GOLD;              // the mark only (first place)
+constexpr std::uint32_t WARN = fzgx::theme::WARN;
+constexpr std::uint32_t DANGER = fzgx::theme::DANGER;          // out, knocked out, a scrub beyond the buffer
+constexpr std::uint32_t CLOSE_OVER = fzgx::theme::CLOSE_OVER, ON_CLOSE = fzgx::theme::ON_CLOSE;  // the close button under the pointer
 
 // The display role's lean: tan 12 degrees. A leaning line reaches past its box on the right by its height times
 // this (the launcher's DisplayReach).
