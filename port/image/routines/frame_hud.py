@@ -100,7 +100,7 @@ def asm():
         "OUT_FINISH\n", outtest.clause(10, 30, 0, 8, "fw_kind", "fw_on")).replace("FINISH_STOP\n", seatport.finish_stop())
 
 
-_TEXT = """hudstate:
+_TEXT = f"""hudstate:
     lwz 9, 116(31)
     cmpwi 9, 0
     beqlr
@@ -118,7 +118,7 @@ hs_local:
     lwz 9, 0x14(9)
     addis 10, 30, 7
     lwz 10, -0x27C8(10)
-    mulli 9, 9, 0x620
+    mulli 9, 9, 0x{memmap.MACHINE_SIZE:X}
     add 10, 10, 9
     lwz 8, 0(10)
     li 6, 0
@@ -225,7 +225,7 @@ finwatch:
     lwz 9, 0x14(9)
     addis 10, 30, 7
     lwz 10, -0x27C8(10)
-    mulli 9, 9, 0x620
+    mulli 9, 9, 0x{memmap.MACHINE_SIZE:X}
     add 10, 10, 9
     lwz 0, 56(31)
     cmpwi 0, 0
@@ -285,7 +285,7 @@ FINISH_STOP
     cmpwi 0, 0
     bne fw_count
 fw_keep:
-    lwz 11, 0x49C(10)
+    lwz 11, 0x{memmap.MACHINE_PROGRESS:X}(10)
     addi 12, 31, 0x400
     li 0, 127
     mtctr 0
@@ -295,9 +295,9 @@ fw_copy:
     addi 11, 11, 4
     addi 12, 12, 4
     bdnz fw_copy
-    lwz 0, 0xD8(10)
+    lwz 0, 0x{memmap.MACHINE_TOP_SPEED:X}(10)
     stw 0, 0x5FC(31)
-    lbz 0, 0x482(10)
+    lbz 0, 0x{memmap.MACHINE_SKULLS:X}(10)
     cmplwi 0, 30
     ble fw_place
     li 0, 30

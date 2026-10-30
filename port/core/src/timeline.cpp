@@ -41,9 +41,9 @@ namespace fzgx::net
 namespace
 {
 constexpr u32 NONE = 0xFFFFFFFF;
-constexpr u32 BLOCK = 0x620;
+constexpr u32 BLOCK = game::MACHINE_SIZE;
 constexpr u32 LEAD_STEPS = 30;  // half a second
-constexpr u32 OUT_FLAGS = 0x08000880;
+constexpr u32 OUT_FLAGS = game::MACHINE_FLAG_RETIRED | game::MACHINE_FLAG_DESTROYED | game::MACHINE_FLAG_BROKEN_DOWN;
 // stand-in colours for a seat whose set-up names none (bit 24 says so)
 constexpr u32 STAND_IN[8] = {0xE6194B, 0x3CB44B, 0xFFE119, 0x4363D8, 0xF58231, 0x911EB4, 0x46F0F0, 0xF032E6};
 
@@ -107,7 +107,7 @@ bool IsOut(const TimelineState& t, u32 i)
 
 bool IsFinished(const TimelineState& t, u32 i)
 {
-  return (t.flags[i] & 0x10000) != 0 && !IsOut(t, i);
+  return (t.flags[i] & game::MACHINE_FLAG_FINISHED) != 0 && !IsOut(t, i);
 }
 
 // The racers in the race's order now: finished (by place), racing (by distance), out (by the distance they died with).
@@ -156,11 +156,11 @@ void Start(Guest& g, TimelineState& t, u32 machines, u32 count, u32 step)
   for (u32 i = 0; i < t.racers; ++i)
   {
     const u32 base = machines + i * BLOCK;
-    const u32 progress = g.Read32(base + 0x49C);
+    const u32 progress = g.Read32(base + game::MACHINE_PROGRESS);
     t.flags[i] = g.Read32(base);
-    t.skulls[i] = g.Read8(base + 0x482);
-    t.laps[i] = progress ? g.Read32(progress + 0x118) : 0;
-    t.distance[i] = progress ? F(g, progress + 0xF8) : 0;
+    t.skulls[i] = g.Read8(base + game::MACHINE_SKULLS);
+    t.laps[i] = progress ? g.Read32(progress + game::PROGRESS_LAPS) : 0;
+    t.distance[i] = progress ? F(g, progress + game::PROGRESS_DISTANCE) : 0;
     t.line.end[i] = NONE;
   }
   for (u32 i = t.racers; i < Timeline::MOST; ++i)
@@ -193,23 +193,23 @@ u8 PlaceNow(const TimelineState& t, u32 i)
 // One racer after a step: its end (finished or out), its lap, its fastest lap; a KO waits for its attacker.
 void ReadRacer(Guest& g, TimelineState& t, u32 base, u32 i, u32 step, Change* change)
 {
-  const u32 progress = g.Read32(base + 0x49C);
+  const u32 progress = g.Read32(base + game::MACHINE_PROGRESS);
   const u32 flags = g.Read32(base);
   const u32 before = t.flags[i];
   change->before = before;
-  const u32 skulls = g.Read8(base + 0x482);
+  const u32 skulls = g.Read8(base + game::MACHINE_SKULLS);
   change->credits = skulls > t.skulls[i] ? skulls - t.skulls[i] : 0;
-  change->approached = g.Read8(base + 0x4C1);
+  change->approached = g.Read8(base + game::MACHINE_APPROACHED);
   t.skulls[i] = skulls;
   t.flags[i] = flags;
   if (progress == 0)
     return;
   if (!IsOut(t, i))
-    t.distance[i] = F(g, progress + 0xF8);
-  if (t.line.go == NONE && i == 0 && g.Read32(progress + 0x1E4) != 0)
-    t.line.go = step + 1 - g.Read32(progress + 0x1E4);
+    t.distance[i] = F(g, progress + game::PROGRESS_DISTANCE);
+  if (t.line.go == NONE && i == 0 && g.Read32(progress + game::PROGRESS_RACE_TIME) != 0)
+    t.line.go = step + 1 - g.Read32(progress + game::PROGRESS_RACE_TIME);
   const u32 gained = flags & ~before;
-  if (!IsOut(t, i) && (before & 0x10000) == 0 && (gained & 0x10000) == 0 && (gained & OUT_FLAGS) != 0)
+  if (!IsOut(t, i) && (before & game::MACHINE_FLAG_FINISHED) == 0 && (gained & game::MACHINE_FLAG_FINISHED) == 0 && (gained & OUT_FLAGS) != 0)
   {
     t.line.out[i] = 1;
     t.line.end[i] = step;
@@ -220,12 +220,12 @@ void ReadRacer(Guest& g, TimelineState& t, u32 base, u32 i, u32 step, Change* ch
     else
       TimelineAdd(t, {step, TimelineEvent::Retired, static_cast<u8>(i)});
   }
-  const u32 laps = g.Read32(progress + 0x118);
+  const u32 laps = g.Read32(progress + game::PROGRESS_LAPS);
   const bool lap = static_cast<s32>(laps) > static_cast<s32>(t.laps[i]) && static_cast<s32>(laps) >= 1 && !IsOut(t, i);
   t.laps[i] = laps;
-  if ((gained & 0x10000) != 0 && !IsOut(t, i))
+  if ((gained & game::MACHINE_FLAG_FINISHED) != 0 && !IsOut(t, i))
   {
-    t.finish_ms[i] = Ms(g, progress + 0x1D8);
+    t.finish_ms[i] = Ms(g, progress + game::PROGRESS_LAP_SUM);
     t.line.end[i] = step;
     ++t.finished;
     TimelineAdd(t, {step, TimelineEvent::Finish, static_cast<u8>(i), 0xFF, PlaceNow(t, i), t.finish_ms[i]});
@@ -325,8 +325,8 @@ void Sample(Guest& g, const Session& s, TimelineState& t, u32 machines, u32 step
   for (u32 i = 0; i < t.racers; ++i)
   {
     const u32 base = machines + i * BLOCK;
-    const float most = static_cast<float>(g.Read16(base + 0x5DA));
-    const float energy = F(g, base + 0x184);
+    const float most = static_cast<float>(g.Read16(base + game::MACHINE_MAX_ENERGY));
+    const float energy = F(g, base + game::MACHINE_ENERGY);
     const u32 share = IsOut(t, i) || most <= 0 ? 0 : static_cast<u32>(std::clamp(energy / most, 0.0f, 1.0f) * 127.0f + 0.5f);
     t.line.samples.push_back(static_cast<u8>(share | (computer[i] ? 0x80 : 0)));
   }

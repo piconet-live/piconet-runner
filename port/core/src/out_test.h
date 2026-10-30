@@ -11,12 +11,14 @@
 
 namespace fzgx::net::out_test
 {
-constexpr u32 FINISHED = 0x00010000, TIME_OVER = 0x10000000;           // a machine's flags (+0x0)
-constexpr u32 RETIRED = 0x08000000, DESTROYED = 0x800, BROKEN_DOWN = 0x80, CPU = 0x200;
-constexpr u32 FALLEN = 0x10;                                           // +0x58C: out of contact, a fall
+// a machine's flags (+0x0) and second flags (+0x58C), from the facts table (game.tsv, the machine group)
+constexpr u32 FINISHED = game::MACHINE_FLAG_FINISHED, TIME_OVER = game::MACHINE_FLAG_TIME_OVER;
+constexpr u32 RETIRED = game::MACHINE_FLAG_RETIRED, DESTROYED = game::MACHINE_FLAG_DESTROYED;
+constexpr u32 BROKEN_DOWN = game::MACHINE_FLAG_BROKEN_DOWN, CPU = game::MACHINE_FLAG_CPU;
+constexpr u32 FALLEN = game::MACHINE_FLAGS2_FALLEN;                    // out of contact, a fall
 constexpr u32 RESTORE = 0x8000;                                        // the rule word's bit (.bss 0x3C30)
 constexpr u32 ONE = 0x3F800000;                                        // 1.0, .rodata 0xBE4
-constexpr u32 FLAGS = 0x0, CONTACT = 0x58C, SPEED = 0x17C;             // in a machine's block
+constexpr u32 FLAGS = game::MACHINE_FLAGS, CONTACT = game::MACHINE_FLAGS2, SPEED = game::MACHINE_SPEED;  // in a machine's block
 constexpr u32 RULES = BSS + 0x3C30, RACE_TYPE = BSS + 0x3C35;          // from the module pointer's value
 
 // The verdict. `speed`: the bits of the float at +0x17C, below 1.0 as the game's fcmpo and bge say it: a NaN (of

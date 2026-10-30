@@ -32,11 +32,14 @@ it), which is not below. `out(...)` is the same verdict in Python, for the tests
 in C++, for what the core shows (the scrubber, the replay's racer watched, the live feed). Both and this text are
 held to one list of cases, tests/out-cases.tsv."""
 import struct
+import memmap
 
-FINISHED, TIME_OVER = 0x00010000, 0x10000000
+# a machine's flags and second flags (+0x58C), the facts table's (memmap: its machine group)
+FINISHED, TIME_OVER = memmap.MACHINE_FLAG_FINISHED, memmap.MACHINE_FLAG_TIME_OVER
+RETIRED, DESTROYED = memmap.MACHINE_FLAG_RETIRED, memmap.MACHINE_FLAG_DESTROYED
+BROKEN_DOWN, CPU = memmap.MACHINE_FLAG_BROKEN_DOWN, memmap.MACHINE_FLAG_CPU
+FALLEN = memmap.MACHINE_FLAGS2_FALLEN  # +0x58C
 RESTORE = 0x8000                      # the rule word's bit
-RETIRED, DESTROYED, BROKEN_DOWN, CPU = 0x08000000, 0x800, 0x80, 0x200
-FALLEN = 0x10                         # +0x58C
 ONE = 0x3F800000                      # 1.0, .rodata 0xBE4
 
 
@@ -54,7 +57,7 @@ def clause(m, bss, t0, t1, out, racing):
     bne {out}
     andi. {t1}, {t0}, {DESTROYED}
     bne {out}
-    lwz {t1}, 0x58C({m})
+    lwz {t1}, 0x{memmap.MACHINE_FLAGS2:X}({m})
     andi. {t1}, {t1}, {FALLEN}
     bne {out}
     andi. {t1}, {t0}, {BROKEN_DOWN}
@@ -64,7 +67,7 @@ def clause(m, bss, t0, t1, out, racing):
     lbz {t1}, 0x3C35({bss})
     cmplwi {t1}, 5
     beq {out}
-    lwz {t1}, 0x17C({m})
+    lwz {t1}, 0x{memmap.MACHINE_SPEED:X}({m})
     lis {t0}, {ONE >> 16}
     cmpw {t1}, {t0}
     bge {racing}

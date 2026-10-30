@@ -1,5 +1,5 @@
 region,offset,type,name,category,confidence,changes_in_race,net,mask_7200
-block,0x000,u32 bits,"flags (spin 0x8, boost req 0x40, broken 0x80, CPU 0x200, contact 0x400/0x02000000, finished 0x10000, side attack 0x20000, AI-driven 0x04000000, ...)",STATE,code,yes,SEND,0x03654076
+block,0x000,u32 bits,"flags (airborne 0x2, airborne over 10 steps 0x4, spin 0x8, landed this step 0x10, boosting 0x20, boost req 0x40, broken down 0x80, CPU 0x200, driven since start or restore 0x400, destroyed 0x800, strafe latch 0x4000, finished 0x10000, side attack 0x20000, lap event 0x40000, contact this step 0x02000000, AI-driven 0x04000000, retired 0x08000000, time over 0x10000000, ...)",STATE,code,yes,SEND,0x03654076
 block,0x004,s16 | s16,+4 racer index (bit in +0x514 masks) | +6 machine id (>=0x29 custom),SETUP,code,no,ONCE,0x00000000
 block,0x008,f32,weight W,SETUP,code,no,ONCE,0x00000000
 block,0x00C,f32,stat: grip 1,SETUP,code,no,ONCE,0x00000000
@@ -324,7 +324,7 @@ block,0x504,vec3 f32,last collision impulse.y,EVENT,code,yes,RECOMPUTE,0xFFFFFFF
 block,0x508,vec3 f32,last collision impulse.z,EVENT,code,yes,RECOMPUTE,0xFFFFFFFF
 block,0x50C,u8 | u8 | u8 | u8,+50C split-path indicator 2 | +50D model detail level | +50E human handed to CPU flag | +50F per-frame byte (zeroed every frame),EVENT,guess,yes,SEND-EV,0x04000000
 block,0x510,f32,contact radius (2.0),CONSTANT,code,no,LOCAL,0x00000000
-block,0x514,u32 bits,contact immunity mask (bit 0x80000000>>j),STATE,code,no,SEND,0x00000000
+block,0x514,u32 bits,"contact immunity mask (bit 0x80000000>>j: no contact response with j; restore sets -1; not a record of contact)",STATE,code,no,SEND,0x00000000
 block,0x518,f32,restore distance progress,EVENT,code,no,SEND-EV,0x00000000
 block,0x51C,f32,restore-related float,EVENT,code,no,SEND-EV,0x00000000
 block,0x520,mtx3x4 f32,restore pose A (start pose until the first restore)[0][0],EVENT,inferred,no,SEND-EV,0x00000000
@@ -354,7 +354,7 @@ block,0x57C,mtx3x4 f32,restore pose B[2][3],EVENT,inferred,no,SEND-EV,0x00000000
 block,0x580,f32,turning value,DERIVED,inferred,yes,RECOMPUTE,0xFFFFFFFF
 block,0x584,f32,stat: obstacle collision,SETUP,code,no,ONCE,0x00000000
 block,0x588,f32,stat: track collision,SETUP,code,no,ONCE,0x00000000
-block,0x58C,u32 bits,"flags 2 (0x8 stepped this frame, 0x10 out of contact, 0x4 alt input scheme, 0x20 ...)",STATE,code,yes,SEND,0x00000001
+block,0x58C,u32 bits,"flags 2 (0x1 used a pit, 0x8 stepped this frame, 0x10 out of contact, 0x4 alt input scheme, 0x20 ...)",STATE,code,yes,SEND,0x00000001
 block,0x590,u8 | u8 | u8 | u8,+590 control mode / restore completion | +591 byte (reset) | +592 set on the first KO | +593 breakdown countdown (60),EVENT,guess,no,SEND-EV,0x00000000
 block,0x594,mtx3x4 f32,restore pose C[0][0],EVENT,inferred,no,SEND-EV,0x00000000
 block,0x598,mtx3x4 f32,restore pose C[0][1],EVENT,inferred,no,SEND-EV,0x00000000

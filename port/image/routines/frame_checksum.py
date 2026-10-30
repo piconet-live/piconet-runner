@@ -20,7 +20,7 @@ def asm():
         "GENLOG_HI", str(memmap.hi(memmap.GENERATOR_LOG))).replace("GENLOG_LO", str(memmap.lo(memmap.GENERATOR_LOG)))
 
 
-_TEXT = """checksum:
+_TEXT = f"""checksum:
     lwz 9, 116(31)
     cmpwi 9, 0
     beq cs_do
@@ -46,16 +46,16 @@ cs_tables:
 cs_racer:
     li 8, 0
     mr 10, 7
-    li 0, 0x620
+    li 0, 0x{memmap.MACHINE_SIZE:X}
     bl cs_words
     mr 12, 11
-    lwz 10, 0x49C(7)
+    lwz 10, 0x{memmap.MACHINE_PROGRESS:X}(7)
     addi 11, 11, 52
     li 8, 0
     li 0, 0x1FC
     bl cs_words
     mr 11, 12
-    addi 7, 7, 0x620
+    addi 7, 7, 0x{memmap.MACHINE_SIZE:X}
     addi 6, 6, -1
     cmpwi 6, 0
     bne cs_racer

@@ -23,12 +23,13 @@ namespace fzgx::hfr
 namespace
 {
 constexpr u32 B = game::REL_BSS_AT;
-constexpr u32 MACHINES = B + 0x6D838, CAMERA_OBJECT = B + 0xF68, CAMERA_RECORDS = B + 0xF6C;
+constexpr u32 MACHINES = game::MACHINES_AT, CAMERA_OBJECT = B + 0xF68, CAMERA_RECORDS = B + 0xF6C;
 // a chase record's view matrix is at +0xDC (the one fn_1_5948 copies for the drawing), its camera matrix at +0xAC
-constexpr u32 BLOCK = 0x620, POSE = 0x14C, RECORD = 0x1FC;
+constexpr u32 BLOCK = game::MACHINE_SIZE, POSE = 0x14C, RECORD = 0x1FC;
 // in a machine's block: its flags, its speed (km/h), the frames since its start or restore, its flags 2 (the
 // machine-state map, port/facts/machine-state.csv)
-constexpr u32 FLAGS_AT = 0x0, SPEED_AT = 0x17C, SINCE_AT = 0x47C, FLAGS2_AT = 0x58C;
+constexpr u32 FLAGS_AT = game::MACHINE_FLAGS, SPEED_AT = game::MACHINE_SPEED, SINCE_AT = game::MACHINE_SINCE,
+              FLAGS2_AT = game::MACHINE_FLAGS2;
 constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
 
 // The guards' numbers (Judge).
@@ -40,12 +41,12 @@ constexpr double STEADY_SHARE = 0.25, STEADY_MARGIN = 5.0;
 // The flag bits whose change in a step is a jump, in the order Report says them (Run::kept_bit): the game's
 // "destroyed" (fn_1_25004 sets it), "retired" (out of the race: the ranking's), retired or destroyed, and out of
 // energy (its inputs are zeroed).
-constexpr u32 FLAG_DESTROYED = 0x40000000u, FLAG_RETIRED = 0x08000000u, FLAG_OUT = 0x800u, FLAG_BROKEN_DOWN = 0x80u;
+constexpr u32 FLAG_DESTROYED = 0x40000000u, FLAG_RETIRED = game::MACHINE_FLAG_RETIRED, FLAG_OUT = 0x800u, FLAG_BROKEN_DOWN = game::MACHINE_FLAG_BROKEN_DOWN;
 constexpr std::array<u32, 4> JUMP_FLAGS = {FLAG_DESTROYED, FLAG_RETIRED, FLAG_OUT, FLAG_BROKEN_DOWN};
 constexpr u32 JUMP_FLAG_MASK = FLAG_DESTROYED | FLAG_RETIRED | FLAG_OUT | FLAG_BROKEN_DOWN;
 static_assert(JUMP_FLAG_MASK == 0x48000880u);
 // flags 2 (+0x58C): out of contact (a fall, a destruction)
-constexpr u32 FLAGS2_OUT_OF_CONTACT = 0x10u;
+constexpr u32 FLAGS2_OUT_OF_CONTACT = game::MACHINE_FLAGS2_FALLEN;
 // A camera that jumped: its eye moved more than 3 times the followed machine's move and 10 units, or it turned more
 // than 30 degrees (in radians).
 constexpr double CAMERA_STEP_SHARE = 3.0, CAMERA_MARGIN = 10.0, MOST_CAMERA_TURN = 0.5236;
@@ -170,9 +171,9 @@ void Take(const Guest& g, State& st)
     Machine& a = st.machine[i];
     a = {ReadMtx(g, m + POSE), g.Read32(m + FLAGS_AT), g.Read32(m + SINCE_AT), g.Read32(m + FLAGS2_AT), F(g, m + SPEED_AT)};
     for (int k = 0; k < 3; ++k)
-      a.up[k] = F(g, m + 0x1BC + 4 * k);
-    a.walls = g.Read8(m + 0x213);
-    a.knock = g.Read8(m + 0x4C4);
+      a.up[k] = F(g, m + game::MACHINE_UP_X + 4 * k);
+    a.walls = g.Read8(m + game::MACHINE_WALL_HITS);
+    a.knock = g.Read8(m + game::MACHINE_BUMP_COUNTDOWN);
   }
   const u8 mode = g.Read8(object + 0x48);
   st.viewports = mode == 0xB ? 1 : (g.Read32(object) >> 31) != 0 ? 1 : std::min<u32>(g.Read8(object + 0x49), 4);

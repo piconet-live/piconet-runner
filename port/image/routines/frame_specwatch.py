@@ -24,8 +24,9 @@ across the step the racer went out in makes the same move in the same step, and 
 finds the racer asked for racing and puts the cameras back on it."""
 
 import outtest
+import memmap
 
-TEXT = """ss_watched:
+TEXT = f"""ss_watched:
     addis 5, 30, 7
     lwz 8, -0x27C8(5)
     lbz 5, -0x27B6(5)
@@ -33,7 +34,7 @@ TEXT = """ss_watched:
     li 3, 0
     cmplw 4, 5
     bgelr
-    mulli 10, 4, 0x620
+    mulli 10, 4, 0x{memmap.MACHINE_SIZE:X}
     add 10, 10, 8
 OUT_ASKED
 sw_asked_racing:
@@ -42,19 +43,19 @@ sw_asked_out:
     lha 11, 0(6)
     cmplw 11, 5
     bge sw_pick
-    mulli 10, 11, 0x620
+    mulli 10, 11, 0x{memmap.MACHINE_SIZE:X}
     add 10, 10, 8
 OUT_SHOWN
 sw_shown_racing:
     mr 4, 11
     blr
 sw_pick:
-    mulli 10, 4, 0x620
+    mulli 10, 4, 0x{memmap.MACHINE_SIZE:X}
     add 10, 10, 8
-    lwz 10, 0x49C(10)
+    lwz 10, 0x{memmap.MACHINE_PROGRESS:X}(10)
     cmpwi 10, 0
     beqlr
-    lbz 11, 0x115(10)
+    lbz 11, 0x{memmap.PROGRESS_RANK:X}(10)
     mtctr 5
 sw_rank:
     addi 11, 11, 1
@@ -65,10 +66,10 @@ sw_seek:
     li 3, 0
     mr 10, 8
 sw_find:
-    lwz 6, 0x49C(10)
+    lwz 6, 0x{memmap.MACHINE_PROGRESS:X}(10)
     cmpwi 6, 0
     beq sw_next
-    lbz 0, 0x115(6)
+    lbz 0, 0x{memmap.PROGRESS_RANK:X}(6)
     cmpw 0, 11
     bne sw_next
 OUT_FOUND
@@ -77,7 +78,7 @@ sw_found:
     li 3, 1
     blr
 sw_next:
-    addi 10, 10, 0x620
+    addi 10, 10, 0x{memmap.MACHINE_SIZE:X}
     addi 3, 3, 1
     cmpw 3, 5
     blt sw_find

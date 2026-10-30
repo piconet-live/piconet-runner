@@ -21,7 +21,6 @@ from places import generate, root  # noqa: E402
 
 CHECKSUM = "port/core/src/checksum.cpp"
 MANIFEST = "recomp/manifest.toml"
-STATE_MAP_TODAY = "research/machine-state-map.csv"
 
 
 def read(path):
@@ -87,11 +86,11 @@ class Proof(unittest.TestCase):
             places._texts[file] = kept
             places._constants.clear()
         changed = made()
-        changed["cxx"]["MACHINE_SIZE"] += 4
+        changed["cxx"]["SEATS"] += 1
         changed["csharp"]["NameShown"] = 17
         places.generated_values = lambda: changed
         problems, _ = places.check(self.rows)
-        self.assertTrue(any("says 0x620, the table's MACHINE_SIZE is 0x624" in p for p in problems))
+        self.assertTrue(any("says 0x1E, the table's SEATS is 0x1F" in p for p in problems))
         self.assertTrue(any("net/src/Online.Protocol/PlayerNames.cs" in p and "the table's NAME_SHOWN is 0x11" in p
                             for p in problems))
 
@@ -167,10 +166,8 @@ class Proof(unittest.TestCase):
             exec(compile(ast.Module(wanted, []), path, "exec"), space)
         self.assertEqual({"BLOCK_SKIP": space["BLOCK"], "PROGRESS_SKIP": space["PROG"]}, self.masks)
 
-    def test_the_state_map_is_todays(self):
-        """The annex is a copy until the map itself moves here; then this test goes."""
-        if os.path.exists(os.path.join(root, STATE_MAP_TODAY)):
-            self.assertEqual(read("port/facts/machine-state.csv"), read(STATE_MAP_TODAY))
+    def test_the_state_map_is_whole(self):
+        """The map is here alone (piconet-docs' research/machine-state-map.md points at it): every row of it."""
         with open(generate.STATE_MAP, newline="") as f:
             self.assertEqual(sum(1 for _ in f), 847)
 

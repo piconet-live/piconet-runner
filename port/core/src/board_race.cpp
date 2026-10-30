@@ -56,7 +56,7 @@ void Race(Guest& g, u32 step, int local_seat)
       continue;
     const u32 base = racer->block;
     const u32 m = racer->progress;
-    const u8 attack = g.Read8(base + 0x212);
+    const u8 attack = g.Read8(base + game::MACHINE_ATTACK_KOS);
     if (attack > s_attack[i])
       s_kos[i] += attack - s_attack[i];
     s_attack[i] = attack;
@@ -69,17 +69,17 @@ void Race(Guest& g, u32 step, int local_seat)
     r.flags = laps > 0 ? RACER_FLAGS_HAS_BEST_LAP : 0;
     r.lap = static_cast<u16>(std::clamp(laps, 0, 0xFFFF));
     r.kos = static_cast<u16>(std::min<u32>(s_kos[i], 0xFFFF));
-    r.max_energy = g.Read16(base + 0x5DA);
-    r.lap_ms = RaceMs(g, m + 0x160);
-    r.total_ms = finished ? racer->lap_sum_ms : RaceMs(g, m + 0x1E4);
+    r.max_energy = g.Read16(base + game::MACHINE_MAX_ENERGY);
+    r.lap_ms = RaceMs(g, m + game::PROGRESS_LAP_TIME);
+    r.total_ms = finished ? racer->lap_sum_ms : RaceMs(g, m + game::PROGRESS_RACE_TIME);
     r.best_lap_ms = laps > 0 ? racer->best_lap_ms : 0;
-    r.speed = f(base + 0x17C);
-    r.energy = f(base + 0x184);
-    r.top_speed = f(base + 0xD8);
-    r.x = f(base + 0x7C);
-    r.y = f(base + 0x80);
-    r.z = f(base + 0x84);
-    r.distance = f(m + 0xF8);
+    r.speed = f(base + game::MACHINE_SPEED);
+    r.energy = f(base + game::MACHINE_ENERGY);
+    r.top_speed = f(base + game::MACHINE_TOP_SPEED);
+    r.x = f(base + game::MACHINE_POSITION_X);
+    r.y = f(base + game::MACHINE_POSITION_Y);
+    r.z = f(base + game::MACHINE_POSITION_Z);
+    r.distance = f(m + game::PROGRESS_DISTANCE);
   }
   ++s.serial;
   PutSnapshot(s);
