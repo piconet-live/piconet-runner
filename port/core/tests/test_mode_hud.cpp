@@ -122,6 +122,8 @@ void TestTheDisplayWordsRun()
   g.Write32(d + 12, 0);
   g.Write32(d + 8, 0);
 
+  // (the pass logs once: to this test's host, not a host of an earlier test that has gone)
+  Init(host, Options{});
   // the HUD pass for the player in seat 1: the mask's story bits off but TIMER, the source block, the looks
   g.Write32(layout::MODES + 4, BLOCK);
   g.Write32(net::SEAT_SLOT + 4, 1);
@@ -144,6 +146,32 @@ void TestTheDisplayWordsRun()
   g.Write32(MODULE + game::HUD_PARTS, 0);  // the HUD off (out, finished): it stays off
   hud::Hud(g);
   CHECK(g.Read32(MODULE + game::HUD_PARTS) == 0);
+
+  // GAP (seat 1, this game's): the seat's time at its last lap line for the popup, its part for 60 steps; WRONG_WAY:
+  // the sign starts once for an ask, however often the frame is drawn
+  const u32 p1 = g.Read32(MACHINES + game::MACHINE_SIZE + game::MACHINE_PROGRESS);
+  g.Write8(p1 + 0x1E0, 1);
+  g.Write8(p1 + 0x1E1, 2);
+  g.Write16(p1 + 0x1E2, 3);
+  g.Write32(MODULE + game::RACE_CLOCK, 1000);
+  g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_STOCKBANNER, 1, modes::BANNER_GAP));
+  CHECK(g.Read32(Record(1) + hud::GAP_TIME) == (1u << 20 | 2u << 12 | 3));
+  CHECK(g.Read8(Record(1) + hud::BANNER) == 1 + modes::BANNER_GAP);
+  hud::Hud(g);
+  CHECK(g.Read32(MODULE + game::HUD_PARTS) & hud::GAP_PART);
+  g.Write32(MODULE + game::RACE_CLOCK, 1000 + hud::GAP_STEPS + 1);
+  g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+  hud::Hud(g);
+  CHECK(!(g.Read32(MODULE + game::HUD_PARTS) & hud::GAP_PART));
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_WRONG) == 0);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_STOCKBANNER, 1, modes::BANNER_WRONG_WAY));
+  hud::Hud(g);
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_WRONG) == 1);
+  g.Write32(layout::MODE_HUD + hud::WINDOW_WRONG, 0);
+  hud::Hud(g);
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_WRONG) == 0);
+  g.Write32(MODULE + game::HUD_PARTS, 0);
 
   // the course map: seat 1 and the out seat are hidden from every other racer's map, never from a spectator's
   std::array<bool, 30> present{};

@@ -63,6 +63,7 @@ MODE_NC_ANY = MODE_ENGINE + 0xC          # the OR of the no-contact rows: 0, the
 MODE_NC = MODE_ENGINE + 0x10             # a seat's no-contact row (bit 0x80000000 >> j)
 MODE_TOUCH = MODE_ENGINE + 0x88          # a seat's contact answers this step, the same order (the pair gate ORs them)
 MODE_CLOCK = MODE_ENGINE + 0x4           # clock_limit in steps (0: none): the game's own timer is skipped
+MODE_POINTS = MODE_ENGINE + 0x240         # award's points, a word a seat (the results' points page reads them)
 MODE_MOVES = MODE_ENGINE + 0xA80         # a seat's move: +0 1 push, 2 velocity; +4 x, +8 y, +12 z (momentum)
 MODE_MOVE = 16
 MODE_ROLL_SAVE = MODE_ENGINE + 0xE40     # a seat's steering (+0 M+0x1FC, +4 M+0x1F8) before the rule hook

@@ -11,7 +11,8 @@ the game does. Native form only. sites.py calls add().
 | `mode_story` | the frame routine, after mode_preload (sites.py's `frame`) | — | the story's picture group 0xBA (bmp_sto: the big digit, DANGER, the distance's digits, MISSION CLEAR!/FAILED, Time is up...) loaded once, with fn_1_47F74, on the frame the block is taken, when the core says the mode shows one of them (MODE_STORY_PICTURES): every game and playback of the race at the same point, before step 0 |
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
 
-GAP and WRONG_WAY are other mechanisms (the gap popups and the wrong-way part): not raised yet.
+| `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
+| `mode_beep` | fn_1_3A330 0x3A448, where the timed mode's countdown ends on every path (`lwz r0, 0x30(r29)`) | — | under clock_limit (whose timer the game no longer counts) the countdown's own tick: 0xA9092700 when the time left is a whole second below ten, including 0, as the code it skips does. Only a sound: the mute of a step run again (mute.py) as for the game's |
 
 Registers: each routine replaces a call (`mode_spare`, `mode_look`), so the volatile registers are free there; or a
 test (`mode_points`), after which only r0 and cr0 (both set again as the original sets them) and r12 are written;
@@ -28,15 +29,32 @@ TINT, RESET_STATE = 0x5621C, 0x56000         # fn_1_5621C(r, g, b, a), fn_1_5600
 BLEND_ON, BLEND_OFF = 0x80074A60, 0x80074A6C  # main.dol: as Time Attack's ghost trail sets them (fn_1_ED540)
 LOAD_GROUP, STORY_GROUP = 0x47F74, 0xBA
 FINAL_LAP, BOOST_POWER, TIME_BONUS = 0x15E5E4, 0x15E540, 0x15E764
+GAP_POPUP = 0x15E330                          # fn_1_15E330(port, the time, heap): the gap popup, against the leader's line
+PLAY_SOUND = 0xA2D84                          # fn_1_A2D84: a sound, as the game's voices start
+WRONG_WAY_VOICE, TICK = (-0x56FA, 0x1800), (-0x56F7, 0x2700)  # 0xA9061800 (fn_1_A4BC8's), 0xA9092700 (fn_1_3A330's)
+WRONG_SITE, WRONG_KNOWN, WRONG_SIGN = 0xCD560, 0x8003010C, 0xCD578  # fn_1_CD51C: lwz r0, 0x10c(r3); the sign's making
+BEEP_SITE, BEEP_KNOWN = 0x3A448, 0x801D0030   # fn_1_3A330: lwz r0, 0x30(r29), where the timer's code ends on every path
 HUD_ENTRIES, BANNER_HEAP = 0x8FDA8, 0x25B88   # .bss: port 0's HUD entry (+0 the banners raised); the banners' heap word
 ONCE_BITS = {FINAL_LAP: 0x2, BOOST_POWER: 0x1, TIME_BONUS: 0x0}
 GHOST_TINT = 0x3F333333                       # 0.7: Time Attack's (1.0, 1.0, 0.7) other ghosts; (0.7, 0.7, 1.0) blue
 ONE = 0x3F800000
 BYTE_SCALE = 0x3B808081                       # 1 / 255: seat.colour's bytes to the tint's floats
 GHOST_ALPHA = 0x3F000000                      # 0.5 at most (the stock alpha, a near-camera fade, if lower)
-DISPLAY, SEATS_AT, SEAT_DISPLAY, NUMBER, BANNER = 0x6000, 0x6010, 0x20, 4, 10   # mode_hud.h
+DISPLAY, SEATS_AT, SEAT_DISPLAY, NUMBER, BANNER, GAP_TIME = 0x6000, 0x6010, 0x20, 4, 10, 24   # mode_hud.h
 assert SEATS_AT + 30 * SEAT_DISPLAY <= memmap.MODE_BLOCK and SEATS_AT + NUMBER < 0x8000
 SLOT_SEAT = memmap.IMAGE + 0x14               # the slot 'FZSI' +4: the local seat (frame_hud.py)
+# The results pages' reads of R+0x8 (the race's players) where the page is 4, the points page (each `page == 4 ?
+# R+0x8 : R+0x9`, the list's rows, its window, its scroll; 0x14B710 and fn_1_14A1AC's 0x14A234 the window's rows as page 4 opens), all
+# `lbz rD, 0x8(rA)`: +1 is `lbz rD, 0x9(rA)`, the racers
+RANKING_COUNTS = [(at, 0x88000008 | rd << 21 | ra << 16) for at, rd, ra in (
+    (0x14A234, 3, 3), (0x14A4C8, 0, 6), (0x14A4F8, 0, 3), (0x14A524, 4, 3), (0x14A6E4, 0, 6), (0x14A714, 0, 3), (0x14A748, 4, 3),
+    (0x14A8EC, 0, 6), (0x14A91C, 0, 3), (0x14A950, 4, 3), (0x14AF08, 3, 3), (0x14B0B0, 0, 5), (0x14B0E0, 0, 3),
+    (0x14B114, 4, 3), (0x14B244, 3, 3), (0x14B420, 0, 6), (0x14B450, 0, 3), (0x14B484, 4, 3), (0x14B670, 3, 3),
+    (0x14B710, 3, 3), (0x14B814, 0, 5), (0x14B844, 0, 3), (0x14B878, 4, 3), (0x14B984, 3, 3), (0x14BB60, 0, 6),
+    (0x14BB90, 0, 3), (0x14BBC4, 4, 3), (0x14C898, 3, 3), (0x14CA88, 3, 3))]
+SORT = 0x3F2A0                                # fn_1_3F2A0: the results' order R+0x1394 (outside a Grand Prix: R+0x8's)
+SORT_CALLS = {0x14B738: 0x4BEF3B69, 0x14B7C4: 0x4BEF3ADD, 0x14B95C: 0x4BEF3945}   # its `bl` as page 4 opens
+RACE, RECORDS, RECORD = 0x3C30, 0xD4, 0xA0    # R (.bss); its results records, one a seat
 
 
 def add(k, r, patch, stock, test, la, middle):
@@ -196,6 +214,135 @@ mpts_stock:
     patch(site, word, 0, "mode_points")
     middle.append((site, ["r12", "cr0"], "mode_points"))
 
+    # the points page's rows: every racer's (RANKING_COUNTS), while the core says the mode awards points
+    for at, known in RANKING_COUNTS:
+        site = TEXT + at
+        word = stock(site, known)
+        name = f"mode_rows_{at:x}"
+        r.add(name, test + f"""    beq mrw{at:x}_stock
+""" + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {memmap.MODE_POINTS_PAGE}
+    beq mrw{at:x}_stock
+    .long {word + 1:#010x}
+    @b {site + 4:#x}
+mrw{at:x}_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+        patch(site, word, 0, name)
+        middle.append((site, ["r12", "cr0"], name))
+
+    # the points page's order: the game's sort as a Grand Prix's (R+0x5 set for the call alone: every racer, by its
+    # record's +0x4, which the call outside a Grand Prix overwrites with the VS points R+0x1480), each record's +0x4
+    # first written from award's points (the block's, whatever the race or the results' set-up left there)
+    sort_fn = FN(SORT)
+    r.add("mode_sort", la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {memmap.MODE_POINTS_PAGE}
+    beq msrt_stock
+""" + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq msrt_stock
+    stwu 1, -0x20(1)
+    mflr 0
+    stw 0, 0x24(1)
+    stw 31, 0x1C(1)
+""" + la(31, REL_BSS + RACE) + f"""    lbz 10, 9(31)
+    cmplwi 10, 30
+    ble msrt_count
+    li 10, 30
+msrt_count:
+    addi 12, 12, {memmap.MODE_POINTS - 4:#x}
+    addi 11, 31, {RECORDS:#x}
+    li 9, 0
+msrt_seat:
+    cmpw 9, 10
+    bge msrt_sorted
+    lwzu 0, 4(12)
+    cmplwi 0, 0xFFFF
+    ble msrt_fits
+    li 0, -1
+msrt_fits:
+    sth 0, 4(11)
+    addi 11, 11, {RECORD:#x}
+    addi 9, 9, 1
+    b msrt_seat
+msrt_sorted:
+    lbz 0, 5(31)
+    stb 0, 0x18(1)
+    li 0, 1
+    stb 0, 5(31)
+    @bl {sort_fn}
+    lbz 0, 0x18(1)
+    stb 0, 5(31)
+    lwz 31, 0x1C(1)
+    lwz 0, 0x24(1)
+    mtlr 0
+    addi 1, 1, 0x20
+    blr
+msrt_stock:
+    @b {sort_fn}
+""")
+    for at, known in SORT_CALLS.items():
+        site = TEXT + at
+        word = stock(site, known)
+        name = f"mode_sort_{at:x}"
+        r.add(name, f"""    bl mode_sort
+    @b {site + 4:#x}
+""")
+        patch(site, word, 0, name)
+        # (in place of a call of the sort, which writes r0, r3 to r12 and cr0 itself)
+        middle.append((site, ["lr"], name))
+
+    # the wrong-way sign when WRONG_WAY was asked
+    site = TEXT + WRONG_SITE
+    word = stock(site, WRONG_KNOWN)
+    r.add("mode_wrong", test + """    beq mwr_stock
+""" + la(12, memmap.MODE_HUD + 0xC) + f"""    lwz 0, 0(12)
+    cmpwi 0, 0
+    beq mwr_stock
+    li 0, 0
+    stw 0, 0(12)
+    @b {TEXT + WRONG_SIGN:#x}
+mwr_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_wrong")
+    middle.append((site, ["r12", "cr0"], "mode_wrong"))
+
+    # the countdown's tick under clock_limit: time left = the limit - the race clock (r11, r12; r0 is written next).
+    # The path through the game's own tick reaches this word after a call, so nothing volatile is live here
+    site = TEXT + BEEP_SITE
+    word = stock(site, BEEP_KNOWN)
+    r.add("mode_beep", test + """    beq mbp_out
+""" + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq mbp_out
+    lwz 12, {memmap.MODE_CLOCK:#x}(12)
+    cmpwi 12, 0
+    beq mbp_out
+""" + la(11, memmap._facts.RACE_CLOCK_AT) + f"""    lwz 11, 0(11)
+    cmpwi 11, 0
+    ble mbp_out
+    subf. 12, 11, 12
+    blt mbp_out
+    cmpwi 12, {9 * 60}
+    bgt mbp_out
+    li 11, 60
+    divwu 0, 12, 11
+    mullw 0, 0, 11
+    cmpw 0, 12
+    bne mbp_out
+    lis 3, {TICK[0]}
+    addi 3, 3, {TICK[1]:#x}
+    @bl {FN(PLAY_SOUND)}
+mbp_out:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_beep")
+    middle.append((site, ["r12", "cr0", "lr"], "mode_beep"))
+
     # the story's pictures, once, on the frame the block is taken (MODES +0 then 1), when the core asks (called by
     # the frame's entry after mode_preload: every register but r0, r3 to r12 and cr0 kept). +8 of the window's words
     # says it is done (the window is never rolled back; one game process, one race)
@@ -231,7 +378,18 @@ mpts_stock:
     lwz 4, 0(31)
     @bl {FN(fn)}
     b mbn_out
-""" for n, fn in ((1, FINAL_LAP), (2, BOOST_POWER), (3, TIME_BONUS)))
+""" for n, fn in ((1, FINAL_LAP), (2, BOOST_POWER), (3, TIME_BONUS))) + f"""mbn_4:
+    li 3, 0
+    lwz 4, {SEATS_AT + GAP_TIME:#x}(12)
+    lwz 5, 0(31)
+    @bl {FN(GAP_POPUP)}
+    b mbn_out
+mbn_5:
+    lis 3, {WRONG_WAY_VOICE[0]}
+    addi 3, 3, {WRONG_WAY_VOICE[1]:#x}
+    @bl {FN(PLAY_SOUND)}
+    b mbn_out
+"""
     r.add("mode_banners", la(12, memmap.MODES) + f"""    lwz 12, 4(12)
     cmplwi 12, 0
     beqlr
@@ -243,7 +401,7 @@ mpts_stock:
     lbz 0, {SEATS_AT + BANNER:#x}(12)
     cmpwi 0, 0
     beqlr
-    cmpwi 0, 3
+    cmpwi 0, 5
     bgtlr
     stwu 1, -0x20(1)
     mflr 3
@@ -254,7 +412,11 @@ mpts_stock:
     beq mbn_1
     cmpwi 0, 2
     beq mbn_2
-    b mbn_3
+    cmpwi 0, 3
+    beq mbn_3
+    cmpwi 0, 4
+    beq mbn_4
+    b mbn_5
 """ + raise_ + """mbn_out:
     lwz 30, 0x18(1)
     lwz 31, 0x1C(1)

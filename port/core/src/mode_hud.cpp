@@ -66,6 +66,20 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value)
     case ACTION_STOCKBANNER:
       if (value < BANNER_COUNT)
         g.Write8(r + BANNER, static_cast<u8>(value + 1));
+      if (value == BANNER_GAP || value == BANNER_WRONG_WAY)
+      {
+        const u32 module = layout::MAIN_REL, machines = g.Read32(module + net::MACHINES);
+        g.Write8(r + ASKED, static_cast<u8>(value));
+        g.Write32(r + ASKED_AT, g.Read32(module + game::RACE_CLOCK));
+        if (value == BANNER_GAP && machines != 0)
+        {
+          // the time fn_1_327F8 gives the popup at a lap line, which the popup draws against the leader's
+          const u32 p = g.Read32(machines + seat * game::MACHINE_SIZE + game::MACHINE_PROGRESS);
+          if (p != 0)
+            g.Write32(r + GAP_TIME, static_cast<u32>(g.Read8(p + 0x1E0)) << 20 | static_cast<u32>(g.Read8(p + 0x1E1)) << 12 |
+                                        g.Read16(p + 0x1E2));
+        }
+      }
       return true;
     case ACTION_SEATLOOK:
       if (value < LOOK_COUNT)
@@ -181,9 +195,27 @@ void Hud(Guest& g)
   // the part mask: the mode's parts over what the HUD's owners wrote this frame (hudstate, spechud, the game's own
   // when the machine is out or finished: 0 stays 0, the HUD is off). Every story part the mode does not show is off:
   // the default mask has them on.
+  u32 gap_part = 0;
+  if (const u32 own = net::OwnSeat(g); own < SEATS)
+  {
+    // GAP's popup and WRONG_WAY's sign, for the local seat: from the page, so a rollback changes nothing; the sign
+    // starts once for each ask (the window is not rolled back, a step run again asks at the same clock)
+    static u32 s_wrong_at = 0;
+    const u32 r = Seat(block, own), at = g.Read32(r + ASKED_AT), since = g.Read32(module + game::RACE_CLOCK) - at;
+    if (at != 0 && since <= GAP_STEPS)
+    {
+      if (g.Read8(r + ASKED) == BANNER_GAP)
+        gap_part = GAP_PART;
+      else if (at != s_wrong_at)
+      {
+        s_wrong_at = at;
+        g.Write32(layout::MODE_HUD + WINDOW_WRONG, 1);
+      }
+    }
+  }
   const u32 mask = g.Read32(module + game::HUD_PARTS);
   if (mask != 0)
-    g.Write32(module + game::HUD_PARTS, (mask & ~STORY_BITS) | f.parts);
+    g.Write32(module + game::HUD_PARTS, (mask & ~STORY_BITS) | f.parts | gap_part);
   // the source block, whole: the digit's value in the window; the viewed racer's speed and progress record; R
   const u32 window = layout::MODE_HUD;
   g.Write32(window + WINDOW_DIGIT, static_cast<u32>(f.digit));
