@@ -8,6 +8,9 @@
 #include "files.h"
 
 #include <cstring>
+#include <string_view>
+
+#include "course_names.g.h"  // the courses' names (protocol/courses.toml): a story stage's own
 
 namespace fzgx::boot
 {
@@ -28,11 +31,24 @@ constexpr float TRUE_WIDESCREEN_ASPECT = 16.0f / 9.0f;
 // Options, Screen Mode.
 constexpr u32 MODULE_LIST = game::MODULE_LIST;
 constexpr u32 SCREEN_OPTION = 0x229630;
+// A story stage's name (protocol/courses.toml). The game names courses from a table in main.rel's data, a pointer a
+// language for each course number (COURSE_NAMES); the course intro's title card writes the English one under the
+// venue's lettering, in the game's 24 by 24 font, as do the screens that name a course. For every story stage the
+// table points at "---" (and chapter 1's, course 37, at "Sonic Oval"). For a stage with a name of its own the name is
+// put in the data window (COURSE_NAME, as the player names are: Prepare, and once after boot) and the stage's English
+// entry is pointed at it, every frame until it holds it (main.rel is loaded a while after the boot's first frame). No
+// step reads the table and the state checksum does not cover it: a race or a replay runs the same steps with it.
+constexpr u32 COURSE_NAME = table::COURSE_NAME;
+constexpr u32 COURSE_NAMES = game::COURSE_NAMES, COURSE_NAME_ENTRY = game::COURSE_NAME_ENTRY;
+constexpr u32 COURSE_COUNT = 111;  // the table's courses
+static_assert(courses::LONGEST < NAME_SIZE);
+static_assert(courses::FIRST_STORY_STAGE + courses::STORY_CHAPTERS <= static_cast<int>(COURSE_COUNT));
 // The largest offset from main.rel's header that this file reads or writes at: the header must leave that much of
 // main memory after it, or nothing is touched.
 constexpr u32 FARTHEST = game::GAME_OPTIONS + 4;
 static_assert(SCREEN_OPTION + 4 <= FARTHEST);
 static_assert(game::OPTION_BINDINGS + 0x150 <= FARTHEST && game::OPTION_SCHEME + 4 <= FARTHEST);
+static_assert(COURSE_NAMES + COURSE_COUNT * COURSE_NAME_ENTRY <= FARTHEST);
 
 std::optional<Match> s_match;
 bool s_read = false;
@@ -124,6 +140,40 @@ void WriteControllerOptions(Guest& g)
   if (!written.empty() && ++s_controls_written <= LINES)
     Notice("fzgx: controller options written where the game held others: {}{}", written,
            s_controls_written == LINES ? " (no further lines)" : "");
+}
+
+u32 CourseOf(const Match& m)
+{
+  return paint::Be32(m.race.data() + 4);
+}
+
+// The stage's name as the window holds it (NAME_SIZE bytes, the ending zero after it); empty for a course the
+// table does not name.
+std::array<u8, NAME_SIZE> CourseNameBytes(u32 course)
+{
+  std::array<u8, NAME_SIZE> bytes{};
+  if (const char* name = courses::StoryName(static_cast<int>(course)))
+  {
+    const std::string_view text(name);
+    std::memcpy(bytes.data(), text.data(), std::min<std::size_t>(text.size(), NAME_SIZE - 1));
+  }
+  return bytes;
+}
+
+// The stage's English entry pointed at the window's name, when the course has one and main.rel is there.
+void PointCourseName(Guest& g, const Match& m)
+{
+  const u32 course = CourseOf(m);
+  if (course >= COURSE_COUNT || !courses::StoryName(static_cast<int>(course)))
+    return;
+  const u32 module = MainRel(g);
+  if (module == 0)
+    return;
+  const u32 entry = module + COURSE_NAMES + course * COURSE_NAME_ENTRY;  // (English first)
+  if (g.Read32(entry) == COURSE_NAME)
+    return;
+  g.Write32(entry, COURSE_NAME);
+  Notice("fzgx: course name: course {}'s is {} (the game's table had another)", course, courses::StoryName(static_cast<int>(course)));
 }
 
 // The player's camera (Options::camera, the launch file's "match.camera": the launcher's record of the view the
@@ -224,6 +274,8 @@ void Prepare(ModData& data)
     data.CopyTo(RACE, m->race.data(), m->race.size());
     data.CopyTo(table::SEAT_BLOCK, m->seat_block.data(), m->seat_block.size());
     data.CopyTo(NAMES, m->names.data(), m->names.size());
+    const std::array<u8, NAME_SIZE> course_name = CourseNameBytes(CourseOf(*m));
+    data.CopyTo(COURSE_NAME, course_name.data(), course_name.size());
   }
   Notice("fzgx: native form: image {} ({} bytes), {} patched words, mode {}", b->image_sha1.substr(0, 8), image.size(),
          b->patches.size(), m ? m->mode : 0);
@@ -265,6 +317,7 @@ void OnFrame(Guest& g)
   }
   g.Write32(TRUE_ASPECT, TrueAspectWord(TheOptions()));
   WriteControllerOptions(g);
+  PointCourseName(g, *m);
   WriteStartView(g);
   // the seats' constants every frame until the race runs (in the native form Prepare wrote them before the boot)
   if (g.Read32(table::RUNNING_AT) == 0 && m->seat_block.size() == table::SEAT_BLOCK_SIZE)
@@ -281,6 +334,8 @@ void OnFrame(Guest& g)
   }
   g.CopyTo(RACE, m->race.data(), m->race.size());
   g.CopyTo(NAMES, m->names.data(), m->names.size());
+  const std::array<u8, NAME_SIZE> course_name = CourseNameBytes(CourseOf(*m));
+  g.CopyTo(COURSE_NAME, course_name.data(), course_name.size());
   g.CopyTo(IMAGE, m->image.data(), m->image.size());
   Notice("fzgx: mod image ({} bytes) and race values written", m->image.size());
 }

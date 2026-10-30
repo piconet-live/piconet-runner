@@ -3,7 +3,8 @@
 // runner, leaning 12 degrees about its foot as the launcher's display words do; the system's bold face without it),
 // anti-aliased, a flat fill in the text colour (overlay.h: no gradient, no glow), with a soft shadow under it (it
 // floats over the picture) and nothing else around it. Drawn once a figure and picture height with GDI+; panel.cpp
-// eases it in. Windows only: elsewhere no picture, and panel.cpp keeps the small font.
+// eases it in. Windows only: elsewhere no picture, and panel.cpp writes the figure as
+// text in the same face.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "panel_figure.h"
@@ -35,7 +36,7 @@ namespace fzgx_port
 {
 namespace
 {
-// The figure's height (its digits' cap height) as a share of the picture's: about twice the small font's digit.
+// The figure's height (its digits' cap height) as a share of the picture's: about twice a count's capitals.
 constexpr float FIGURE_SHARE = 0.046f;
 constexpr float CAP_OF_EM = 0.70f;  // Saira's digits stand about this much of the em
 constexpr std::uint32_t FILL = overlay::TEXT;

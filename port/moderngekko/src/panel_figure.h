@@ -8,6 +8,6 @@
 namespace fzgx_port
 {
 // The figure (0 to 9) for a picture `picture_height` pixels high, straight (not premultiplied) opacity; empty where
-// it cannot be drawn (no GDI+: not Windows), and the caller draws the small font instead.
+// it cannot be drawn (no GDI+: not Windows), and the caller writes the figure as text instead.
 fzgx::panel::Picture FigurePicture(fzgx::u32 figure, fzgx::u32 picture_height);
 }  // namespace fzgx_port

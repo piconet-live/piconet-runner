@@ -82,14 +82,11 @@ void TestWhatThePanelShows();
 void TestThePanelHeldToTheRace();
 void TestThePanelHeldUntilLive();
 void TestThePanelsLines();
-void TestTheGamesFontIsRead();
-void TestThePanelsPicture();
 void TestThePanelFromAStartToTheCourse();
 void TestThePanelAtTheStartGate();
 // test_panel_art.cpp
 void TestAPackedFileIsUnpacked();
 void TestATexturesPixels();
-void TestTheVenueLettersAreCutFromTheirStrips();
 void TestAGamePictureScaledForTheScreen();
 void TestTheLoadsProgress();
 void TestTheSettingThatMakesAGameStand();
@@ -136,6 +133,7 @@ void TestTheGapsToTheLeader();
 void TestTheTowersHeadAndTexts();
 // test_native_form.cpp
 void TestTheNativeForm();
+void TestAStoryStageIsNamedInTheGame();
 // test_strip.cpp
 void TestTheStripsLayout();
 void TestWhatAPointOfTheWindowIs();
@@ -291,8 +289,6 @@ void TestThePanelBeforeARace()
   TestThePanelHeldToTheRace();
   TestThePanelHeldUntilLive();
   TestThePanelsLines();
-  TestTheGamesFontIsRead();
-  TestThePanelsPicture();
   TestThePanelFromAStartToTheCourse();
   TestThePanelAtTheStartGate();
 }
@@ -456,7 +452,6 @@ int main(int argc, char** argv)
   TestThePanelBeforeARace();
   TestAPackedFileIsUnpacked();
   TestATexturesPixels();
-  TestTheVenueLettersAreCutFromTheirStrips();
   TestAGamePictureScaledForTheScreen();
   TestTheLoadsProgress();
   TestTheSettingThatMakesAGameStand();
@@ -473,6 +468,7 @@ int main(int argc, char** argv)
   TestPracticeWithRewind();
   TestTheSpectatorControls();
   TestTheNativeForm();
+  TestAStoryStageIsNamedInTheGame();
   TestASavesControllerOptions();
   TestASaveThatIsRefused();
   TestARaceTakesThePlayersControllerOptions();

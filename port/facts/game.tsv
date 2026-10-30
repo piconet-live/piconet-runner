@@ -26,6 +26,7 @@ NAMES	window	0x81813000		u32		memmap.py:7	the player names: 30 places of NAME_SI
 MONITORS	window	0x81813600		u32		memmap.py:21	the rejoin hand-back monitors' state (monitors.py), the picture's only: +0 the step control comes back, +4 the pictures (0 not tried, 1 trying, 2 read, 3 not read), +36 the picture in the texture plus 1 (0 none)
 MINES	window	0x81813700		u32		memmap.py:31	mines that come back (sites_mines.py): +0 the state of the countdowns' block (0 not tried, 1 taken, 3 none), +4 its address in the main heap (0 none)
 ICONS	window	0x81813710		u32		memmap.py:82	tests: the rank icons' exclusion (rankicons.py): a word a racer, the drawn frames its icon was held back (the racer the HUD follows), then a word a racer at +120, the frames it was let through; counted only with IMAGE_LOGS
+COURSE_NAME	window	0x81813810		u32		memmap.py:236	a story stage's name, NAME_SIZE bytes with the ending zero, written by the core (protocol/courses.toml): the game's course name table points the stage's English entry here (COURSE_NAMES); the picture's only
 RACE	window	0x81814000		u32		memmap.py:18	the race block: what race to start (group race)
 INPUTS	window	0x81820000		u32		memmap.py:24	the input buffer: 1024 steps of 30 seats, INPUT_SLOT bytes each
 INPUTS_END	window	=INPUTS + RING_STEPS * SEATS * INPUT_SLOT		u32		memmap.py:25	the first address after the input buffer
@@ -202,6 +203,8 @@ INTRO_CUT	game	30		u32		port/core/src/core.cpp:183	what the game's own skip of t
 INTRO_FADE	game	0x8032A93F		u32		port/core/src/core.cpp:183	main.rel's fade's state byte (fn_1_4C10 reads it); its bit 0: a fade runs, and the course intro's skip is not taken (read in the linked code of a dump, run cam4g-dual-core-race300-on-1)
 HUD_PARTS	game	=REL_DATA + 0x3D544	MAIN_REL	u32		port/core/src/minimap_frame.cpp:131	the HUD part mask, a word a viewport (viewport 0 first): read by drawing only; bit 0x00800000 is the game's map picture (fn_1_79654), which our course map replaces
 MAP_CAMERAS	game	=REL_DATA + 0x1DFB0	MAIN_REL	u32		port/core/src/minimap_frame.cpp:74	the game's map cameras, 0x1C bytes a course (field of view, eye, the point it looks at), 46 courses: the game's map picture and its markers are drawn through them (fn_1_7926C)
+COURSE_NAMES	game	=REL_DATA + 0x2BD54	MAIN_REL	u32		port/core/src/boot.cpp:42	the game's course name table: COURSE_NAME_ENTRY bytes a course by its number, a pointer a language (English first, then German, French, Spanish, Italian, Japanese); every story stage's English entry points at "---" (37 at "Sonic Oval"); drawn by the course intro's title card and the screens that name a course, read by no step
+COURSE_NAME_ENTRY	game	0x18		u32		port/core/src/boot.cpp:42	bytes of one course's entry in the course name table (COURSE_NAMES): six pointers
 INTRO_SKIP_ON	game	=REL_BSS + 0x7B188	MAIN_REL	u32		port/core/src/core.cpp:183	fn_1_EB200's first word: 0 lets the course intro's skip be taken whatever INTRO_SKIP_STATE says
 INTRO_SKIP_STATE	game	0x8036618C		u32		port/core/src/core.cpp:183	fn_1_EB200's state word: 0xE, 0xF or 0x10 refuse the course intro's skip while INTRO_SKIP_ON is not 0 (what the states are is not known)
 MODE_GAME	game	2		u16		port/core/src/core.cpp:184	the game's mode word in a race (MD_GAME)

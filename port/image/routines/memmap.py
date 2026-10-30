@@ -235,3 +235,9 @@ assert FINISH_COUNT + 4 == RESULTS_KEEP and RESULTS_CAMERA + 4 == DRAW_ASK and D
 assert TRUE_ASPECT + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
 hi = lambda a: (a >> 16) & 0xFFFF
 lo = lambda a: a & 0xFFFF
+# A story stage's name (the core writes it, port/core/src/boot.cpp; the protocol's courses.toml): the course intro's
+# title card and every screen that names the course read it through the game's own course name table, whose English
+# entry for the stage the core points here (the game's own says "---"). NUL-terminated, NAME_SIZE bytes. Not read by
+# a step: the picture's only, never rolled back, not in the checksum.
+COURSE_NAME = ICONS + 0x100
+assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE

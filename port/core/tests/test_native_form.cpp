@@ -199,3 +199,61 @@ void TestTheNativeForm()
   Init(last_host, none);
   CHECK(!NativeForm() && Patches().empty());
 }
+
+// A story stage's name (the protocol's courses.toml): in the window before boot, and the game's course name table
+// pointed at it once main.rel is there, the stage's English entry only; a cup course's table is left as the game has
+// it.
+void TestAStoryStageIsNamedInTheGame()
+{
+  BEGIN_TEST();
+  const std::string dir = Temp();
+  NativeBundle(dir);
+  const auto launch = [&](u32 course) {
+    WriteText(dir + "/launch.json", R"({"about": "a story stage", "bundle": ")" + dir + R"(", "match": {
+      "match": {"matchId": "m9", "seat": 0, "token": "1f2e3d4c5b6a7988", "relay": {"host": "", "port": 47811},
+                "setup": {"course": )" + std::to_string(course) + R"(, "laps": 1, "shuffleSeed": 1, "cpuSeed": 2,
+                          "seats": [{"seat": 0, "machine": 5, "playerId": "p1", "name": "one"}]}},
+      "relayHost": "127.0.0.1", "delay": 2}})");
+    Options options;
+    CHECK(!ReadLaunchFile(dir + "/launch.json", &options));
+    return options;
+  };
+  const u32 entry39 = MODULE + game::COURSE_NAMES + 39 * game::COURSE_NAME_ENTRY;
+  const u32 dashes = MODULE + game::REL_DATA + 0x2B15C;  // where the game's "---" is
+  TestHost host;
+  Init(host, launch(39));
+  ModData& d = Data();
+  char name[layout::NAME_SIZE] = {};
+  d.CopyFrom(name, layout::COURSE_NAME, layout::NAME_SIZE);
+  CHECK(std::string(name) == "High-Stakes Jumps");
+  Guest g(host, d);
+  FrameTick();   // main.rel not there yet: nothing is pointed
+  CHECK(host.notices.find("course name") == std::string::npos);
+  LinkMainRel(g);
+  for (u32 course = 38; course <= 40; ++course)
+    for (u32 language = 0; language < 6; ++language)
+      g.Write32(MODULE + game::COURSE_NAMES + course * game::COURSE_NAME_ENTRY + language * 4, dashes);
+  FrameTick();
+  CHECK(g.Read32(entry39) == layout::COURSE_NAME && g.Read32(entry39 + 4) == dashes && g.Read32(entry39 + 20) == dashes);
+  CHECK(g.Read32(entry39 - game::COURSE_NAME_ENTRY) == dashes && g.Read32(entry39 + game::COURSE_NAME_ENTRY) == dashes);
+  CHECK(host.notices.find("course name: course 39's is High-Stakes Jumps") != std::string::npos);
+  const std::size_t said = host.notices.size();
+  FrameTick();   // it holds it: nothing written, nothing said
+  CHECK(g.Read32(entry39) == layout::COURSE_NAME && host.notices.size() == said);
+
+  // a cup course: no name in the window, the table as the game has it
+  TestHost cup;
+  Init(cup, launch(16));
+  ModData& e = Data();
+  e.CopyFrom(name, layout::COURSE_NAME, layout::NAME_SIZE);
+  CHECK(name[0] == 0);
+  Guest h(cup, e);
+  LinkMainRel(h);
+  const u32 entry16 = MODULE + game::COURSE_NAMES + 16 * game::COURSE_NAME_ENTRY;
+  h.Write32(entry16, dashes);
+  FrameTick();
+  CHECK(h.Read32(entry16) == dashes && cup.notices.find("course name") == std::string::npos);
+  Options none;
+  TestHost last;
+  Init(last, none);
+}

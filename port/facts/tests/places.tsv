@@ -376,6 +376,10 @@ GAME_OPTIONS	port/core/src/boot.cpp	use	game::GAME_OPTIONS	2
 SAVED_VIEW	port/core/src/boot.cpp	use	game::SAVED_VIEW	3
 CHASE_RECORD	port/core/src/board_race.cpp	use	game::CHASE_RECORD	1
 CHASE_VIEW	port/core/src/board_race.cpp	use	game::CHASE_VIEW	2
+COURSE_NAME	memmap.py	py	COURSE_NAME	
+COURSE_NAME	port/core/src/boot.cpp	use	table::COURSE_NAME	1
+COURSE_NAMES	port/core/src/boot.cpp	use	game::COURSE_NAMES	1
+COURSE_NAME_ENTRY	port/core/src/boot.cpp	use	game::COURSE_NAME_ENTRY	1
 MACHINE_FLAGS	port/core/src/out_test.h	use	game::MACHINE_FLAGS	1
 MACHINE_FLAGS2	port/core/src/out_test.h	use	game::MACHINE_FLAGS2	1
 MACHINE_FLAGS2_FALLEN	port/core/src/out_test.h	use	game::MACHINE_FLAGS2_FALLEN	1
