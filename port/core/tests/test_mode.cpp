@@ -1046,6 +1046,23 @@ void TestASquareRootsCostInBothLoops()
   CHECK(ends.size() > 1);  // (a sqrt's fault overshoots the budget by up to seven; another's by one)
 }
 
+// The cut race's words as a package gives them: race_waits, results points and the title, and the clock's use.
+void TestTheCutRaceWords()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("cuts.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->race_waits && p->results_points);
+  CHECK(p->results_title != nullptr && std::string(p->results_title) == "KNOCKOUT");
+  CHECK(mode::hud::UsesClock(*p));
+  CHECK((mode::hud::WindowFlags(*p) & mode::hud::POINTS_ONLY) != 0);
+  std::optional<mode::Package> old = mode::Read(Vector("overdrive.mode.json"), &why);
+  CHECK(old && !old->race_waits && !old->results_points && !old->results_title && !mode::hud::UsesClock(*old));
+}
+
 // A mode without `cpus allowed`: a player seat with the "AI drives" record retires at that step (flag set, its Restore
 // cleared), once, a seat that has driven or one never ready from the start; a finished seat keeps its finish; an autopilot's
 // marked record and all zeros and a seat that is no player's stay as they are; `cpus allowed` and `solo` never retire anyone;
