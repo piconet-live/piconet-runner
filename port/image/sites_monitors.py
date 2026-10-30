@@ -1,5 +1,4 @@
-"""The hand-back monitors' pictures (routines/monitors.py; a rolling start's monitors show the game's movie and do
-not use them), read before the race (sites.py's frame routine calls
+"""The hand-back monitors' pictures (routines/monitors.py), read before the race (sites.py's frame routine calls
 `monitors_preload` after `results_preload`, on the same black frame before the start gate). Native form only: the
 fork's image has no reader, and its monitors stay off (their state word stays 0).
 

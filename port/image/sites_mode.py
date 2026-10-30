@@ -8,7 +8,7 @@ nothing is taken from the heap. Native form only: the fork's image does not have
 | `mode_preload` | the frame routine, on the black frame before the start gate (sites.py's `frame`, with mines_preload) | — | the mode's block (memmap.MODE_BLOCK bytes on whole pages of 4 KiB, zeroed: MODE_ALLOC taken) from the top of the main heap's largest free block, as mines_preload takes its block, when the host asked for one (MODES +0 = 4) |
 | `mode_point` | fn_1_850C4 0x8548C, after the race pass's callbacks (`lwz r3, 0x15C(r31)`, r31 the car manager) | — | the host call HOST_MODE (the interpreter, port/core/src/mode.cpp: the rules run, their actions go into the block and the machines), then for every seat whose speed is held this step the hold's rescale and the read-out M+0x17C, as the step's start computes it (the vocabulary's "rescale R") |
 | `mode_rolls` | fn_1_34924 0x34988, the count after its decrement (`lhz r0, 0(r29)`) | the machines' tasks wait for the count below 240 | under `rolling_start` (window flag ROLLING) the mask is lifted from the count's first step: the machines and the mode run through the whole intro; GO's step and the count are the game's |
-| `mode_starter_disp` | fn_1_1050D0 0x105124, StarterDisp's replay test (`cmpwi r3, 0`, after its hidden and camera tests) | draws the start's monitors | a rolling start, viewport 0 (r28 the first record): as when a replay plays, nothing drawn: routines/monitors.py draws them from the start's count. Picture only: the task is in the draw half, which a late frame skips whole (sites_present.py), so no step or checksum reads what it writes; Starter, the record and the movie go on as ever |
+| `mode_monitors` | fn_1_1049E0 0x104BFC, the start monitors' placing (`li r4, 0`) | keeps the first step's turn | a rolling start: 1, the machine's turn every step |
 | `mode_speed` | fn_1_236CC 0x23854, after the air drag (`bl fn_1_294D0`) and before the position moves by P / W (`lfs f1, 0x14(r31)`, r30 the machine) | — | for a seat whose speed is held: P scaled to the held speed, keeping its direction (rebuilt along the nose when the drag left it 0), and the base speed M+0x224 the same (the vocabulary's "site L") |
 | `respawns` | fn_1_32600 0x32628, the game's verdict (`rlwinm. r0, r0, 0, 16, 16`: the rule word's Restore bit, r30 the machine) | Restore when the rule says so | Restore when the rule says so or the machine has flag 0x1 (its own Restore: a mode's `respawns`, story chapter 8's), as the image's verdict text says (routines/outtest.py). Not gated on a mode: flag 0x1 on an unfinished machine occurs only under the rule, which already exempts it (the open words' note, section 1) |
 
@@ -39,8 +39,7 @@ SEAT, SEATS = memmap.MODE_SEAT, memmap.MODE_SEATS
 PEDALS, BOOST_OFF, HELD, BOOST, EXPLODE, HAND, ROLL = 1, 2, 4, 8, 16, 32, 64   # a seat record's flags
 WANTED, TAKEN, NONE = 4, 1, 3                     # MODES +0: the host asks; the block taken; none
 ROLLS, ROLLS_KNOWN = 0x34988, 0xA01D0000          # fn_1_34924: lhz r0, 0(r29), the count after its decrement
-STARTER_DISP, STARTER_DISP_KNOWN = 0x105124, 0x2C030000   # fn_1_1050D0: cmpwi r3, 0, fn_1_F2F34's answer
-RECORDS = 0x85298                                 # .bss: the start monitors' records, viewport 0's first
+MONITORS_TURN, MONITORS_TURN_KNOWN = 0x104BFC, 0x38800000   # fn_1_1049E0: li r4, 0, the stock fn_1_104730 call's "oriented"
 TASK_MASK = 0x4310                                # fn_1_4310(mask)
 POINT, POINT_KNOWN = 0x8548C, 0x807F015C          # fn_1_850C4: lwz r3, 0x15c(r31)
 SPEED, SPEED_KNOWN = 0x23854, 0xC03F0014          # fn_1_236CC: lfs f1, 0x14(r31)
@@ -303,23 +302,22 @@ mheld_no:
     blr
 """)
 
-    # a rolling start: viewport 0's monitors are monitors.py's, from the start's count; the stock draw says "a replay
-    # plays" and draws nothing (r3 is free here: the next call sets it)
-    site = TEXT + STARTER_DISP
-    word = stock(site, STARTER_DISP_KNOWN)
-    r.add("mode_starter_disp", test + """    beq msd_stock
+    # a rolling start: the start's monitors take the followed machine's turn every step, as the game's own branch for
+    # rule flag 0x100 in phase 0x28 does; the stock call keeps the first step's turn, so on a loop they part from it
+    site = TEXT + MONITORS_TURN
+    word = stock(site, MONITORS_TURN_KNOWN)
+    r.add("mode_monitors", test + """    beq mmt_stock
 """ + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
     andi. 12, 12, {memmap.MODE_ROLLING}
-    beq msd_stock
-""" + la(12, memmap.REL_BSS + RECORDS) + f"""    cmplw 28, 12
-    bne msd_stock
-    li 3, 1
-msd_stock:
+    beq mmt_stock
+    li 4, 1
+    @b {site + 4:#x}
+mmt_stock:
     .long {word:#010x}
     @b {site + 4:#x}
 """)
-    patch(site, word, 0, "mode_starter_disp")
-    middle.append((site, ["r12", "cr0"], "mode_starter_disp"))
+    patch(site, word, 0, "mode_monitors")
+    middle.append((site, ["r12", "cr0"], "mode_monitors"))
 
     # a rolling start: what the count does below 240, lift the machines' task mask, from its first step
     site = TEXT + ROLLS

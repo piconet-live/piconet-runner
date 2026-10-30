@@ -1,5 +1,5 @@
-"""The monitors (monitors.py), run here as the bytes the image holds against a made-up race seen from seat
-0, one drawn frame a step through a whole hand-back and a rolling start: when they are on, which picture the screen shows (and that each
+"""The hand-back's monitors (monitors.py), run here as the bytes the image holds against a made-up race seen from seat
+0, one drawn frame a step through a whole hand-back: when they are on, which picture the screen shows (and that each
 is decoded once), which sounds play and when (once each, also when steps are skipped), where they are placed against
 the followed racer's drawn matrix, how that frame is eased (monitors_ease.py), what the draw sends (the models in
 StarterDisp's order, and not its depth-only box), and that the routine writes nothing but its stack, its own state and
@@ -105,7 +105,7 @@ class Race:
                 put(m, model + 0x18, 2, 2)
                 m[model + 0x40 + 0x20 + 0xD] = 1
                 put(m, model + 0x40 + 0x20 + 8, TEXOBJ[off])
-        self.followed, self.status, self.replaying = FOLLOWED, 1, 0
+        self.followed = FOLLOWED
         self.place(matrix(yaw))
 
     def place(self, m, seat=FOLLOWED):
@@ -136,10 +136,6 @@ class Race:
             r[3] = 0
         elif address == TEXT + 0x6B48:
             r[3] = self.followed
-        elif address == TEXT + monitors.CAMERA_STATUS:
-            r[3] = self.status
-        elif address == TEXT + monitors.GAME_REPLAY:
-            r[3] = self.replaying
         elif address == 0x8006E0A4:
             self.point = struct.unpack(">3f", bytes(cpu.read(r[3] + i, 1) for i in range(12)))
         elif address == 0x8006E324:
@@ -277,127 +273,6 @@ class TheMonitors(MonitorsBuild):
         self.assertEqual(race.begins, [])                                # no box: drawn before the scene, its
         self.assertEqual(race.pipe, 0)                                   # depth would hide the scene behind it
         self.assertEqual(race.models, [0x80A40000 + off * 0x100 for off in MODELS])
-
-
-class TheRollingStart(MonitorsBuild):
-    """A rolling start: c is the start's own count, whatever the hand-back's words say; the placing and the draw are
-    the hand-back's; no sounds, no picture of ours; the movie left bound and not waited for."""
-
-    def rolling(self, count, state=2, movie=1, **fields):
-        race = Race(self, state=state, movie=movie)
-        put(race.mem, memmap.MODE_HUD_FLAGS, memmap.MODE_ROLLING)
-        put(race.mem, BSS + monitors.COUNT, count, 2)
-        race.__dict__.update(fields)
-        return race
-
-    def frame(self, race, count, step=None):
-        put(race.mem, BSS + monitors.COUNT, count, 2)
-        return race.frame(step if step is not None else 423 - count, end=0)
-
-    def test_on_while_the_count_runs(self):
-        race = self.rolling(420)
-        for count, on in ((420, False), (419, True), (59, True), (1, True), (0, False)):
-            self.assertEqual(self.frame(race, count), on, count)
-
-    def test_placed_and_drawn_as_a_hand_back_at_the_same_count(self):
-        for c in (419, 390, 360, 330, 100, 20):
-            race, back = self.rolling(c), Race(self)
-            self.assertTrue(self.frame(race, c))
-            if c < 59:
-                back.frame(END - 1)                                      # the step control comes back is known
-            self.assertTrue(back.frame(END + 59 - c))
-            self.assertEqual((race.point, race.yaw, race.angles, race.models),
-                             (back.point, back.yaw, back.angles, back.models), c)
-            self.assertEqual(race.models, [0x80A40000 + off * 0x100 for off in MODELS])
-            self.assertEqual((race.begins, race.pipe), ([], 0))
-            self.assertEqual(race.floats(HB + monitors.RECORD + 0x48, 12), back.floats(HB + monitors.RECORD + 0x48, 12))
-
-    def test_the_turn_is_eased_as_a_hand_back(self):
-        race = self.rolling(400)
-        self.frame(race, 400)
-        m = posed(0.6)
-        race.place(m)
-        self.assertTrue(self.frame(race, 399))
-        _, back_eased, _ = race.eased()
-        self.assertGreater(angle(back_eased, column(m, 2)), 0.4)         # eased, not snapped
-        p, _, _ = race.eased()
-        self.assertLess(apart(p, column(m, 3)), 1e-3)                    # the position at once
-
-    def test_no_sounds_and_the_movie_stays_bound(self):
-        race = self.rolling(419)
-        for count in range(419, 0, -1):
-            self.assertTrue(self.frame(race, count))
-            self.assertEqual((race.sounds, race.decoded, race.bound), ([], [], set()), count)
-            self.assertEqual(len(race.models), len(MODELS))
-
-    def test_needs_neither_the_pictures_nor_the_freed_movie_nor_the_hand_backs_words(self):
-        for state, movie in ((0, 1), (3, 1), (2, 0), (2, 1)):
-            race = self.rolling(200, state=state, movie=movie)
-            self.assertTrue(self.frame(race, 200), (state, movie))
-        race = self.rolling(200)
-        put(race.mem, HB + monitors.END, 9999)
-        self.assertTrue(self.frame(race, 200))
-        self.assertEqual(int.from_bytes(bytes(race.mem[HB + monitors.END + i] for i in range(4)), "big"), 9999)   # untouched
-
-    def test_the_count_wins_over_a_hand_back_while_it_runs(self):
-        race = self.rolling(300)
-        self.assertTrue(race.frame(123, end=123 + 500))                  # 559 by the hand-back's sum: it would be off
-        self.assertEqual((race.sounds, race.bound), ([], set()))
-
-    def test_stock_disp_s_tests(self):
-        self.assertFalse(self.frame(self.rolling(200, status=2), 200))   # the camera's status
-        self.assertFalse(self.frame(self.rolling(200, replaying=1), 200))   # the game's own replay plays
-
-    def test_a_steady_end_one_start(self):
-        race = self.rolling(419)
-        self.frame(race, 419)
-        first = race.floats(HB + monitors.SEEN, 1)
-        self.frame(race, 300)
-        self.assertEqual(race.floats(HB + monitors.SEEN, 1), first)      # the same "end" all the way
-
-    def test_a_hand_back_after_the_start_is_the_normal_path(self):
-        race = self.rolling(0, movie=2)
-        self.assertFalse(race.frame(END, end=0))                         # the count over, no hand-back
-        played, decodes = [], []
-        for step in range(END - 240, END + 59):
-            self.assertTrue(race.frame(step))
-            played += race.sounds
-            decodes += race.decoded
-            self.assertTrue(race.bound)
-        self.assertEqual(played, [s for c, ids in monitors.SOUNDS if c < 300 for s in ids])
-        self.assertEqual(decodes, [0, 1, 2, 3, 4])
-
-    def test_after_a_rolling_start_the_hand_back_decodes_its_own_first_picture(self):
-        race = self.rolling(100, movie=1)
-        self.frame(race, 100, step=323)
-        put(race.mem, BSS + monitors.COUNT, 0, 2)
-        put(race.mem, BSS + 0x85280 + 0x248, 2)
-        self.assertTrue(race.frame(END - 100))
-        self.assertEqual(race.decoded, [2])                              # c = 159: "2", though SHOWN was never set
-        self.assertTrue(race.bound)
-
-
-class ANormalRace(MonitorsBuild):
-    """A race with no rolling start: nothing of the rolling path, whatever the count says."""
-
-    def test_the_count_alone_draws_nothing(self):
-        race = Race(self, movie=1)
-        put(race.mem, BSS + monitors.COUNT, 200, 2)
-        self.assertFalse(race.frame(100, end=0))
-        self.assertEqual((race.sounds, race.models), ([], []))
-
-    def test_other_mode_flags_are_not_rolling(self):
-        race = Race(self, movie=1)
-        put(race.mem, memmap.MODE_HUD_FLAGS, ~memmap.MODE_ROLLING & 0xFFFFFFFF)
-        put(race.mem, BSS + monitors.COUNT, 200, 2)
-        self.assertFalse(race.frame(100, end=0))
-
-    def test_a_hand_back_ignores_the_count_and_the_status(self):
-        race = Race(self)
-        race.status, race.replaying = 2, 1
-        put(race.mem, BSS + monitors.COUNT, 200, 2)                      # (never so after the movie is freed)
-        self.assertTrue(race.frame(END - 1))
-        self.assertTrue(race.bound)
 
 
 class TheEasedFrame(MonitorsBuild):

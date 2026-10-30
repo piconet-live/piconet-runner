@@ -93,36 +93,6 @@ class ThePairGate(Build):
         self.assertEqual(get(m.mem, MI + 0x514), 0)
 
 
-class TheStarterDisp(Build):
-    """StarterDisp in a rolling start: viewport 0's is skipped as if a replay played (monitors.py draws it)."""
-    RECORD = memmap.REL_BSS + sites_mode.RECORDS
-
-    def answer(self, flags, record=None, mode=1, replay=0):
-        memory = {}
-        put(memory, MODE, mode)
-        put(memory, memmap.MODE_HUD_FLAGS, flags)
-        reached = []
-        m = ModeCpu(self.image, memory, lambda address, cpu: reached.append(address))
-        m.r[3], m.r[28] = replay, self.RECORD if record is None else record
-        m.run(self.symbols["mode_starter_disp"])
-        self.assertEqual(reached, [TEXT + sites_mode.STARTER_DISP + 4])
-        return m.r[3], m.cr0[2]
-
-    def test_the_site_is_the_replay_test(self):
-        p = self.patches[TEXT + sites_mode.STARTER_DISP]
-        self.assertEqual(int(p["original"], 16), sites_mode.STARTER_DISP_KNOWN)   # cmpwi r3, 0
-
-    def test_a_rolling_start_skips_viewport_0(self):
-        self.assertEqual(self.answer(memmap.MODE_ROLLING), (1, False))
-
-    def test_every_other_race_draws(self):
-        self.assertEqual(self.answer(0), (0, True))
-        self.assertEqual(self.answer(memmap.MODE_POINTS_ONLY), (0, True))
-        self.assertEqual(self.answer(memmap.MODE_ROLLING, mode=0), (0, True))     # a plain start
-        self.assertEqual(self.answer(memmap.MODE_ROLLING, record=self.RECORD + 0x88), (0, True))   # viewport 1
-        self.assertEqual(self.answer(0, replay=1), (1, False))                    # the game's own replay
-
-
 class TheTimer(Build):
     def timer(self, rule, mode=1, block=BLOCK, clock=3600):
         memory = {}
