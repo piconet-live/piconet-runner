@@ -249,7 +249,7 @@ void TestAStatPackInARecording()
   };
   const std::string with = recorded(Stats(ThePack(), "Rec Pack")), without = recorded("");
   // (a race from a match has no rubber band since 0.4.0, so its recording is version 7 with a pack or without)
-  CHECK(with.compare(0, 6, std::string("FZRP\0\7", 6)) == 0 && without.compare(0, 6, std::string("FZRP\0\7", 6)) == 0);
+  CHECK(with.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0 && without.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0);
   CHECK(Says(with, std::string("\"fingerprint\":\"") + THE_PACKS_FINGERPRINT + "\"") && Says(with, "\"name\":\"Rec Pack\"") &&
         Says(with, "\"values\":\"BgRFHYAABkgDAQAAKFy") && !Says(without, "stats"));
   // read back: version 3 with the pack, version 2 without; the other two are refused, and so is a pack that is none
