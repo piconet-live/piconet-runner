@@ -19,6 +19,8 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 
 #if defined(__x86_64__) || defined(_M_X64)
@@ -897,6 +899,47 @@ void Remember(Machine& m, Guest& g, u32 block, const Now& n)
   g.Write32(block + FLAGS, (g.Read32(block + FLAGS) & ~1u) | (n.started ? 1u : 0u));
 }
 
+// Tests (debug "modeTrace"): what a mode's words did, as text, one line a thing; R the run (the block's count, which a
+// rollback puts back: a line of run k takes the place of every earlier line of runs k and later), then E a rule that
+// fired (its label, seat, second), A an action of the queue (id, seat, cells), S a seat's state every tenth run and
+// every run before GO, X the race's words and the results' records at the end. Nothing is read back: no bearing on
+// the race.
+std::FILE* TraceFile()
+{
+  static std::FILE* file = [] {
+    const char* path = std::getenv("FZGX_MODE_TRACE");
+    return path && *path ? std::fopen(path, "w") : nullptr;
+  }();
+  return file;
+}
+
+void TraceSeats(Machine& m, Guest& g, u32 block, u32 module, u32 runs, bool started, const Now& n)
+{
+  std::FILE* t = TraceFile();
+  if (!t || (started && runs % 10 != 0))
+    return;
+  const u32 r = module + R_BASE, slot = g.Read8(r + R_SLOT);
+  std::fprintf(t, "T %u clock %u rule %08x timer %u phase %d end %u\n", runs, g.Read32(module + game::RACE_CLOCK),
+               g.Read32(r), g.Read16(r + R_TIMER), static_cast<s16>(g.Read16(module + game::PHASE)), g.Read32(block + END));
+  for (u32 seat = 0; seat < m.Count(); ++seat)
+  {
+    const u32 a = m.MachineOf(seat), pr = m.Progress(seat), rec = r + R_RECORDS + R_RECORD * seat;
+    std::fprintf(t,
+                 "S %u %u was %08x flags %08x v %.1f e %.2f lap %d dist %.0f x %.1f y %.1f z %.1f p %.1f %.1f %.1f steer %.3f "
+                 "accel %.2f brake %.2f restoring %u kos %u rank %u out %u place %u time %08x cb %u\n",
+                 runs, seat, n.flags[seat], g.Read32(a + game::MACHINE_FLAGS), Real(g.Read32(a + game::MACHINE_SPEED)),
+                 Real(g.Read32(a + game::MACHINE_ENERGY)), Int(g.Read32(pr + game::PROGRESS_LAPS)),
+                 Real(g.Read32(pr + 0xF8)), Real(g.Read32(a + game::MACHINE_POSITION_X)),
+                 Real(g.Read32(a + game::MACHINE_POSITION_X + 4)), Real(g.Read32(a + game::MACHINE_POSITION_X + 8)),
+                 Real(g.Read32(a + M_MOMENTUM)), Real(g.Read32(a + M_MOMENTUM + 4)), Real(g.Read32(a + M_MOMENTUM + 8)),
+                 Real(g.Read32(a + M_STEER)), Real(g.Read32(a + M_ACCEL)), Real(g.Read32(a + M_BRAKE)),
+                 g.Read16(a + M_RESTORING), g.Read8(a + M_KOS), m.Rank(seat), m.Out(seat) ? 1 : 0,
+                 g.Read8(rec + 0xE + slot), g.Read32(rec + 0x24 + 4 * slot),
+                 g.Read32(a + M_CPU) ? g.Read8(g.Read32(a + M_CPU) + 0x32) : 0);
+  }
+  std::fflush(t);
+}
+
 // One occurrence of a discrete event: every rule on it in the file's order, its instance on `seat` (none: the rule's
 // own) not waiting, its conditions holding; `second` is local 1 (ko's credited seat, hit's other, out's cause).
 void Fire(Machine& m, Guest& g, const Package& p, u32 block, u32 event, u32 seat, u32 second = NONE)
@@ -908,7 +951,12 @@ void Fire(Machine& m, Guest& g, const Package& p, u32 block, u32 event, u32 seat
       continue;
     m.Second(second);
     if (Holds(m, g, rule, i, block, seat, false))
+    {
+      if (std::FILE* t = TraceFile())
+        std::fprintf(t, "E %u %s seat %d second %d\n", g.Read32(block + RUNS), rule.label.c_str(), static_cast<int>(seat),
+                     static_cast<int>(second));
       m.Run(rule.body, i, seat);
+    }
   }
   m.Second(NONE);
 }
@@ -1039,6 +1087,9 @@ void Apply(Machine& m, Guest& g, const Package& p, u32 block, u32 module, bool* 
   };
   for (const Action& a : m.Queue())
   {
+    if (std::FILE* t = TraceFile())
+      std::fprintf(t, "A %u id %u seat %d %08x %08x %08x\n", g.Read32(block + RUNS), a.id, static_cast<int>(a.seat),
+                   a.value[0], a.value[1], a.value[2]);
     // the race's words first: they name no seat
     switch (a.id)
     {
@@ -1244,7 +1295,7 @@ void EndClause(Machine& m, Guest& g, u32 block, u32 module)
 // the clock limit's timer and its end, and the end clause when the run asked for it.
 void After(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const Now& n, bool end)
 {
-  const u32 count = m.Count(), rule = g.Read32(module + R_BASE), respawn = g.Read32(block + RESPAWN);
+  const u32 count = m.Count(), respawn = g.Read32(block + RESPAWN);
   u32 any = 0;
   for (u32 seat = 0; seat < count; ++seat)
   {
@@ -1254,7 +1305,7 @@ void After(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const 
     {
       if ((respawn >> seat & 1) && !(flags & F_RESTORE))
         g.Write32(machine + game::MACHINE_FLAGS, flags | F_RESTORE);
-      else if (!(respawn >> seat & 1) && (flags & F_RESTORE) && !(rule & 0x8000) && restoring <= 20)
+      else if (!(respawn >> seat & 1) && (flags & F_RESTORE) && restoring <= 20)
         g.Write32(machine + game::MACHINE_FLAGS, flags & ~F_RESTORE);
     }
     any |= g.Read32(block + NC + 4 * seat);
@@ -1423,6 +1474,7 @@ void Run(Guest& g, const Package& p, u32 block, u32 module)
     Apply(m, g, p, block, module, &end);
   if (m.Faulted() == FAULT_NONE)
     After(m, g, p, block, module, n, end);
+  TraceSeats(m, g, block, module, runs, n.started && !end, n);
   Remember(m, g, block, n);
   g.Write32(block + OPS, m.Ops());
   g.Write32(block + OPS + 4, std::max(g.Read32(block + OPS + 4), m.Ops()));

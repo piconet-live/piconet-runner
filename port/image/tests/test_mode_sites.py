@@ -6,10 +6,11 @@ import os, struct, sys, unittest
 
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(here, ".."))
-from test_raceview import Build, Cpu, get, put, TEXT
+from test_raceview import Build, Cpu, get, put, IMAGE, TEXT, native
 from test_race_end import signed
 import memmap
 import sites_mode
+import standin_inputs
 
 MODE, MODES = memmap.MODE, memmap.MODES
 BLOCK = 0x80D00000
@@ -140,6 +141,109 @@ class TheExplosion(Build):
         self.assertEqual(reached, [(TEXT + sites_mode.DESTROY, machine)])
         self.assertEqual({at: get(m.mem, machine + at) for at in motion}, motion)
         self.assertEqual(get(m.mem, machine), 0x40800880)
+
+
+class TheRuleHookWrapper(Build):
+    """standin_inputs.py from `ps_yes` and `call_orig`: a seat's record against the game's rule hook, run as the image
+    holds it; the hook is a stand-in that clears what the game's start hold or lap-1 rule would."""
+    SEAT = 5
+    M = 0x80D40000            # the seat's machine
+    DATA = 0x80D50000         # the stand-in routine's data (r30): +36 0, no AI hold
+    MODULE = 0x80600000
+    ROW = BLOCK + memmap.MODE_SEATS + SEAT * memmap.MODE_SEAT
+    SAVE = BLOCK + memmap.MODE_ROLL_SAVE + SEAT * memmap.MODE_ROLL
+    ACCEL, BRAKE, STEER, STRAFE = 0x3F000000, 0x3E800000, 0x3E000000, 0x3D800000
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from keystone import Ks, KS_ARCH_PPC, KS_MODE_PPC32, KS_MODE_BIG_ENDIAN
+        text = standin_inputs.asm()
+        code = bytes(Ks(KS_ARCH_PPC, KS_MODE_PPC32 + KS_MODE_BIG_ENDIAN).asm(text)[0])
+        assert cls.image.count(code) == 1
+        at = IMAGE + cls.image.index(code)
+        cls.labels = {name: at + offset for name, offset in native.label_offsets(text).items()}
+
+    def wrap(self, record=0, flags=0x41, block=BLOCK, hook=None, entry="call_orig"):
+        """Through the wrapper: gives the machine's words as the hook saw them and the machine after."""
+        memory = {}
+        put(memory, MODES + 4, block)
+        put(memory, 0x800030C8, self.MODULE)
+        put(memory, self.ROW, record)
+        put(memory, self.ROW + 4, 0x3F400000)             # the record's accelerator
+        put(memory, self.ROW + 8, 0x3DCCCCCD)             # and brake
+        put(memory, self.M, flags)
+        put(memory, self.M + 4, self.SEAT << 16)          # the seat (lha 4(31))
+        for at, value in ((0x1FC, self.STEER), (0x1F8, self.STRAFE), (0x200, self.ACCEL), (0x204, self.BRAKE)):
+            put(memory, self.M + at, value)
+        seen = []
+
+        def game(address, cpu):
+            self.assertEqual((address, cpu.r[3]), (self.MODULE + 0x332C8, self.M))
+            seen.append({at: get(cpu.mem, self.M + at) for at in (0, 0x1F8, 0x1FC, 0x200, 0x204)})
+            if hook:
+                hook(cpu)
+        m = ModeCpu(self.image, memory, game)
+        m.r[31], m.r[30], m.r[29], m.r[9] = self.M, self.DATA, self.MODULE, self.SEAT
+        m.run(self.labels[entry])
+        self.assertEqual(len(seen), 1)
+        return seen[0], m
+
+    def hold(self, cpu):
+        """The game's start hold: controls zero, no boost request."""
+        put(cpu.mem, self.M, get(cpu.mem, self.M) & ~0x40)
+        for at in (0x1F8, 0x1FC, 0x200, 0x204):
+            put(cpu.mem, self.M + at, 0)
+
+    def test_without_a_mode_the_hook_is_the_games(self):
+        seen, m = self.wrap(record=0xFF, block=0)
+        self.assertEqual(seen[0], 0x41)
+        self.assertEqual(seen[0x200], self.ACCEL)
+        self.assertEqual(get(m.mem, self.M), 0x41)
+        self.assertEqual(get(m.mem, self.SAVE), 0)
+
+    def test_an_empty_record_changes_nothing(self):
+        seen, m = self.wrap()
+        self.assertEqual((seen[0], seen[0x200], seen[0x204]), (0x41, self.ACCEL, self.BRAKE))
+        self.assertEqual(get(m.mem, self.M), 0x41)
+
+    def test_a_seat_handed_to_the_cpu_skips_the_players_controls(self):
+        # past `ps_yes` with HAND: straight to the hook, no input row read and the CPU's controls kept
+        seen, m = self.wrap(record=standin_inputs.HAND, entry="ps_yes")
+        self.assertEqual((seen[0x1FC], seen[0x200], seen[0x204]), (self.STEER, self.ACCEL, self.BRAKE))
+        self.assertEqual(get(m.mem, self.M), 0x41)
+
+    def test_the_rolling_start_keeps_the_cpus_steering_through_the_hold(self):
+        record = standin_inputs.HAND | standin_inputs.ROLL
+        seen, m = self.wrap(record=record, hook=self.hold)
+        self.assertEqual((get(m.mem, self.SAVE), get(m.mem, self.SAVE + 4)), (self.STEER, self.STRAFE))
+        self.assertEqual((get(m.mem, self.M + 0x1FC), get(m.mem, self.M + 0x1F8)), (self.STEER, self.STRAFE))
+        self.assertEqual(get(m.mem, self.M + 0x200), standin_inputs.ROLL_ACCEL)
+        self.assertEqual(get(m.mem, self.M + 0x204), 0)
+        self.assertEqual(get(m.mem, self.M) & 0x40, 0)              # the hold's refusal stands
+
+    def test_another_seats_save_is_left_alone(self):
+        _, m = self.wrap(record=standin_inputs.ROLL)
+        for other in (self.SEAT - 1, self.SEAT + 1):
+            self.assertEqual(get(m.mem, BLOCK + memmap.MODE_ROLL_SAVE + other * memmap.MODE_ROLL), 0)
+
+    def test_boost_is_asked_before_the_hook_which_may_refuse_it(self):
+        seen, m = self.wrap(record=standin_inputs.BOOST, flags=1)
+        self.assertEqual(seen[0], 0x41)                              # the hook sees the request
+        self.assertEqual(get(m.mem, self.M), 0x41)
+        seen, m = self.wrap(record=standin_inputs.BOOST, flags=1, hook=self.hold)
+        self.assertEqual(seen[0], 0x41)
+        self.assertEqual(get(m.mem, self.M), 1)                      # the game's lap-1 rule or start hold wins
+
+    def test_boost_off_clears_the_request_after_the_hook_even_a_boost_word(self):
+        seen, m = self.wrap(record=2)
+        self.assertEqual((seen[0], get(m.mem, self.M)), (0x41, 1))
+        _, m = self.wrap(record=2 | standin_inputs.BOOST, flags=1)
+        self.assertEqual(get(m.mem, self.M), 1)
+
+    def test_pedals_locked_before_the_hook_no_press(self):
+        seen, m = self.wrap(record=1, flags=0x2041)
+        self.assertEqual((seen[0x200], seen[0x204], seen[0]), (0x3F400000, 0x3DCCCCCD, 0x41))
 
 
 if __name__ == "__main__":

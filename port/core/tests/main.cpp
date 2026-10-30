@@ -183,6 +183,7 @@ void TestTheLanguageVectorRuns();
 void TestTheRaceWordsRun();
 void TestTheKnockoutEndsWithItsPlaces();
 void TestTheLivesLibraryRuns();
+void TestTheLobbysRestoreStaysOut();
 // test_stats_race.cpp
 void TestAStatPackIsLaidOverTheCarData();
 void TestAStatPackUnderRollback();
@@ -518,6 +519,7 @@ int main(int argc, char** argv)
   TestTheLanguageVectorRuns();
   TestTheRaceWordsRun();
   TestTheKnockoutEndsWithItsPlaces();
+  TestTheLobbysRestoreStaysOut();
   TestTheLivesLibraryRuns();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);
   return s_failed == 0 ? 0 : 1;

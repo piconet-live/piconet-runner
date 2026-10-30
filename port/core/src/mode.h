@@ -134,7 +134,7 @@ struct Package
   std::optional<u32> finish_limit;  // seconds
   std::optional<u32> mine_regen;    // milliseconds, 0 off
   std::optional<u32> cpu_level;
-  std::optional<bool> restore;      // restore on / off; unstated, files_match.cpp puts the lobby's in
+  std::optional<bool> restore;      // restore on / off; unstated, no restore (the lobby's rule never reaches a mode's race)
   bool contact_off = false;
   u32 clock_limit = 0;              // steps, 0 none
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits

@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "files.h"
 #include "harness.h"
 #include "mode.h"
 #include "parts.h"
@@ -536,6 +537,33 @@ void TestTheKnockoutEndsWithItsPlaces()
   }
   CHECK(g.Read32(R + 0xD4 + 0x24) == (15u << 12 | 16));                    // seat 0 out at step 901: 15.016 s
   CHECK(g.Read32(R + 0xD4 + 0xA0 * 3 + 0x24) == (45u << 12));              // the winner: the race's 2700 steps
+}
+
+// The lobby's restore rule never reaches a mode's race: rule 0x8000 is never asked for, and a mode's restore is its own
+// words alone.
+void TestTheLobbysRestoreStaysOut()
+{
+  const auto match = [](const char* restore, const char* vector) {
+    picojson::value mode = Vector(vector);
+    const std::string json = R"({"matchId": "m7", "seat": 0, "token": "1f2e3d4c5b6a7988", "relay": {"host": "", "port": 47811},
+      "setup": {"course": 8, "laps": 3, "shuffleSeed": 1, "cpuSeed": 2, "rules": {"restore": )" + std::string(restore) +
+                             R"(}, "seats": [{"seat": 0, "machine": 5, "playerId": "p1", "name": "A"},
+      {"seat": 1, "machine": 7}], "mode": )" + mode.serialize() + "}}";
+    return boot::ReadMatch(json, "test");
+  };
+  const auto word = [](const boot::Match& m) {
+    const u8* r = m.race.data() + boot::RACE_RESTORE;
+    return u32(r[0]) << 24 | u32(r[1]) << 16 | u32(r[2]) << 8 | u32(r[3]);
+  };
+  for (const char* restore : {"true", "false"})
+  {
+    // a mode that says nothing: no restore, whatever the lobby's rule says
+    const auto plain = match(restore, "overdrive.mode.json");
+    CHECK(plain && plain->game_mode && !plain->game_mode->restore && word(*plain) == 0);
+    // a mode that says `restore on`: the seats' own Restore (Begin), never the rule
+    const auto own = match(restore, "race.mode.json");
+    CHECK(own && own->game_mode && own->game_mode->restore == true && word(*own) == 0);
+  }
 }
 
 // Lives 3: every seat respawns; each restore costs a life; the wreck that leaves one life turns the seat's Restore off
