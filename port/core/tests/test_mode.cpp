@@ -712,3 +712,84 @@ void TestTheLivesLibraryRuns()
   run();
   CHECK(g.Read32(MachineAt(1) + game::MACHINE_FLAGS) & 1);
 }
+
+// The prepared interpreter is the plain one (mode.h, Prepared): every vector on a moving race gives the same block and
+// machines at every step, and the same again with its code changed at random, where every fault has to fall on the
+// same operation with the same memory. The plain loop reads the code's bytes, as the first interpreter did.
+void TestThePreparedInterpreterIsThePlainOne()
+{
+  BEGIN_TEST();
+  const auto race = [](const mode::Package& p, std::vector<u8>* out, u32* last_ops, u32* last_fault) {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 30, 0);
+    g.Write16(MODULE + game::PHASE, game::PHASE_RACE - 1);
+    u32 x = 0x2F6E2B1;
+    const auto next = [&] { x ^= x << 13; x ^= x >> 17; x ^= x << 5; return x; };
+    for (u32 step = 0; step < 90; ++step)
+    {
+      g.Write32(MODULE + game::RACE_CLOCK, step);
+      if (step == 20)
+        g.Write16(MODULE + game::PHASE, game::PHASE_RACE);
+      for (u32 s = 0; s < 30; ++s)
+      {
+        const u32 r = next();
+        g.Write32(MachineAt(s) + game::MACHINE_SPEED, std::bit_cast<u32>(static_cast<float>(r % 1200)));
+        if ((r & 0x1F) == 1)
+          SetFlags(g, s, 0x20);
+        if ((r & 0x3F) == 2)
+          SetFlags(g, s, 0, 0x20);
+        if ((r & 0xFF) == 3)
+          SetFlags(g, s, 0x80);
+        if ((r & 0x3F) == 4)
+          g.Write32(ProgressAt(s) + 0x140, g.Read32(ProgressAt(s) + 0x140) + 1);
+        if ((r & 0xFF) == 5)
+          g.Write32(ProgressAt(s) + game::PROGRESS_LAPS, g.Read32(ProgressAt(s) + game::PROGRESS_LAPS) + 1);
+      }
+      mode::Run(g, p, BLOCK, MODULE);
+      const std::vector<u8> block = BlockOf(g);
+      out->insert(out->end(), block.begin(), block.end());
+      for (u32 s = 0; s < 30; ++s)
+      {
+        const u32 m = MachineAt(s);
+        for (u32 at = 0; at < game::MACHINE_SIZE; at += 4)
+          for (const u8 b : {g.Read8(m + at), g.Read8(m + at + 1), g.Read8(m + at + 2), g.Read8(m + at + 3)})
+            out->push_back(b);
+      }
+    }
+    *last_ops = g.Read32(BLOCK + mode::OPS + 4);
+    *last_fault = g.Read32(BLOCK + mode::FAULT);
+  };
+  u32 x = 0x51ED27;
+  const auto next = [&] { x ^= x << 13; x ^= x >> 17; x ^= x << 5; return x; };
+  u32 faults = 0;
+  for (const char* name : {"overdrive", "words", "waits", "language", "race", "knockout", "lives", "display", "wrecks"})
+  {
+    std::string why;
+    std::optional<mode::Package> read = mode::Read(Vector((std::string(name) + ".mode.json").c_str()), &why);
+    CHECK(read.has_value());
+    if (!read)
+      continue;
+    for (u32 round = 0; round < 20; ++round)
+    {
+      mode::Package prepared = *read;
+      if (round != 0)
+      {
+        for (u32 c = 1 + next() % 3; c > 0 && !prepared.code.empty(); --c)
+          prepared.code[next() % prepared.code.size()] = static_cast<u8>(next());
+        mode::Prepare(prepared);
+      }
+      CHECK(prepared.prepared.ops.size() == prepared.code.size() + 1);
+      mode::Package plain = prepared;
+      plain.prepared = {};
+      std::vector<u8> a, b;
+      u32 ops_a = 0, ops_b = 0, fault_a = 0, fault_b = 0;
+      race(prepared, &a, &ops_a, &fault_a);
+      race(plain, &b, &ops_b, &fault_b);
+      CHECK(a == b && ops_a == ops_b && fault_a == fault_b);
+      faults += fault_a != mode::FAULT_NONE ? 1 : 0;
+    }
+  }
+  CHECK(faults != 0);   // the changed code does reach the faults
+}

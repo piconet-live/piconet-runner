@@ -22,10 +22,14 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <xmmintrin.h>
+#endif
+#if defined(_MSC_VER)
+#include <stdlib.h>   // _byteswap_ulong
 #endif
 
 #include "out_test.h"
@@ -82,6 +86,82 @@ constexpr u32 OUT_CAUSES[][2] = {{F_TIME_OVER, 5}, {F_DESTROYED, 2}, {F_FALLEN, 
 constexpr u32 STACK = 256;
 constexpr u32 MOST_KEYS = 8;
 
+// Guest memory for one run: the same memory and the same bytes as Guest's accessors (fzgx/guest.h), with the host's
+// pointer asked for once and a word's bytes swapped by one instruction. A run reads and writes guest memory thousands
+// of times, so this is what a step of a mode costs most. An address outside main memory takes Guest's way.
+class Mem
+{
+public:
+  explicit Mem(Guest& g)
+      : m_g(g), m_ram(g.GetHost().Ram()), m_size8(g.GetHost().RamSize()), m_size16(m_size8 >= 2 ? m_size8 - 1 : 0),
+        m_size32(m_size8 >= 4 ? m_size8 - 3 : 0)
+  {
+  }
+  Guest& Plain() const { return m_g; }
+
+  u8 Read8(u32 a) const
+  {
+    const u32 at = a - layout::RAM;
+    return at < m_size8 ? m_ram[at] : m_g.Read8(a);
+  }
+  u16 Read16(u32 a) const
+  {
+    const u32 at = a - layout::RAM;
+    return at < m_size16 ? static_cast<u16>(u32(m_ram[at]) << 8 | m_ram[at + 1]) : m_g.Read16(a);
+  }
+  u32 Read32(u32 a) const
+  {
+    const u32 at = a - layout::RAM;
+    if (at >= m_size32)
+      return m_g.Read32(a);
+    u32 v;
+    std::memcpy(&v, m_ram + at, 4);
+    return Swapped(v);
+  }
+  void Write8(u32 a, u8 v)
+  {
+    const u32 at = a - layout::RAM;
+    if (at < m_size8)
+      m_ram[at] = v;
+    else
+      m_g.Write8(a, v);
+  }
+  void Write16(u32 a, u16 v)
+  {
+    const u32 at = a - layout::RAM;
+    if (at < m_size16)
+    {
+      m_ram[at] = static_cast<u8>(v >> 8);
+      m_ram[at + 1] = static_cast<u8>(v);
+    }
+    else
+    {
+      m_g.Write16(a, v);
+    }
+  }
+  void Write32(u32 a, u32 v)
+  {
+    const u32 at = a - layout::RAM;
+    if (at >= m_size32)
+      return m_g.Write32(a, v);
+    const u32 w = Swapped(v);
+    std::memcpy(m_ram + at, &w, 4);
+  }
+
+private:
+  static u32 Swapped(u32 v)
+  {
+#if defined(_MSC_VER) && !defined(__clang__)
+    return _byteswap_ulong(v);
+#else
+    return __builtin_bswap32(v);
+#endif
+  }
+  Guest& m_g;
+  u8* m_ram;
+  u32 m_size8, m_size16, m_size32;
+};
+
 // The host's floating-point control for the run: round to nearest, denormals kept, every exception masked (MXCSR's
 // power-on value), and back as it was after.
 class FloatControl
@@ -100,7 +180,8 @@ private:
 
 u32 Bits(float f)
 {
-  return std::isnan(f) ? QNAN : std::bit_cast<u32>(f);
+  const u32 bits = std::bit_cast<u32>(f);
+  return (bits & 0x7FFFFFFFu) > 0x7F800000u ? QNAN : bits;
 }
 float Real(u32 bits)
 {
@@ -210,6 +291,60 @@ u32 Bit(u32 binding)
   return 1u << (binding < SEATS ? binding : 0);
 }
 
+// An operation of two cells or of one: a op b, one definition for the plain interpreter and the prepared one.
+template <u8 OP>
+inline u32 Binary(u32 a, u32 b)
+{
+  if constexpr (OP == OP_IADD) return a + b;
+  else if constexpr (OP == OP_ISUB) return a - b;
+  else if constexpr (OP == OP_IMUL) return a * b;
+  else if constexpr (OP == OP_IDIV)
+    return b == 0 ? 0u : (Int(a) == std::numeric_limits<s32>::min() && Int(b) == -1) ? a : Word(Int(a) / Int(b));
+  else if constexpr (OP == OP_IMOD) return b == 0 || Int(b) == -1 ? 0u : Word(Int(a) % Int(b));
+  else if constexpr (OP == OP_FADD) return Bits(Real(a) + Real(b));
+  else if constexpr (OP == OP_FSUB) return Bits(Real(a) - Real(b));
+  else if constexpr (OP == OP_FMUL) return Bits(Real(a) * Real(b));
+  else if constexpr (OP == OP_FDIV) return Bits(Real(a) / Real(b));
+  else if constexpr (OP == OP_IMIN) return Word(std::min(Int(a), Int(b)));
+  else if constexpr (OP == OP_IMAX) return Word(std::max(Int(a), Int(b)));
+  else if constexpr (OP == OP_FMIN) return Real(b) < Real(a) ? b : a;
+  else if constexpr (OP == OP_FMAX) return Real(b) > Real(a) ? b : a;
+  else if constexpr (OP == OP_IEQ) return Int(a) == Int(b) ? 1u : 0u;
+  else if constexpr (OP == OP_INE) return Int(a) != Int(b) ? 1u : 0u;
+  else if constexpr (OP == OP_ILT) return Int(a) < Int(b) ? 1u : 0u;
+  else if constexpr (OP == OP_ILE) return Int(a) <= Int(b) ? 1u : 0u;
+  else if constexpr (OP == OP_IGT) return Int(a) > Int(b) ? 1u : 0u;
+  else if constexpr (OP == OP_IGE) return Int(a) >= Int(b) ? 1u : 0u;
+  else if constexpr (OP == OP_FEQ) return Real(a) == Real(b) ? 1u : 0u;
+  else if constexpr (OP == OP_FNE) return Real(a) != Real(b) ? 1u : 0u;
+  else if constexpr (OP == OP_FLT) return Real(a) < Real(b) ? 1u : 0u;
+  else if constexpr (OP == OP_FLE) return Real(a) <= Real(b) ? 1u : 0u;
+  else if constexpr (OP == OP_FGT) return Real(a) > Real(b) ? 1u : 0u;
+  else if constexpr (OP == OP_FGE) return Real(a) >= Real(b) ? 1u : 0u;
+  else if constexpr (OP == OP_BITAND) return a & b;
+  else if constexpr (OP == OP_BITOR) return a | b;
+  else if constexpr (OP == OP_BITANDNOT) return a & ~b;
+}
+template <u8 OP>
+inline u32 Unary(u32 a)
+{
+  if constexpr (OP == OP_INEG) return 0u - a;
+  else if constexpr (OP == OP_FNEG) return a ^ 0x80000000u;
+  else if constexpr (OP == OP_FSQRT) return Bits(GameSqrt(Real(a)));
+  else if constexpr (OP == OP_ITOF) return Bits(static_cast<float>(Int(a)));
+  else if constexpr (OP == OP_FLOOR) return ToInt(std::floor(Real(a)));
+  else if constexpr (OP == OP_CEIL) return ToInt(std::ceil(Real(a)));
+  else if constexpr (OP == OP_ROUND) return ToInt(std::round(Real(a)));
+  else if constexpr (OP == OP_TRUNC) return ToInt(std::trunc(Real(a)));
+  else if constexpr (OP == OP_IABS) return Int(a) < 0 ? 0u - a : a;
+  else if constexpr (OP == OP_FABS) return a & 0x7FFFFFFFu;
+  else if constexpr (OP == OP_NOT) return a == 0 ? 1u : 0u;
+}
+
+// A prepared entry's kinds besides the operations' own numbers (none of which is this high): an operation the plain
+// interpreter's Do works from the bytes, and a place where no operation can be read.
+constexpr u8 K_SLOW = 0xFE, K_INVALID = 0xFF;
+
 // a seat's state at the last run, which its events compare with (mode.h SEAT_STATE), and the mode's own counts
 constexpr u32 S_FLAGS = 0x0, S_LAP = 0x4, S_CHECKPOINT = 0x8, S_ENERGY = 0xC, S_KOS = 0x10, S_RESTORING = 0x14,
               S_WRONG = 0x18, S_SURFACE = 0x1C, S_LAP_START = 0x20, S_BEST_LAP = 0x24, S_FINISH = 0x28, S_HITS = 0x2C,
@@ -252,10 +387,10 @@ struct Sort
 {
   struct Entry
   {
-    std::array<u32, MOST_KEYS> keys{};
-    u32 seat = 0;
+    std::array<u32, MOST_KEYS> keys;
+    u32 seat;
   };
-  std::array<Entry, SEATS> entries{};
+  std::array<Entry, SEATS> entries;  // (only those below `count` are ever read)
   u32 count = 0, next = 0;
 };
 
@@ -263,7 +398,8 @@ struct Sort
 class Machine
 {
 public:
-  Machine(Guest& g, const Package& p, u32 block, u32 module) : m_g(g), m_p(p), m_block(block), m_module(module)
+  Machine(Mem& g, const Package& p, u32 block, u32 module)
+      : m_g(g), m_p(p), m_block(block), m_module(module), m_prepared(!p.prepared.ops.empty())
   {
     m_machines = g.Read32(module + net::MACHINES);
     m_count = std::min<u32>(g.Read8(module + net::MACHINE_COUNT), SEATS);
@@ -282,9 +418,19 @@ public:
   u32 Count() const { return m_count; }
   u32 Ops() const { return m_ops; }
   Fault Faulted() const { return m_fault; }
-  const std::vector<Action>& Queue() const { return m_queue; }
+  const Action* QueueBegin() const { return m_queue.data(); }
+  const Action* QueueEnd() const { return m_queue.data() + m_queued; }
+  // Whether a rule may be on `event`, and the prepared form to tell it by (no prepared form: any may be)
+  bool On(u32 event) const { return !m_prepared || !m_p.prepared.on_event[event].empty(); }
+  bool IsPrepared() const { return m_prepared; }
   u32 MachineOf(u32 seat) const { return m_machines + seat * game::MACHINE_SIZE; }
-  bool Out(u32 seat) const { return net::out_test::Out(m_g, m_module, MachineOf(seat)); }
+  bool Out(u32 seat) const
+  {
+    namespace out = net::out_test;
+    const u32 m = MachineOf(seat);
+    return out::Out(m_g.Read32(m + out::FLAGS), m_g.Read32(m + out::CONTACT), m_g.Read32(m + out::SPEED),
+                    m_g.Read32(m_module + out::RULES), m_g.Read8(m_module + out::RACE_TYPE));
+  }
   void Fail(Fault f)
   {
     if (m_fault == FAULT_NONE)
@@ -296,7 +442,8 @@ public:
   bool Run(u32 at, u32 index, u32 binding, const u32* kept = nullptr, u32 live = 0)
   {
     const Rule& rule = m_p.rules[index];
-    m_locals.fill(0);
+    // (a rule's code reaches only its own locals: Do and the prepared loop both hold it to them)
+    std::fill_n(m_locals.begin(), std::max<u32>(rule.locals, 2), 0u);
     m_locals[0] = binding;
     m_locals[1] = m_second;
     for (u32 i = 0; i < live && i < LOCALS; ++i)
@@ -305,6 +452,14 @@ public:
     m_binding = binding;
     m_waited = false;
     m_sp = 0;
+    return m_prepared ? RunPrepared(at, rule) : RunPlain(at, rule);
+  }
+
+private:
+  // From the code's bytes: the definition of what an operation does and when it faults. The prepared loop below comes
+  // here for every operation it does not do itself, so every fault but the budget's is this code's.
+  bool RunPlain(u32 at, const Rule& rule)
+  {
     while (m_fault == FAULT_NONE)
     {
       if (at >= m_p.code.size())
@@ -332,7 +487,262 @@ public:
     return false;
   }
 
-private:
+  // From the prepared form (mode.h): the same operations, counted the same, with the operands decoded and checked by
+  // Prepare, and the stack and the count in this function's own variables. Whatever is not the plain case of an
+  // operation (a stack too short or too full, an operand out of range) goes to Do with the bytes, which faults as it
+  // always did: the two loops give the same memory, the same count and the same fault for any code.
+  bool RunPrepared(const u32 start, const Rule& rule)
+  {
+    if (m_fault != FAULT_NONE || start >= m_p.code.size())
+    {
+      Fail(FAULT_CODE);
+      return false;
+    }
+    const PreparedOp* const base = m_p.prepared.ops.data();
+    const PreparedOp* ip = base + start;
+    u32* const stack = m_stack.data();
+    u32 sp = 0, ops = m_ops;
+    const u32 locals = rule.locals;
+    bool result = false;
+#define MODE_BINARY(OP)                                 \
+  case OP:                                              \
+    if (sp < 2)                                         \
+      goto slow;                                        \
+    stack[sp - 2] = Binary<OP>(stack[sp - 2], stack[sp - 1]); \
+    --sp;                                               \
+    ++ip;                                               \
+    continue
+#define MODE_UNARY(OP)                                  \
+  case OP:                                              \
+    if (sp < 1)                                         \
+      goto slow;                                        \
+    stack[sp - 1] = Unary<OP>(stack[sp - 1]);           \
+    ++ip;                                               \
+    continue
+    for (;;)
+    {
+      const PreparedOp& o = *ip;
+      if (++ops > static_cast<u32>(BUDGET))
+      {
+        if (o.kind == K_INVALID)   // (no operation there to count)
+        {
+          --ops;
+          goto invalid;
+        }
+        Fail(FAULT_BUDGET);
+        goto done;
+      }
+      switch (o.kind)
+      {
+        case K_INVALID:
+          --ops;
+          goto invalid;
+        case OP_END:
+          result = true;
+          goto done;
+        case OP_RET:
+          if (sp < 1)
+            goto slow_ret;
+          result = stack[sp - 1] != 0;
+          --sp;
+          goto done;
+        case OP_PUSH:
+          if (sp >= STACK)
+            goto slow;
+          stack[sp++] = o.arg;
+          ip += 5;
+          continue;
+        case OP_POP:
+          if (sp < 1)
+            goto slow;
+          --sp;
+          ++ip;
+          continue;
+        case OP_DUP:
+          if (sp < 1 || sp >= STACK)
+            goto slow;
+          stack[sp] = stack[sp - 1];
+          ++sp;
+          ++ip;
+          continue;
+        case OP_LOADLOCAL:
+          if (o.small >= locals || sp >= STACK)
+            goto slow;
+          stack[sp++] = m_locals[o.small];
+          ip += 2;
+          continue;
+        case OP_STORELOCAL:
+          if (o.small >= locals || sp < 1)
+            goto slow;
+          m_locals[o.small] = stack[--sp];
+          ip += 2;
+          continue;
+        case OP_LOADGLOBAL:
+          if (sp >= STACK)
+            goto slow;
+          stack[sp++] = m_g.Read32(m_block + o.arg);
+          ip += 3;
+          continue;
+        case OP_STOREGLOBAL:
+          if (sp < 1)
+            goto slow;
+          m_g.Write32(m_block + o.arg, stack[--sp]);
+          ip += 3;
+          continue;
+        case OP_LOADSEATVAR:
+          if (sp < 1)
+            goto slow;
+          stack[sp - 1] = IsSeat(stack[sp - 1]) ? m_g.Read32(m_block + SeatWord(stack[sp - 1], 0) + o.arg) : 0;
+          ip += 3;
+          continue;
+        case OP_STORESEATVAR:
+          if (sp < 2)
+            goto slow;
+          if (IsSeat(stack[sp - 2]))
+            m_g.Write32(m_block + SeatWord(stack[sp - 2], 0) + o.arg, stack[sp - 1]);
+          sp -= 2;
+          ip += 3;
+          continue;
+        case OP_LOADTEAMVAR:
+          if (sp < 1)
+            goto slow;
+          stack[sp - 1] = IsSeat(stack[sp - 1]) ? m_g.Read32(TeamWord(stack[sp - 1], 0) + o.arg) : 0;
+          ip += 3;
+          continue;
+        case OP_STORETEAMVAR:
+          if (sp < 2)
+            goto slow;
+          if (IsSeat(stack[sp - 2]))
+            m_g.Write32(TeamWord(stack[sp - 2], 0) + o.arg, stack[sp - 1]);
+          sp -= 2;
+          ip += 3;
+          continue;
+        case OP_PARAM:
+          if (sp >= STACK)
+            goto slow;
+          stack[sp++] = o.arg;
+          ip += 2;
+          continue;
+        case OP_SEATREAD:
+          if (sp < 1)
+            goto slow;
+          stack[sp - 1] = SeatRead(o.small, stack[sp - 1]);
+          if (m_fault != FAULT_NONE)
+            goto done;
+          ip += 2;
+          continue;
+        case OP_RACEREAD:
+          if (sp >= STACK)
+            goto slow;
+          stack[sp++] = RaceRead(o.small);
+          if (m_fault != FAULT_NONE)
+            goto done;
+          ip += 2;
+          continue;
+        case OP_JUMP:
+          ip = base + o.arg;
+          continue;
+        case OP_JUMPIFZERO:
+          if (sp < 1)
+            goto slow;
+          ip = stack[--sp] == 0 ? base + o.arg : ip + 5;
+          continue;
+        case OP_JUMPIFNOTZERO:
+          if (sp < 1)
+            goto slow;
+          ip = stack[--sp] != 0 ? base + o.arg : ip + 5;
+          continue;
+        case OP_SEATBIT:
+          if (sp < 1)
+            goto slow;
+          stack[sp - 1] = IsSeat(stack[sp - 1]) ? 1u << stack[sp - 1] : 0u;
+          ++ip;
+          continue;
+        case OP_ALLSEATS:
+          if (sp >= STACK)
+            goto slow;
+          stack[sp++] = m_count >= 32 ? ~0u : (1u << m_count) - 1;
+          ++ip;
+          continue;
+          MODE_BINARY(OP_IADD);
+          MODE_BINARY(OP_ISUB);
+          MODE_BINARY(OP_IMUL);
+          MODE_BINARY(OP_IDIV);
+          MODE_BINARY(OP_IMOD);
+          MODE_BINARY(OP_FADD);
+          MODE_BINARY(OP_FSUB);
+          MODE_BINARY(OP_FMUL);
+          MODE_BINARY(OP_FDIV);
+          MODE_BINARY(OP_IMIN);
+          MODE_BINARY(OP_IMAX);
+          MODE_BINARY(OP_FMIN);
+          MODE_BINARY(OP_FMAX);
+          MODE_BINARY(OP_IEQ);
+          MODE_BINARY(OP_INE);
+          MODE_BINARY(OP_ILT);
+          MODE_BINARY(OP_ILE);
+          MODE_BINARY(OP_IGT);
+          MODE_BINARY(OP_IGE);
+          MODE_BINARY(OP_FEQ);
+          MODE_BINARY(OP_FNE);
+          MODE_BINARY(OP_FLT);
+          MODE_BINARY(OP_FLE);
+          MODE_BINARY(OP_FGT);
+          MODE_BINARY(OP_FGE);
+          MODE_BINARY(OP_BITAND);
+          MODE_BINARY(OP_BITOR);
+          MODE_BINARY(OP_BITANDNOT);
+          MODE_UNARY(OP_INEG);
+          MODE_UNARY(OP_FNEG);
+          MODE_UNARY(OP_FSQRT);
+          MODE_UNARY(OP_ITOF);
+          MODE_UNARY(OP_FLOOR);
+          MODE_UNARY(OP_CEIL);
+          MODE_UNARY(OP_ROUND);
+          MODE_UNARY(OP_TRUNC);
+          MODE_UNARY(OP_IABS);
+          MODE_UNARY(OP_FABS);
+          MODE_UNARY(OP_NOT);
+        default:
+          break;
+      }
+    slow:
+    {
+      // An operation Do has: the count and the stack as Do knows them, and back
+      u32 at = static_cast<u32>(ip - base);
+      const u8 op = m_p.code[at];
+      const u8* operands = m_p.code.data() + at + 1;
+      at += static_cast<u32>(OpSize(op));
+      m_sp = sp;
+      m_ops = ops;
+      Do(op, operands, rule, &at);
+      sp = m_sp;
+      ops = m_ops;
+      if (m_waited)
+      {
+        result = m_fault == FAULT_NONE;
+        goto done;
+      }
+      if (m_fault != FAULT_NONE)
+        goto done;
+      ip = base + at;
+    }
+    }
+  invalid:
+    Fail(FAULT_CODE);
+    goto done;
+  slow_ret:
+    m_sp = sp;
+    result = Pop() != 0 && m_fault == FAULT_NONE;
+    sp = m_sp;
+  done:
+#undef MODE_BINARY
+#undef MODE_UNARY
+    m_sp = sp;
+    m_ops = ops;
+    return result;
+  }
+
   void Push(u32 v)
   {
     if (m_sp >= STACK)
@@ -358,22 +768,23 @@ private:
     if (!IsSeat(seat))
       return 0;
     const u32 m = MachineOf(seat);
-    const u32 flags = m_g.Read32(m + game::MACHINE_FLAGS);
-    const u32 progress = m_g.Read32(m + game::MACHINE_PROGRESS);
+    // (read where a word asks for them: reading has no effect on anything)
+    const auto Flags = [&] { return m_g.Read32(m + game::MACHINE_FLAGS); };
+    const auto Progress = [&] { return m_g.Read32(m + game::MACHINE_PROGRESS); };
     switch (id)
     {
-      case SEAT_RACING: return (flags & game::MACHINE_FLAG_FINISHED) == 0 && !Out(seat);
+      case SEAT_RACING: return (Flags() & game::MACHINE_FLAG_FINISHED) == 0 && !Out(seat);
       case SEAT_OUT: return Out(seat);
-      case SEAT_FINISHED: return (flags & game::MACHINE_FLAG_FINISHED) != 0;
+      case SEAT_FINISHED: return (Flags() & game::MACHINE_FLAG_FINISHED) != 0;
       case SEAT_SPEED: return m_g.Read32(m + game::MACHINE_SPEED);
       case SEAT_ENERGY: return m_g.Read32(m + game::MACHINE_ENERGY);
-      case SEAT_LAP: return m_g.Read32(progress + game::PROGRESS_LAPS);
+      case SEAT_LAP: return m_g.Read32(Progress() + game::PROGRESS_LAPS);
       case SEAT_INDEX: return seat;
-      case SEAT_BROKEN: return (flags & game::MACHINE_FLAG_BROKEN_DOWN) != 0;
+      case SEAT_BROKEN: return (Flags() & game::MACHINE_FLAG_BROKEN_DOWN) != 0;
       case SEAT_DESTROYED: return m_g.Read32(m_block + SeatState(seat) + S_WRECK) == WRECK_EXPLODED;
-      case SEAT_DISTANCE: return m_g.Read32(progress + game::PROGRESS_DISTANCE);
+      case SEAT_DISTANCE: return m_g.Read32(Progress() + game::PROGRESS_DISTANCE);
       case SEAT_TEAM: return m_p.teams[seat];
-      case SEAT_LAPLENGTH: return m_g.Read32(progress + game::PROGRESS_LAP_LENGTH);
+      case SEAT_LAPLENGTH: return m_g.Read32(Progress() + game::PROGRESS_LAP_LENGTH);
       case SEAT_RESTORING: return m_g.Read16(m + M_RESTORING) != 0;
       case SEAT_SURFACE: return Surface(m_g.Read32(m + M_SURFACE));
       case SEAT_INPUTACCEL: return m_g.Read32(m + M_ACCEL);
@@ -395,19 +806,19 @@ private:
       case SEAT_HITS: return m_g.Read32(m_block + SeatState(seat) + S_HITS);
       case SEAT_DAMAGETAKEN: return m_g.Read32(m_block + SeatState(seat) + S_DAMAGE);
       case SEAT_TOUCHING: return SetOfRow(m_g.Read32(m_block + TOUCH + 4 * seat));
-      case SEAT_LAPDISTANCE: return m_g.Read32(progress + P_LAP_DISTANCE);
-      case SEAT_CHECKPOINT: return m_g.Read32(progress + P_CHECKPOINT);
-      case SEAT_CHECKPOINTFRACTION: return m_g.Read32(progress + P_FRACTION);
-      case SEAT_LAPSTEPS: return m_g.Read32(progress + P_LAP_STEPS);
-      case SEAT_WRONGWAY: return m_g.Read32(progress + P_WRONG_WAY) != 0;
+      case SEAT_LAPDISTANCE: return m_g.Read32(Progress() + P_LAP_DISTANCE);
+      case SEAT_CHECKPOINT: return m_g.Read32(Progress() + P_CHECKPOINT);
+      case SEAT_CHECKPOINTFRACTION: return m_g.Read32(Progress() + P_FRACTION);
+      case SEAT_LAPSTEPS: return m_g.Read32(Progress() + P_LAP_STEPS);
+      case SEAT_WRONGWAY: return m_g.Read32(Progress() + P_WRONG_WAY) != 0;
       case SEAT_TOPSPEED: return m_g.Read32(m + M_TOP_SPEED);
       case SEAT_MAXENERGY: return Bits(static_cast<float>(m_g.Read16(m + M_MAX_ENERGY)));
       case SEAT_LASTHITENERGY: return m_g.Read32(m + M_LAST_HIT);
-      case SEAT_FALLEN: return (flags & F_FALLEN) != 0;
-      case SEAT_SPINNING: return (flags & F_SPIN) != 0;
-      case SEAT_AIRBORNE: return (flags & F_AIRBORNE) != 0;
-      case SEAT_BOOSTING: return (flags & F_BOOSTING) != 0;
-      case SEAT_SIDEATTACK: return (flags & F_SIDE) != 0;
+      case SEAT_FALLEN: return (Flags() & F_FALLEN) != 0;
+      case SEAT_SPINNING: return (Flags() & F_SPIN) != 0;
+      case SEAT_AIRBORNE: return (Flags() & F_AIRBORNE) != 0;
+      case SEAT_BOOSTING: return (Flags() & F_BOOSTING) != 0;
+      case SEAT_SIDEATTACK: return (Flags() & F_SIDE) != 0;
       case SEAT_INPIT: return (m_g.Read32(m + M_SURFACE) & 0x08000000) != 0;
       case SEAT_USEDPIT: return (m_g.Read32(m + M_CONTACT) & 1) != 0;
       case SEAT_STANDING: return Rank(seat) < SEATS ? Rank(seat) + 1 : 0;
@@ -525,21 +936,6 @@ private:
   {
     Push(f(Pop()));
   }
-  template <typename F>
-  void Reals(F f)
-  {
-    Two([&](u32 a, u32 b) { return Bits(f(Real(a), Real(b))); });
-  }
-  template <typename F>
-  void Compare(F f)
-  {
-    Two([&](u32 a, u32 b) { return f(Real(a), Real(b)) ? 1u : 0u; });
-  }
-  template <typename F>
-  void Compare32(F f)
-  {
-    Two([&](u32 a, u32 b) { return f(Int(a), Int(b)) ? 1u : 0u; });
-  }
   void Jump(u32 to, u32* at)
   {
     if (to >= m_p.code.size())
@@ -605,46 +1001,42 @@ private:
           m_g.Write32(TeamWord(seat, U16(o)), value);
         return;
       }
-      case OP_IADD: return Two([](u32 a, u32 b) { return a + b; });
-      case OP_ISUB: return Two([](u32 a, u32 b) { return a - b; });
-      case OP_IMUL: return Two([](u32 a, u32 b) { return a * b; });
-      case OP_IDIV:
-        return Two([](u32 a, u32 b) {
-          return b == 0 ? 0u : (Int(a) == std::numeric_limits<s32>::min() && Int(b) == -1) ? a : Word(Int(a) / Int(b));
-        });
-      case OP_IMOD:
-        return Two([](u32 a, u32 b) { return b == 0 || Int(b) == -1 ? 0u : Word(Int(a) % Int(b)); });
-      case OP_INEG: return One([](u32 a) { return 0u - a; });
-      case OP_FADD: return Reals([](float a, float b) { return a + b; });
-      case OP_FSUB: return Reals([](float a, float b) { return a - b; });
-      case OP_FMUL: return Reals([](float a, float b) { return a * b; });
-      case OP_FDIV: return Reals([](float a, float b) { return a / b; });
-      case OP_FNEG: return One([](u32 a) { return a ^ 0x80000000u; });
-      case OP_FSQRT: return One([](u32 a) { return Bits(GameSqrt(Real(a))); });
-      case OP_ITOF: return One([](u32 a) { return Bits(static_cast<float>(Int(a))); });
-      case OP_FLOOR: return One([](u32 a) { return ToInt(std::floor(Real(a))); });
-      case OP_CEIL: return One([](u32 a) { return ToInt(std::ceil(Real(a))); });
-      case OP_ROUND: return One([](u32 a) { return ToInt(std::round(Real(a))); });
-      case OP_TRUNC: return One([](u32 a) { return ToInt(std::trunc(Real(a))); });
-      case OP_IMIN: return Two([](u32 a, u32 b) { return Word(std::min(Int(a), Int(b))); });
-      case OP_IMAX: return Two([](u32 a, u32 b) { return Word(std::max(Int(a), Int(b))); });
-      case OP_IABS: return One([](u32 a) { return Int(a) < 0 ? 0u - a : a; });
-      case OP_FMIN: return Two([](u32 a, u32 b) { return Real(b) < Real(a) ? b : a; });
-      case OP_FMAX: return Two([](u32 a, u32 b) { return Real(b) > Real(a) ? b : a; });
-      case OP_FABS: return One([](u32 a) { return a & 0x7FFFFFFFu; });
-      case OP_IEQ: return Compare32([](s32 a, s32 b) { return a == b; });
-      case OP_INE: return Compare32([](s32 a, s32 b) { return a != b; });
-      case OP_ILT: return Compare32([](s32 a, s32 b) { return a < b; });
-      case OP_ILE: return Compare32([](s32 a, s32 b) { return a <= b; });
-      case OP_IGT: return Compare32([](s32 a, s32 b) { return a > b; });
-      case OP_IGE: return Compare32([](s32 a, s32 b) { return a >= b; });
-      case OP_FEQ: return Compare([](float a, float b) { return a == b; });
-      case OP_FNE: return Compare([](float a, float b) { return a != b; });
-      case OP_FLT: return Compare([](float a, float b) { return a < b; });
-      case OP_FLE: return Compare([](float a, float b) { return a <= b; });
-      case OP_FGT: return Compare([](float a, float b) { return a > b; });
-      case OP_FGE: return Compare([](float a, float b) { return a >= b; });
-      case OP_NOT: return One([](u32 a) { return a == 0 ? 1u : 0u; });
+      case OP_IADD: return Two(Binary<OP_IADD>);
+      case OP_ISUB: return Two(Binary<OP_ISUB>);
+      case OP_IMUL: return Two(Binary<OP_IMUL>);
+      case OP_IDIV: return Two(Binary<OP_IDIV>);
+      case OP_IMOD: return Two(Binary<OP_IMOD>);
+      case OP_INEG: return One(Unary<OP_INEG>);
+      case OP_FADD: return Two(Binary<OP_FADD>);
+      case OP_FSUB: return Two(Binary<OP_FSUB>);
+      case OP_FMUL: return Two(Binary<OP_FMUL>);
+      case OP_FDIV: return Two(Binary<OP_FDIV>);
+      case OP_FNEG: return One(Unary<OP_FNEG>);
+      case OP_FSQRT: return One(Unary<OP_FSQRT>);
+      case OP_ITOF: return One(Unary<OP_ITOF>);
+      case OP_FLOOR: return One(Unary<OP_FLOOR>);
+      case OP_CEIL: return One(Unary<OP_CEIL>);
+      case OP_ROUND: return One(Unary<OP_ROUND>);
+      case OP_TRUNC: return One(Unary<OP_TRUNC>);
+      case OP_IMIN: return Two(Binary<OP_IMIN>);
+      case OP_IMAX: return Two(Binary<OP_IMAX>);
+      case OP_IABS: return One(Unary<OP_IABS>);
+      case OP_FMIN: return Two(Binary<OP_FMIN>);
+      case OP_FMAX: return Two(Binary<OP_FMAX>);
+      case OP_FABS: return One(Unary<OP_FABS>);
+      case OP_IEQ: return Two(Binary<OP_IEQ>);
+      case OP_INE: return Two(Binary<OP_INE>);
+      case OP_ILT: return Two(Binary<OP_ILT>);
+      case OP_ILE: return Two(Binary<OP_ILE>);
+      case OP_IGT: return Two(Binary<OP_IGT>);
+      case OP_IGE: return Two(Binary<OP_IGE>);
+      case OP_FEQ: return Two(Binary<OP_FEQ>);
+      case OP_FNE: return Two(Binary<OP_FNE>);
+      case OP_FLT: return Two(Binary<OP_FLT>);
+      case OP_FLE: return Two(Binary<OP_FLE>);
+      case OP_FGT: return Two(Binary<OP_FGT>);
+      case OP_FGE: return Two(Binary<OP_FGE>);
+      case OP_NOT: return One(Unary<OP_NOT>);
       case OP_JUMP: return Jump(U32(o), at);
       case OP_JUMPIFZERO:
         if (Pop() == 0)
@@ -657,9 +1049,9 @@ private:
       case OP_WAIT: return Wait(Pop(), U8(o), U8(o + 1), U32(o + 2), *at);
       case OP_SEATBIT: return One([&](u32 a) { return IsSeat(a) ? 1u << a : 0u; });
       case OP_ALLSEATS: return Push(m_count >= 32 ? ~0u : (1u << m_count) - 1);
-      case OP_BITAND: return Two([](u32 a, u32 b) { return a & b; });
-      case OP_BITOR: return Two([](u32 a, u32 b) { return a | b; });
-      case OP_BITANDNOT: return Two([](u32 a, u32 b) { return a & ~b; });
+      case OP_BITAND: return Two(Binary<OP_BITAND>);
+      case OP_BITOR: return Two(Binary<OP_BITOR>);
+      case OP_BITANDNOT: return Two(Binary<OP_BITANDNOT>);
       case OP_RANDOM:
       {
         const u32 n = Pop();
@@ -689,7 +1081,7 @@ private:
   {
     if (buffer >= SORTS || keys > MOST_KEYS || m_sorts[buffer].count >= SEATS)
       return Fail(FAULT_CODE);
-    Sort::Entry e;
+    Sort::Entry e{};
     e.seat = Pop();
     for (u32 k = keys; k-- > 0;)
       e.keys[k] = Pop();
@@ -752,31 +1144,33 @@ private:
     if (hud::IsDisplay(a.id))
     {
       if (a.seat < m_count)
-        hud::Apply(m_g, m_block, a.id, a.seat, a.value[0]);
+        hud::Apply(m_g.Plain(), m_block, a.id, a.seat, a.value[0]);
       return;
     }
-    if (m_queue.size() >= static_cast<size_t>(QUEUE))
+    if (m_queued >= static_cast<u32>(QUEUE))
       return Fail(FAULT_QUEUE);
-    m_queue.push_back(a);
+    m_queue[m_queued++] = a;
   }
 
-  Guest& m_g;
+  Mem& m_g;
   const Package& m_p;
-  u32 m_block, m_module, m_machines = 0, m_count = 0, m_ops = 0, m_sp = 0, m_runs = 0;
+  u32 m_block, m_module, m_machines = 0, m_count = 0, m_ops = 0, m_sp = 0, m_runs = 0, m_queued = 0;
+  bool m_prepared;
   u32 m_index = 0, m_binding = NONE;  // the rule instance running
   u32 m_second = NONE;
   std::array<u32, SEATS> m_ranks{};    // a seat's place in the standing at the mode point (R+0xE), 0 first
   bool m_waited = false;              // its code came to a wait
   Fault m_fault = FAULT_NONE;
-  std::array<u32, STACK> m_stack{};
-  std::array<u32, LOCALS> m_locals{};
-  std::array<Sort, SORTS> m_sorts{};
-  std::vector<Action> m_queue;
+  // (made anew at every run and read only below what has been written: never cleared, a run being one call per step)
+  std::array<u32, STACK> m_stack;
+  std::array<u32, LOCALS> m_locals;
+  std::array<Sort, SORTS> m_sorts;
+  std::array<Action, QUEUE> m_queue;
 };
 
 // The step stamps: the block's every page changes at every run, so the undo log watches each from the race's first
 // steps (undo_log.cpp: a page first seen changing later is a late page).
-void Stamp(Guest& g, u32 block, u32 runs)
+void Stamp(Mem& g, u32 block, u32 runs)
 {
   g.Write32(block + RUNS, runs);
   for (u32 page = PAGE; page < BLOCK; page += PAGE)
@@ -785,7 +1179,7 @@ void Stamp(Guest& g, u32 block, u32 runs)
 
 // The rule's condition for this event and binding: `when` on its edge (kept in the block, a bit a seat), `while`
 // every step; both, both; neither, always.
-bool Holds(Machine& m, Guest& g, const Rule& rule, u32 index, u32 block, u32 binding, bool edge)
+bool Holds(Machine& m, Mem& g, const Rule& rule, u32 index, u32 block, u32 binding, bool edge)
 {
   bool go = true;
   if (rule.when != NONE)
@@ -809,7 +1203,7 @@ bool Holds(Machine& m, Guest& g, const Rule& rule, u32 index, u32 block, u32 bin
 }
 
 // Whether rule `index`'s instance on `binding` waits: then it does not fire, nor are its conditions tested.
-bool Waiting(const Guest& g, u32 block, u32 index, u32 binding)
+bool Waiting(const Mem& g, u32 block, u32 index, u32 binding)
 {
   return (g.Read32(block + WAITING + 4 * index) & Bit(binding)) != 0;
 }
@@ -817,7 +1211,7 @@ bool Waiting(const Guest& g, u32 block, u32 index, u32 binding)
 // The waits (the step's third part): every waiting instance in rule order, then seat order. A condition is tested
 // from the step after the wait began: `abort when` true drops the rest of the instance's code, `restart when` true
 // begins the wait again. A wait whose step has come is freed and its instance goes on from it, with its locals.
-void Waits(Machine& m, Guest& g, const Package& p, u32 block)
+void Waits(Machine& m, Mem& g, const Package& p, u32 block)
 {
   const u32 runs = g.Read32(block + RUNS);
   std::array<std::pair<u32, u32>, modes::WAITS> order;  // (rule x 32 + its seat's place, record)
@@ -877,7 +1271,7 @@ struct Now
 // What this seat's destroy record says, kept in the block for this life of the machine: the record newly there is an
 // explosion unless the machine is under the fall planes, where the routine only ends a fall. A wreck that has fallen
 // keeps its word. Written at once: `seat.destroyed` reads it in this run's rules.
-u32 Wreck(Guest& g, u32 block, u32 module, u32 seat, u32 machine, u32 contact)
+u32 Wreck(Mem& g, u32 block, u32 module, u32 seat, u32 machine, u32 contact)
 {
   const u32 at = block + SeatState(seat) + S_WRECK;
   u32 wreck = WRECK_NONE;
@@ -895,7 +1289,7 @@ u32 Wreck(Guest& g, u32 block, u32 module, u32 seat, u32 machine, u32 contact)
   return wreck;
 }
 
-Now ReadNow(Machine& m, Guest& g, u32 block, u32 module)
+Now ReadNow(Machine& m, Mem& g, u32 block, u32 module)
 {
   Now n;
   n.started = static_cast<s16>(g.Read16(module + game::PHASE)) >= s16{game::PHASE_RACE};
@@ -921,7 +1315,7 @@ Now ReadNow(Machine& m, Guest& g, u32 block, u32 module)
 }
 
 // The state the next run compares with; the touching rows move on (the pair gate fills them again in the next step).
-void Remember(Machine& m, Guest& g, u32 block, const Now& n)
+void Remember(Machine& m, Mem& g, u32 block, const Now& n)
 {
   for (u32 seat = 0; seat < SEATS; ++seat)
   {
@@ -971,7 +1365,7 @@ u32 TraceEvery()
   return every;
 }
 
-void TraceSeats(Machine& m, Guest& g, u32 block, u32 module, u32 runs, bool started, const Now& n)
+void TraceSeats(Machine& m, Mem& g, u32 block, u32 module, u32 runs, bool started, const Now& n)
 {
   std::FILE* t = TraceFile();
   if (!t || (started && runs % TraceEvery() != 0))
@@ -1002,10 +1396,15 @@ void TraceSeats(Machine& m, Guest& g, u32 block, u32 module, u32 runs, bool star
 
 // One occurrence of a discrete event: every rule on it in the file's order, its instance on `seat` (none: the rule's
 // own) not waiting, its conditions holding; `second` is local 1 (ko's credited seat, hit's other, out's cause).
-void Fire(Machine& m, Guest& g, const Package& p, u32 block, u32 event, u32 seat, u32 second = NONE)
+void Fire(Machine& m, Mem& g, const Package& p, u32 block, u32 event, u32 seat, u32 second = NONE)
 {
-  for (u32 i = 0; i < p.rules.size() && m.Faulted() == FAULT_NONE; ++i)
+  // the rules on this event: the prepared list, or every rule asked
+  const std::vector<u16>& on = p.prepared.on_event[event];
+  const bool prepared = m.IsPrepared();
+  const u32 rules = prepared ? static_cast<u32>(on.size()) : static_cast<u32>(p.rules.size());
+  for (u32 r = 0; r < rules && m.Faulted() == FAULT_NONE; ++r)
   {
+    const u32 i = prepared ? on[r] : r;
     const Rule& rule = p.rules[i];
     if (rule.event != event || Waiting(g, block, i, seat))
       continue;
@@ -1030,7 +1429,7 @@ u32 OutCause(u32 flags)
 }
 
 // The step's discrete events, kind by kind in the language's order (language 6, modes.toml), each kind by seat.
-void Events(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const Now& n, u32 runs)
+void Events(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const Now& n, u32 runs)
 {
   const u32 count = m.Count(), clock = g.Read32(module + game::RACE_CLOCK);
   const auto was = [&](u32 seat, u32 at) { return g.Read32(block + SeatState(seat) + at); };
@@ -1038,6 +1437,11 @@ void Events(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const
     for (u32 seat = 0; seat < count && m.Faulted() == FAULT_NONE; ++seat)
       if (happened(seat))
         Fire(m, g, p, block, event, seat);
+  };
+  // an event whose test only reads: nothing to do without a rule on it (the kinds that keep a count go through `each`)
+  const auto pure = [&](u32 event, auto&& happened) {
+    if (m.On(event))
+      each(event, happened);
   };
   const auto rose = [&](u32 seat, u32 bit) { return (n.flags[seat] & bit) && !(was(seat, S_FLAGS) & bit); };
   const auto fell = [&](u32 seat, u32 bit) { return !(n.flags[seat] & bit) && (was(seat, S_FLAGS) & bit); };
@@ -1053,19 +1457,24 @@ void Events(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const
       Fire(m, g, p, block, EVENT_OUT, seat, OutCause(n.flags[seat]));
     }
   // ko: the victims whose contact KO began (flag 0x80 rose with M+0x593 = 60), the one seat whose skulls rose
-  u32 risers = 0;
-  for (u32 seat = 0; seat < count; ++seat)
-    risers |= n.kos[seat] > was(seat, S_KOS) ? 1u << seat : 0;
-  const u32 by = std::popcount(risers) == 1 ? static_cast<u32>(std::countr_zero(risers)) : NONE;
-  for (u32 seat = 0; seat < count && m.Faulted() == FAULT_NONE; ++seat)
-    if (rose(seat, F_BROKEN) && g.Read8(m.MachineOf(seat) + M_KO_WAIT) == 60)
-      Fire(m, g, p, block, EVENT_KO, seat, by);
-  each(EVENT_DESTROYED, [&](u32 seat) { return rose(seat, F_DESTROYED); });
-  each(EVENT_FALL, [&](u32 seat) { return rose(seat, F_FALLEN) && !(n.flags[seat] & F_DESTROYED); });
+  if (m.On(EVENT_KO))
+  {
+    u32 risers = 0;
+    for (u32 seat = 0; seat < count; ++seat)
+      risers |= n.kos[seat] > was(seat, S_KOS) ? 1u << seat : 0;
+    const u32 by = std::popcount(risers) == 1 ? static_cast<u32>(std::countr_zero(risers)) : NONE;
+    for (u32 seat = 0; seat < count && m.Faulted() == FAULT_NONE; ++seat)
+      if (rose(seat, F_BROKEN) && g.Read8(m.MachineOf(seat) + M_KO_WAIT) == 60)
+        Fire(m, g, p, block, EVENT_KO, seat, by);
+  }
+  pure(EVENT_DESTROYED, [&](u32 seat) { return rose(seat, F_DESTROYED); });
+  pure(EVENT_FALL, [&](u32 seat) { return rose(seat, F_FALLEN) && !(n.flags[seat] & F_DESTROYED); });
   // hit: a pair's contact answered now and not the step before, by the lower seat, then the higher
   for (u32 a = 0; a < count && m.Faulted() == FAULT_NONE; ++a)
   {
     const u32 now = g.Read32(block + TOUCH + 4 * a), before = g.Read32(block + TOUCH_PREV + 4 * a);
+    if ((now & ~before) == 0)
+      continue;
     for (u32 b = a + 1; b < count && m.Faulted() == FAULT_NONE; ++b)
     {
       if (!(now & GameBit(b)) || (before & GameBit(b)))
@@ -1084,10 +1493,10 @@ void Events(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const
     g.Write32(at, Bits(Real(g.Read32(at)) + (before - now)));
     return true;
   });
-  each(EVENT_WALL, [&](u32 seat) { return n.wall[seat] && !was(seat, S_WALL); });
-  each(EVENT_BOOST, [&](u32 seat) { return rose(seat, F_BOOSTING); });
-  each(EVENT_PIT, [&](u32 seat) { return (n.surface[seat] & 0x08000000) && !(was(seat, S_SURFACE) & 0x08000000); });
-  each(EVENT_CHECKPOINT, [&](u32 seat) { return n.checkpoint[seat] != was(seat, S_CHECKPOINT); });
+  pure(EVENT_WALL, [&](u32 seat) { return n.wall[seat] && !was(seat, S_WALL); });
+  pure(EVENT_BOOST, [&](u32 seat) { return rose(seat, F_BOOSTING); });
+  pure(EVENT_PIT, [&](u32 seat) { return (n.surface[seat] & 0x08000000) && !(was(seat, S_SURFACE) & 0x08000000); });
+  pure(EVENT_CHECKPOINT, [&](u32 seat) { return n.checkpoint[seat] != was(seat, S_CHECKPOINT); });
   each(EVENT_LAP, [&](u32 seat) {
     if (!(Int(n.lap[seat]) > Int(was(seat, S_LAP))))
       return false;
@@ -1105,7 +1514,7 @@ void Events(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const
     return true;
   });
   // overtake: a now ahead of b, both racing, and behind it the run before
-  for (u32 a = 0; a < count && m.Faulted() == FAULT_NONE; ++a)
+  for (u32 a = 0; m.On(EVENT_OVERTAKE) && a < count && m.Faulted() == FAULT_NONE; ++a)
   {
     for (u32 b = 0; b < count && m.Faulted() == FAULT_NONE; ++b)
     {
@@ -1115,10 +1524,10 @@ void Events(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const
         Fire(m, g, p, block, EVENT_OVERTAKE, a, b);
     }
   }
-  each(EVENT_RESPAWNED, [&](u32 seat) { return was(seat, S_RESTORING) > 20 && n.restoring[seat] <= 20; });
-  each(EVENT_LAND, [&](u32 seat) { return fell(seat, F_AIRBORNE); });
-  each(EVENT_BOOSTEND, [&](u32 seat) { return fell(seat, F_BOOSTING); });
-  each(EVENT_WRONGWAY, [&](u32 seat) { return n.wrong[seat] && !was(seat, S_WRONG); });
+  pure(EVENT_RESPAWNED, [&](u32 seat) { return was(seat, S_RESTORING) > 20 && n.restoring[seat] <= 20; });
+  pure(EVENT_LAND, [&](u32 seat) { return fell(seat, F_AIRBORNE); });
+  pure(EVENT_BOOSTEND, [&](u32 seat) { return fell(seat, F_BOOSTING); });
+  pure(EVENT_WRONGWAY, [&](u32 seat) { return n.wrong[seat] && !was(seat, S_WRONG); });
 }
 
 u32 Members(const Package& p, u32 team, u32 count)
@@ -1130,7 +1539,7 @@ u32 Members(const Package& p, u32 team, u32 count)
 }
 
 // The queue, in its order, into the block and the machines; `end` is set by end_race (the end clause runs after).
-void Apply(Machine& m, Guest& g, const Package& p, u32 block, u32 module, bool* end)
+void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* end)
 {
   const u32 count = m.Count();
   const auto mask = [&](u32 at, u32 seat, bool on) {
@@ -1145,8 +1554,9 @@ void Apply(Machine& m, Guest& g, const Package& p, u32 block, u32 module, bool* 
           g.Write32(block + NC + 4 * j, g.Read32(block + NC + 4 * j) | GameBit(i));
         }
   };
-  for (const Action& a : m.Queue())
+  for (const Action* queued = m.QueueBegin(); queued != m.QueueEnd(); ++queued)
   {
+    const Action& a = *queued;
     if (std::FILE* t = TraceFile())
       std::fprintf(t, "A %u id %u seat %d %08x %08x %08x\n", g.Read32(block + RUNS), a.id, static_cast<int>(a.seat),
                    a.value[0], a.value[1], a.value[2]);
@@ -1270,7 +1680,7 @@ void Apply(Machine& m, Guest& g, const Package& p, u32 block, u32 module, bool* 
 
 // The end clause's order held in the standing (the ranking pass rewrites it every step; the mode point comes after
 // it): R+0xE, R+0x2C, P+0x115, CM+0x23C, CM+0x21C from the block's END_ORDER.
-void HoldOrder(Guest& g, u32 block, u32 module)
+void HoldOrder(Mem& g, u32 block, u32 module)
 {
   const u32 machines = g.Read32(module + net::MACHINES);
   const u32 count = std::min<u32>(g.Read8(module + net::MACHINE_COUNT), SEATS);
@@ -1299,7 +1709,7 @@ void HoldOrder(Guest& g, u32 block, u32 module)
 // time and what fn_1_2E928 would have written, so no row stays RUNNING; an out seat keeps DISQUALIFIED (0xFE) unless
 // the mode placed it (a knockout's cut seats: their place and the time they went out); a finished seat keeps its time. Points into the record's +0x4 and this race's +0x9. The end word 2: the race is over
 // at this step's boundary (raceend.py), and every later run holds the order.
-void EndClause(Machine& m, Guest& g, u32 block, u32 module)
+void EndClause(Machine& m, Mem& g, u32 block, u32 module)
 {
   const u32 count = m.Count(), r = module + R_BASE, clock = g.Read32(module + game::RACE_CLOCK);
   std::array<u32, SEATS> order{};
@@ -1353,7 +1763,7 @@ void EndClause(Machine& m, Guest& g, u32 block, u32 module)
 // After the queue: the seats' own Restore follows the respawns words (never on a finished seat, never cleared in a
 // restore's wreck phase: mode-open-words 1.4), the no-contact rows' OR, the danger zones, the rolling start's hold,
 // the clock limit's timer and its end, and the end clause when the run asked for it.
-void After(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const Now& n, bool end)
+void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const Now& n, bool end)
 {
   const u32 count = m.Count(), respawn = g.Read32(block + RESPAWN);
   u32 any = 0;
@@ -1415,7 +1825,7 @@ void After(Machine& m, Guest& g, const Package& p, u32 block, u32 module, const 
 }
 
 // The mode's first run (the first step after the start gate): the setup words that act on the race from its start.
-void Begin(Machine& m, Guest& g, const Package& p, u32 block, u32 module)
+void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
 {
   const u32 count = m.Count();
   const u32 all = count >= 32 ? ~0u : (1u << count) - 1;
@@ -1457,8 +1867,9 @@ void Begin(Machine& m, Guest& g, const Package& p, u32 block, u32 module)
 }
 }  // namespace
 
-void Run(Guest& g, const Package& p, u32 block, u32 module)
+void Run(Guest& guest, const Package& p, u32 block, u32 module)
 {
+  Mem g(guest);
   if (const u32 end = g.Read32(block + END); end != 0)
   {
     // the race is over (the image's race-end clause has it); a race the mode ended keeps the mode's order
@@ -1482,7 +1893,7 @@ void Run(Guest& g, const Package& p, u32 block, u32 module)
       g.Write32(block + RANDOM + 4 * k, p.seed[k]);
   }
   Stamp(g, block, runs + 1);
-  hud::BeginRun(g, block);
+  hud::BeginRun(guest, block);
   Machine m(g, p, block, module);
   const Now n = ReadNow(m, g, block, module);
   if (runs == 0)
@@ -1509,8 +1920,8 @@ void Run(Guest& g, const Package& p, u32 block, u32 module)
   }
   // the discrete events, in the language's order
   Events(m, g, p, block, module, n, runs);
-  // the waits whose time has come
-  if (m.Faulted() == FAULT_NONE)
+  // the waits whose time has come (none in a package that has no Wait)
+  if (m.Faulted() == FAULT_NONE && (!m.IsPrepared() || p.prepared.waits))
     Waits(m, g, p, block);
   // the continuous rules in the file's order (each seat: by seat)
   for (u32 i = 0; i < p.rules.size() && m.Faulted() == FAULT_NONE; ++i)
@@ -1546,6 +1957,91 @@ void Run(Guest& g, const Package& p, u32 block, u32 module)
     g.Write32(block + FAULT + 4, g.Read32(module + game::RACE_CLOCK));
     g.Write32(block + END, 1);
   }
+}
+
+void Prepare(Package& p)
+{
+  Prepared& out = p.prepared;
+  const std::vector<u8>& code = p.code;
+  const u32 size = static_cast<u32>(code.size());
+  out = Prepared{};
+  out.ops.assign(size + 1, PreparedOp{0, K_INVALID, 0});
+  const auto u16_at = [&](u32 at) { return static_cast<u32>(code[at]) << 8 | code[at + 1]; };
+  const auto u32_at = [&](u32 at) {
+    return static_cast<u32>(code[at]) << 24 | static_cast<u32>(code[at + 1]) << 16 | static_cast<u32>(code[at + 2]) << 8 |
+           code[at + 3];
+  };
+  // Every offset, not only those a straight read of the code passes through: a jump may land anywhere in it.
+  for (u32 at = 0; at < size; ++at)
+  {
+    const u8 op = code[at];
+    const u32 length = static_cast<u32>(OpSize(op));
+    if (length == 0 || at + length > size)
+      continue;
+    PreparedOp& e = out.ops[at];
+    e.kind = op;
+    switch (op)
+    {
+      case OP_PUSH: e.arg = u32_at(at + 1); break;
+      case OP_LOADLOCAL:
+      case OP_STORELOCAL:
+      case OP_RACEREAD: e.small = code[at + 1]; break;
+      case OP_LOADGLOBAL:
+      case OP_STOREGLOBAL:
+        if (u16_at(at + 1) < p.globals.size())
+          e.arg = GLOBALS + 4 * u16_at(at + 1);
+        else
+          e.kind = K_SLOW;
+        break;
+      case OP_LOADSEATVAR:
+      case OP_STORESEATVAR:
+        if (u16_at(at + 1) < p.seat_words.size())
+          e.arg = 4 * u16_at(at + 1);
+        else
+          e.kind = K_SLOW;
+        break;
+      case OP_LOADTEAMVAR:
+      case OP_STORETEAMVAR:
+        if (u16_at(at + 1) < p.team_words.size())
+          e.arg = 4 * u16_at(at + 1);
+        else
+          e.kind = K_SLOW;
+        break;
+      case OP_PARAM:
+        if (code[at + 1] < p.params.size())
+          e.arg = Word(p.params[code[at + 1]]);
+        else
+          e.kind = K_SLOW;
+        break;
+      case OP_SEATREAD:
+        e.small = code[at + 1];
+        if (e.small == SEAT_POSITION || e.small == SEAT_FORWARD || e.small == SEAT_VELOCITY || e.small == SEAT_UP)
+          e.kind = K_SLOW;
+        break;
+      case OP_JUMP:
+      case OP_JUMPIFZERO:
+      case OP_JUMPIFNOTZERO:
+        if (u32_at(at + 1) < size)
+          e.arg = u32_at(at + 1);
+        else
+          e.kind = K_SLOW;
+        break;
+      case OP_WAIT:
+        out.waits = true;
+        e.kind = K_SLOW;
+        break;
+      case OP_RANDOM:
+      case OP_RANDOMREAL:
+      case OP_SORTBEGIN:
+      case OP_SORTADD:
+      case OP_SORTRUN:
+      case OP_SORTNEXT:
+      case OP_ACTION: e.kind = K_SLOW; break;
+      default: break;
+    }
+  }
+  for (u32 i = 0; i < p.rules.size(); ++i)
+    out.on_event[p.rules[i].event].push_back(static_cast<u16>(i));
 }
 }  // namespace fzgx::mode
 

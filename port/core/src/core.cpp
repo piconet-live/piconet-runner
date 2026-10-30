@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "board_net.h"
+#include "host_timers.h"
 #include "page_guard.h"
 #include "rollback.h"
 
@@ -312,6 +313,7 @@ void ModeCall()
   if (!s_host)
     return;
   Guest g(*s_host, Data());
+  FZGX_TIME(Mode);
   mode::Step(g);
 }
 

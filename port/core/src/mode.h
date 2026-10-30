@@ -110,6 +110,23 @@ struct Rule
   u32 when = NONE, during = NONE, body = 0;  // offsets in the code (`during`: the rule's `while`)
 };
 
+// A package's code in the form the interpreter runs (Prepare in mode.cpp): one entry for each byte offset of the code,
+// and one past its end, the operands decoded and checked once. Worked out from the package alone and never written
+// after: it holds nothing of a race, so a rollback has nothing of it to put back. What it answers is what the code
+// says; every state of the run stays in the block.
+struct PreparedOp
+{
+  u32 arg = 0;     // the operand: a value, a jump's offset, a word's place
+  u8 kind = 0;     // the operation, or one of mode.cpp's two below them
+  u8 small = 0;    // a local's number, a read's word
+};
+struct Prepared
+{
+  std::vector<PreparedOp> ops;                                 // empty: the plain interpreter, from the bytes (tests)
+  std::array<std::vector<u16>, modes::EVENT_COUNT> on_event;   // the rules on each event, in the file's order
+  bool waits = false;                                          // the code may hold a Wait: no wait record otherwise
+};
+
 // The package as it runs: the setup words' values with the parameters put in.
 struct Package
 {
@@ -144,6 +161,7 @@ struct Package
   std::vector<u8> code;
   std::array<u8, 30> teams = SeatTeams();  // each seat's team (setup.mode.teams; none given: the seat's number)
   std::array<u32, 4> seed{};               // the generator's first state (Seed)
+  Prepared prepared;                       // Read does it; see Prepare
 
   static constexpr std::array<u8, 30> SeatTeams()
   {
@@ -158,6 +176,9 @@ struct Package
 // in its range, the package's sections whole and every rule's offsets inside the code. Nothing (and `why` says it)
 // otherwise.
 std::optional<Package> Read(const picojson::value& mode, std::string* why);
+
+// `p.prepared` from `p`'s code, rules, parameters and variables (Read calls it): again after any of them is changed.
+void Prepare(Package& p);
 
 // The generator's first state for the race of match `match_id` (formats.md section 9): SHA-256 of the match id's
 // bytes and the package's hash (its 32 bytes), its first 16 bytes as four big-endian words, each through one step of
