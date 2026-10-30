@@ -51,6 +51,16 @@ constexpr int STICK_FULL = 54;
 constexpr double SLOWEST = 0.25, HALF_TILT = 1.0, FASTEST = 8.0;
 double ScrubSpeed(int stick_x);
 
+// What a practice's game mode gives it (the setup words rewind, pause, save_state, resume_countdown; mode.h). As they
+// stand here: a practice with no game mode, today's words of practice.fzmode.
+struct Words
+{
+  u32 reach = WINDOW;         // the rewind's reach in steps; 0: no way back
+  bool pause = true;          // Start pauses
+  bool save = true;           // D-pad right saves, D-pad left loads
+  u32 countdown = COUNTDOWN;  // displayed frames between a resume or a load and the race running on
+};
+
 enum class Mode
 {
   Racing,     // the race runs at the front
@@ -77,7 +87,7 @@ class Rewind
 {
 public:
   // `first`: the race's first step, the earliest any rewind reaches and the step keys are counted from
-  explicit Rewind(u32 first = 0) : m_first(first), m_front(first), m_position(first) {}
+  explicit Rewind(u32 first = 0, Words words = {}) : m_words(words), m_first(first), m_front(first), m_position(first) {}
 
   // A displayed frame, with the pad as it reads now: what the frame does.
   Frame Next(const Pad& pad);
@@ -89,7 +99,8 @@ public:
   Mode Now() const { return m_mode; }
   u32 First() const { return m_first; }
   u32 Front() const { return m_front; }  // every step below it has run
-  u32 Oldest() const { return m_front - m_first > WINDOW ? m_front - WINDOW : m_first; }  // the earliest moment
+  u32 Oldest() const { return m_front - m_first > m_words.reach ? m_front - m_words.reach : m_first; }  // the earliest moment
+  const Words& Said() const { return m_words; }
   u32 Position() const;                  // the moment the picture shows (the front while racing)
   std::optional<u32> Save() const { return m_save; }
   u32 CountdownLeft() const { return m_countdown; }
@@ -110,6 +121,7 @@ private:
   void Load();
   bool Pressed(u16 button) const { return (m_buttons & button) != 0 && (m_before & button) == 0; }
 
+  Words m_words;
   u32 m_first, m_front;
   double m_position;  // while paused or counting down: fractional, so slow scrubs move by quarters of a step
   Mode m_mode = Mode::Racing;

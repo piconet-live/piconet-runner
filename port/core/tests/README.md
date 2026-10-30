@@ -37,6 +37,7 @@ plain memory, and the game is a stand-in whose steps are a hash of its inputs.
 | `test_spectate.cpp` | A paced race whose local seat goes out, every prediction wrong, with the relay's clock as the host's, 1.2% slow and 3% fast: one step a frame from there, at 0.99 (lower on the slow clock) until in lockstep with the slack in hand, no rollback after, the official race, no late input, the pad until lockstep and the neutral record after; a knock-out taken back (after 30 frames, and in the frame that would go into lockstep): racing again with the pad, never in lockstep; a seat over the line; a two-second stall made up at up to 1.25; a wait raising the slack; the race's end while still falling behind; and the launch file's switch that keeps it rolling back |
 | `test_recording.cpp` | A recording played back with rollbacks forced and with late inputs; a recording written and read back |
 | `test_native_form.cpp` | The native form: its bundle, what is in the window before boot, the patch list written into the code |
+| `mode_bench.cpp` | The mode interpreter's bench, outside the suite: its cost on a fake race, and a hash of its state at each run to hold two builds of it to the same bytes; built and run by hand |
 | `fuzz.sh` | Builds the fuzzers with the sanitizers and runs both (`fuzz.sh [seconds] [seed] [folder]`); run by hand |
 | `fuzz.h` | What the fuzzers share: the host, the stand-in game, a bundle |
 | `fuzz_replays.cpp` | Replay files changed in hostile ways, read by both readers and played back; the program's `main` |

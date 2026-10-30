@@ -32,3 +32,9 @@ flags	contact	speed	rules	race type	verdict	what
 10000000	00000000	42480000	00008000	6	out	the game's time-over flag under Restore too
 00000000	00000000	00000000	04000000	6	racing	the no-time-limit rule alone
 00000080	00000000	00000000	00200000	6	out	rule 0x200000 is not read here: a breakdown at rest is out
+00000801	00000010	00000000	00000000	6	racing	the seat's own Restore: a fall put back
+00000081	00000000	00000000	00000000	6	racing	the seat's own Restore over a breakdown at rest
+00000281	00000000	00000000	00000000	5	racing	the seat's own Restore over a CPU's breakdown in type 5
+08000001	00000000	42480000	00000000	6	racing	retired with flag 0x1: as the patched verdict says (a mode's eliminate clears 0x1 first)
+10000001	00000000	42480000	00000000	6	out	time over takes a respawns seat out too
+00010801	00000010	00000000	00000000	6	racing	finished (the finish booking also sets 0x1)

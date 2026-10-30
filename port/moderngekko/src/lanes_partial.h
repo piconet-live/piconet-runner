@@ -4,7 +4,7 @@
 // (its locked-cache reads and writes, its registers and cycles). When a step runs again, a machine runs if
 //   - its input row differs from the step's last run, or
 //   - any byte of its records differs (block, progress record, the four track records, segment, driver block, car
-//     object, its countdown word), or
+//     object, its countdown word, its record in a game mode's block: fzgx::ModeRecord), or
 //   - a locked-cache word it read last time holds another value now, or the floating-point status it started from
 //     differs, or
 //   - its call is the task's last (racer 0's: the stand-in routine does the frame's own work there), or
@@ -49,7 +49,7 @@ constexpr u32 CPU_GLOBALS = game::REL_BSS_AT + 0x7AC48;  // the computer drivers
 constexpr u32 CAR_MANAGER_SIZE = 0xA00, CPU_GLOBALS_SIZE = 0x60;
 
 // One part of a machine's records: block, progress, the four track records, segment, driver, car object, countdown.
-enum Kind : u8 { BLOCK, PROGRESS, TRACK0, TRACK1, TRACK2, TRACK3, SEGMENT, DRIVER, CAR, COUNTDOWN, KINDS };
+enum Kind : u8 { BLOCK, PROGRESS, TRACK0, TRACK1, TRACK2, TRACK3, SEGMENT, DRIVER, CAR, COUNTDOWN, MODE, KINDS };
 struct Span
 {
   u32 address = 0, size = 0;

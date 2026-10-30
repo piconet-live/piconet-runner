@@ -6,6 +6,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "files.h"
+#include "mode_hud.h"
 
 #include <cstring>
 #include <string_view>
@@ -276,6 +277,11 @@ void Prepare(ModData& data)
     data.CopyTo(NAMES, m->names.data(), m->names.size());
     const std::array<u8, NAME_SIZE> course_name = CourseNameBytes(CourseOf(*m));
     data.CopyTo(COURSE_NAME, course_name.data(), course_name.size());
+    // a game mode: the image takes its block from the heap before the start gate (sites_mode.py, mode.h)
+    data.Write(layout::MODES, m->game_mode ? 4 : 0, 4);
+    data.Write(layout::MODES + 4, 0, 4);
+    data.Write(layout::MODE_HUD, m->game_mode ? mode::hud::WindowFlags(*m->game_mode) : 0, 4);
+    data.Write(layout::MODE_HUD + 8, 0, 4);  // (the story's pictures not loaded yet: sites_modehud.py mode_story)
   }
   Notice("fzgx: native form: image {} ({} bytes), {} patched words, mode {}", b->image_sha1.substr(0, 8), image.size(),
          b->patches.size(), m ? m->mode : 0);

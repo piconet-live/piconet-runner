@@ -27,6 +27,7 @@
 #include "net_modes.h"
 #include "out_test.h"
 #include "files.h"
+#include "mode_hud.h"
 
 #include "fzgx/minimap.h"
 
@@ -105,17 +106,6 @@ void Load(Guest& g, u32 module)
   TheHost().MinimapCourseLoaded(prepared);
 }
 
-// The racer the picture follows (see the head).
-u32 You(Guest& g)
-{
-  const Session* s = s_session.get();
-  if (s && s->spectator.shown)
-    return s->spectator.followed;
-  if (g.Read32(SPECTATING) != 0)
-    return g.Read32(SPECTATED);
-  return g.Read32(SEAT_SLOT + 4);
-}
-
 mm::Racers ReadRacers(Guest& g, u32 module, u32 machines, u32 count)
 {
   mm::Racers racers{};
@@ -171,6 +161,18 @@ void CheckStart(const mm::Racers& racers, u32 count)
   Notice("fzgx: course map: start line check: {}", s_map.start_check);
 }
 
+// The racers' dots as the game mode shows them to `you` (map_hide, map_mark: mode_hud.h): nothing without a mode.
+void ModeDots(Guest& g, mm::Racers& racers, u32 you)
+{
+  std::array<bool, 30> present{};
+  std::array<u32, 30> colour{};
+  for (u32 i = 0; i < 30; ++i)
+    present[i] = racers[i].present, colour[i] = racers[i].colour;
+  mode::hud::MapRacers(g, you, OwnSeat(g) == you, present, colour);
+  for (u32 i = 0; i < 30; ++i)
+    racers[i].present = present[i], racers[i].colour = colour[i];
+}
+
 void Tell(const MinimapShow& show)
 {
   if (!show.on && !s_map.shown)
@@ -213,7 +215,9 @@ void MinimapFrame(Guest& g)
     CheckStart(ReadRacers(g, module, machines, count), count);
   if (mm::Shows(seen) && machines != 0 && count != 0)
   {
-    show = mm::Pick(ReadRacers(g, module, machines, count), count, You(g), s_map.camera);
+    mm::Racers racers = ReadRacers(g, module, machines, count);
+    ModeDots(g, racers, ViewedRacer(g));
+    show = mm::Pick(racers, count, ViewedRacer(g), s_map.camera);
     show.on = true;
     // the view's turn: port 1's C-stick left or right, unless the player's controls give the C-stick a racing action
     std::array<u8, mm::BINDING_SETS * mm::BINDING_SET_SIZE> bindings{};
@@ -235,6 +239,27 @@ void MinimapFrame(Guest& g)
   }
   show.course = s_map.course;
   Tell(show);
+}
+
+// The racer the picture follows (see the head).
+u32 ViewedRacer(Guest& g)
+{
+  const Session* s = s_session.get();
+  if (s && s->spectator.shown)
+    return s->spectator.followed;
+  if (g.Read32(SPECTATING) != 0)
+    return g.Read32(SPECTATED);
+  return g.Read32(SEAT_SLOT + 4);
+}
+
+u32 OwnSeat(Guest& g)
+{
+  const Session* s = s_session.get();
+  if (s && (s->spectator.shown || s->watcher || s->playback))
+    return 0xFFFFFFFF;
+  if (g.Read32(SPECTATING) != 0)
+    return 0xFFFFFFFF;
+  return g.Read32(SEAT_SLOT + 4);
 }
 
 void MinimapSummary()

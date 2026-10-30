@@ -12,6 +12,7 @@
 
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
+#include "fzgx/core.h"
 
 namespace fzgx_port::lanes::partial
 {
@@ -34,7 +35,7 @@ bool InRam(const CPUState* cpu, u32 address, u32 size)
 }
 
 constexpr const char* KIND_NAMES[KINDS] = {"block", "progress", "track0", "track1", "track2",
-                                          "track3", "segment", "driver", "car", "countdown"};
+                                          "track3", "segment", "driver", "car", "countdown", "mode"};
 }  // namespace
 
 Batch s_b;
@@ -97,6 +98,9 @@ void LayOut(const CPUState* cpu, u32 count, Layout* layout)
     add(car, CAR_PRESENTATION, CAR);
     add(car + after, game::CAR_SIZE - after, CAR, after);
     add(CAR_MANAGER + 0xD4 + 4 * i, 4, COUNTDOWN);
+    add(fzgx::ModeRecord(i), 16, MODE);  // (the image's mode_speed reads it in the machine's step)
+    add(fzgx::ModeMove(i), 16, MODE);    // (mode_speed's push and velocity)
+    add(fzgx::ModeRollSave(i), 8, MODE); // (the rule hook wrapper's saved steering in a rolling start)
   }
 }
 

@@ -234,6 +234,23 @@ void RulesIntoRace(Match& m, const picojson::object* rules)
   m.boost_from_start = (boost[0] | boost[1] | boost[2] | boost[3]) != 0;
 }
 
+// A game mode's setup words over the host's rules (a mode's word wins over the lobby's: modes.toml's setup rows).
+// The finish limit is the mode's or none (the mode owns its ending); mine regeneration and the CPUs' level are the
+// mode's when it states them; the lobby's restore rule never reaches a mode's race (rule 0x8000 would put flag 0x1 on
+// every seat every step, over a seat's own respawns): restore comes only from the mode's own words, `restore on` and
+// `respawns`.
+void ModeIntoRace(Match& m)
+{
+  mode::Package& p = *m.game_mode;
+  u8* r = m.race.data();
+  Put32(r + RACE_FINISH_LIMIT, p.finish_limit.value_or(0) * STEPS_A_SECOND);
+  if (p.mine_regen)
+    Put32(r + RACE_MINE_REGEN, *p.mine_regen * STEPS_A_SECOND / 1000);
+  if (p.cpu_level)
+    Put32(r + RACE_CPULEVEL, *p.cpu_level);
+  Put32(r + RACE_RESTORE, 0);
+}
+
 // The start grid of the set-up ("grid", the coordinator's RaceSetup.Grid: the seats in starting order, pole first)
 // into the race block: RACE_GRID_ON 1 and each slot's seat at RACE_GRID. None (absent or null): the word stays 0
 // and the game sorts its own grid, as every race and recording before it. One that is not every seat of the race
@@ -314,8 +331,20 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
     return false;
   if (!PacksOfSetup(*setup, path, &m.packs))
     return false;
+  if (const auto mode = setup->find("mode"); mode != setup->end())
+  {
+    std::string why;
+    m.game_mode = mode::Read(mode->second, &why);
+    if (!m.game_mode)
+    {
+      Error("fzgx: {}: the race's game mode {}: refused (a mode error)", path, why);
+      return false;
+    }
+    m.game_mode->seed = mode::Seed(Text(json, "matchId"), m.game_mode->hash);
+  }
   const u32 racers = static_cast<u32>(std::min<size_t>(seats.size(), MAX_SEATS));
-  const u32 laps = *lap_count;
+  // a game mode's `laps` is the race's, over the match's (its setup words win)
+  const u32 laps = m.game_mode ? m.game_mode->LapsFor(*course).value_or(*lap_count) : *lap_count;
   std::array<u8, 30> machines{};
   for (const picojson::value& v : seats)
   {
@@ -363,6 +392,8 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
     if (!Text(s, "playerId").empty())
     {
       m.player_mask |= 1u << seat;
+      if (m.game_mode && !is_cpu)
+        m.game_mode->players |= 1u << seat;
       if (!is_cpu)
       {
         const std::string name = GameText(Text(s, "name"));
@@ -381,6 +412,8 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
   Put32(r + 28, *cpu_seed);
   std::memcpy(r + 32, machines.data(), machines.size());
   RulesIntoRace(m, Object(*setup, "rules"));
+  if (m.game_mode)
+    ModeIntoRace(m);
   if (!GridIntoRace(m, *setup, racers, path))
     return false;
   m.seat_block = SeatBlock(m);
@@ -395,6 +428,11 @@ std::optional<Match> ReadPractice(Match& m, const picojson::object& json, const 
   if (m.player_mask != 1u || Object(json, "relay") != nullptr)
   {
     Error("fzgx: {}: a practice names one seat, seat 0, a player's, and no relay: refused", path);
+    return std::nullopt;
+  }
+  if (m.game_mode && !m.game_mode->solo)
+  {
+    Error("fzgx: {}: a practice's game mode says solo, and {} does not: refused", path, m.game_mode->name);
     return std::nullopt;
   }
   Put32(m.race.data() + RACE_FLOW, FLOW_GAME_OUT);
@@ -424,6 +462,12 @@ std::optional<Match> ReadMatch(const std::string& text, const std::string& path)
   if (!relay || !FromMatch(m, json, path))
   {
     Error("fzgx: {}: no match or relay", path);
+    return std::nullopt;
+  }
+  if (m.game_mode && m.game_mode->solo)
+  {
+    Error("fzgx: {}: the game mode {} is raced alone, and this match has a relay: refused (a mode error)", path,
+          m.game_mode->name);
     return std::nullopt;
   }
   // a race raced from here on is the game's flow, with no rubber band, and its recording says so (replay.cpp
