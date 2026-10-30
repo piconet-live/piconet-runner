@@ -180,6 +180,20 @@ void Hud(Guest& g)
   g.Write32(module + SRC + 0x10, 0);
   for (u32 seat = 0; seat < SEATS; ++seat)
     g.Write8(window + WINDOW_LOOKS + seat, f.looks[seat]);
+  // the results' points page, once the mode has awarded points (its flag on the page)
+  const u32 flags = g.Read32(window + WINDOW_FLAGS);
+  g.Write32(window + WINDOW_FLAGS, (g.Read32(block + FLAGS) & POINTS_USED) ? flags | POINTS_PAGE : flags & ~POINTS_PAGE);
+}
+
+void UsePoints(Guest& g, u32 block)
+{
+  g.Write32(block + FLAGS, g.Read32(block + FLAGS) | POINTS_USED);
+}
+
+void WritePoints(Guest& g, u32 module, u32 seat, u32 points)
+{
+  // the record of the seat (R+0xD4 + 0xA0 x seat), +0x4: the total the points pages show ("%04d") and sort by
+  g.Write16(module + R + 0xD4 + 0xA0 * seat + 4, static_cast<u16>(std::min<u32>(points, 9999)));
 }
 
 void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour)

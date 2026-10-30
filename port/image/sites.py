@@ -25,6 +25,7 @@ import sites_grid
 import sites_hfr
 import sites_mines
 import sites_mode
+import sites_modehud
 import sites_monitors
 import sites_pilot
 import sites_present
@@ -130,6 +131,7 @@ cpu_seed_on:
 frame_on:
     @bl mines_preload
     @bl mode_preload
+    @bl mode_story
     @bl results_preload
     @bl monitors_preload
     @bl frame_routine
@@ -447,6 +449,7 @@ rl_disc:
     sites_grid.add(k, r, patch, stock, test, middle, complete)
     sites_mines.add(k, r, patch, stock, test, la, D, middle)
     sites_mode.add(k, r, patch, stock, test, la, D, middle)
+    sites_modehud.add(k, r, patch, stock, test, la, middle)
     sites_cpu.add(k, r, patch, stock, test, middle, complete)
     sites_dash.add(k, r, patch, stock, test, la, middle)
     sites_curve.add(k, r, patch, stock, test, middle)

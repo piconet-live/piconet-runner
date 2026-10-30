@@ -130,7 +130,7 @@ class Bundle(unittest.TestCase):
         self.assertFalse(any((a, b) == old for a, b in zip(words, words[1:])))
 
     def test_every_patch_enters_the_image(self):
-        self.assertEqual(len(self.patches), 245)   # 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
+        self.assertEqual(len(self.patches), 248)   # 248: the game mode's displays' three (sites_modehud.py); 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
         executable = [a for a in self.patches if a < memmap.REL]
         # the last: frame begin's copy to the display buffer (sites_present.py)
         self.assertEqual(sorted(executable), [0x80005940, 0x800059A8, 0x80067898, 0x8006FDA4])
@@ -235,6 +235,9 @@ class Bundle(unittest.TestCase):
         on += 4
         # (then the game mode's block, sites_mode.py, below the mines' when the race has a mode)
         self.assertEqual(word_at(image, on), build.branch(on, self.symbols["mode_preload"], True))
+        on += 4
+        # (then the story's pictures a mode's displays ask for, sites_modehud.py, once the block is taken)
+        self.assertEqual(word_at(image, on), build.branch(on, self.symbols["mode_story"], True))
         on += 4
         self.assertEqual(word_at(image, on), build.branch(on, preload, True))
         self.assertEqual(word_at(image, on + 4), build.branch(on + 4, self.symbols["monitors_preload"], True))

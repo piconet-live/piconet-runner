@@ -281,6 +281,7 @@ void Prepare(ModData& data)
     data.Write(layout::MODES, m->game_mode ? 4 : 0, 4);
     data.Write(layout::MODES + 4, 0, 4);
     data.Write(layout::MODE_HUD, m->game_mode ? mode::hud::WindowFlags(*m->game_mode) : 0, 4);
+    data.Write(layout::MODE_HUD + 8, 0, 4);  // (the story's pictures not loaded yet: sites_modehud.py mode_story)
   }
   Notice("fzgx: native form: image {} ({} bytes), {} patched words, mode {}", b->image_sha1.substr(0, 8), image.size(),
          b->patches.size(), m ? m->mode : 0);

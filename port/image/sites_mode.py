@@ -258,6 +258,7 @@ mheld_no:
     mfctr 0
     stw 0, 0xC(1)
 {SAVE_GPR}{SAVE_FPR}    @bl host_mode
+    bl mode_banners
 """ + la(28, MODES) + f"""    lwz 28, 4(28)
     lwz 27, 0x18(31)
     lbz 26, 0x2A(31)
