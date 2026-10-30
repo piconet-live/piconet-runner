@@ -13,7 +13,7 @@ namespace fzgx::net::out_test
 {
 // a machine's flags (+0x0) and second flags (+0x58C), from the facts table (game.tsv, the machine group)
 constexpr u32 FINISHED = game::MACHINE_FLAG_FINISHED, TIME_OVER = game::MACHINE_FLAG_TIME_OVER;
-constexpr u32 RETIRED = game::MACHINE_FLAG_RETIRED, DESTROYED = game::MACHINE_FLAG_DESTROYED;
+constexpr u32 RETIRED = game::MACHINE_FLAG_RETIRED, OUT = game::MACHINE_FLAG_OUT;
 constexpr u32 BROKEN_DOWN = game::MACHINE_FLAG_BROKEN_DOWN, CPU = game::MACHINE_FLAG_CPU;
 constexpr u32 FALLEN = game::MACHINE_FLAGS2_FALLEN;                    // out of contact, a fall
 constexpr u32 RESTORE = 0x8000;                                        // the rule word's bit (.bss 0x3C30)
@@ -31,7 +31,7 @@ constexpr bool Out(u32 flags, u32 contact, u32 speed, u32 rules, u8 race_type)
     return true;    // a timed mode's or the time limit's end, in either regime
   if (rules & RESTORE)
     return false;   // every wreck, fall and breakdown is put back
-  if ((flags & (RETIRED | DESTROYED)) != 0 || (contact & FALLEN) != 0)
+  if ((flags & (RETIRED | OUT)) != 0 || (contact & FALLEN) != 0)
     return true;
   if ((flags & BROKEN_DOWN) == 0)
     return false;

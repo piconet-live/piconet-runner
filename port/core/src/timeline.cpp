@@ -7,7 +7,7 @@
 //             that moment) without 0x800 in the same step, the racer not finished (0x10000). The attacker: a racer
 //             whose skull count +0x482 grew in the same step (fn_1_2A318 credits it in the same contact call). With
 //             several, the one whose "last machine approached" +0x4C1 is the victim, or the victim's is it.
-//   Out       flags gains 0x800 (retired or destroyed: fn_1_25004, which sets 0x80 with it; fn_1_24A4C, the fall)
+//   Out       flags gains 0x800 (out of the course: fn_1_25004, which sets 0x80 with it; fn_1_24A4C, the fall)
 //             with no 0x80 before: destroyed without a KO, a fall.
 //   Retired   flags gains 0x08000000 alone (the launcher's "out" mask, playback.cpp); none seen so far.
 //   Finish    flags gains 0x10000 (fn_1_250F8); the time is the sum of the laps, progress record +0x1D8 (as the
@@ -43,7 +43,7 @@ namespace
 constexpr u32 NONE = 0xFFFFFFFF;
 constexpr u32 BLOCK = game::MACHINE_SIZE;
 constexpr u32 LEAD_STEPS = 30;  // half a second
-constexpr u32 OUT_FLAGS = game::MACHINE_FLAG_RETIRED | game::MACHINE_FLAG_DESTROYED | game::MACHINE_FLAG_BROKEN_DOWN;
+constexpr u32 OUT_FLAGS = game::MACHINE_FLAG_RETIRED | game::MACHINE_FLAG_OUT | game::MACHINE_FLAG_BROKEN_DOWN;
 // stand-in colours for a seat whose set-up names none (bit 24 says so)
 constexpr u32 STAND_IN[8] = {0xE6194B, 0x3CB44B, 0xFFE119, 0x4363D8, 0xF58231, 0x911EB4, 0x46F0F0, 0xF032E6};
 

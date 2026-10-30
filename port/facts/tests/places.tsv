@@ -377,7 +377,7 @@ MACHINE_FLAGS2	port/core/src/out_test.h	use	game::MACHINE_FLAGS2	1
 MACHINE_FLAGS2_FALLEN	port/core/src/out_test.h	use	game::MACHINE_FLAGS2_FALLEN	1
 MACHINE_FLAG_BROKEN_DOWN	port/core/src/out_test.h	use	game::MACHINE_FLAG_BROKEN_DOWN	1
 MACHINE_FLAG_CPU	port/core/src/out_test.h	use	game::MACHINE_FLAG_CPU	1
-MACHINE_FLAG_DESTROYED	port/core/src/out_test.h	use	game::MACHINE_FLAG_DESTROYED	1
+MACHINE_FLAG_OUT	port/core/src/out_test.h	use	game::MACHINE_FLAG_OUT	1
 MACHINE_FLAG_FINISHED	port/core/src/out_test.h	use	game::MACHINE_FLAG_FINISHED	1
 MACHINE_FLAG_RETIRED	port/core/src/out_test.h	use	game::MACHINE_FLAG_RETIRED	1
 MACHINE_FLAG_TIME_OVER	port/core/src/out_test.h	use	game::MACHINE_FLAG_TIME_OVER	1
@@ -432,7 +432,7 @@ PROGRESS_RANK	port/core/src/spectator_frame.cpp	use	game::PROGRESS_RANK	1
 MACHINE_APPROACHED	port/core/src/timeline.cpp	use	game::MACHINE_APPROACHED	1
 MACHINE_ENERGY	port/core/src/timeline.cpp	use	game::MACHINE_ENERGY	1
 MACHINE_FLAG_BROKEN_DOWN	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_BROKEN_DOWN	1
-MACHINE_FLAG_DESTROYED	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_DESTROYED	1
+MACHINE_FLAG_OUT	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_OUT	1
 MACHINE_FLAG_FINISHED	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_FINISHED	4
 MACHINE_FLAG_RETIRED	port/core/src/timeline.cpp	use	game::MACHINE_FLAG_RETIRED	1
 MACHINE_MAX_ENERGY	port/core/src/timeline.cpp	use	game::MACHINE_MAX_ENERGY	1
@@ -495,7 +495,7 @@ MACHINE_FLAG_BOOST_REQUEST	port/facts/machine-state.csv	re	"flags \([^"]*\bboost
 MACHINE_FLAG_BROKEN_DOWN	port/facts/machine-state.csv	re	"flags \([^"]*\bbroken down (0x[0-9A-F]+)\b	1
 MACHINE_FLAG_CPU	port/facts/machine-state.csv	re	"flags \([^"]*\bCPU (0x[0-9A-F]+)\b	1
 MACHINE_FLAG_DRIVEN	port/facts/machine-state.csv	re	"flags \([^"]*\bdriven since start or restore (0x[0-9A-F]+)\b	1
-MACHINE_FLAG_DESTROYED	port/facts/machine-state.csv	re	"flags \([^"]*\bdestroyed (0x[0-9A-F]+)\b	1
+MACHINE_FLAG_OUT	port/facts/machine-state.csv	re	"flags \([^"]*\bout of the course (0x[0-9A-F]+)\b	1
 MACHINE_FLAG_STRAFE_LATCH	port/facts/machine-state.csv	re	"flags \([^"]*\bstrafe latch (0x[0-9A-F]+)\b	1
 MACHINE_FLAG_FINISHED	port/facts/machine-state.csv	re	"flags \([^"]*\bfinished (0x[0-9A-F]+)\b	1
 MACHINE_FLAG_SIDE_ATTACK	port/facts/machine-state.csv	re	"flags \([^"]*\bside attack (0x[0-9A-F]+)\b	1
@@ -506,4 +506,4 @@ MACHINE_FLAG_RETIRED	port/facts/machine-state.csv	re	"flags \([^"]*\bretired (0x
 MACHINE_FLAG_TIME_OVER	port/facts/machine-state.csv	re	"flags \([^"]*\btime over (0x[0-9A-F]+)\b	1
 MACHINE_FLAGS2_PIT	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) used a pit	1
 MACHINE_FLAGS2_STEPPED	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) stepped this frame	1
-MACHINE_FLAGS2_FALLEN	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) out of contact	1
+MACHINE_FLAGS2_FALLEN	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) destroyed/out of contact	1
