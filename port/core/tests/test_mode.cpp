@@ -5,6 +5,7 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <sstream>
@@ -545,9 +546,20 @@ void TestTheLobbysRestoreStaysOut()
 {
   BEGIN_TEST();
   TestHost host;
+  const std::string dir = (std::filesystem::temp_directory_path() / "fzgx-test-restore").string();
+  std::filesystem::create_directories(dir);
+  std::string image(0x100, '\0');
+  image.replace(0, 4, "FZMD");
+  image.replace(0x10, 4, "FZSI");
+  WriteText(dir + "/mod.bin", image);
+  WriteText(dir + "/manifest.json", "{\"commit\": \"abc1234\"}");
+  WriteText(dir + "/codes.txt", "$Boot to race\n48000000 800030C8\n$Race setup\nC0000000 00000001\n4E800020 00000000\n");
+  Options options;
+  options.bundle_dir = dir;
+  Init(host, options);
   const auto match = [](const char* restore, const char* vector) {
     picojson::value mode = Vector(vector);
-    const std::string json = R"({"matchId": "m7", "seat": 0, "token": "1f2e3d4c5b6a7988", "relay": {"host": "", "port": 47811},
+    const std::string json = R"({"matchId": "m7", "seat": 0, "token": "1f2e3d4c5b6a7988", "relay": {"host": "127.0.0.1", "port": 47811},
       "setup": {"course": 8, "laps": 3, "shuffleSeed": 1, "cpuSeed": 2, "rules": {"restore": )" + std::string(restore) +
                              R"(}, "seats": [{"seat": 0, "machine": 5, "playerId": "p1", "name": "A"},
       {"seat": 1, "machine": 7}], "mode": )" + mode.serialize() + "}}";
@@ -566,6 +578,8 @@ void TestTheLobbysRestoreStaysOut()
     const auto own = match(restore, "race.mode.json");
     CHECK(own && own->game_mode && own->game_mode->restore == true && word(*own) == 0);
   }
+  Shutdown();
+  std::filesystem::remove_all(dir);
 }
 
 // Lives 3: every seat respawns; each restore costs a life; the wreck that leaves one life turns the seat's Restore off
