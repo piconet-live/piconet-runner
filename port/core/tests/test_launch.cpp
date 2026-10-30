@@ -99,6 +99,23 @@ void TestALaunchFile()
         DebugSettingsOn(plain.debug).empty());
   CHECK(!ParseLaunchFile(Launch(R"({"singleCore": true})"), &plain) && DebugSettingsOn(plain.debug) ==
                                                                           std::vector<std::string>{"debug.singleCore"});
+  // the picture shown: the emulator's own unless a test asks for Aurora's (presentation only), and its test pictures
+  CHECK(plain.debug.renderer == "dolphin" && plain.debug.aurora_shots.empty() && plain.debug.aurora_log.empty());
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "aurora", "auroraShots": [600, 1200], "auroraLog": "C:\\runs\\a"})"),
+                         &plain) &&
+        plain.debug.renderer == "aurora" && plain.debug.aurora_shots == std::vector<u32>({600, 1200}) &&
+        plain.debug.aurora_log == "C:\\runs\\a" &&
+        DebugSettingsOn(plain.debug) ==
+            std::vector<std::string>({"debug.renderer", "debug.auroraShots", "debug.auroraLog"}));
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain) && DebugSettingsOn(plain.debug).empty());
+  // its render scale: the emulator's own unless given, 1 to 8
+  CHECK(plain.debug.aurora_scale == 0);
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "aurora", "auroraScale": 3})"), &plain) && plain.debug.aurora_scale == 3 &&
+        DebugSettingsOn(plain.debug) == std::vector<std::string>({"debug.renderer", "debug.auroraScale"}));
+  CHECK(ParseLaunchFile(Launch(R"({"auroraScale": 9})"), &plain).has_value());
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain));
+  const std::optional<std::string> wrong = ParseLaunchFile(Launch(R"({"renderer": "vulkan"})"), &plain);
+  CHECK(wrong && wrong->find("renderer") != std::string::npos);
   // a playback, and a plain start
   Options play;
   CHECK(!ParseLaunchFile(R"({"about": "a playback", "bundle": "b", "replay": {"file": "r.fzrp",
