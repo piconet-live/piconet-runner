@@ -2,6 +2,7 @@
 
 #include "internal.h"
 #include "mode.h"
+#include "mode_hud.h"
 
 #include "fzgx/freeze.h"
 #include "fzgx/panel.h"
@@ -271,6 +272,8 @@ void WindowWritten(u32 address, u64 value)
   if (address == layout::DRAW_ASK)
   {
     Guest g(*s_host, Data());
+    if (value == 1)
+      mode::hud::Hud(g);  // the game mode's displays: after the frame routine's HUD passes, before the drawing
     net::PresentAsked(g, static_cast<u32>(value));
     return;
   }

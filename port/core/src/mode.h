@@ -24,9 +24,10 @@
 namespace fzgx::mode
 {
 // The block's layout (port/image/routines/memmap.py names the first two: the records the image's sites read, and
-// the end word its race-end clause reads). Five pages: the run's words, the globals, the edges, the generator and the
-// waiting rules' bits; two of seat words; the wait records; the team words. Every page's first word is its step stamp.
-constexpr u32 BLOCK = 0x5000, PAGE = 0x1000;
+// the end word its race-end clause reads). Six pages: the run's words, the globals, the edges, the generator and the
+// waiting rules' bits; two of seat words; the wait records; the team words; the displays (mode_hud.h). Every page's
+// first word is its step stamp.
+constexpr u32 BLOCK = 0x6000, PAGE = 0x1000;
 constexpr u32 RECORDS = 0, RECORD = 16;   // a seat's: +0 flags, +4 accelerator, +8 brake, +12 the held speed
 constexpr u32 END = RECORDS + 30 * RECORD;  // 0x1E0: 0 the race goes on; 1 a mode error; 2 the mode ended it
 constexpr u32 FAULT = END + 4;            // the fault's reason (Fault), and +8 its step
@@ -49,7 +50,7 @@ constexpr float MOST_SPEED = 9000.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
               WAIT_RECORDS + modes::WAITS * WAIT <= 4 * PAGE && 4 * modes::TEAM_WORDS == 0x80 &&
-              TEAM_PAGE + modes::TEAMS * 0x80 <= BLOCK && 5 * PAGE == BLOCK);
+              TEAM_PAGE + modes::TEAMS * 0x80 <= 5 * PAGE && 6 * PAGE == BLOCK);
 
 constexpr u32 SeatWord(u32 seat, u32 word)
 {

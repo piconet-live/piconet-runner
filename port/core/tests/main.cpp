@@ -180,6 +180,7 @@ void TestTheGamesSquareRootIsTheCompilers();
 void TestTheGeneratorIsTheReferences();
 void TestWaitsRunInTheBlock();
 void TestTheLanguageVectorRuns();
+void TestTheDisplayWordsRun();
 // test_stats_race.cpp
 void TestAStatPackIsLaidOverTheCarData();
 void TestAStatPackUnderRollback();
@@ -513,6 +514,7 @@ int main(int argc, char** argv)
   TestTheGeneratorIsTheReferences();
   TestWaitsRunInTheBlock();
   TestTheLanguageVectorRuns();
+  TestTheDisplayWordsRun();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);
   return s_failed == 0 ? 0 : 1;
 }

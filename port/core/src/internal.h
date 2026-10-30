@@ -82,6 +82,11 @@ void SetExitCode(int code);
 void StepsDone(Guest& g);
 // Our course map (minimap_frame.cpp), at every game frame of a race or replay start.
 void MinimapFrame(Guest& g);
+// The racer this game's picture follows (the spectator controls', the image's own spectating, else the stand-in
+// seat), and the seat whose driver this game's player is: none (-1) for a spectator, a watcher, a replay, or a racer
+// the image spectates for (minimap_frame.cpp; the game mode's displays, mode_hud.cpp).
+u32 ViewedRacer(Guest& g);
+u32 OwnSeat(Guest& g);
 void MinimapSummary();  // its line in the log, at the end
 // A late frame's drawing skipped (present.cpp): the frame tick; NormalStep's word that the frame is a race frame
 // that may skip; the image's store into DRAW_ASK (WindowWritten); the session's end (its line in the log).
