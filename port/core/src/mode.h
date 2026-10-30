@@ -24,11 +24,11 @@
 namespace fzgx::mode
 {
 // The block's layout (port/image/routines/memmap.py names the words the image's sites read: the records, the end
-// word, the engine page's clock, no-contact rows, touching rows, moves and the rolling start's saved steering). Six
+// word, the engine page's clock, no-contact rows, touching rows, moves and the rolling start's saved steering). Seven
 // pages: the run's words, the globals, the edges, the generator and the waiting rules' bits; two of seat words; the
 // wait records; the team words; the engine page (the race side's state: what the events compare with, the places,
-// the points, the contact table). Every page's first word is its step stamp.
-constexpr u32 BLOCK = 0x6000, PAGE = 0x1000;
+// the points, the contact table); the displays (mode_hud.h). Every page's first word is its step stamp.
+constexpr u32 BLOCK = 0x7000, PAGE = 0x1000;
 constexpr u32 RECORDS = 0, RECORD = 16;   // a seat's: +0 flags, +4 accelerator, +8 brake, +12 the held speed
 constexpr u32 END = RECORDS + 30 * RECORD;  // 0x1E0: 0 the race goes on; 1 a mode error; 2 the mode ended it
 constexpr u32 FAULT = END + 4;            // the fault's reason (Fault), and +8 its step
@@ -74,11 +74,11 @@ constexpr float MOST_SPEED = 9000.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
               WAIT_RECORDS + modes::WAITS * WAIT <= 4 * PAGE && 4 * modes::TEAM_WORDS == 0x80 &&
-              TEAM_PAGE + modes::TEAMS * 0x80 <= ENGINE && 6 * PAGE == BLOCK && NC + 30 * 4 <= TOUCH &&
+              TEAM_PAGE + modes::TEAMS * 0x80 <= ENGINE && 7 * PAGE == BLOCK && NC + 30 * 4 <= TOUCH &&
               TOUCH + 30 * 4 <= TOUCH_PREV && TOUCH_PREV + 30 * 4 <= RESPAWN && TEAM_NC + 30 * 4 <= END_ORDER &&
               END_ORDER + 30 <= PLACES && PLACES + 30 <= POINTS && POINTS + 30 * 4 <= RANKS && RANKS + 30 <= SEAT_STATE &&
               SEAT_STATE + 30 * SEAT_STATE_SIZE <= MOVES && MOVES + 30 * 16 <= DANGER && DANGER + 30 * 16 <= ROLL_SAVE &&
-              ROLL_SAVE + 30 * ROLL_SAVE_SIZE <= BLOCK);
+              ROLL_SAVE + 30 * ROLL_SAVE_SIZE <= 6 * PAGE);
 
 constexpr u32 SeatWord(u32 seat, u32 word)
 {

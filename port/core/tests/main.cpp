@@ -184,6 +184,7 @@ void TestTheLanguageVectorRuns();
 void TestTheRaceWordsRun();
 void TestTheKnockoutEndsWithItsPlaces();
 void TestTheLivesLibraryRuns();
+void TestTheDisplayWordsRun();
 void TestTheLobbysRestoreStaysOut();
 // test_stats_race.cpp
 void TestAStatPackIsLaidOverTheCarData();
@@ -523,6 +524,7 @@ int main(int argc, char** argv)
   TestTheKnockoutEndsWithItsPlaces();
   TestTheLobbysRestoreStaysOut();
   TestTheLivesLibraryRuns();
+  TestTheDisplayWordsRun();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);
   return s_failed == 0 ? 0 : 1;
 }

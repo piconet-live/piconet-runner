@@ -13,6 +13,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mode.h"
+#include "mode_hud.h"
 
 #include <algorithm>
 #include <array>
@@ -746,6 +747,14 @@ private:
       a.value[k - 1] = Pop();
     if (cells > 0)
       a.seat = Pop();
+    // a display word writes the block's display page at once, as a variable is written: no game field, nothing a
+    // read of the step sees, so it takes no place in the queue (a display on every seat each step fits)
+    if (hud::IsDisplay(a.id))
+    {
+      if (a.seat < m_count)
+        hud::Apply(m_g, m_block, a.id, a.seat, a.value[0]);
+      return;
+    }
     if (m_queue.size() >= static_cast<size_t>(QUEUE))
       return Fail(FAULT_QUEUE);
     m_queue.push_back(a);
@@ -1473,6 +1482,7 @@ void Run(Guest& g, const Package& p, u32 block, u32 module)
       g.Write32(block + RANDOM + 4 * k, p.seed[k]);
   }
   Stamp(g, block, runs + 1);
+  hud::BeginRun(g, block);
   Machine m(g, p, block, module);
   const Now n = ReadNow(m, g, block, module);
   if (runs == 0)

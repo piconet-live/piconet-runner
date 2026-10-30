@@ -52,7 +52,7 @@ MINE_BLOCK = MINE_COUNTS + 2 * MINE_TABLE
 # the start gate, as MINES; the block itself is the undo log's and the checksum's (MODE_BLOCK bytes: MODE_SEATS, a
 # seat's record of MODE_SEAT bytes that the image's sites read, then the interpreter's state).
 MODES = _facts.MODES
-MODE_BLOCK = 0x6000
+MODE_BLOCK = 0x7000
 MODE_ALLOC = MODE_BLOCK + 0x1000   # taken from the heap: the block starts on a page (the undo log's pages, mode.cpp)
 MODE_SEAT = 16
 MODE_SEATS = 0
@@ -63,6 +63,7 @@ MODE_NC_ANY = MODE_ENGINE + 0xC          # the OR of the no-contact rows: 0, the
 MODE_NC = MODE_ENGINE + 0x10             # a seat's no-contact row (bit 0x80000000 >> j)
 MODE_TOUCH = MODE_ENGINE + 0x88          # a seat's contact answers this step, the same order (the pair gate ORs them)
 MODE_CLOCK = MODE_ENGINE + 0x4           # clock_limit in steps (0: none): the game's own timer is skipped
+MODE_POINTS = MODE_ENGINE + 0x240         # award's points, a word a seat (the results' points page reads them)
 MODE_MOVES = MODE_ENGINE + 0xA80         # a seat's move: +0 1 push, 2 velocity; +4 x, +8 y, +12 z (momentum)
 MODE_MOVE = 16
 MODE_ROLL_SAVE = MODE_ENGINE + 0xE40     # a seat's steering (+0 M+0x1FC, +4 M+0x1F8) before the rule hook
@@ -264,3 +265,9 @@ lo = lambda a: a & 0xFFFF
 # a step: the picture's only, never rolled back, not in the checksum.
 COURSE_NAME = ICONS + 0x100
 assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE
+# The game mode's displays (sites_modehud.py; port/core/src/mode_hud.h): the core writes them at every frame's drawing
+# from the mode's block, the image reads them in the drawing and at the race's set-up (the flags). Not read by a step.
+MODE_HUD = _facts.MODE_HUD
+MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
+MODE_POINTS_PAGE, MODE_STORY_PICTURES = 1, 2
+assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE
