@@ -63,6 +63,7 @@ void StartAurora()
   s.shot_prefix = d.aurora_log;
   s.shots.assign(d.aurora_shots.begin(), d.aurora_shots.end());
   s.log_path = d.aurora_log;
+  s.scale = d.aurora_scale;
   VideoCommon::AuroraPresent::Configure(s);
   s_core_host.Log(fzgx::LogLevel::Notice,
                   std::string("fzgx: aurora: ") +

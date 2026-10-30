@@ -168,6 +168,7 @@ struct Debug
   // logs' file prefix
   std::string renderer = "dolphin";
   std::vector<u32> aurora_shots;
+  u32 aurora_scale = 0;  // "auroraScale": its render scale, 1 to 8; 0 (or none): the same as the emulator's resolution
   std::string aurora_log;
   std::vector<EmulatorSetting> emulator;  // every other key of the emulator's side that was given (files_launch.cpp
                                           // holds the table: "pad", "poke", "probe", "paceLog", ...)

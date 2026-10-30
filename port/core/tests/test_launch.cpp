@@ -108,6 +108,12 @@ void TestALaunchFile()
         DebugSettingsOn(plain.debug) ==
             std::vector<std::string>({"debug.renderer", "debug.auroraShots", "debug.auroraLog"}));
   CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain) && DebugSettingsOn(plain.debug).empty());
+  // its render scale: the emulator's own unless given, 1 to 8
+  CHECK(plain.debug.aurora_scale == 0);
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "aurora", "auroraScale": 3})"), &plain) && plain.debug.aurora_scale == 3 &&
+        DebugSettingsOn(plain.debug) == std::vector<std::string>({"debug.renderer", "debug.auroraScale"}));
+  CHECK(ParseLaunchFile(Launch(R"({"auroraScale": 9})"), &plain).has_value());
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain));
   const std::optional<std::string> wrong = ParseLaunchFile(Launch(R"({"renderer": "vulkan"})"), &plain);
   CHECK(wrong && wrong->find("renderer") != std::string::npos);
   // a playback, and a plain start

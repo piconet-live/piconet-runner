@@ -107,6 +107,7 @@ std::vector<std::string> DebugSettingsOn(const Debug& d)
   add(d.jit, "jit");
   add(d.renderer != "dolphin", "renderer");
   add(!d.aurora_shots.empty(), "auroraShots");
+  add(d.aurora_scale != 0, "auroraScale");
   add(!d.aurora_log.empty(), "auroraLog");
   add(d.cheats, "cheats");
   add(d.mods, "mods");
