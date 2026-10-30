@@ -10,6 +10,7 @@
 #include "internal.h"
 #include "mode.h"
 #include "rollback.h"
+#include "util.h"
 
 namespace fzgx::mode::hud
 {
@@ -154,6 +155,13 @@ void Hud(Guest& g)
   const u32 module = layout::MAIN_REL;
   if (g.Read16(module + game::PHASE) < PHASE_INTRO)
     return;
+  static bool said = false;  // (where the block is, once: for a test's dump or poke of the display page)
+  if (!said)
+  {
+    said = true;
+    Notice("fzgx: game mode: block at {:#010x}, display page at {:#010x}, window flags {:#x}", block, block + DISPLAY,
+           g.Read32(layout::MODE_HUD + WINDOW_FLAGS));
+  }
   const u32 viewed = net::ViewedRacer(g);
   const Frame f = Read(g, block, viewed, net::OwnSeat(g));
   // the part mask: the mode's parts over what the HUD's owners wrote this frame (hudstate, spechud, the game's own
