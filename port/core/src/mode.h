@@ -23,10 +23,12 @@
 
 namespace fzgx::mode
 {
-// The block's layout (port/image/routines/memmap.py names the first two: the records the image's sites read, and
-// the end word its race-end clause reads). Five pages: the run's words, the globals, the edges, the generator and the
-// waiting rules' bits; two of seat words; the wait records; the team words. Every page's first word is its step stamp.
-constexpr u32 BLOCK = 0x5000, PAGE = 0x1000;
+// The block's layout (port/image/routines/memmap.py names the words the image's sites read: the records, the end
+// word, the engine page's clock, no-contact rows, touching rows, moves and the rolling start's saved steering). Six
+// pages: the run's words, the globals, the edges, the generator and the waiting rules' bits; two of seat words; the
+// wait records; the team words; the engine page (the race side's state: what the events compare with, the places,
+// the points, the contact table). Every page's first word is its step stamp.
+constexpr u32 BLOCK = 0x6000, PAGE = 0x1000;
 constexpr u32 RECORDS = 0, RECORD = 16;   // a seat's: +0 flags, +4 accelerator, +8 brake, +12 the held speed
 constexpr u32 END = RECORDS + 30 * RECORD;  // 0x1E0: 0 the race goes on; 1 a mode error; 2 the mode ended it
 constexpr u32 FAULT = END + 4;            // the fault's reason (Fault), and +8 its step
@@ -44,12 +46,39 @@ constexpr u32 WAIT = 0x3C;                // +0 its rule + 1 (0: free), +4 the i
                                           // +12 the run it ends at, +16 its length, +20 where the code goes on,
                                           // +24 its condition, +28 the locals kept
 constexpr u32 TEAM_PAGE = 4 * PAGE + 0x10;  // team t's words at +0x80 t
-constexpr u32 PEDALS = 1, BOOST_OFF = 2, HELD = 4;  // a record's flags
+// a record's flags: the stand-in routine reads 1, 2, 8, 32 and 64, the mode point 4 and 16, site L 4
+constexpr u32 PEDALS = 1, BOOST_OFF = 2, HELD = 4, BOOST = 8, EXPLODE = 16, HAND = 32, ROLL = 64;
+// The engine page (the race side, wave 2A). The image reads CLOCK (the timer site), NC_ANY and NC (the pair gate),
+// writes TOUCH (the pair gate, a contact answered), reads MOVES (site L) and ROLL_SAVE (the stand-in routine).
+constexpr u32 ENGINE = 5 * PAGE;
+constexpr u32 CLOCK = ENGINE + 0x4;       // clock_limit in steps (0: none)
+constexpr u32 FLAGS = ENGINE + 0x8;       // 1 race.started at the last run; 2 rolling start written
+constexpr u32 NC_ANY = ENGINE + 0xC;      // the OR of the no-contact rows: 0, the pair gate takes the stock path
+constexpr u32 NC = ENGINE + 0x10;         // a seat's no-contact row: bit 0x80000000 >> j, the game's own order (+0x514's)
+constexpr u32 TOUCH = ENGINE + 0x88;      // a seat's contact answers this step, the same order (the pair gate ORs)
+constexpr u32 TOUCH_PREV = ENGINE + 0x100;  // the same, the step before
+constexpr u32 RESPAWN = ENGINE + 0x178;   // bit i: seat i respawns (flag 0x1 kept on while it is not finished)
+constexpr u32 HANDED = ENGINE + 0x17C;    // bit i: the CPU drives seat i (hand_to_cpu)
+constexpr u32 FROZEN = ENGINE + 0x180;    // bit i: seat i is held at speed 0 (freeze)
+constexpr u32 TEAM_NC = ENGINE + 0x188;   // a seat's no-contact bits from team T no contact (what ghost off goes back to)
+constexpr u32 END_ORDER = ENGINE + 0x200;  // the end clause's order, a seat a byte (held every step after the end)
+constexpr u32 PLACES = ENGINE + 0x220;    // seat.place, a byte a seat (0: none)
+constexpr u32 POINTS = ENGINE + 0x240;    // award's points, a word a seat
+constexpr u32 RANKS = ENGINE + 0x2B8;     // the standing at the last run, a byte a seat (overtake)
+constexpr u32 SEAT_STATE = ENGINE + 0x300, SEAT_STATE_SIZE = 0x40;  // what a seat's events compare with (mode.cpp)
+constexpr u32 MOVES = ENGINE + 0xA80;     // a seat's: +0 1 push, 2 velocity; +4 x, +8 y, +12 z (momentum, binary32)
+constexpr u32 DANGER = ENGINE + 0xC60;    // a seat's danger zone: +0 below, +4 arm (km/h), +8 count, +12 flags
+constexpr u32 ROLL_SAVE = ENGINE + 0xE40, ROLL_SAVE_SIZE = 8;  // a seat's steering (+0) before the rule hook while the rolling start holds it
+constexpr u32 DANGER_ON = 1, DANGER_ARMED = 2, DANGER_DONE = 4;
 constexpr float MOST_SPEED = 9000.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
               WAIT_RECORDS + modes::WAITS * WAIT <= 4 * PAGE && 4 * modes::TEAM_WORDS == 0x80 &&
-              TEAM_PAGE + modes::TEAMS * 0x80 <= BLOCK && 5 * PAGE == BLOCK);
+              TEAM_PAGE + modes::TEAMS * 0x80 <= ENGINE && 6 * PAGE == BLOCK && NC + 30 * 4 <= TOUCH &&
+              TOUCH + 30 * 4 <= TOUCH_PREV && TOUCH_PREV + 30 * 4 <= RESPAWN && TEAM_NC + 30 * 4 <= END_ORDER &&
+              END_ORDER + 30 <= PLACES && PLACES + 30 <= POINTS && POINTS + 30 * 4 <= RANKS && RANKS + 30 <= SEAT_STATE &&
+              SEAT_STATE + 30 * SEAT_STATE_SIZE <= MOVES && MOVES + 30 * 16 <= DANGER && DANGER + 30 * 16 <= ROLL_SAVE &&
+              ROLL_SAVE + 30 * ROLL_SAVE_SIZE <= BLOCK);
 
 constexpr u32 SeatWord(u32 seat, u32 word)
 {
@@ -100,6 +129,16 @@ struct Package
   }
   bool pedals = false, boost_off = false;
   u32 accel = 0, brake = 0;        // binary32 bits
+  // the race side's setup words (wave 2A): the race block's rules a mode states (files_match.cpp puts them in), and
+  // the engine's own
+  std::optional<u32> finish_limit;  // seconds
+  std::optional<u32> mine_regen;    // milliseconds, 0 off
+  std::optional<u32> cpu_level;
+  std::optional<bool> restore;      // restore on / off; unstated, files_match.cpp puts the lobby's in
+  bool contact_off = false;
+  u32 clock_limit = 0;              // steps, 0 none
+  std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
+  u32 players = 0;                  // bit i: a player drives seat i (the match start's player seats)
   std::vector<s32> globals, seat_words, team_words;  // their start values
   std::vector<Rule> rules;
   std::vector<u8> code;
@@ -135,4 +174,9 @@ void Run(Guest& g, const Package& p, u32 block, u32 module);
 void Step(Guest& g);
 // Seat `seat`'s record in the block; 0 without a block.
 u32 Record(const Guest& g, u32 seat);
+// Seat `seat`'s move (MOVES: read by the image's mode_speed in the machine's step) and its rolling start's saved
+// steering (ROLL_SAVE: written and read by the stand-in's rule hook wrapper in the machine's task); 0 without a mode.
+u32 Move(const Guest& g, u32 seat);
+u32 RollSave(const Guest& g, u32 seat);
+// The run with no package past its end: the end clause's order held in the standing (a race the mode ended).
 }  // namespace fzgx::mode

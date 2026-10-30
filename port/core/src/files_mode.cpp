@@ -173,6 +173,46 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.boost_off = true;
         }
+        else if (id == modes::SETUP_FINISHLIMIT || id == modes::SETUP_MINEREGEN || id == modes::SETUP_CPULEVEL ||
+                 id == modes::SETUP_CLOCKLIMIT)
+        {
+          // (the ranges are modes.toml's: the compiler holds a value to them, a package from elsewhere is refused)
+          const s32 v = arg(0);
+          const bool in = id == modes::SETUP_FINISHLIMIT ? v >= 0 && v <= 600
+                          : id == modes::SETUP_MINEREGEN ? v >= 50 && v <= 5000
+                          : id == modes::SETUP_CPULEVEL  ? v >= 0 && v <= 3
+                                                         : v >= 60 && v <= 65535;
+          if (setup_args.size() != 1 || !in)
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          const u32 value = static_cast<u32>(v);
+          if (id == modes::SETUP_FINISHLIMIT)
+            p.finish_limit = value;
+          else if (id == modes::SETUP_MINEREGEN)
+            p.mine_regen = value;
+          else if (id == modes::SETUP_CPULEVEL)
+            p.cpu_level = value;
+          else
+            p.clock_limit = value;
+        }
+        else if (id == modes::SETUP_MINEREGENOFF)
+        {
+          p.mine_regen = 0;
+        }
+        else if (id == modes::SETUP_RESTOREON || id == modes::SETUP_RESTOREOFF)
+        {
+          p.restore = id == modes::SETUP_RESTOREON;
+        }
+        else if (id == modes::SETUP_CONTACTOFF)
+        {
+          p.contact_off = true;
+        }
+        else if (id == modes::SETUP_ROLLINGSTART)
+        {
+          const float v = std::bit_cast<float>(arg(0));
+          if (setup_args.size() != 1 || !(v >= 0.0f && v <= MOST_SPEED))
+            return Fail(why, "starts rolling at a speed outside 0 to 9000 km/h");
+          p.rolling = static_cast<u32>(arg(0));
+        }
         else if (id != modes::SETUP_CPUSALLOWED)  // (the coordinator's)
         {
           return Fail(why, std::format("has a setup word this build does not know ({})", id));

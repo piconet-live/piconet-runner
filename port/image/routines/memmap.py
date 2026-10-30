@@ -52,11 +52,22 @@ MINE_BLOCK = MINE_COUNTS + 2 * MINE_TABLE
 # the start gate, as MINES; the block itself is the undo log's and the checksum's (MODE_BLOCK bytes: MODE_SEATS, a
 # seat's record of MODE_SEAT bytes that the image's sites read, then the interpreter's state).
 MODES = _facts.MODES
-MODE_BLOCK = 0x5000
+MODE_BLOCK = 0x6000
 MODE_ALLOC = MODE_BLOCK + 0x1000   # taken from the heap: the block starts on a page (the undo log's pages, mode.cpp)
 MODE_SEAT = 16
 MODE_SEATS = 0
 MODE_END = MODE_SEATS + 30 * MODE_SEAT   # the block's word: not 0, the mode ended the race (the step after which, plus 1)
+# the engine page's words the image reads and writes (port/core/src/mode.h: the same offsets)
+MODE_ENGINE = 0x5000
+MODE_NC_ANY = MODE_ENGINE + 0xC          # the OR of the no-contact rows: 0, the pair gate takes the stock path
+MODE_NC = MODE_ENGINE + 0x10             # a seat's no-contact row (bit 0x80000000 >> j)
+MODE_TOUCH = MODE_ENGINE + 0x88          # a seat's contact answers this step, the same order (the pair gate ORs them)
+MODE_CLOCK = MODE_ENGINE + 0x4           # clock_limit in steps (0: none): the game's own timer is skipped
+MODE_MOVES = MODE_ENGINE + 0xA80         # a seat's move: +0 1 push, 2 velocity; +4 x, +8 y, +12 z (momentum)
+MODE_MOVE = 16
+MODE_ROLL_SAVE = MODE_ENGINE + 0xE40     # a seat's steering (+0 M+0x1FC, +4 M+0x1F8) before the rule hook
+MODE_ROLL = 8
+assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_MOVE <= MODE_ROLL_SAVE
 # The race's setup (written by the Dolphin fork from the match file before the game reaches the race; the built-in
 # codes read it, boot-to-race/racecodes.py): 'FZRC', then words: +4 course, +8 port 0's machine, +12 CPU opponents
 # (racers - 1), +16 laps, +20 race type (6 laps, 3 free run), +24 the DOL generator's value up to the race (SHUFFLE),

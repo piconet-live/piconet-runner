@@ -234,6 +234,26 @@ void RulesIntoRace(Match& m, const picojson::object* rules)
   m.boost_from_start = (boost[0] | boost[1] | boost[2] | boost[3]) != 0;
 }
 
+// A game mode's setup words over the host's rules (a mode's word wins over the lobby's: modes.toml's setup rows).
+// The finish limit is the mode's or none (the mode owns its ending); mine regeneration and the CPUs' level are the
+// mode's when it states them; the restore rule never reaches a mode's race (rule 0x8000 would put flag 0x1 on every
+// seat every step, over a seat's own respawns): the lobby's restore becomes the mode's `restore on` unless the mode
+// states restore on or off itself.
+void ModeIntoRace(Match& m)
+{
+  mode::Package& p = *m.game_mode;
+  u8* r = m.race.data();
+  const auto word = [&](u32 at) { return u32(r[at]) << 24 | u32(r[at + 1]) << 16 | u32(r[at + 2]) << 8 | u32(r[at + 3]); };
+  Put32(r + RACE_FINISH_LIMIT, p.finish_limit.value_or(0) * STEPS_A_SECOND);
+  if (p.mine_regen)
+    Put32(r + RACE_MINE_REGEN, *p.mine_regen * STEPS_A_SECOND / 1000);
+  if (p.cpu_level)
+    Put32(r + RACE_CPULEVEL, *p.cpu_level);
+  if (!p.restore)
+    p.restore = word(RACE_RESTORE) != 0;
+  Put32(r + RACE_RESTORE, 0);
+}
+
 // The start grid of the set-up ("grid", the coordinator's RaceSetup.Grid: the seats in starting order, pole first)
 // into the race block: RACE_GRID_ON 1 and each slot's seat at RACE_GRID. None (absent or null): the word stays 0
 // and the game sorts its own grid, as every race and recording before it. One that is not every seat of the race
@@ -375,6 +395,8 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
     if (!Text(s, "playerId").empty())
     {
       m.player_mask |= 1u << seat;
+      if (m.game_mode && !is_cpu)
+        m.game_mode->players |= 1u << seat;
       if (!is_cpu)
       {
         const std::string name = GameText(Text(s, "name"));
@@ -393,6 +415,8 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
   Put32(r + 28, *cpu_seed);
   std::memcpy(r + 32, machines.data(), machines.size());
   RulesIntoRace(m, Object(*setup, "rules"));
+  if (m.game_mode)
+    ModeIntoRace(m);
   if (!GridIntoRace(m, *setup, racers, path))
     return false;
   m.seat_block = SeatBlock(m);
