@@ -9,6 +9,7 @@ the block .bss 0x7B180 with them) is not used. Time Attack's order is copied ins
 | `ghost_make` | fn_1_36330 0x36A30, `bl fn_1_E9770` (r4 the draw tasks' set) | the ghosts' tasks, outside our races none | after the stock call, under the window's flag GHOST_TASK (a mode whose code asks the look ghost or GHOST_GAP): one task of ours in that set, at priority 0x1A, as fn_1_E9770 makes GhostDisp (0xE98EC to 0xE9904). Every game of the race makes it at the same point of the set-up, from the package alone |
 | `ghost_disp` | that task | | each seat `mode_look` set aside this frame: fn_1_EE530's two passes, below. Then the gap, as fn_1_ED540 0xEDF40 to 0xEE148 draws it |
 | `ghost_voice` | fn_1_A3D5C 0xA3DFC, `fcmpo cr0, f31, f0`: the machine r27 beyond hearing? | sound by distance | a seat in the window's silent mask takes the path of a machine past 300 units: no volume, as Time Attack's ghosts, which no voice is ever given to (`seat.ghost_sound = on` leaves the seat out of the mask). Other sounds (a mine, a hit) are not voices and stay |
+| `ghost_pilot` | fn_1_84860 0x84DB8, `bl fn_1_A7854` (r29 the machine): the pilot, drawn at CarDisp at alpha 1 | the pilot | no call for a seat drawn as a ghost or invisible: Time Attack's draw path has no pilot (fn_1_EE530 calls neither fn_1_A7854 nor fn_1_A8270). fn_1_A77DC, the pose, stays, so it is current if the look changes back. The only other caller, fn_1_7C2A0 0x7C594, is in car_test.c, the developers' CAR_TEST screen: no reference to it from any race, left alone |
 | `ghost_shadow` | fn_1_568F8's entry, CarShadowPreRend (r3 the record, +0x48 the machine) | the shadow's picture | not drawn for a seat this game draws as a ghost. Time Attack's draw path has no shadow call [inf] |
 
 The two passes (fn_1_EE530, read [code]; `mode_look` in sites_modehud.py sets the seats aside and draws nothing at CarDisp):
@@ -16,7 +17,8 @@ The two passes (fn_1_EE530, read [code]; `mode_look` in sites_modehud.py sets th
    blend, through fn_1_875B4, so that only the front skin shows. fn_1_56298 and the tint first, as the game does.
 2. The visible pass: alpha min(0.5, 2 x clamp(d2 - 15, 0, 50) / 35) of the squared distance d2 from the camera, the blend
    fn_80074A60(4, 1), additive; the tint; fn_1_875EC, which draws at once where fn_1_875B4 below alpha 1 queues; the
-   resets. A custom machine (car +0x390 bit 0x04000000) through fn_1_14E5E4 with the part's record +0x3A0 in both.
+   resets. That alpha reaches only the moving parts (fn_1_875EC) and a custom machine (fn_1_14E5E4): a stock body (fn_1_556B8)
+   draws at the global alpha, 1, additive, at any distance (ta-ghost-pilot.md section 4). A custom machine (car +0x390 bit 0x04000000) through fn_1_14E5E4 with the part's record +0x3A0 in both.
 
 The first 60 frames fade in, x clock / 60 (fn_1_ED540 0xEDD2C): from the race clock, a function of the steps, where the game
 has a counter of its own; so before GO a ghost is not seen, as in Time Attack.
@@ -33,6 +35,7 @@ TASK_NAME = 0x3E358 + 0x2E8                    # main.rel .data: the name fn_1_E
 VOICE, VOICE_KNOWN = 0xA3DFC, 0xFC1F0040       # fn_1_A3D5C: fcmpo cr0, f31, f0; 0xA3E04 the path of a machine out of hearing
 VOICE_FAR = 0xA3E04
 SHADOW, SHADOW_KNOWN = 0x568F8, 0x9421FED0     # fn_1_568F8: stwu r1, -0x130(r1)
+PILOT, PILOT_KNOWN, PILOT_DRAW = 0x84DB8, 0x48022A9D, 0xA7854  # fn_1_84860: bl fn_1_A7854
 TINT, RESET_STATE, DEPTH_STATE, DEPTH_ALPHA = 0x5621C, 0x56000, 0x56298, 0x55FF0
 MODEL, COLOUR_TAB, DRAW_QUEUED, DRAW_NOW, DRAW_CUSTOM = 0x556B8, 0x87610, 0x875B4, 0x875EC, 0x14E5E4
 VIEWPORT, CAMERA_AT = 0x5910, 0x681C           # fn_1_5910: the viewport; fn_1_681C(it, out): the camera's place
@@ -389,6 +392,29 @@ gv_stock:
 """)
     patch(site, word, 0, "ghost_voice")
     middle.append((site, ["r12", "cr0"], "ghost_voice"))
+
+    # no pilot for a seat drawn as a ghost or invisible (r29 the machine), as Time Attack's draw path has none
+    site = TEXT + PILOT
+    word = stock(site, PILOT_KNOWN)
+    r.add("ghost_pilot", test + """    beq gp_stock
+""" + la(12, memmap.MODES) + """    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq gp_stock
+    lha 11, 4(29)
+    cmplwi 11, 30
+    bge gp_stock
+""" + la(12, memmap.MODE_HUD_LOOKS) + f"""    lbzx 11, 12, 11
+    cmpwi 11, 1
+    beq gp_none
+    cmpwi 11, 2
+    beq gp_none
+gp_stock:
+    @bl {FN(PILOT_DRAW)}
+gp_none:
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "ghost_pilot")
+    middle.append((site, ["r11", "r12", "cr0", "lr"], "ghost_pilot"))
 
     # no shadow's picture for a seat drawn as a ghost
     site = TEXT + SHADOW
