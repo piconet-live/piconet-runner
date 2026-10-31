@@ -55,14 +55,14 @@ constexpr float HIT_DROP = 0.006f;             // a fall in one picture of this 
 constexpr float SHAKE = 0.2f, SHAKE_APART = 0.25f, CHUNK_LINGERS = 0.25f;
 constexpr std::uint32_t LOCKED = 0xE60000;     // the game's meter on lap 1
 
-// The game's rainbow, fixed along the meter, sampled from Classic frames (the mockup's STOPS).
+// The game's rainbow, fixed along the meter, sampled from a full meter in Classic frames.
 struct Stop
 {
   float at;
   std::uint32_t rgb;
 };
-constexpr std::array<Stop, 9> STOPS = {{{0, 0xED3E3E}, {.13f, 0xE71110}, {.24f, 0xEE9F46}, {.35f, 0xE7D410}, {.46f, 0xC1ED3E},
-                                        {.57f, 0x10E749}, {.67f, 0x2BD9EA}, {.78f, 0x1027E7}, {1, 0xB026E7}}};
+constexpr std::array<Stop, 12> STOPS = {{{0, 0xE71010}, {.13f, 0xE71010}, {.24f, 0xE77A10}, {.35f, 0xE7D110}, {.46f, 0xB8E710}, {.57f, 0x10E747},
+                                         {.67f, 0x10E0E7}, {.78f, 0x233FE9}, {.85f, 0x3E10E7}, {.90f, 0x7C10E7}, {.95f, 0xD010E7}, {1, 0xE710E7}}};
 
 struct Hud
 {
@@ -371,7 +371,8 @@ void DrawTop6(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pi
       const float top = 8 / SQUARE, bottom = (H + 8) / SQUARE;
       list->AddImageQuad(picture_of, bl, br, tr, tl, ImVec2(0, bottom), ImVec2(W / SQUARE, bottom), ImVec2(1, top), ImVec2(SL / SQUARE, top), ov::Colour(ov::TEXT, a));
     }
-    list->AddQuadFilled(m.P(X - EDGE, y + H), bl, tl, m.P(X + SL - EDGE, y), ov::Colour(head.colour, a));
+    if (head.colour != 0)  // (a black dot, a computer racer's: no edge)
+      list->AddQuadFilled(m.P(X - EDGE, y + H), bl, tl, m.P(X + SL - EDGE, y), ov::Colour(head.colour, a));
     char place[8];
     std::snprintf(place, sizeof(place), "%u", head.row + 1);
     Text(list, m, Heavy(38), X - 14 + SL * 0.2f, y + H - 2, head.row == 0 ? ov::GOLD : ov::TEXT, a, true, place);
