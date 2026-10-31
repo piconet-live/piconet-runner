@@ -241,6 +241,9 @@ float GameSqrt(float x);
 
 // The run at the mode point (`block`: the block's address; `module`: the module pointer's value).
 void Run(Guest& g, const Package& p, u32 block, u32 module);
+// game_start's pass alone (mode_begin, port/image/sites_mode.py): the block's run count goes from 0 to 1. Run on a count
+// of 0 does this first, so a test may start from either.
+void GameStart(Guest& g, const Package& p, u32 block, u32 module);
 // The mode point's host call: the race's mode run, and a mode error said once in the log.
 void Step(Guest& g);
 // Seat `seat`'s record in the block; 0 without a block.

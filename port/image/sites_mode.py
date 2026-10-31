@@ -5,7 +5,8 @@ nothing is taken from the heap. Native form only: the fork's image does not have
 
 | Site | Where | What the game did | Now, with a mode |
 |---|---|---|---|
-| `mode_preload` | the frame routine, on the black frame before the start gate (sites.py's `frame`, with mines_preload) | — | the mode's block (memmap.MODE_BLOCK bytes on whole pages of 4 KiB, zeroed: MODE_ALLOC taken) from the top of the main heap's largest free block, as mines_preload takes its block, when the host asked for one (MODES +0 = 4); under `start_together` (window flag TOGETHER) with every no-contact row and their OR on, so the pair gate keeps every pair apart from the race's first contact pass (the mode's first run, which writes `contact off`'s rows, comes only after that pass's pairs) |
+| `mode_preload` | the frame routine, on the black frame before the start gate (sites.py's `frame`, with mines_preload) | — | the mode's block (memmap.MODE_BLOCK bytes on whole pages of 4 KiB, zeroed: MODE_ALLOC taken) from the top of the main heap's largest free block, as mines_preload takes its block, when the host asked for one (MODES +0 = 4). Only the block: the machines do not exist yet, so what the mode says about them waits for `mode_begin` |
+| `mode_begin` | fn_1_34924's entry, the countdown task (`stwu r1, -0x20(r1)`) | — | while the block's run count is 0, the host call HOST_MODE: `game_start`, the mode's first pass. fn_1_395CC makes the machines and registers this task at the frame's start, so its first entry is in the step before the first picture with machines in it, before the count's holds and before any machine task has run: every setup word is in force for the first picture and the first contact pass. A task of flag 1: every step run again runs it, and the block's count, which the undo log puts back with the block, says whether it has run |
 | `mode_point` | fn_1_850C4 0x8548C, after the race pass's callbacks (`lwz r3, 0x15C(r31)`, r31 the car manager) | — | the host call HOST_MODE (the interpreter, port/core/src/mode.cpp: the rules run, their actions go into the block and the machines), then for each seat the game's own damage where the run asked for it (`damage`: fn_1_24F10, which calls nothing, so it draws no generator and plays no sound), its explosion, and for every seat whose speed is held this step the hold's rescale and the read-out M+0x17C, as the step's start computes it (the vocabulary's "rescale R") |
 | `mode_rolls` | fn_1_34924 0x34988, the count after its decrement (`lhz r0, 0(r29)`) | the machines' tasks wait for the count below 240 | under `rolling_start` (window flag ROLLING) the mask is lifted from the count's first step: the machines and the mode run through the whole intro; GO's step and the count are the game's |
 | `mode_monitors` | fn_1_1049E0 0x104BFC, the start monitors' placing (`li r4, 0`) | keeps the first step's turn | a rolling start: 1, the machine's turn every step |
@@ -38,6 +39,7 @@ MODES = memmap.MODES
 SEAT, SEATS = memmap.MODE_SEAT, memmap.MODE_SEATS
 PEDALS, BOOST_OFF, HELD, BOOST, EXPLODE, HAND, ROLL, DAMAGE = 1, 2, 4, 8, 16, 32, 64, 128   # a seat record's flags
 WANTED, TAKEN, NONE = 4, 1, 3                     # MODES +0: the host asks; the block taken; none
+BEGIN, BEGIN_KNOWN = 0x34924, 0x9421FFE0          # fn_1_34924's first word: stwu r1, -0x20(r1)
 ROLLS, ROLLS_KNOWN = 0x34988, 0xA01D0000          # fn_1_34924: lhz r0, 0(r29), the count after its decrement
 MONITORS_TURN, MONITORS_TURN_KNOWN = 0x104BFC, 0x38800000   # fn_1_1049E0: li r4, 0, the stock fn_1_104730 call's "oriented"
 TASK_MASK = 0x4310                                # fn_1_4310(mask)
@@ -140,18 +142,6 @@ mpre_walked:
 mpre_zero:
     stwu 0, 4(9)
     bdnz mpre_zero
-""" + la(9, memmap.MODE_HUD_FLAGS) + f"""    lwz 9, 0(9)
-    andi. 9, 9, {memmap.MODE_TOGETHER}
-    beq mpre_rows
-    li 0, -1
-    stw 0, {memmap.MODE_NC_ANY:#x}(24)
-    li 9, {SEATS_ROWS}
-    mtctr 9
-    addi 9, 24, {memmap.MODE_NC - 4:#x}
-mpre_row:
-    stwu 0, 4(9)
-    bdnz mpre_row
-mpre_rows:
     stw 24, 4(31)
     li 0, 1
     stw 0, 0(31)
@@ -166,6 +156,32 @@ mpre_out:
     addi 1, 1, 0x30
     blr
 """)
+
+    # game_start: the host's first pass, at the countdown task's first entry. r3 is the task's argument; nothing else
+    # is live at a function's entry but LR
+    begin = TEXT + BEGIN
+    word = stock(begin, BEGIN_KNOWN)
+    r.add("mode_begin", test + """    beq mbg_stock
+""" + la(12, MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq mbg_stock
+    lwz 0, {memmap.MODE_RUNS:#x}(12)
+    cmpwi 0, 0
+    bne mbg_stock
+    stwu 1, -0x20(1)
+    mflr 0
+    stw 0, 0x24(1)
+    stw 3, 8(1)
+    @bl host_mode
+    lwz 3, 8(1)
+    lwz 0, 0x24(1)
+    mtlr 0
+    addi 1, 1, 0x20
+mbg_stock:
+    .long {word:#010x}
+    @b {begin + 4:#x}
+""")
+    patch(begin, word, 0, "mode_begin")
 
     # the hold: r3 the machine, r4 its record, r5 not 0 for the read-out too. Changes the volatile registers.
     r.add("mode_hold", f"""    stwu 1, -0x40(1)

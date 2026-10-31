@@ -121,8 +121,8 @@ void TestOverdriveRunsInTheBlock()
     CHECK(std::bit_cast<float>(g.Read32(record + 12)) == (held ? 1020.0f : 0.0f));  // 1000 + 10 x 1200 / 600
   }
   CHECK(g.Read32(BLOCK + mode::SeatWord(2, 0)) == 1200 && g.Read32(BLOCK + mode::SeatWord(1, 0)) == 0);
-  CHECK(g.Read32(BLOCK + mode::OUT_MASK) == 4 && g.Read32(BLOCK + mode::END) == 0 && g.Read32(BLOCK + mode::RUNS) == 1);
-  CHECK(g.Read32(BLOCK + mode::PAGE) == 1 && g.Read32(BLOCK + 2 * mode::PAGE) == 1);
+  CHECK(g.Read32(BLOCK + mode::OUT_MASK) == 4 && g.Read32(BLOCK + mode::END) == 0 && g.Read32(BLOCK + mode::RUNS) == 2);
+  CHECK(g.Read32(BLOCK + mode::PAGE) == 2 && g.Read32(BLOCK + 2 * mode::PAGE) == 2);
   CHECK(g.Read32(BLOCK + mode::OPS) > 0 && g.Read32(BLOCK + mode::OPS) <= 720);
   const std::vector<u8> after = BlockOf(g);
   // a step run again from the same memory: the same block
@@ -132,7 +132,7 @@ void TestOverdriveRunsInTheBlock()
   // the next step: the out seat is not booked again
   g.Write32(MODULE + game::RACE_CLOCK, 1260);
   mode::Run(g, *p, BLOCK, MODULE);
-  CHECK(g.Read32(BLOCK + mode::SeatWord(2, 0)) == 1200 && g.Read32(BLOCK + mode::RUNS) == 2);
+  CHECK(g.Read32(BLOCK + mode::SeatWord(2, 0)) == 1200 && g.Read32(BLOCK + mode::RUNS) == 3);
   // the speed's cap: 9000 at most
   g.Write32(MODULE + game::RACE_CLOCK, 600 * 900);
   mode::Run(g, *p, BLOCK, MODULE);
@@ -140,7 +140,7 @@ void TestOverdriveRunsInTheBlock()
   // a mode's end word stops the runs
   g.Write32(BLOCK + mode::END, 1);
   mode::Run(g, *p, BLOCK, MODULE);
-  CHECK(g.Read32(BLOCK + mode::RUNS) == 3);
+  CHECK(g.Read32(BLOCK + mode::RUNS) == 4);
 }
 
 // The words vector (every operation and word of the api) runs on thirty seats without a mode error, within the
@@ -405,6 +405,37 @@ void TestStartTogetherKeepsEveryPairApart()
 // countdown hands every seat to the CPU with the rolling hold; the events fire on the game's changes (a lap's award,
 // a hit's push, a wall's freeze and danger zone, a KO's credit and retire); no mode error, within the budget, and a
 // step run again from the same memory to the same memory.
+// game_start runs alone and once: its rule and the setup words, before any step; `countdown` is the next run's, and a
+// rollback to before it runs it again to the same memory.
+void TestGameStartComesFirst()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("race.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 4, 0);
+  g.Write16(MODULE + game::PHASE, game::PHASE_RACE - 1);  // the countdown
+  const auto before = host.ram;
+  mode::GameStart(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::RUNS) == 1 && g.Read32(BLOCK + mode::END) == 0);
+  // game_start's look is on the page; countdown's rule (the CPUs handed to the CPU driver) has not run
+  CHECK(g.Read8(BLOCK + mode::hud::SEATS_AT + mode::hud::LOOK) == modes::LOOK_INVISIBLE);
+  CHECK(g.Read8(BLOCK + mode::hud::SEATS_AT + mode::hud::OWN_LOOK) == 1 + modes::LOOK_NORMAL);
+  CHECK(g.Read32(BLOCK + mode::HANDED) == 0);
+  const auto after = host.ram;
+  host.ram = before;
+  mode::GameStart(g, *p, BLOCK, MODULE);
+  CHECK(host.ram == after);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::RUNS) == 2 && g.Read32(BLOCK + mode::HANDED) != 0);
+  CHECK(g.Read8(BLOCK + mode::hud::SEATS_AT + mode::hud::LOOK) == modes::LOOK_INVISIBLE);
+}
+
 void TestTheRaceWordsRun()
 {
   BEGIN_TEST();

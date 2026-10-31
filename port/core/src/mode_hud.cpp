@@ -136,7 +136,7 @@ bool Uses(const std::vector<u8>& code, u8 id, bool part)
     if (part && op == OP_PUSH && i + 7 <= code.size() && code[i + 5] == OP_ACTION && code[i + 6] == id)
     {
       const u32 value = static_cast<u32>(code[i + 1]) << 24 | code[i + 2] << 16 | code[i + 3] << 8 | code[i + 4];
-      if (value != PART_TIMER && value < PART_RANK)
+      if (value != PART_TIMER && value != PART_LEADER_GAP && value < PART_RANK)
         return true;
     }
     i += static_cast<size_t>(size);
@@ -248,6 +248,7 @@ void Hud(Guest& g)
   if (mask != 0)
     g.Write32(module + game::HUD_PARTS, (mask & ~STORY_BITS & ~f.hidden) | f.parts | gap_part);
   g.Write32(layout::MODE_HUD + WINDOW_FACES, f.faces_hidden ? 1 : 0);
+  g.Write32(layout::MODE_HUD + WINDOW_RANK, f.hidden & PART_BITS[PART_RANK] ? 1 : 0);
   // the source block, whole: the digit's value in the window; the viewed racer's speed and progress record; R
   const u32 window = layout::MODE_HUD;
   g.Write32(window + WINDOW_DIGIT, static_cast<u32>(f.digit));

@@ -34,6 +34,9 @@ case, centred above the point, with a drop shadow), depth-tested against the sce
 (fn_1_12A0E0: sort depth 90000.1 + 9000 / view z for fn_1_4954C, and fn_1_12A080 as the text's draw set-up, an
 ortho projection with z compare), so a wall in front hides the tag.
 
+A seat a game mode draws `invisible` (the window's look, memmap.MODE_HUD_LOOKS) has no ordinary name tag: nothing is there
+for it to name. A mode's own `tag` stands: that is a word about the seat.
+
 A game mode's `tag` (mode_hud.h; the window's byte a seat, memmap.MODE_HUD_TAGS, 0 in a race without tags, and the texts
 it numbers from 1) draws through this one routine, with the text in place of the name:
 - on any seat but the followed one: the player-seat, name and AI-driven tests are not asked (finished and out still
@@ -194,6 +197,11 @@ c_tag_gone:
     li 0, 0
     stw 0, 12(19)
 c_plain:
+    lis 9, {memmap.hi(memmap.MODE_HUD_LOOKS)}
+    ori 9, 9, {memmap.lo(memmap.MODE_HUD_LOOKS)}
+    lbzx 0, 9, 27
+    cmpwi 0, 2
+    beq c_not
     slwi 3, 27, 5
 {names}    lbzx 0, 3, 9
     cmpwi 0, 0

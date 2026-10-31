@@ -173,6 +173,22 @@ void TestTheDisplayWordsRun()
     hud::Hud(g);
     CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS) | 0x20000));
   }
+  // the game's gap popup: its bit on while shown; a part of the game's own pictures, so no story pictures to load
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 1, modes::PART_LEADER_GAP));
+  g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+  hud::Hud(g);
+  CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS) | 0x20000 | hud::GAP_PART));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_HIDE, 1, modes::PART_LEADER_GAP));
+  CHECK(hud::PART_BITS[modes::PART_LEADER_GAP] == hud::GAP_PART);
+  // a racer's RANK hidden hides the rank icons too: the window's word
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_HIDE, 1, modes::PART_RANK));
+  g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+  hud::Hud(g);
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_RANK) == 1);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 1, modes::PART_RANK));
+  g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
+  hud::Hud(g);
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_RANK) == 0);
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_HIDE, 2, modes::PART_RANK));
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_HIDE, 1, modes::PART_FACES));
   g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);

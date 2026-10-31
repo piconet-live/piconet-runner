@@ -197,6 +197,7 @@ void TestTheGamesSquareRootIsTheCompilers();
 void TestTheGeneratorIsTheReferences();
 void TestWaitsRunInTheBlock();
 void TestTheLanguageVectorRuns();
+void TestGameStartComesFirst();
 void TestTheRaceWordsRun();
 void TestStartTogetherKeepsEveryPairApart();
 void TestTheKnockoutEndsWithItsPlaces();
@@ -556,6 +557,7 @@ int main(int argc, char** argv)
   TestTheGeneratorIsTheReferences();
   TestWaitsRunInTheBlock();
   TestTheLanguageVectorRuns();
+  TestGameStartComesFirst();
   TestTheRaceWordsRun();
   TestStartTogetherKeepsEveryPairApart();
   TestTheKnockoutEndsWithItsPlaces();

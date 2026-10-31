@@ -38,6 +38,7 @@ NAMES	memmap.py	py	NAMES
 MONITORS	memmap.py	py	MONITORS	
 MINES	memmap.py	py	MINES	
 MODES	memmap.py	py	MODES	
+MODE_HUD	memmap.py	py	MODE_HUD	
 ICONS	memmap.py	py	ICONS	
 NAMES	port/core/src/files.h	use	table::NAMES	1
 RACE	memmap.py	py	RACE	
