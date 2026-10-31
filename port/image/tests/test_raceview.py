@@ -93,7 +93,7 @@ class Cpu(Machine):
         elif op == 59 and xo & 31 == 29: f[d] = single(f[a] * f[c] + f[b])                    # fmadds
         elif op == 59 and xo & 31 == 30: f[d] = single(-(f[a] * f[c] - f[b]))                 # fnmsubs
         elif op == 63 and xo & 31 == 21: f[d] = f[a] + f[b]                                   # fadd (double)
-        elif op == 63 and xo == 0: self.compare(f[a], f[b])                                   # fcmpu, field 0
+        elif op == 63 and xo in (0, 32): self.compare(f[a], f[b])                             # fcmpu, fcmpo, field 0
         elif op == 63 and xo == 72: f[d] = f[b]                                               # fmr
         elif op == 63 and xo == 264: f[d] = abs(f[b])                                         # fabs
         else:
@@ -156,9 +156,7 @@ class TheRacingView(Build):
         return m.r[0]
 
     def view(self, memory, steps, view=1):
-        """fn_1_ABAC from 0xAD10 on, over `steps`: the two reads of the bits, the lowest view, the highest."""
-        low = Cpu(self.image, {})
-        low.run(self.helper(raceview.LOW_SITE))
+        """fn_1_ABAC from 0xAD10 on, over `steps`: the two reads of the bits, the lowest view (the game's), the highest."""
         shown = []
         for step in steps:
             if self.bits(memory, step) & 2:
@@ -166,26 +164,26 @@ class TheRacingView(Build):
             if self.bits(memory, step) & 1:
                 view -= 1
             if view <= 0:
-                view = low.r[31]
+                view = 0
             view = min(view, 3)
             shown.append(view)
         return shown
 
-    def test_the_four_sites_are_fn_1_abacs(self):
+    def test_the_sites_are_fn_1_abacs_and_the_first_person_reads(self):
         self.assertEqual([s[0] for s in raceview.SITES], [0xABF8, 0xAD10, 0xAD24, 0xAD3C])
+        self.assertNotIn(TEXT + raceview.LOW_SITE, self.patches)     # the view's lowest is the game's: 0, the first person view
         self.assertEqual(self.helper(raceview.BITS_SITES[0]), self.helper(raceview.BITS_SITES[1]))
-        for offset, word, mask, _ in raceview.SITES:
+        sites, _ = raceview.first_person()
+        self.assertEqual(len(sites), 3 + len(raceview.SLOT_READS) + len(raceview.SLOT_CALLS))
+        for offset, word, mask, _ in sites:
             self.assertEqual(int(self.patches[TEXT + offset]["original"], 16), word)
             self.assertEqual(mask, 0xFFFFFFFF)                       # no relocated half: the word is the game's own
 
-    def test_the_followed_machine_has_port_0_and_the_lowest_view_is_1(self):
+    def test_the_followed_machine_has_port_0(self):
         m = Cpu(self.image, {})
         m.r[3] = 0xFFFFFFFF                                          # what fn_1_86678 answers for a machine with no port
         m.run(self.helper(raceview.PORT_SITE))
         self.assertEqual((m.r[3], m.written), (0, set()))
-        m = Cpu(self.image, {})
-        m.run(self.helper(raceview.LOW_SITE))
-        self.assertEqual((m.r[31], m.written), (1, set()))
 
     def test_the_helpers_are_the_races_whatever_the_mode_word(self):
         # a replay plays as the race: no mode word gives the game's own call or views back (the fork's image has none)
@@ -196,9 +194,6 @@ class TheRacingView(Build):
             m.r[3] = 17
             m.run(self.helper(raceview.PORT_SITE))
             self.assertEqual((m.r[3], m.written), (0, set()))
-            m = Cpu(self.image, memory)
-            m.run(self.helper(raceview.LOW_SITE))
-            self.assertEqual(m.r[31], 1)
 
     def test_a_press_is_new_in_one_step_only(self):
         memory = self.rows(3, {100: 0, 101: 2, 102: 2, 103: 0, 104: 1, 105: 0x43})
@@ -226,13 +221,51 @@ class TheRacingView(Build):
         self.assertEqual(self.bits(self.rows(3, bits, out_frames=180), 101), 0)   # this game spectates
         self.assertEqual(self.bits(self.rows(3, bits, out_frames=179), 101), 2)
 
-    def test_the_views_are_1_to_3(self):
+    def test_the_views_are_0_to_3(self):
         up, down = 2, 1                                              # the bits: the next view, the view before
         presses = [up, 0, up, 0, up, 0, down, 0, down, 0, down, 0, down, 0]
         memory = self.rows(3, {100 + i: b for i, b in enumerate(presses)})
-        self.assertEqual(self.view(memory, range(100, 114)), [2, 2, 3, 3, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1])
-        # a view 0 the save file started the camera with becomes 1 the first time
-        self.assertEqual(self.view(self.rows(3, {}), [200], view=0), [1])
+        self.assertEqual(self.view(memory, range(100, 114)), [2, 2, 3, 3, 3, 3, 2, 2, 1, 1, 0, 0, 0, 0])
+        self.assertEqual(self.view(self.rows(3, {}), [200], view=0), [0])
+
+    def first_person_read(self, site, chase_racer, machine_seat, ra, rt):
+        """A read's helper with the machine at `ra`: what it reads into `rt`, with the chase camera on `chase_racer`."""
+        memory = {}
+        put(memory, 0x800030C8, MODULE)
+        block, chase = 0x80B02000, 0x80B03000
+        put(memory, BSS + 0xF68, block); put(memory, BSS + 0xF6C, chase)
+        put(memory, chase + 2, chase_racer, 2)
+        put(memory, 0x80B04004, machine_seat, 2)                     # machine +4: its number
+        m = Cpu(self.image, memory)
+        m.r[ra], m.r[1], m.r[0] = 0x80B04000, STACK, 0x12345678
+        m.run(self.helper(site))
+        self.assertTrue(all(STACK - 16 <= a < STACK for a in m.written), m.written)  # only its own frame
+        self.assertEqual((m.r[0], m.r[1]), (0x12345678, STACK))
+        return m.r[rt]
+
+    def test_the_camera_slot_is_the_followed_racers(self):
+        # every read of +0x475 the view's readers ask: 0 for the machine the camera follows, 0xFF for the others, on
+        # any seat: on seat 0 the machine of seat 3, watched or driven by this game, is the camera's, seat 0's is not
+        for offset, ra, rt in raceview.SLOT_READS:
+            self.assertEqual(self.first_person_read(offset, 3, 3, ra, rt), 0, hex(offset))
+            self.assertEqual(self.first_person_read(offset, 3, 0, ra, rt), 0xFF, hex(offset))
+            self.assertEqual(self.first_person_read(offset, 0, 0, ra, rt), 0, hex(offset))
+
+    def test_the_slot_of_an_effects_machine(self):
+        # 0x5D41C, 0x5D570: `extsb r29, r3`, r30 the effect, its +0x18 the machine's number
+        for offset in raceview.SLOT_CALLS:
+            memory = {}
+            put(memory, 0x800030C8, MODULE)
+            block, chase = 0x80B02000, 0x80B03000
+            put(memory, BSS + 0xF68, block); put(memory, BSS + 0xF6C, chase)
+            put(memory, chase + 2, 7, 2)
+            for seat, slot in ((7, 0), (0, 0xFF)):
+                put(memory, 0x80B04018, seat, 2)
+                m = Cpu(self.image, dict(memory))
+                m.r[30], m.r[1], m.r[0] = 0x80B04000, STACK, 0x12345678
+                m.run(self.helper(offset))
+                self.assertEqual((m.r[29], m.r[0], m.r[1]), (slot, 0x12345678, STACK))
+                self.assertTrue(all(STACK - 16 <= a < STACK for a in m.written), m.written)
 
     def test_a_rollback_makes_the_change_again_and_a_corrected_row_corrects_it(self):
         memory = self.rows(3, {100: 0, 101: 2, 102: 0, 103: 0})

@@ -19,8 +19,13 @@ def add(k, r, patch, stock, test, middle):
     # drawing with a machine's own slot, some without asking whether it has one: fn_1_725C (the view, +0xA4),
     # fn_1_6EC0 (the state, +0xA8), fn_1_681C (the position, +0x10): for slot 0xFF they read 0x1FA04 bytes past the
     # records' start, whatever the heap holds there, and what is drawn follows from it. In a race or a replay the
-    # index is 0 whenever it is not one of the four: the one screen's camera, which is the local racer's.
+    # index is 0 whenever it is not one of the four: the one screen's camera, which is the local racer's. fn_1_725C,
+    # the view, answers 1 for a slot that is none of the four (`camera_view`): its callers ask only "is this machine's
+    # camera in view 0?", and in a race of ours with the first person view (raceview.py) the machines the camera does
+    # not follow have slot 0xFF: they are not in it.
     for offset in CAMERA_INDEXES:
+        if offset == CAMERA_INDEXES[0]:
+            continue
         site, name = TEXT + offset, f"camera_index_{offset:x}"
         word = stock(site, CAMERA_INDEX_WORD)
         r.add(name, test + f"""    .long {word:#010x}
@@ -33,3 +38,16 @@ def add(k, r, patch, stock, test, middle):
 """)
         patch(site, word, 0, name)
         middle.append((site, ["r12", "cr0"], name))
+    site = TEXT + CAMERA_INDEXES[0]
+    word = stock(site, CAMERA_INDEX_WORD)
+    r.add("camera_view", test + f"""    .long {word:#010x}
+    beq camera_view_back
+    cmplwi 0, 4
+    blt camera_view_back
+    li 3, 1
+    blr
+camera_view_back:
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "camera_view")
+    middle.append((site, ["r12", "cr0"], "camera_view"))

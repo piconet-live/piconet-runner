@@ -300,6 +300,46 @@ void TestTheRunKeptForTheReplay()
 }
 
 // The six above, in order (main.cpp).
+// The setup words: a shorter reach and countdown, no save, no pause, and no countdown at all.
+void TestAPracticesWords()
+{
+  BEGIN_TEST();
+  using namespace fzgx::practice;
+  const auto press = [](Rewind& r, u16 button) {
+    Pad down;
+    down.buttons = button;
+    const Frame f = r.Next(down);
+    r.Next(Pad{});
+    return f;
+  };
+  Rewind shorter(0, {120, true, true, 10});
+  for (u32 t = 0; t < 500; ++t)
+    shorter.Ran(t);
+  CHECK(shorter.Oldest() == 380);
+  CHECK(press(shorter, BUTTON_START).run == false && shorter.Now() == Mode::Paused);
+  press(shorter, BUTTON_START);
+  CHECK(shorter.Now() == Mode::Countdown && shorter.CountdownLeft() == 8);  // (two frames gone: the press and the release)
+
+  Rewind none(0, {0, false, false, 0});
+  for (u32 t = 0; t < 10; ++t)
+    none.Ran(t);
+  CHECK(none.Oldest() == 10 && none.FinalBelow() == 10);
+  CHECK(!press(none, BUTTON_RIGHT).saved && !none.Save());
+  press(none, BUTTON_START);
+  CHECK(none.Now() == Mode::Racing && none.Count().pauses == 0);
+
+  Rewind at_once(0, {120, true, true, 0});
+  for (u32 t = 0; t < 10; ++t)
+    at_once.Ran(t);
+  press(at_once, BUTTON_START);
+  CHECK(at_once.Now() == Mode::Paused);
+  Pad down;
+  down.buttons = BUTTON_START;
+  const Frame f = at_once.Next(down);
+  CHECK(at_once.Now() == Mode::Racing && f.run && !f.branch);
+  CHECK(Words{}.reach == WINDOW && Words{}.countdown == COUNTDOWN && Words{}.pause && Words{}.save);
+}
+
 void TestPracticeWithRewind()
 {
   TestTheStickScrubsOnACurve();
@@ -308,4 +348,5 @@ void TestPracticeWithRewind()
   TestABranchOnResume();
   TestALoadRunsTheCountdown();
   TestTheRunKeptForTheReplay();
+  TestAPracticesWords();
 }

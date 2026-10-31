@@ -12,6 +12,7 @@
 
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
+#include "fzgx/core.h"
 
 namespace fzgx_port::lanes::partial
 {
@@ -34,7 +35,7 @@ bool InRam(const CPUState* cpu, u32 address, u32 size)
 }
 
 constexpr const char* KIND_NAMES[KINDS] = {"block", "progress", "track0", "track1", "track2",
-                                          "track3", "segment", "driver", "car", "countdown"};
+                                          "track3", "segment", "driver", "car", "countdown", "mode"};
 }  // namespace
 
 Batch s_b;
@@ -97,6 +98,10 @@ void LayOut(const CPUState* cpu, u32 count, Layout* layout)
     add(car, CAR_PRESENTATION, CAR);
     add(car + after, game::CAR_SIZE - after, CAR, after);
     add(CAR_MANAGER + 0xD4 + 4 * i, 4, COUNTDOWN);
+    add(fzgx::ModeRecord(i), 16, MODE);  // (the image's mode_speed reads it in the machine's step)
+    add(fzgx::ModeMove(i), 16, MODE);    // (mode_speed's push and velocity)
+    add(fzgx::ModeRollSave(i), 8, MODE); // (the rule hook wrapper's saved steering in a rolling start)
+    add(fzgx::ModeStat(i), 0x60, MODE);  // (the rule hook wrapper's changed stats, mode.h STAT)
   }
 }
 
@@ -253,7 +258,10 @@ u32 Choose(CPUState* cpu, u32 step, const Kept* old)
   {
     Gather(cpu, b.layout[i], &b.starts[i]);
     fzgx::Data().CopyFrom(b.rows[i].data(), table::INPUTS + ((step & 1023) * 30 + i) * 8, ROW);
-    bool run = old == nullptr || b.rows[i] != old->rows[i] || b.starts[i] != old->start[i];
+    // (the stand-in routine's button edges are this step's row and not the step before's: both rows are the job's inputs)
+    fzgx::Data().CopyFrom(b.prev_rows[i].data(), table::INPUTS + (((step - 1) & 1023) * 30 + i) * 8, ROW);
+    bool run = old == nullptr || b.rows[i] != old->rows[i] || b.prev_rows[i] != old->prev_rows[i] ||
+               b.starts[i] != old->start[i];
     // the task's last call (racer 0's) also does the frame's own work in the stand-in routine (the seat switch,
     // viewport 0's camera record, [.bss 0xF6C] +0x2): it always runs (found by "check" at step 1810)
     const bool last = s_work.jobs != 0 && i == b.index[s_work.jobs - 1];
@@ -262,6 +270,8 @@ u32 Choose(CPUState* cpu, u32 step, const Kept* old)
     if (!log || !b.run[i])
       continue;
     std::string why = b.rows[i] != old->rows[i] ? "I" : "";
+    if (b.prev_rows[i] != old->prev_rows[i])
+      why += why.empty() ? "P" : ",P";
     if (b.starts[i] != old->start[i])
       why += (why.empty() ? "" : ",") + FirstDifference(b.layout[i], b.starts[i], old->start[i]);
     Line("S," + std::to_string(step) + "," + std::to_string(i) + "," + (why.empty() ? "F" : why));
@@ -439,6 +449,7 @@ void Remember(CPUState* cpu, u32 step)
   k.moment = b.moment;
   k.jobs = s_work.jobs;
   k.rows = b.rows;
+  k.prev_rows = b.prev_rows;
   k.entry_cr = b.entry.cr;
   if (Mode("check"))
     k.tables.swap(b.tables);

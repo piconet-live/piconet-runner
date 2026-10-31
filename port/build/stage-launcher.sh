@@ -55,6 +55,8 @@ cp "$W/work/mod-$M/gGFZE01_recomp.dll" "$OUT/recomp/"
 # the same files the launcher carries, with their licence; without them the runner uses the system's font
 mkdir "$OUT/recomp/Fonts"
 for f in SairaCondensed-ExtraBold.ttf SairaCondensed-SemiBold.ttf SairaSemiCondensed-Regular.ttf OFL.txt; do cp "$APP_FONTS/$f" "$OUT/recomp/Fonts/"; done
+# the "Show inputs" pictures are m-overlay's (MIT): its notice goes with the runner
+cp port/moderngekko/art/inputs/LICENSE.txt "$OUT/recomp/m-overlay-LICENSE.txt"
 mkdir "$OUT/recomp/fzgx"; cp "$B/mod.bin" "$B/manifest.json" "$OUT/recomp/fzgx/"
 # the fork's bundle has its Gecko codes, the native form's its patch list
 for f in codes.txt patches.json symbols.json; do [ ! -f "$B/$f" ] || cp "$B/$f" "$OUT/recomp/fzgx/"; done

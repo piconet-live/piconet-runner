@@ -47,6 +47,8 @@ constexpr int CSTICK_PUSHED = 40;  // the C-stick counts as pushed from here (fr
 // The camera kinds, in the order D-pad down goes through them (up goes back). Chase: the game's chase camera behind
 // the followed racer, its views 1 to 3. Course: the course's own TV cameras (its camera files). Auto: the game's
 // automatic TV shots. Fixed: the game's four manual shot types, each with its variants (the C-stick picks one).
+// FirstPerson: the chase camera's view 0, a chase kind like the others; the last in the order, so D-pad up from Chase1
+// reaches it, as a racer's D-pad up from view 1 does (the kinds' numbers before it stay).
 enum class Kind : u32
 {
   Chase1,
@@ -58,12 +60,14 @@ enum class Kind : u32
   Fixed2,
   Fixed3,
   Fixed4,
+  FirstPerson,
 };
-constexpr u32 KINDS = 9;
+constexpr u32 KINDS = 10;
 constexpr std::array<u32, 4> FIXED_VARIANTS{6, 20, 9, 2};  // memmap.SPEC_HEIGHTS of the manual shots
 bool IsChase(Kind kind);
 bool IsFixed(Kind kind);
-u32 ChaseView(Kind kind);          // 1 to 3; 0 for another kind
+u32 ChaseView(Kind kind);          // 1 to 3, 0 for FirstPerson (the game's view 0); 0 for another kind
+u32 ChaseHeight(Kind kind);        // the image's height for a chase kind (memmap.SPEC_HEIGHT): view 1, 2, 3, 0 as 0, 1, 2, 3
 u32 FixedType(Kind kind);          // 0 to 3; 0 for another kind
 const char* KindName(Kind kind);   // as the overlay's buttons say it
 

@@ -76,7 +76,7 @@ void TestALaunchFile()
   CHECK(!ParseLaunchFile(Launch(""), &plain));
   CHECK(DebugSettingsOn(plain.debug).empty() && plain.delay == 2 && plain.cpu_clock == 6.0f && plain.widescreen);
   // the game window's strip: no name unless the launcher gives one, and no frame rate unless the player asked
-  CHECK(plain.window_name.empty() && !plain.show_frame_rate);
+  CHECK(plain.window_name.empty() && !plain.show_frame_rate && !plain.show_inputs);
   // the controllers rumble unless the player switched it off
   CHECK(plain.rumble);
   const Debug off;
@@ -99,6 +99,23 @@ void TestALaunchFile()
         DebugSettingsOn(plain.debug).empty());
   CHECK(!ParseLaunchFile(Launch(R"({"singleCore": true})"), &plain) && DebugSettingsOn(plain.debug) ==
                                                                           std::vector<std::string>{"debug.singleCore"});
+  // the picture shown: the emulator's own unless a test asks for Aurora's (presentation only), and its test pictures
+  CHECK(plain.debug.renderer == "dolphin" && plain.debug.aurora_shots.empty() && plain.debug.aurora_log.empty());
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "aurora", "auroraShots": [600, 1200], "auroraLog": "C:\\runs\\a"})"),
+                         &plain) &&
+        plain.debug.renderer == "aurora" && plain.debug.aurora_shots == std::vector<u32>({600, 1200}) &&
+        plain.debug.aurora_log == "C:\\runs\\a" &&
+        DebugSettingsOn(plain.debug) ==
+            std::vector<std::string>({"debug.renderer", "debug.auroraShots", "debug.auroraLog"}));
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain) && DebugSettingsOn(plain.debug).empty());
+  // its render scale: the emulator's own unless given, 1 to 8
+  CHECK(plain.debug.aurora_scale == 0);
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "aurora", "auroraScale": 3})"), &plain) && plain.debug.aurora_scale == 3 &&
+        DebugSettingsOn(plain.debug) == std::vector<std::string>({"debug.renderer", "debug.auroraScale"}));
+  CHECK(ParseLaunchFile(Launch(R"({"auroraScale": 9})"), &plain).has_value());
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain));
+  const std::optional<std::string> wrong = ParseLaunchFile(Launch(R"({"renderer": "vulkan"})"), &plain);
+  CHECK(wrong && wrong->find("renderer") != std::string::npos);
   // a playback, and a plain start
   Options play;
   CHECK(!ParseLaunchFile(R"({"about": "a playback", "bundle": "b", "replay": {"file": "r.fzrp",
@@ -207,10 +224,11 @@ void TestALaunchFileThatIsRefused()
   CHECK(Says(Launch(R"({"lateSteps": 0})"), "\"debug.lateSteps\" is not a whole number from 1 to 20"));
   CHECK(Says(Launch(R"({"lateSteps": 21})"), "\"debug.lateSteps\" is not a whole number from 1 to 20"));
   CHECK(Says(Launch(R"({"alterStep": 0})"), "\"debug.alterStep\""));
-  // the player's camera view: 1 to 3 only
-  CHECK(Says(Launch("", "\"camera\": 0"), "\"match.camera\" is not a whole number from 1 to 3"));
-  CHECK(Says(Launch("", "\"camera\": 4"), "\"match.camera\" is not a whole number from 1 to 3"));
+  // the player's camera view: 1 to 3, 4 first person
+  CHECK(Says(Launch("", "\"camera\": 0"), "\"match.camera\" is not a whole number from 1 to 4"));
+  CHECK(Says(Launch("", "\"camera\": 5"), "\"match.camera\" is not a whole number from 1 to 4"));
   CHECK(Refused(Launch("", "\"camera\": 3")).empty());
+  CHECK(Refused(Launch("", "\"camera\": 4")).empty());
   CHECK(Says(Launch(R"({"alterStep": 4294967296})"), "\"debug.alterStep\""));
   // a number too large to be one is refused before the parser, which ends the program on it, sees it
   CHECK(Says(Launch(R"({"jitterMs": 1e999})"), "a number too large to be one"));

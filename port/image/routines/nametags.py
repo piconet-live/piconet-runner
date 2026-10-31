@@ -34,9 +34,25 @@ case, centred above the point, with a drop shadow), depth-tested against the sce
 (fn_1_12A0E0: sort depth 90000.1 + 9000 / view z for fn_1_4954C, and fn_1_12A080 as the text's draw set-up, an
 ortho projection with z compare), so a wall in front hides the tag.
 
+A seat a game mode draws `invisible` (the window's look, memmap.MODE_HUD_LOOKS) has no ordinary name tag: nothing is there
+for it to name. A mode's own `tag` stands: that is a word about the seat.
+
+A game mode's `tag` (mode_hud.h; the window's byte a seat, memmap.MODE_HUD_TAGS, 0 in a race without tags, and the texts
+it numbers from 1) draws through this one routine, with the text in place of the name:
+- on any seat but the followed one: the player-seat, name and AI-driven tests are not asked (finished and out still
+  fade it, as off screen does);
+- within TAG_FAR (TAG_NEAR for full alpha), and size TAG_SIZE + TAG_SIZE_SLOPE x the distance fade: read at 200 m;
+- in the SHOWN limit and the overlap rule's order, every tagged seat comes before every other: its score and its
+  order key are less TAG_FIRST, more than any of them can be (a tagged seat's own hold and margin stay);
+- in TAG_COLOUR, with the same shadow;
+- through walls: the text's sort depth is the one a point 1 unit before the camera has (the nearest a tag can be: a
+  point nearer is no candidate), with the same draw set-up, so the scene's depth never hides it;
+- the seat's state +12 holds the text being drawn: when the word goes off, the old text fades out as a seat leaving
+  does (0x400), then an ordinary tag may come. A candidate's seat word has 0x800 for a tagged seat.
+
 State (memmap.TAGS, in the data window: no rollback puts it back, the checksum does not cover it, no step reads
 it): +0 the drawn frames counted (one a call), +4/+8/+12 what tagsfade.fresh compares, then 16 bytes a seat from +0x10: +0 the fade (float), +4 the frame
-it was last chosen shown, +8 flags (1 shown, 2 left out by the overlap rule), +12 not used. Not the control block's
+it was last chosen shown, +8 flags (1 shown, 2 left out by the overlap rule), +12 the mode tag's text being drawn, from 1 (0: none). Not the control block's
 +80/+84/+88 and +0x200 for the distances and the names: nothing writes those for the tags (and other words of the
 block use them), so the tags would never be on in a players' game."""
 import json, os, struct, sys
@@ -46,19 +62,26 @@ from tagsfade import FADE_IN, FADE_OUT, FADE_LEAVE
 
 NEAR, FAR, TAG_HEIGHT = 15.0, 40.0, 2.5   # game units (1 unit = 1 m: a machine at 216 km/h moves 1 a step)
 SHOWN, HOLD, MARGIN = 3, 30, 0.2           # tags, drawn frames, share of the distance
+TAG_NEAR, TAG_FAR = 150.0, 200.0           # a mode's `tag`: 1.0 alpha to 150 m, none past 200 m (ordinary: 15, 40)
+TAG_SIZE, TAG_SIZE_SLOPE = 0.9, 0.3        # its text's size: 1.2 to TAG_NEAR, 0.9 at TAG_FAR (ordinary: 1.0, 0.6)
+TAG_COLOUR = 0xFFD800                      # saturated yellow: reads over the road, the sky and a red machine alike
+TAG_FIRST = 2.0 * TAG_FAR * TAG_FAR        # more than any tagged seat's score (at worst d^2 / (1 - MARGIN)^2)
+assert TAG_FAR * TAG_FAR / (1.0 - MARGIN) ** 2 < TAG_FIRST
 PLAYERS = memmap.IMAGE + 0x10 + 40        # the slot 'FZSI' +40: the player seats
 TEXT = 0xDC
 # constants at r23 (written to the stack on every call): 0 one, 4 255, 8 x min, 12 x max, 16 y max, 20 zero,
 # 24/28 the ghost names' sort-depth constants, 32/36 size slope and base, 40/44 the overlap box (pixels), 48 NEAR^2,
 # 52 FAR^2, 56 1 / (FAR^2 - NEAR^2), 60 a challenger's factor, 64 the fade's step, 68 TAG_HEIGHT, 72 the box's growth
-# for a tag left out, 76 larger than any score, 80 the fade-out step, 84 the leaving fade-out step, 88 two
+# for a tag left out, 76 larger than any score, 80 the fade-out step, 84 the leaving fade-out step, 88 two,
+# 92 TAG_FAR^2, 96 1 / (TAG_FAR^2 - TAG_NEAR^2), 100 TAG_FIRST, 104 and 108 a tag's size slope and base
 CONSTS = (1.0, 255.0, -100.0, 740.0, 520.0, 0.0, 90000.1, 9000.0, 0.4, 0.6, 70.0, 16.0, NEAR * NEAR, FAR * FAR,
           1.0 / (FAR * FAR - NEAR * NEAR), 1.0 / (1.0 - MARGIN) ** 2, 1.0 / FADE_IN, TAG_HEIGHT, 1.25, 1.0e30,
-          1.0 / FADE_OUT, 1.0 / FADE_LEAVE, 2.0)
+          1.0 / FADE_OUT, 1.0 / FADE_LEAVE, 2.0, TAG_FAR * TAG_FAR, 1.0 / (TAG_FAR * TAG_FAR - TAG_NEAR * TAG_NEAR),
+          TAG_FIRST, TAG_SIZE_SLOPE, TAG_SIZE)
 # stack: 0x10 world point, 0x20 projected x, y, view z, 0x30 scratch, 0x38 colour, 0x40 candidates (32 bytes: x, y,
 # view z, distance fade, seat (| 0x100 once chosen), score, d^2, order key, then drawn alpha), 0x400 placed tags
-# (8 bytes: x, y), 0x420 the constants, 0x480 r19-r31, 0x4B8 f26-f31
-CAND, PLACED, K, GPRS, FPRS, FRAME = 0x40, 0x400, 0x420, 0x480, 0x4B8, 0x4F0
+# (8 bytes: x, y), 0x420 the constants, 0x4A0 r19-r31, 0x4D8 f26-f31
+CAND, PLACED, K, GPRS, FPRS, FRAME = 0x40, 0x400, 0x420, 0x4A0, 0x4D8, 0x510
 assert CAND + 30 * 32 <= PLACED and PLACED + SHOWN * 8 <= K and K + 4 * len(CONSTS) <= GPRS
 assert GPRS + 13 * 4 <= FPRS and FPRS + 6 * 8 <= FRAME and memmap.TAGS + 0x10 + 30 * 16 <= memmap.RACE
 
@@ -92,6 +115,14 @@ def cand(reg, index):    # reg = the candidate `index`'s record on the stack
 
 def entry(reg, seat):    # reg = seat's state record (seat a register, may be reg)
     return f"    slwi {reg}, {seat}, 4\n    addi {reg}, {reg}, 16\n    add {reg}, {reg}, 22\n"
+
+
+def tagged(reg, entry_reg, label):   # to `label` when the seat of state record entry_reg has no mode tag (cr0)
+    return f"    lwz {reg}, 12({entry_reg})\n    cmpwi {reg}, 0\n    beq {label}\n"
+
+
+def marked(reg, record, label):      # to `label` when candidate `record` is no mode tag (cr0)
+    return f"    lwz {reg}, 16({record})\n    andi. {reg}, {reg}, 0x800\n    beq {label}\n"
 
 
 def asm():
@@ -145,6 +176,32 @@ collect:
     li 20, 0
     cmpw 27, 25
     beq c_not
+    lis 9, {memmap.hi(memmap.MODE_HUD_TAGS)}
+    ori 9, 9, {memmap.lo(memmap.MODE_HUD_TAGS)}
+    lbzx 0, 9, 27
+    cmpwi 0, 0
+    beq c_untagged
+    stw 0, 12(19)
+    b c_row
+c_untagged:
+    lwz 9, 12(19)
+    cmpwi 9, 0
+    beq c_plain
+    lfs 0, 0(19)
+    lfs 1, 20(23)
+    fcmpu 0, 0, 1
+    ble c_tag_gone
+    li 20, 2
+    b c_row
+c_tag_gone:
+    li 0, 0
+    stw 0, 12(19)
+c_plain:
+    lis 9, {memmap.hi(memmap.MODE_HUD_LOOKS)}
+    ori 9, 9, {memmap.lo(memmap.MODE_HUD_LOOKS)}
+    lbzx 0, 9, 27
+    cmpwi 0, 2
+    beq c_not
     slwi 3, 27, 5
 {names}    lbzx 0, 3, 9
     cmpwi 0, 0
@@ -187,7 +244,11 @@ c_tag:
     lfs 1, 0x{memmap.MACHINE_DRAWN_Z:X}(24)
     fsubs 1, 1, 30
     fmadds 4, 1, 1, 4
+""" + tagged(9, 19, "c_far") + f"""    lfs 0, 92(23)
+    b c_far_on
+c_far:
     lfs 0, 52(23)
+c_far_on:
     fcmpu 0, 4, 0
     bge c_not
     stfs 4, 0x30(1)
@@ -233,9 +294,15 @@ c_off:
     li 20, 1
 c_on:
     lfs 5, 0x30(1)
+""" + tagged(9, 19, "c_fade_plain") + f"""    lfs 0, 92(23)
+    fsubs 2, 0, 5
+    lfs 0, 96(23)
+    b c_fade_on
+c_fade_plain:
     lfs 0, 52(23)
     fsubs 2, 0, 5
     lfs 0, 56(23)
+c_fade_on:
     fmuls 2, 2, 0
     lfs 0, 0(23)
     fcmpu 0, 2, 0
@@ -247,15 +314,27 @@ c_fade:
     stfs 4, 4(9)
     stfs 1, 8(9)
     stfs 2, 12(9)
-    stw 27, 16(9)
+    lwz 10, 12(19)
+    cmpwi 10, 0
+    mr 0, 27
+    beq c_word
+    ori 0, 0, 0x800
+c_word:
+    stw 0, 16(9)
     stfs 5, 24(9)
-""" + tagsfade.leaving(20, 27, 9, 23) + f"""    lwz 0, 8(19)
+""" + tagsfade.leaving(20, 9, 23) + f"""    lwz 0, 8(19)
     fmr 6, 5
     andi. 10, 0, 2
     beq c_key
     lfs 0, 60(23)
     fmuls 6, 5, 0
 c_key:
+    lwz 10, 12(19)
+    cmpwi 10, 0
+    beq c_key_on
+    lfs 0, 100(23)
+    fsubs 6, 6, 0
+c_key_on:
     stfs 6, 28(9)
     andi. 10, 0, 1
     bne c_held
@@ -271,6 +350,12 @@ c_held:
     bge c_score
     lfs 6, 20(23)
 c_score:
+    lwz 10, 12(19)
+    cmpwi 10, 0
+    beq c_score_on
+    lfs 0, 100(23)
+    fsubs 6, 6, 0
+c_score_on:
     stfs 6, 20(9)
     addi 21, 21, 1
     b c_next
@@ -278,6 +363,7 @@ c_not:
     li 0, 0
     stw 0, 0(19)
     stw 0, 8(19)
+    stw 0, 12(19)
 c_next:
     addi 27, 27, 1
     b collect
@@ -445,8 +531,13 @@ d_store:
     fctiwz 0, 0
     stfd 0, 0x30(1)
     lwz 0, 0x34(1)
+""" + marked(10, 24, "d_white") + f"""    lis 9, {(TAG_COLOUR << 8) >> 16}
+    ori 9, 9, {(TAG_COLOUR << 8) & 0xFFFF}
+    b d_colour
+d_white:
     lis 9, -1
     ori 9, 9, 0xFF00
+d_colour:
     or 0, 0, 9
     stw 0, 0x38(1)
 """ + rel(0x49410) + """
@@ -456,25 +547,40 @@ d_store:
 """ + rel(0x495C8) + """
     addi 3, 1, 0x38
 """ + rel(0x49514) + rel(0x495FC) + """
-    lfs 1, 28(23)
     lfs 2, 8(24)
+""" + marked(10, 24, "d_depth") + """    lfs 2, 0(23)
+d_depth:
+    lfs 1, 28(23)
     fdivs 1, 1, 2
     lfs 0, 24(23)
     fsubs 1, 0, 1
 """ + rel(0x4954C) + addr(0x12A080) + rel(0x49738) + """
     lfs 0, 12(24)
+""" + marked(10, 24, "d_size") + """    lfs 1, 104(23)
+    lfs 2, 108(23)
+    b d_size_on
+d_size:
     lfs 1, 32(23)
     lfs 2, 36(23)
+d_size_on:
     fmadds 1, 0, 1, 2
     fmr 2, 1
 """ + rel(0x4955C) + """
     lfs 1, 0(24)
     lfs 2, 4(24)
-""" + rel(0x496FC) + f"""
+""" + rel(0x496FC) + marked(10, 24, "d_name") + f"""    lwz 3, 12(19)
+    addi 3, 3, -1
+    mulli 3, 3, {memmap.MODE_HUD_TAG_TEXT}
+    lis 9, {memmap.hi(memmap.MODE_HUD_TAG_TEXTS)}
+    ori 9, 9, {memmap.lo(memmap.MODE_HUD_TAG_TEXTS)}
+    add 3, 3, 9
+    b d_text
+d_name:
     lwz 3, 16(24)
     andi. 3, 3, 0xFF
     slwi 3, 3, 5
 {names}    add 3, 3, 9
+d_text:
 """ + rel(0x4A0D8) + f"""
 d_next:
     addi 27, 27, 1

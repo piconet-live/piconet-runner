@@ -130,7 +130,7 @@ class Bundle(unittest.TestCase):
         self.assertFalse(any((a, b) == old for a, b in zip(words, words[1:])))
 
     def test_every_patch_enters_the_image(self):
-        self.assertEqual(len(self.patches), 242)   # 242: the machine setting's curve (54 and its 2 calls), the boost length
+        self.assertEqual(len(self.patches), 349)   # 346 + the ghost's pilot and the HUD's two lap draws; 343 + the ghost task's making, voice and shadow; 319: game_start's mode_begin; 318: start_together's placing; 317: the portraits' mark, the leader's gap popup in the step, and the mode words' ten since 305; 305: mode_monitors; 286: the simulation's own generator (2), the mode's sites from the board, display and race words; 250: the game mode's displays' three (sites_modehud.py); 247: the game mode's pair gate and timer; 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
         executable = [a for a in self.patches if a < memmap.REL]
         # the last: frame begin's copy to the display buffer (sites_present.py)
         self.assertEqual(sorted(executable), [0x80005940, 0x800059A8, 0x80067898, 0x8006FDA4])
@@ -164,10 +164,13 @@ class Bundle(unittest.TestCase):
 
     def test_routines_test_the_mode_word_first(self):
         test = (0x3D800000 | memmap.hi(memmap.CONTROL), 0x818C0000 | (memmap.MODE - memmap.CONTROL))
-        # every start; a plain word; tests its own word (smooth.py); reached only after mine_shown, which tests it
-        untested = {"linked", "pin", "smooth_hook", "mine_fade"}
+        # every start; a plain word; tests its own word (smooth.py); reached only after mine_shown, which tests it;
+        # the simulation's own generator (sites_generator.py), whose shift word is 0 in a plain start: the stock word
+        # the ghost task's making: at the race's set-up, by the window's flag word, zero without a mode (boot.cpp)
+        untested = {"linked", "pin", "smooth_hook", "mine_fade", "simgen_cpu", "simgen_hazard", "ghost_make"}
         for address, p in self.patches.items():
-            if p["what"] in untested:
+            # a `bl mode_sort` first, which tests the mode's own flag word (sites_modehud.py), and then the stock call
+            if p["what"] in untested or p["what"].startswith(("mode_sort_", "mode_clock_")):
                 continue
             to = target(int(p["new"], 16), address)
             # the draw skip's routines (sites_present.py) load the word into r11 and keep r12 the control block;
@@ -182,7 +185,7 @@ class Bundle(unittest.TestCase):
     def test_installer_sites(self):
         sites = [p for p in self.patches.values() if int(p["new"], 16) & 1]
         # follow 44, banners 4, effects 1, the racing view 4, other sounds 6, names 4, smoothing 1, the seat's port 47
-        self.assertEqual(len(sites), 111)
+        self.assertEqual(len(sites), 136)
         # the installers left in the frame routine compare a site with its stock word before writing: with the
         # site already patched they write nothing
         for p in sites:
@@ -232,6 +235,12 @@ class Bundle(unittest.TestCase):
         on = frame + 12 + (word_at(image, frame + 12) & 0xFFFC)
         # (the mines' countdowns first, sites_mines.py: they then lie at the very top of the heap's free block)
         self.assertEqual(word_at(image, on), build.branch(on, self.symbols["mines_preload"], True))
+        on += 4
+        # (then the game mode's block, sites_mode.py, below the mines' when the race has a mode)
+        self.assertEqual(word_at(image, on), build.branch(on, self.symbols["mode_preload"], True))
+        on += 4
+        # (then the story's pictures a mode's displays ask for, sites_modehud.py, once the block is taken)
+        self.assertEqual(word_at(image, on), build.branch(on, self.symbols["mode_story"], True))
         on += 4
         self.assertEqual(word_at(image, on), build.branch(on, preload, True))
         self.assertEqual(word_at(image, on + 4), build.branch(on + 4, self.symbols["monitors_preload"], True))
@@ -321,7 +330,7 @@ class CompleteBundle(unittest.TestCase):
             disp = ((bc & 0xFFFC) ^ 0x8000) - 0x8000
             self.assertTrue(IMAGE <= entry + 12 + disp < IMAGE + len(image), p)
             entries += 1
-        self.assertEqual(entries, 110)
+        self.assertEqual(entries, 135)
 
     def test_the_stock_path_is_the_replaced_instruction(self):
         image = self.b["image"]

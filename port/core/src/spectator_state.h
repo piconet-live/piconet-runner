@@ -28,6 +28,7 @@ struct ObserverState
   // for the log: displayed frames in each view, the game's HUD put back, the first frame's line said
   std::array<u32, spectator::VIEWS> frames{};
   u32 hud_back = 0;
+  u32 game_mask[2] = {0, 0};  // frames in the game HUD view with its mask off, on
   bool said = false;
 };
 
@@ -39,6 +40,7 @@ struct SpectatorState
   bool leaving = false;  // ... and are handed back to the chase camera in this frame
   bool shown = false;    // the overlay was told something to show
   bool overlay = true;   // ... and not the clean picture (Z, the mode button): with it the course map
+  u32 camera_mode = 0xFFFFFFFF;  // the image's mode LiveCameras asked for last
   ObserverState observer;
   u32 followed = 0xFFFFFFFF;  // ... and the racer it followed
   u32 last_step = 0;     // the step the frame before showed: another than the next is a move of the picture

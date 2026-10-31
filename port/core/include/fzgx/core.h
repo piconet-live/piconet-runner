@@ -163,6 +163,13 @@ struct Debug
   bool user_settings = false;  // "userSettings": the emulator's settings are the user folder's (Config/Dolphin.ini,
                                // GFX.ini: a test's speed limit, clock and the like); without it the runner sets every
                                // setting that decides what the game computes or how fast it runs, whatever they say
+  // "renderer": who draws the picture shown, "dolphin" (the emulator) or "aurora" (Aurora beside it, presentation
+  // only: aurora.cpp in the adapter); "auroraShots", "auroraLog": its test pictures (XFB copies, 1 the first) and its
+  // logs' file prefix
+  std::string renderer = "dolphin";
+  std::vector<u32> aurora_shots;
+  u32 aurora_scale = 0;  // "auroraScale": its render scale, 1 to 8; 0 (or none): the same as the emulator's resolution
+  std::string aurora_log;
   std::vector<EmulatorSetting> emulator;  // every other key of the emulator's side that was given (files_launch.cpp
                                           // holds the table: "pad", "poke", "probe", "paceLog", ...)
 };
@@ -199,6 +206,8 @@ struct Options
                              // runner has no name of its own); none: the strip shows no name
   WindowPicture window_name_picture;  // "windowNamePicture": the name as a picture, drawn in place of the text
   bool show_frame_rate = false;  // "showFrameRate": the game window's strip shows the frame rate (a player's setting)
+  bool show_inputs = false;  // "showInputs": a controller over the picture shows the player's pad (a player's setting;
+                             // picture only: inputs_overlay.cpp)
   bool rumble = true;        // "rumble": the player's controller may rumble (a player's setting); false: no rumble
                              // command reaches a pad in this start (the game still asks for it: RumbleAllowed)
   TaskbarGroup taskbar;      // "taskbar": the launcher's taskbar button, which the game window joins (a player's
@@ -376,6 +385,17 @@ void ControllerSetupTick();
 std::optional<bool> GameWidescreen();
 // The mod's network hook: before every simulation step and in every pass of the race-start gate's wait.
 void NetSync();
+// The race's game mode, once a step (the image's mode point, HOST_MODE: port/image/sites_mode.py): its rules run
+// (port/core/src/mode.h). Nothing to do without one.
+void ModeCall();
+// Seat `seat`'s record in the game mode's block (16 bytes, read by the machine's step: the per-machine rollback
+// compares it with the machine's records); 0 without a mode or before the block is taken.
+u32 ModeRecord(u32 seat);
+// Its move (16 bytes, read by the image's mode_speed) and its rolling start's saved steering (8 bytes, written and
+// read by the stand-in's rule hook wrapper): the per-machine rollback's records too; 0 without a mode.
+u32 ModeMove(u32 seat);
+u32 ModeRollSave(u32 seat);
+u32 ModeStat(u32 seat);
 // The game wrote a word of the data window (the native form: every access of it passes the host). The replay
 // scrubber takes one of them as a call: the frame routine's "the extra steps are done" (control block +12 set to
 // 0), which is the only moment the host has after a frame's last step and before its picture. The image's two

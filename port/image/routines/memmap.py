@@ -31,8 +31,8 @@ TAGS = NAMES + 0x400       # the name tags' state (nametags.py): a frame count, 
 # five JPEGs' sizes. +32 the hand-back the words below are for (+0 when they were set). +36 the picture in the
 # texture, plus 1 (0 none). +40 the countdown at the last drawn frame (the sounds' edge). +44 the texture's words as
 # the last decode left them (a rollback can put the texture back). +48 the followed racer + 1 and +52 the step word
-# the eased frame is for (monitors_ease.py). +0x40 the monitors' record (0x88 bytes, the game's own layout: the point,
-# the eased turn, the tilt, the yaw). +0xC8 the eased frame: position, back, up (36 bytes, floats; to +0xEC).
+# (unused). +0x40 the monitors' record (0x88 bytes, the game's own layout: the point,
+# the turn, the tilt, the yaw). +0xC8 the frame's position (12 bytes, floats).
 MONITORS = _facts.MONITORS
 MONITORS_BLOCK = 0x19000
 # Mines that come back (sites_mines.py; the host's rule RACE_MINE_REGEN): +0 the state of the countdowns' block (0 not
@@ -46,12 +46,47 @@ MINES = _facts.MINES
 MINE_TABLE = 64
 MINE_COUNTS = 16
 MINE_BLOCK = MINE_COUNTS + 2 * MINE_TABLE
+# The race's game mode (sites_mode.py; the host's interpreter, port/core/src/mode.cpp): +0 the state of the mode's
+# block (0 not tried, 1 taken, 3 none: the race has no mode, or the heap had no room), +4 its address in the game's
+# main heap (0: no mode, and every site of the mode does what the game does). Written once, on the black frame before
+# the start gate, as MINES; the block itself is the undo log's and the checksum's (MODE_BLOCK bytes: MODE_SEATS, a
+# seat's record of MODE_SEAT bytes that the image's sites read, then the interpreter's state).
+MODES = _facts.MODES
+MODE_BLOCK = 0x7000
+MODE_ALLOC = MODE_BLOCK + 0x1000   # taken from the heap: the block starts on a page (the undo log's pages, mode.cpp)
+MODE_SEAT = 16
+MODE_SEATS = 0
+MODE_END = MODE_SEATS + 30 * MODE_SEAT   # the block's word: not 0, the mode ended the race (the step after which, plus 1)
+MODE_RUNS = MODE_END + 12                # the interpreter's runs so far; 0: game_start has not run (mode_begin)
+# the engine page's words the image reads and writes (port/core/src/mode.h: the same offsets)
+MODE_ENGINE = 0x5000
+MODE_WAITS = MODE_ENGINE                 # race_waits: not 0, the race-over test counts every seat (raceend.py)
+MODE_NC_ANY = MODE_ENGINE + 0xC          # the OR of the no-contact rows: 0, the pair gate takes the stock path
+MODE_NC = MODE_ENGINE + 0x10             # a seat's no-contact row (bit 0x80000000 >> j)
+MODE_TOUCH = MODE_ENGINE + 0x88          # a seat's contact answers this step, the same order (the pair gate ORs them)
+MODE_CLOCK = MODE_ENGINE + 0x4           # clock_limit in steps (0: none): the game's own timer is skipped
+MODE_POINTS = MODE_ENGINE + 0x240         # award's points, a word a seat (the results' points page reads them)
+MODE_MOVES = MODE_ENGINE + 0xA80         # a seat's move: +0 1 push, 2 velocity; +4 x, +8 y, +12 z (momentum)
+MODE_MOVE = 16
+MODE_ROLL_SAVE = MODE_ENGINE + 0xE40     # a seat's steering (+0 M+0x1FC, +4 M+0x1F8) before the rule hook
+MODE_ROLL = 8
+MODE_STATS = 0x6400                      # a seat's stat record (mode.h STATS): +0 the changed stats' bits, +4 their values
+MODE_STAT = 0x60                         # (+0x54 damage's amount this run)
+MODE_STAT_DAMAGE = 0x54
+assert MODE_STATS + 30 * MODE_STAT <= MODE_BLOCK
+# the live combat words (mode.h COMBAT; sites_combat.py): 0, the game's own
+MODE_COMBAT = MODE_STATS + 30 * MODE_STAT
+MODE_COMBAT_FACTOR, MODE_COMBAT_CAP, MODE_COMBAT_KNOCK, MODE_COMBAT_WALL, MODE_COMBAT_BOUNCE = 0, 4, 8, 12, 16
+MODE_COMBAT_SPIN, MODE_COMBAT_SIDE, MODE_COMBAT_IMMUNE, MODE_COMBAT_ONE = 20, 24, 28, 32
+MODE_COMBAT_SIZE = 36
+assert MODE_COMBAT + MODE_COMBAT_SIZE <= MODE_BLOCK
+assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_MOVE <= MODE_ROLL_SAVE
 # The race's setup (written by the Dolphin fork from the match file before the game reaches the race; the built-in
 # codes read it, boot-to-race/racecodes.py): 'FZRC', then words: +4 course, +8 port 0's machine, +12 CPU opponents
 # (racers - 1), +16 laps, +20 race type (6 laps, 3 free run), +24 the DOL generator's value up to the race (SHUFFLE),
 # +28 the per-race CPU seed; +32 the 30 seats' machines (bytes, seat 0 first); +64 the start grid's word (1: the race
 # names its grid, sites_grid.py; 0: the game's own sort, every recording made before it), +68 the grid (30 bytes, the
-# seat of each slot, pole first); +98 and +99 unused, +100 the rubber band (RACE_RUBBER_BAND_ON, below), +104 to +256 unused; the race's rules: +256 the CPU level (0-3), +260 boost from the start (the fork
+# seat of each slot, pole first); +98 and +99 unused, +100 the rubber band (RACE_RUBBER_BAND_ON, below), +104 the simulation's own generator (RACE_SIM_GENERATOR, below), +108 to +256 unused; the race's rules: +256 the CPU level (0-3), +260 boost from the start (the fork
 # sets rule flag 0x10 through control block +520), +264 restore (words), +268 every seat's machine setting (30 bytes,
 # 0 acceleration to 100 top speed; standin.py), +300 the steps after the first finish at which the race ends for
 # everyone (a word; 0: no such end; raceend.py); +304 the race's flow (a word: 1, a machine is out by the game's own
@@ -72,6 +107,11 @@ RACE_GRID_ON, RACE_GRID = _facts.RACE_GRID_ON, _facts.RACE_GRID
 # +100 the rubber band (a word: 1, the CPU drivers pace against the player seats, the game's own way, every recording
 # made before 0.4.0; 0, every driver at its own pace, every race and practice from 0.4.0; sites_cpu.py)
 RACE_RUBBER_BAND_ON = _facts.RACE_RUBBER_BAND_ON
+# +104 the simulation's own generator (a word: 1, the race's draws take SIM_GENERATOR, every race and practice from
+# this build; 0, the executable's 0x801A63C0, shared with the effects and cameras, every recording made before; the
+# core reads a replay's from its header's "simGenerator"; sites_generator.py)
+RACE_SIM_GENERATOR = _facts.RACE_SIM_GENERATOR
+assert RACE_RUBBER_BAND_ON + 4 <= RACE_SIM_GENERATOR and RACE_SIM_GENERATOR + 4 <= RACE_CPULEVEL
 # The seats' custom machines (garage-built: three parts and a pilot; sites_custom.py): 30 entries of 32 bytes, seat
 # order. +0 a word, not 0 when the seat races its own parts (0xC0000000: a garage record's "used, parts" bits); +4,
 # +12, +20 the body's, cockpit's and booster's part id (bytes: 0-24, 25-49, 50-74) and +8, +16, +24 each part's
@@ -97,13 +137,13 @@ INPUTS = _facts.INPUTS    # input buffer: 1024 frames x 30 seats x 8 bytes (0x3C
 INPUTS_END = _facts.INPUTS_END
 assert IMAGE + 0x10000 <= CONTROL and CONTROL + 0x1000 <= CHECKSUMS and CHECKSUMS + 0x1000 <= SMOOTH
 assert SMOOTH + 0x1000 <= NAMES and NAMES + 30 * NAME_SIZE <= TAGS and TAGS + 0x200 <= MONITORS and MONITORS + 0x100 <= RACE and RACE + RACE_SIZE <= INPUTS
-assert MONITORS + 0x100 <= MINES and MINES + 8 <= RACE
+assert MONITORS + 0x100 <= MINES and MINES + 8 <= RACE and MINES + 8 <= MODES and MODES + 8 <= RACE
 # Tests: the rank icons' exclusion (follow.py `icon`), counted only in a game told to keep the logs (IMAGE_LOGS):
 # 30 words a racer, the drawn frames in which its icon was held back (the racer the HUD follows, or the local seat),
 # then 30 words, the frames in which it was let through to the icon's own tests. The picture's only: no step reads
 # them, no rollback puts them back, the checksum does not cover them.
 ICONS = _facts.ICONS
-assert MINES + 8 <= ICONS and ICONS + 2 * 30 * 4 <= RACE
+assert MODES + 8 <= ICONS and ICONS + 2 * 30 * 4 <= RACE
 # Each seat's own stats and constants (a stat pack a seat: sites_seats.py, sites_dash.py, sites_curve.py; the core writes
 # the block for every race and replay, handbook/stat-pack-constants.md). +0 a byte a seat: not 0, the seat's stock
 # machine takes its stats from its row below in place of the car data's block (racer creation and every step);
@@ -186,7 +226,7 @@ TRUE_ASPECT = _facts.TRUE_ASPECT  # the host's, for the picture only (sites_view
 # into the cameras inside every step, so a rollback's restore is repaired by the first step run again.
 SPEC_MODE = _facts.SPEC_MODE     # what the spectator follows with: 0 automatic shots, 1 the course's cameras, 2 to 5 a
                                  # manual shot (types 0 to 3), 6 the chase camera behind the watched racer
-SPEC_HEIGHT = _facts.SPEC_HEIGHT  # the camera height: the variant within a manual shot, the chase camera's view less 1
+SPEC_HEIGHT = _facts.SPEC_HEIGHT  # the camera height: the variant within a manual shot, the chase camera's view less 1 (3: view 0, first person)
 SPEC_CHANGE = _facts.SPEC_CHANGE  # the step word (+124) plus 1 of the step the last choice was made in: that step, run
                                  # for the first time or again, sets the shot up (a manual shot's type and variant,
                                  # the chase camera's racer)
@@ -203,8 +243,8 @@ SPEC_STEP = _facts.SPEC_STEP     # 1 from `specstep` until the task manager's pa
                                  # cameras' list: there `specwatch` looks again at who is out (smooth.py's hook)
 SPEC_MODES = 7
 SPEC_AUTOMATIC, SPEC_COURSE, SPEC_MANUAL, SPEC_CHASE = 0, 1, 2, 6
-SPEC_HEIGHTS = (1, 1, 6, 20, 9, 2, 3)   # heights of each mode: a manual shot's variants (fn_1_1138C, fn_1_11748,
-                                        # fn_1_11ABC, fn_1_11E98 draw theirs modulo 6, 20, 9, 2), the chase views 1-3
+SPEC_HEIGHTS = (1, 1, 6, 20, 9, 2, 4)   # heights of each mode: a manual shot's variants (fn_1_1138C, fn_1_11748,
+                                        # fn_1_11ABC, fn_1_11E98 draw theirs modulo 6, 20, 9, 2), the chase views: heights 0 to 3 are views 1, 2, 3, 0
 SPEC_LOG = _facts.SPEC_LOG                  # tests: the spectator's log, one entry a displayed frame while spectating (frame_spectate.py
 SPEC_LOG_ENTRIES = _facts.SPEC_LOG_ENTRIES  # `spechud`): 3584 x 8 bytes (60 s); round when full
 GENERATOR_LOG = _facts.GENERATOR_LOG              # tests: the race's two generator words (the executable's 0x801A63C0, the effects' .data
@@ -227,12 +267,18 @@ HOST_NET = _facts.HOST_NET        # the network hook (the frame routine: before 
 HOST_TICK = _facts.HOST_TICK      # every game frame of a race or replay start, at the mode machine's entry (fn_1_ECC)
 HOST_LINKED = _facts.HOST_LINKED  # main.rel is linked and none of its code has run: the host writes its patched words
 HOST_HFR = _facts.HOST_HFR        # the drawn frames between two steps (sites_hfr.py): r3 the operation, r4 its frame
+HOST_MODE = _facts.HOST_MODE      # the mode point (sites_mode.py): the game mode's rules, once a step
 REL = _facts.MAIN_REL       # main.rel's module header in every boot (the pin: main.dol 0x80005940, fze.sample.rel)
 REL_TEXT = _facts.REL_TEXT_AT
 REL_BSS = _facts.REL_BSS_AT
 assert MODE + 4 <= PRELOAD and PRELOAD + 36 <= END_OFFICIAL and END_OVER + 4 == HANDBACK and HANDBACK + 4 <= FINISH_KIND
 assert FINISH_COUNT + 4 == RESULTS_KEEP and RESULTS_CAMERA + 4 == DRAW_ASK and DRAW_SKIP + 4 == TRUE_ASPECT
-assert TRUE_ASPECT + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
+# The simulation's own generator (sites_generator.py, frame_replay.py `simgen`). The image's own: no rollback puts
+# them back, the checksum does not cover them; the step wrapper writes both before every step of a race.
+SIM_GENERATOR = _facts.SIM_GENERATOR              # the word the race's draws step (seeded before every step)
+SIM_GENERATOR_SHIFT = _facts.SIM_GENERATOR_SHIFT  # 0 (the draws take 0x801A63C0) or SIM_GENERATOR - 0x801A63C0
+assert TRUE_ASPECT + 4 <= SIM_GENERATOR and SIM_GENERATOR + 4 == SIM_GENERATOR_SHIFT
+assert SIM_GENERATOR_SHIFT + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
 hi = lambda a: (a >> 16) & 0xFFFF
 lo = lambda a: a & 0xFFFF
 # A story stage's name (the core writes it, port/core/src/boot.cpp; the protocol's courses.toml): the course intro's
@@ -241,3 +287,20 @@ lo = lambda a: a & 0xFFFF
 # a step: the picture's only, never rolled back, not in the checksum.
 COURSE_NAME = ICONS + 0x100
 assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE
+# The game mode's displays (sites_modehud.py; port/core/src/mode_hud.h): the core writes them at every frame's drawing
+# from the mode's block, the image reads them in the drawing and at the race's set-up (the flags). Not read by a step.
+MODE_HUD = _facts.MODE_HUD
+MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
+MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_TOGETHER, MODE_GHOST_TASK = 1, 2, 4, 8, 32, 64
+MODE_HUD_RANK = MODE_HUD + 8             # not 0: the viewed racer's RANK is hidden, the rank icons with it (mode_hud.h)
+MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
+MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
+# `tag` (nametags.py; mode_hud.h): +0x100 a byte a seat, the text's number from 1 (0: none), +0x120 the texts
+MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HUD + 0x120, 12
+# The ghost draw (sites_ghostdraw.py; mode_hud.h): +0xCC the seats with no machine voice, a bit a seat; +0xD0 the live gap,
+# +0 its colour (0: not drawn), +4 its sign's character, +8 minutes, +0xC seconds, +0x10 thousandths; +0x180 eight bytes a
+# seat the machine's draw sets aside for this frame's ghost task: +0 its car (the task clears it), +4 its level of detail
+MODE_HUD_SILENT, MODE_HUD_GAP, MODE_HUD_GHOSTS = MODE_HUD + 0xCC, MODE_HUD + 0xD0, MODE_HUD + 0x180
+assert MODE_HUD_GAP + 0x14 <= MODE_HUD_TAGS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= MODE_HUD_GHOSTS and MODE_HUD_GHOSTS + 30 * 8 <= RACE
+assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE
+assert MODE_HUD_TAGS + 30 <= MODE_HUD_TAG_TEXTS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= RACE

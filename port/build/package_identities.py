@@ -31,6 +31,9 @@ exactly the game's spelling: a .NET string literal (UTF-16, with its length byte
 string. So the pilot "Pico" passes in the launcher's pilot list, while the same word anywhere else (in a sentence, in
 another case, inside a longer string) is searched as ever. Both lists are read from this script's own checkout,
 which is the one package.sh publishes from; a list that cannot be read, or is not 41 names, refuses the copy.
+One more spelling is the game's (stand_in_pilots): a stand-in racer of the launcher's made-up lobby (StandInLobby.Others)
+named after a pilot, in the list's capitals ("PICO"), passes as a whole .NET string literal and in no other form. A
+stand-in whose name is no pilot's is searched as ever; a list that cannot be read, or holds no racers, refuses the copy.
 Status 0: clean. Status 1: refused."""
 import argparse, io, json, os, re, sys, zipfile
 
@@ -87,6 +90,7 @@ def nobodys(home):
 GAME_LISTS = (("REPO_LAUNCHER", "net/src/Launcher.Core/CustomParts.cs", "Pilots"),          # the 41 pilots
               ("REPO_PROTOCOL", "net/src/Online.Protocol/GameMachines.cs", "GameMachines"))    # the 41 machines
 GAME_COUNT = 41
+STAND_INS = ("REPO_LAUNCHER", "net/src/Launcher.Core/StandIn/StandInLobby.cs")      # the made-up lobby's racers
 
 
 def game_names(root=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")):
@@ -107,15 +111,38 @@ def game_names(root=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..
     return tuple(dict.fromkeys(names))
 
 
-def without_game_names(data, names):
-    """The bytes with each of the game's own names blanked where it is a whole string of a program, in exactly its
-    spelling: a .NET string literal (its UTF-16 text between its length byte and its last byte, 0 or 1) or a quoted
-    UTF-8 string. Anywhere else the name is left for the search."""
+def stand_in_pilots(root=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."), pilots=None):
+    """The stand-in racers of StandInLobby.Others (`new("stand-in-N", "NAME", ...`) whose name is a pilot's but for its
+    case, as the list spells them: those are the game's names, the others could be anybody's."""
+    part, path = STAND_INS
+    try:
+        with open(parts.path_in(part, path, root), encoding="utf-8") as f:
+            listed = re.findall(r'new\("stand-in-\d+",\s*"([^"]+)"', f.read())
+    except OSError as e:
+        raise ValueError(f"the stand-in racers cannot be read from {path} ({e.strerror})") from e
+    if not listed:
+        raise ValueError(f"{path}: no stand-in racers found")
+    known = {n.lower() for n in (game_names(root) if pilots is None else pilots)}
+    return tuple(dict.fromkeys(n for n in listed if n.lower() in known))
+
+
+def without_literals(data, names):
+    """The bytes with each name blanked where it is a whole .NET string literal, in exactly its spelling: its UTF-16 text
+    between its length byte and its last byte, 0 or 1."""
     for name in names:
         wide = name.encode("utf-16-le")
         if len(wide) + 1 < 0x80:              # a longer literal's length takes two bytes; the game's names are short
             data = re.sub(re.escape(bytes([len(wide) + 1]) + wide) + b"(?=[\x00\x01])",
                           lambda m: m.group(0)[:1] + bytes(len(wide)), data)
+    return data
+
+
+def without_game_names(data, names, stand_ins=()):
+    """The bytes with each of the game's own names blanked where it is a whole string of a program, in exactly its
+    spelling: a .NET string literal or a quoted UTF-8 string; a stand-in pilot's as a .NET string literal only. Anywhere
+    else the name is left for the search."""
+    data = without_literals(data, (*names, *stand_ins))
+    for name in names:
         plain = name.encode("utf-8")
         data = data.replace(b'"' + plain + b'"', b'"' + bytes(len(plain)) + b'"')
     return data
@@ -220,14 +247,14 @@ def opened(name, data, others, depth=0):
         return
 
 
-def scan(files, sought, game=()):
+def scan(files, sought, game=(), stand_ins=()):
     """files: (name, bytes, whether it is another project's own file, checked) in turn; game: the game's own names
-    (game_names), which are not a person's where they stand as a program's whole string.
+    (game_names), which are not a person's where they stand as a program's whole string; stand_ins: stand_in_pilots.
     -> [(name, the name as it may be printed, kind, how it was written)], a kind once a file. A file whose own name
     holds an identity is printed with *** in its place."""
     out = []
     for name, data, others in (part for file in files for part in opened(*file)):
-        low, found, shown = without_game_names(data, game).lower(), [], name
+        low, found, shown = without_game_names(data, game, stand_ins).lower(), [], name
         for s in sought:
             if s.form == UTF8 and s.is_in(name.encode("utf-8", "surrogateescape").lower()):
                 found.append((s.kind, "the file's name"))
@@ -264,6 +291,7 @@ def refuse_identities(plan, repositories, product, more=None, refused=Exception,
         raise refused(UNGATHERED.format(not_gathered(sources)))
     try:
         game = game_names()
+        stand_ins = stand_in_pilots(pilots=game)
     except ValueError as e:
         raise refused(f"the game's own names could not be read: {e}")
 
@@ -275,7 +303,7 @@ def refuse_identities(plan, repositories, product, more=None, refused=Exception,
                 with open(file["path"], "rb") as f:
                     yield name, f.read(), file["own"]
 
-    found = scan(contents(), sought, game)
+    found = scan(contents(), sought, game, stand_ins)
     for _, shown, kind, form in found[:200]:
         print(f"package: identity: {shown}: {kind} (as {form})", file=sys.stderr)
     if found:
@@ -338,7 +366,8 @@ def main():
             count += 1
             yield item
 
-    found = scan(counted(), sought, game_names())
+    game = game_names()
+    found = scan(counted(), sought, game, stand_in_pilots(pilots=game))
     for _, shown, kind, form in found:
         print(f"identities: {shown}: {kind} (as {form})")
     files = len(dict.fromkeys(name for name, _, _, _ in found))

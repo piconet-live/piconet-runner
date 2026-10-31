@@ -36,9 +36,13 @@ constexpr int GROUPS = 4;
 struct Group
 {
   const char* label;
-  int first, count;  // its kinds: first, first + 1, ...
+  int count;
+  std::array<int, 4> kinds;  // its shots' kinds, by number: first person is Chase's 4, though it is the last kind
 };
-constexpr std::array<Group, GROUPS> GROUP{{{"Chase", 0, 3}, {"TV", 3, 1}, {"Auto", 4, 1}, {"Fixed", 5, 4}}};
+constexpr std::array<Group, GROUPS> GROUP{{{"Chase", 4, {0, 1, 2, 9}},
+                                           {"TV", 1, {3}},
+                                           {"Auto", 1, {4}},
+                                           {"Fixed", 4, {5, 6, 7, 8}}}};
 int GroupOf(fzgx::u32 kind);
 
 // Where everything is, in the display's pixels, for one picture and what is shown.

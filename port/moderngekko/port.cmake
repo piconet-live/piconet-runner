@@ -37,6 +37,22 @@ target_sources(moderngekko PRIVATE ${_fzgx_adapter_sources})
 target_include_directories(moderngekko PUBLIC "${_fzgx}/moderngekko/src" "${_fzgx}/facts/generated")
 target_compile_definitions(moderngekko PUBLIC MODERNGEKKO_FZGX_PORT=1)
 target_link_libraries(moderngekko PRIVATE fzgx_core)
+# "Show inputs" (inputs_overlay.cpp): m-overlay's pictures (art/inputs, MIT, LICENSE.txt beside them) carried inside the
+# program, as bytes in a generated file that is never committed.
+file(GLOB _fzgx_inputs_art CONFIGURE_DEPENDS "${_fzgx}/moderngekko/art/inputs/*.png")
+set(_fzgx_inputs_bytes "")
+set(_fzgx_inputs_table "")
+foreach(_png IN LISTS _fzgx_inputs_art)
+    get_filename_component(_name "${_png}" NAME_WE)
+    string(MAKE_C_IDENTIFIER "${_name}" _id)
+    file(READ "${_png}" _hex HEX)
+    string(REGEX REPLACE "(..)" "0x\\1," _hex "${_hex}")
+    string(APPEND _fzgx_inputs_bytes "static const unsigned char ART_${_id}[] = {${_hex}};\n")
+    string(APPEND _fzgx_inputs_table "    {\"${_name}\", ART_${_id}, sizeof ART_${_id}},\n")
+endforeach()
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fzgx_generated/inputs_art.g.inc" @ONLY
+     CONTENT "@_fzgx_inputs_bytes@static const ArtFile ART[] = {\n@_fzgx_inputs_table@};\n")
+target_include_directories(moderngekko PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/fzgx_generated")
 # the panel before a race (panel.cpp) is drawn into the emulator's own on-screen frame
 if(TARGET imgui)
     target_link_libraries(moderngekko PRIVATE imgui)

@@ -146,6 +146,10 @@ void DrawOverlays()
   if (show.on)
     hud::DrawGround(list, l, a.observer);
   DrawMinimap();
+  {
+    const float h = picture.y1 - picture.y0;
+    DrawInputs(corner.x0 - 0.02f * h, picture.y1 - clear - 0.02f * h, h);
+  }
   if (show.on)
     hud::Draw(list, show, l, a, hx, hy);
   else if (a.observer > 0.004f || a.mode > 0.004f || a.clean > 0.004f)

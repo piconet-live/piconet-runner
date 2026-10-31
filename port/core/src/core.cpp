@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "internal.h"
+#include "mode.h"
+#include "mode_hud.h"
 
 #include "fzgx/freeze.h"
 #include "fzgx/panel.h"
@@ -9,6 +11,7 @@
 #include <memory>
 
 #include "board_net.h"
+#include "host_timers.h"
 #include "page_guard.h"
 #include "rollback.h"
 
@@ -248,6 +251,7 @@ void FrameTick()
   boot::OnFrame(g);
   net::PresentTick(g);
   net::MinimapFrame(g);
+  net::InputsFrame(g);
   // the panel comes down when the course is loaded (one load of a flag once it is down)
   panel::Board& board = panel::TheBoard();
   if (board.Now() == panel::Shows::Loading && g.Ram(net::MODULE_POINTER, 4) &&
@@ -270,6 +274,11 @@ void WindowWritten(u32 address, u64 value)
   if (address == layout::DRAW_ASK)
   {
     Guest g(*s_host, Data());
+    if (value == 1)
+    {
+      mode::hud::Hud(g);  // the game mode's displays: after the frame routine's HUD passes, before the drawing
+      mode::hud::Board(g);  // and its values, for the launcher
+    }
     net::PresentAsked(g, static_cast<u32>(value));
     return;
   }
@@ -301,6 +310,47 @@ void NetSync()
     return;
   Guest g(*s_host, Data());
   net::Run(g);
+}
+
+void ModeCall()
+{
+  if (!s_host)
+    return;
+  Guest g(*s_host, Data());
+  FZGX_TIME(Mode);
+  mode::Step(g);
+}
+
+u32 ModeRecord(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Record(g, seat);
+}
+
+u32 ModeMove(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Move(g, seat);
+}
+
+u32 ModeStat(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Stat(g, seat);
+}
+
+u32 ModeRollSave(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::RollSave(g, seat);
 }
 
 void Shutdown()

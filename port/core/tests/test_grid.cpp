@@ -75,9 +75,9 @@ void TheStartGridInARecording()
   const std::string mines = "\"rules\": {\"cpuLevel\": 3, \"mineRegenMs\": 200}, ";
   const std::string with = recorded(Grid("[1, 0]")), both = recorded(Grid("[1, 0]") + mines + Stats(ThePack())),
                     plain = recorded(""), regen = recorded(mines);
-  CHECK(with.compare(0, 6, std::string("FZRP\0\7", 6)) == 0 && both.compare(0, 6, std::string("FZRP\0\7", 6)) == 0);
+  CHECK(with.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0 && both.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0);
   // (and without a grid: a race from a match has no rubber band since 0.4.0, version 7 too)
-  CHECK(plain.compare(0, 6, std::string("FZRP\0\7", 6)) == 0 && regen.compare(0, 6, std::string("FZRP\0\7", 6)) == 0);
+  CHECK(plain.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0 && regen.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0);
   CHECK(Says(with, "\"grid\":[1,0]") && Says(both, "\"mineRegenMs\":200"));
   // read back
   WriteABundle(dir);

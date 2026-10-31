@@ -175,6 +175,16 @@ struct MinimapDot
   u32 colour = 0;    // 0xRRGGBB, the machine's
   float wx = 0, wy = 0, wz = 0;  // its place in the course (the view turned)
 };
+// "Show inputs" (Options::show_inputs; inputs_overlay.cpp in the adapter): the local player's pad as the game reads it
+// (PADStatus of port 0), or nothing. Picture only.
+struct InputsShow
+{
+  bool on = false;
+  std::uint16_t buttons = 0;
+  std::int8_t stick_x = 0, stick_y = 0, cstick_x = 0, cstick_y = 0;
+  std::uint8_t l = 0, r = 0;
+  bool operator==(const InputsShow&) const = default;
+};
 struct MinimapShow
 {
   bool on = false;   // the map shows: the game's HUD does (fzgx/minimap.h Shows)
@@ -291,6 +301,8 @@ public:
   // displayed frame of a race; the defaults show nothing.
   virtual void MinimapCourseLoaded(const MinimapCourse& course);
   virtual void ShowMinimap(const MinimapShow& show);
+  // The player's pad for "Show inputs" (InputsShow above), on the game's thread, when it changed; the default shows nothing.
+  virtual void ShowInputs(const InputsShow& show);
   // The scrubber's undo log is packed by the host's packer: `out` takes the packed bytes, which may refer to `prefix`
   // (the bytes packed before them, given again to Unpack); Unpack fills exactly `out_size` bytes. False (the
   // default): none, and the bytes are kept as they are.

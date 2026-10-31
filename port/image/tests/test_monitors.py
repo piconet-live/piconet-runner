@@ -1,7 +1,7 @@
 """The hand-back's monitors (monitors.py), run here as the bytes the image holds against a made-up race seen from seat
 0, one drawn frame a step through a whole hand-back: when they are on, which picture the screen shows (and that each
 is decoded once), which sounds play and when (once each, also when steps are skipped), where they are placed against
-the followed racer's drawn matrix, how that frame is eased (monitors_ease.py), what the draw sends (the models in
+the followed racer's drawn matrix, what the draw sends (the models in
 StarterDisp's order, and not its depth-only box), and that the routine writes nothing but its stack, its own state and
 the GX pipe. The game's routines are stand-ins that record what they are given; the constants of .rodata 0x78D0 the
 routine reads are put in by hand."""
@@ -10,7 +10,7 @@ import math, os, struct, sys, unittest
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(here, ".."))
 import build, memmap  # noqa: F401  (build puts the generators' folder on the path)
-import monitors, monitors_ease
+import monitors
 from test_race_end import BSS, MODULE, MACHINES, POINTER, signed
 from test_raceview import Build, put, CONTROL, TEXT
 from test_nametags import TagCpu, single
@@ -119,11 +119,6 @@ class Race:
     def floats(self, address, n):
         return [struct.unpack(">f", bytes(self.mem.get(address + 4 * i + k, 0) for k in range(4)))[0]
                 for i in range(n)]
-
-    def eased(self):
-        """The eased frame: position, back, up (memmap.MONITORS +EASED)."""
-        v = self.floats(HB + monitors_ease.EASED, 9)
-        return v[0:3], v[3:6], v[6:9]
 
     def turn(self):
         """The record's turn: rows of right, up, back."""
@@ -275,94 +270,21 @@ class TheMonitors(MonitorsBuild):
         self.assertEqual(race.models, [0x80A40000 + off * 0x100 for off in MODELS])
 
 
-class TheEasedFrame(MonitorsBuild):
-    """The monitors' frame follows the drawn matrix softly (monitors_ease.py): toward it without passing it, whole
-    (unit, square, right-handed) every frame, at once where it must snap."""
-    START = END - 300                                                    # a step with the monitors on
+class TheFrame(MonitorsBuild):
+    """The monitors' frame is the drawn matrix, every frame, as the game's own oriented placing."""
+    START = END - 300                                                    # a step with the monitors held
 
-    def orthonormal(self, race):
-        rows = race.turn()
-        cols = [column(rows, j) for j in range(3)]
-        for i in range(3):
-            for j in range(3):
-                self.assertAlmostEqual(dot(cols[i], cols[j]), float(i == j), delta=1e-4)
-        r, u, b = cols
-        self.assertAlmostEqual(dot([u[1] * b[2] - u[2] * b[1], u[2] * b[0] - u[0] * b[2],
-                                    u[0] * b[1] - u[1] * b[0]], r), 1.0, delta=1e-4)   # right-handed: no flip
-
-    def at_target(self, race, m, delta=1e-4):
-        p, b, u = race.eased()
-        for got, want in ((p, column(m, 3)), (b, column(m, 2)), (u, column(m, 1))):
-            self.assertLess(apart(got, want), delta * max(1.0, max(abs(x) for x in want)))
-        for got, want in zip(race.turn(), m):
-            self.assertLess(apart(got, want[:3]), delta)
-
-    def test_converges_and_never_overshoots(self):
+    def test_exactly_the_drawn_matrix(self):
         race = Race(self)
         race.frame(self.START)
-        self.at_target(race, race.m)                                     # a hand-back's first frame: as drawn
-        keep = 1.0 - monitors_ease.ALPHA
-        move = (20.0, 3.0, -50.0)                                        # sideways, up, and ahead
-        m = posed(0.6, 0.3, [100.0 + move[0], 5.0 + move[1], -30.0 + move[2]])
-        race.place(m)
-        tp, tb = column(m, 3), column(m, 2)
-        error = [-x for x in move]
-        along = dot(error, tb)
-        side = [e - along * b for e, b in zip(error, tb)]                # ahead follows at once, the rest eases
-        last_d, last_b, last_turn = apart(side, (0, 0, 0)), math.pi, math.pi
-        for k in range(1, 91):
+        for k, m in enumerate((posed(0.6, 0.3, [120.0, 8.0, -80.0]), posed(math.pi, 0.0, [130.0, 8.0, -90.0]),
+                               posed(2.0, 1.5, [900.0, 0.0, 0.0])), 1):
+            race.place(m)
             race.frame(self.START + k)
-            self.orthonormal(race)
-            p, b, u = race.eased()
-            d = apart(p, tp)
-            gone_b = angle(b, tb)
-            rows = race.turn()                                           # the whole turn still to go
-            off = math.sqrt(sum(apart(rows[i], m[i][:3]) ** 2 for i in range(3)))   # |E - T| = 2.83 sin(a / 2)
-            gone = 2 * math.asin(min(1.0, off / 8 ** 0.5))
-            if k == 1:
-                self.assertAlmostEqual(d, keep * last_d, delta=1e-3)
-                self.assertGreater(gone_b, 0.4)                          # eased, not snapped
-            self.assertLessEqual(d, last_d + 1e-4)
-            self.assertLessEqual(gone_b, last_b + 1e-5)
-            self.assertLessEqual(gone, last_turn + 1e-5)
-            self.assertGreaterEqual(b[2] * tb[0] - b[0] * tb[2], -1e-5)  # turning toward it, never past it
-            last_d, last_b, last_turn = d, gone_b, gone
-        self.assertLess(last_d, 0.05)                                    # 1.5 s: 7.5 time constants
-        self.assertLess(last_b, 0.01)
-        self.assertLess(last_turn, 0.01)
+            for got, want in zip(race.turn(), m):
+                self.assertLess(apart(got, want[:3]), 1e-5)
+            self.assertLess(apart(race.floats(HB + monitors.POS, 3), column(m, 3)), 1e-3)
 
-    def eased_after(self, change, step=1, end=END, followed=FOLLOWED):
-        """True when the frame drawn `step` steps after a still one is eased (not at the new matrix at once)."""
-        race = Race(self)
-        race.frame(self.START, end=END)
-        change(race)
-        race.followed = followed
-        self.assertTrue(race.frame(self.START + step, end=end))
-        self.orthonormal(race)
-        p, b, u = race.eased()
-        m = race.m
-        return apart(p, column(m, 3)) > 1e-3 or apart(b, column(m, 2)) > 1e-4
-
-    def test_snaps(self):
-        aside = lambda d: (lambda race: race.place(posed(0.4, 0.0, (100.0 + d, 5.0, -30.0))))
-        self.assertTrue(self.eased_after(aside(2.0)))                    # a rollback's correction
-        self.assertTrue(self.eased_after(aside(250.0)))
-        self.assertFalse(self.eased_after(aside(400.0)))                 # a respawn
-        self.assertTrue(self.eased_after(aside(2.0), step=monitors_ease.GAP))
-        self.assertFalse(self.eased_after(aside(2.0), step=monitors_ease.GAP + 1))   # a scrub forward
-        self.assertFalse(self.eased_after(aside(2.0), step=-1))          # a restore
-        self.assertFalse(self.eased_after(lambda race: race.place(posed(0.4), seat=1), followed=1))   # a new racer
-        self.assertFalse(self.eased_after(aside(2.0), end=END + 50))    # a new hand-back
-        self.assertFalse(self.eased_after(lambda race: race.place(posed(math.pi))))   # a half turn
-        self.assertFalse(self.eased_after(lambda race: race.place(posed(0.0, math.pi))))
-        self.assertTrue(self.eased_after(lambda race: race.place(posed(2.0, 1.5))))  # 115 degrees: eased
-
-    def test_a_spin_stays_whole(self):
-        race = Race(self)
-        for k in range(120):                                             # a full turn in 2 s, rolling
-            race.place(posed(k * math.pi / 60, 0.5 * math.sin(k / 5)))
-            race.frame(self.START + k)
-            self.orthonormal(race)
 
 
 if __name__ == "__main__":

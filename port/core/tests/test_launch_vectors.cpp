@@ -56,6 +56,7 @@ void TestALaunchFileOfTheLaunchers()
     CHECK(o.window_name == words(file, "windowName"));
     CHECK(o.widescreen == (file.count("widescreen") ? file.at("widescreen").get<bool>() : true));
     CHECK(o.show_frame_rate == (file.count("showFrameRate") && file.at("showFrameRate").get<bool>()));
+    CHECK(o.show_inputs == (file.count("showInputs") && file.at("showInputs").get<bool>()));
     CHECK(o.rumble == !file.count("rumble"));
     if (file.count("match"))
     {
