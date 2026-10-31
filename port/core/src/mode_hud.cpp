@@ -160,7 +160,7 @@ u32 WindowFlags(const Package& p)
   // the points page holds the only place the game draws the title, so a title takes the results through it, award or none
   const bool points_page = Uses(p.code, ACTION_AWARD, false) || !p.results_title.empty() || !p.points_table.empty();
   return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (points_page ? POINTS_PAGE : 0) |
-         (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0);
+         (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0) | (p.start_together ? TOGETHER : 0);
 }
 
 void ShowFault(Guest& g, const Package& p, bool broken)

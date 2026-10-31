@@ -8,7 +8,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(here, ".."))
 from test_raceview import Build, Cpu, get, put, IMAGE, TEXT, native
 from test_race_end import signed
-import memmap
+import build, memmap
 import sites_mode
 import sites_combat
 import standin_inputs
@@ -131,6 +131,51 @@ class ThePairGate(Build):
         reached, m = self.pair(self.race(any_row=1, rows={I: 0x80000000 >> (J + 1), 5: 0xFFFFFFFF}))
         self.assertEqual(reached, [TEXT + sites_mode.PAIR_CALL, TEXT + sites_mode.PAIR + 4])
         self.assertEqual(get(m.mem, MI + 0x514), 0)
+
+
+class ThePreload(Build):
+    """The block is taken on the black frame before the start gate; under start_together it comes with every
+    no-contact row on, before the race's first contact pass."""
+    BLOCK_AT = 0x80A01000
+
+    def preload(self, flags):
+        memory = {}
+        put(memory, memmap.MODES, sites_mode.WANTED)
+        put(memory, memmap.MODE_HUD_FLAGS, flags)
+        put(memory, memmap.REL_BSS + 0x960, 2, 2)
+        put(memory, memmap.REL_BSS + 0x3C2A, 0x27, 2)
+        put(memory, memmap.REL_BSS + 0x26C28, 1)
+        put(memory, build.MAIN_HEAP, 1)
+        put(memory, build.HEAP_TABLE, 0x80E00000)
+        put(memory, 0x80E00000 + 12 + 4, 0x80E10000)
+        put(memory, 0x80E10000 + 8, 0x200000)
+        for at in range(self.BLOCK_AT, self.BLOCK_AT + memmap.MODE_BLOCK):
+            memory[at] = 0xFF
+        calls = []
+
+        def game(address, cpu):
+            calls.append(address)
+            cpu.r[3] = {1: 0x80F00000, 2: self.BLOCK_AT}.get(len(calls), 0)
+        m = Cpu(self.image, memory, game)
+        m.r[24], m.r[31] = 0x2424, 0x3131
+        m.run(self.symbols["mode_preload"], limit=20000)     # (the block's zeroing is 7,168 turns of a loop)
+        self.assertEqual((m.r[24], m.r[31], get(m.mem, memmap.MODES + 4)), (0x2424, 0x3131, self.BLOCK_AT))
+        return m.mem
+
+    def row(self, memory, seat):
+        return get(memory, self.BLOCK_AT + memmap.MODE_NC + 4 * seat)
+
+    def test_start_together_comes_with_every_row_on(self):
+        memory = self.preload(memmap.MODE_TOGETHER)
+        self.assertEqual(get(memory, self.BLOCK_AT + memmap.MODE_NC_ANY), 0xFFFFFFFF)
+        self.assertEqual({self.row(memory, seat) for seat in range(30)}, {0xFFFFFFFF})
+        # only the rows: the word after them and the one before are zero as the rest of the block
+        self.assertEqual(self.row(memory, 30), 0)
+        self.assertEqual(get(memory, self.BLOCK_AT + memmap.MODE_NC_ANY - 4), 0)
+
+    def test_any_other_mode_comes_zeroed(self):
+        memory = self.preload(memmap.MODE_ROLLING)
+        self.assertEqual({memory[a] for a in range(self.BLOCK_AT, self.BLOCK_AT + memmap.MODE_BLOCK)}, {0})
 
 
 class TheTimer(Build):

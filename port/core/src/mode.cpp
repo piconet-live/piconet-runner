@@ -2046,7 +2046,8 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
 {
   const u32 count = m.Count();
   const u32 all = count >= 32 ? ~0u : (1u << count) - 1;
-  if (p.contact_off)
+  // (start_together: the image's mode_preload wrote these rows before this run's own contact pass; here as for contact off)
+  if (p.contact_off || p.start_together)
     for (u32 seat = 0; seat < count; ++seat)
       g.Write32(block + NC + 4 * seat, 0xFFFFFFFFu);
   if (p.restore.value_or(false))

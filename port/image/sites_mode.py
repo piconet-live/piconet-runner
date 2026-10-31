@@ -5,7 +5,7 @@ nothing is taken from the heap. Native form only: the fork's image does not have
 
 | Site | Where | What the game did | Now, with a mode |
 |---|---|---|---|
-| `mode_preload` | the frame routine, on the black frame before the start gate (sites.py's `frame`, with mines_preload) | — | the mode's block (memmap.MODE_BLOCK bytes on whole pages of 4 KiB, zeroed: MODE_ALLOC taken) from the top of the main heap's largest free block, as mines_preload takes its block, when the host asked for one (MODES +0 = 4) |
+| `mode_preload` | the frame routine, on the black frame before the start gate (sites.py's `frame`, with mines_preload) | — | the mode's block (memmap.MODE_BLOCK bytes on whole pages of 4 KiB, zeroed: MODE_ALLOC taken) from the top of the main heap's largest free block, as mines_preload takes its block, when the host asked for one (MODES +0 = 4); under `start_together` (window flag TOGETHER) with every no-contact row and their OR on, so the pair gate keeps every pair apart from the race's first contact pass (the mode's first run, which writes `contact off`'s rows, comes only after that pass's pairs) |
 | `mode_point` | fn_1_850C4 0x8548C, after the race pass's callbacks (`lwz r3, 0x15C(r31)`, r31 the car manager) | — | the host call HOST_MODE (the interpreter, port/core/src/mode.cpp: the rules run, their actions go into the block and the machines), then for each seat the game's own damage where the run asked for it (`damage`: fn_1_24F10, which calls nothing, so it draws no generator and plays no sound), its explosion, and for every seat whose speed is held this step the hold's rescale and the read-out M+0x17C, as the step's start computes it (the vocabulary's "rescale R") |
 | `mode_rolls` | fn_1_34924 0x34988, the count after its decrement (`lhz r0, 0(r29)`) | the machines' tasks wait for the count below 240 | under `rolling_start` (window flag ROLLING) the mask is lifted from the count's first step: the machines and the mode run through the whole intro; GO's step and the count are the game's |
 | `mode_monitors` | fn_1_1049E0 0x104BFC, the start monitors' placing (`li r4, 0`) | keeps the first step's turn | a rolling start: 1, the machine's turn every step |
@@ -52,6 +52,7 @@ DESTROY = 0x25004                                 # fn_1_25004: the game's explo
 HURT = 0x24F10                                    # fn_1_24F10: the game's damage (r3 the machine, f1 the amount; calls nothing)
 SQRT = 0x8006D0B4                                 # main.dol: the game's square root (f1 -> f1)
 NOT_HELD = 0x8000 | 0x80 | 0x800 | 0x10000 | 0x08000000 | 0x40000000
+SEATS_ROWS = 30                                   # the block's no-contact rows
 RESTORING = 0x214                                 # M+0x214: the restore's countdown (u16)
 assert SEATS + 30 * SEAT <= memmap.MODE_END and memmap.MODE_END + 8 <= memmap.MODE_BLOCK
 assert memmap.MACHINE_FLAG_RESTORE == 1
@@ -139,6 +140,18 @@ mpre_walked:
 mpre_zero:
     stwu 0, 4(9)
     bdnz mpre_zero
+""" + la(9, memmap.MODE_HUD_FLAGS) + f"""    lwz 9, 0(9)
+    andi. 9, 9, {memmap.MODE_TOGETHER}
+    beq mpre_rows
+    li 0, -1
+    stw 0, {memmap.MODE_NC_ANY:#x}(24)
+    li 9, {SEATS_ROWS}
+    mtctr 9
+    addi 9, 24, {memmap.MODE_NC - 4:#x}
+mpre_row:
+    stwu 0, 4(9)
+    bdnz mpre_row
+mpre_rows:
     stw 24, 4(31)
     li 0, 1
     stw 0, 0(31)

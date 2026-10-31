@@ -58,6 +58,9 @@ constexpr u8 COLOURED = modes::LOOK_COUNT;
 static_assert(WINDOW_TINTS + 30 * 4 <= 0x100);
 // ROLLING: rolling_start: the machines' tasks run from the countdown's first step (the site at main.rel 0x34988).
 constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
+// TOGETHER: start_together: the grid's placing puts every machine on slot 0 (sites_grid.py grid_place) and mode_preload
+// writes every no-contact row as it takes the block (sites_mode.py), before the race's first contact pass.
+constexpr u32 TOGETHER = 32;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;

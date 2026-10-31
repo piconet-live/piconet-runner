@@ -263,4 +263,15 @@ void TestTheDisplayWordsRun()
     const std::optional<mode::Package> race = mode::Read(v, &why);
     CHECK(race.has_value() && hud::WindowFlags(*race) == (hud::STORY_PICTURES | hud::POINTS_PAGE | hud::ROLLING));
   }
+  // start_together: its one flag, read by the image's placing and preload
+  {
+    std::ifstream file(ProtocolFile("protocol/tests/vectors/modes") / "together.mode.json");
+    std::stringstream text;
+    text << file.rdbuf();
+    picojson::value v;
+    picojson::parse(v, text.str());
+    std::string why;
+    const std::optional<mode::Package> together = mode::Read(v, &why);
+    CHECK(together.has_value() && together->start_together && hud::WindowFlags(*together) == hud::TOGETHER);
+  }
 }
