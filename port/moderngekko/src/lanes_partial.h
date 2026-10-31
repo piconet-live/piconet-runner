@@ -87,6 +87,7 @@ struct Kept
   u32 step = NONE, jobs = 0, moment = 0;
   std::array<u32, MOST_JOBS> index{};
   std::array<Row, CARS> rows{};
+  std::array<Row, CARS> prev_rows{};  // the step before's row: the boost edge is this step's row and not that one's
   std::array<std::vector<u8>, CARS> start, end;
   std::array<Record, MOST_JOBS> rec;
   std::array<Regs, MOST_JOBS> regs;
@@ -113,7 +114,7 @@ struct Batch
   std::vector<Kept> kept = std::vector<Kept>(KEEP);
   std::array<u32, KEEP> runs{};
   std::vector<u8> tables;
-  std::array<Row, CARS> rows;
+  std::array<Row, CARS> rows, prev_rows;
   std::array<std::vector<u8>, CARS> starts;
   std::array<Guard, MOST_JOBS> guard_in;
   Guard guard;              // as the last job left it
