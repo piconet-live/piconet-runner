@@ -197,9 +197,11 @@ void WriteStartView(Guest& g)
   if (module == 0)
     return;
   const u32 options = g.Read32(module + game::GAME_OPTIONS);
-  if (!g.Ram(options + game::SAVED_VIEW, 1) || g.Read8(options + game::SAVED_VIEW) == view)
+  // (match.camera's 4 is first person, the game's view 0)
+  const u8 saved = view == 4 ? 0 : static_cast<u8>(view);
+  if (!g.Ram(options + game::SAVED_VIEW, 1) || g.Read8(options + game::SAVED_VIEW) == saved)
     return;
-  g.Write8(options + game::SAVED_VIEW, static_cast<u8>(view));
+  g.Write8(options + game::SAVED_VIEW, saved);
 }
 }  // namespace
 

@@ -205,6 +205,7 @@ void TestARaceThatWaitsRanksTheOut();
 void TestTheLivesLibraryRuns();
 void TestCpuModeEighteen();
 void TestTheDisplayWordsRun();
+void TestTheGhostWords();
 void TestThePreparedInterpreterIsThePlainOne();
 void TestTheLobbysRestoreStaysOut();
 // test_stats_race.cpp
@@ -566,6 +567,7 @@ int main(int argc, char** argv)
   TestTheLivesLibraryRuns();
   TestCpuModeEighteen();
   TestTheDisplayWordsRun();
+  TestTheGhostWords();
   TestThePreparedInterpreterIsThePlainOne();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);
   return s_failed == 0 ? 0 : 1;

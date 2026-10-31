@@ -839,19 +839,19 @@ private:
         const u32 done = m_g.Read32(m_block + SeatState(seat) + S_FINISH);
         return done != 0 ? done - 1 : m_g.Read32(m_module + game::RACE_CLOCK);
       }
-      case SEAT_LAPTIME:
+      case SEAT_MODELAPSTEPS:
         return m_g.Read32(m_module + game::RACE_CLOCK) - m_g.Read32(m_block + SeatState(seat) + S_LAP_START);
       case SEAT_BESTLAP: return m_g.Read32(m_block + SeatState(seat) + S_BEST_LAP);
       case SEAT_MACHINE: return m_g.Read8(layout::RACE_MACHINES_AT + seat);
       case SEAT_ISCPU: return (m_p.players >> seat & 1) == 0;
-      case SEAT_ISPLAYER: return m_p.players >> seat & 1;
+      case SEAT_ISHUMAN: return m_p.players >> seat & 1;
       case SEAT_HITS: return m_g.Read32(m_block + SeatState(seat) + S_HITS);
       case SEAT_DAMAGETAKEN: return m_g.Read32(m_block + SeatState(seat) + S_DAMAGE);
       case SEAT_TOUCHING: return SetOfRow(m_g.Read32(m_block + TOUCH + 4 * seat));
       case SEAT_LAPDISTANCE: return m_g.Read32(Progress() + P_LAP_DISTANCE);
       case SEAT_CHECKPOINT: return m_g.Read32(Progress() + P_CHECKPOINT);
       case SEAT_CHECKPOINTFRACTION: return m_g.Read32(Progress() + P_FRACTION);
-      case SEAT_LAPSTEPS: return m_g.Read32(Progress() + P_LAP_STEPS);
+      case SEAT_GAMELAPSTEPS: return m_g.Read32(Progress() + P_LAP_STEPS);
       case SEAT_WRONGWAY: return m_g.Read32(Progress() + P_WRONG_WAY) != 0;
       case SEAT_TOPSPEED: return m_g.Read32(m + M_TOP_SPEED);
       case SEAT_MAXENERGY: return Bits(static_cast<float>(m_g.Read16(m + M_MAX_ENERGY)));
@@ -867,7 +867,7 @@ private:
       case SEAT_PLACE: return m_g.Read8(m_block + PLACES + seat);
       case SEAT_POINTS: return m_g.Read32(m_block + POINTS + 4 * seat);
       case SEAT_KOS: return m_g.Read8(m + M_KOS);
-      case SEAT_GHOST: return m_g.Read32(m_block + NC + 4 * seat) == 0xFFFFFFFFu;
+      case SEAT_NOCONTACT: return m_g.Read32(m_block + NC + 4 * seat) == 0xFFFFFFFFu;
       default: Fail(FAULT_CODE); return 0;
     }
   }
@@ -970,6 +970,16 @@ private:
       case RACE_SEATS: return m_count;
       case RACE_LAPS: return m_g.Read32(layout::RACE_LAPS_AT);
       case RACE_COURSE: return m_g.Read32(RACE_COURSE_AT);
+      case RACE_HUMANSLEFT:
+      case RACE_HUMANFINISHED:
+      {
+        // from the seats' own state (R+0xD stays 1 and R+0xC 0 in our image): the same in every game and every step run again
+        u32 n = 0;
+        for (u32 seat = 0; seat < m_count; ++seat)
+          if ((m_p.players >> seat & 1) != 0 && SeatRead(id == RACE_HUMANSLEFT ? SEAT_RACING : SEAT_FINISHED, seat) != 0)
+            ++n;
+        return n;
+      }
       case RACE_DAMAGE: return Factor(C_DAMAGE);
       case RACE_KNOCKBACK: return Factor(C_KNOCK);
       case RACE_WALLDAMAGE: return Factor(C_WALL);
@@ -1777,8 +1787,8 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
       }
       case ACTION_FREEZE: mask(FROZEN, seat, true); break;
       case ACTION_RELEASE: mask(FROZEN, seat, false); break;
-      case ACTION_GHOST: g.Write32(block + NC + 4 * seat, 0xFFFFFFFFu); break;
-      case ACTION_GHOSTOFF: g.Write32(block + NC + 4 * seat, g.Read32(block + TEAM_NC + 4 * seat)); break;
+      case ACTION_NOCONTACTSEAT: g.Write32(block + NC + 4 * seat, 0xFFFFFFFFu); break;
+      case ACTION_NOCONTACTSEATOFF: g.Write32(block + NC + 4 * seat, g.Read32(block + TEAM_NC + 4 * seat)); break;
       case ACTION_DANGERZONE:
       {
         const u32 d = block + DANGER + 16 * seat;

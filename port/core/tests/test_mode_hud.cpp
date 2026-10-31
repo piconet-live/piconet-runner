@@ -81,6 +81,63 @@ void TestTheModeTagWords()
 
 // Every display word into the seat's record, run again from the same memory to the same memory; what a player, a
 // spectator and a course map read from it.
+// The owner's words of 2026-10-31: show_number off, the ghost's tint and sound, and the live gap's table.
+void TestTheGhostWords()
+{
+  BEGIN_TEST();
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeDisplayRace(g);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWNUMBER, 2, 7));
+  CHECK(g.Read32(Record(2) + hud::NUMBER) == 8);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWNUMBEROFF, 2, 0));
+  CHECK(g.Read32(Record(2) + hud::NUMBER) == 0);
+  // the look's defaults are Time Attack's: yellow (a word of 0) and no voice, the viewed racer always heard
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATLOOK, 3, modes::LOOK_GHOST));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATLOOK, 4, modes::LOOK_GHOST));
+  hud::Frame f = hud::Read(g, BLOCK, 4, 4);
+  CHECK(f.ghost_tints[3] == 0 && f.silent == 1u << 3);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATGHOSTTINT, 3, 0x80FF80FF));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATGHOSTSOUND, 3, 1));
+  f = hud::Read(g, BLOCK, 4, 4);
+  CHECK(f.ghost_tints[3] == 0x80FF80FF && f.silent == 0);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATGHOSTSOUND, 3, 0));
+  CHECK(hud::Read(g, BLOCK, 4, 4).silent == 1u << 3);
+  CHECK(!hud::Read(g, BLOCK, 4, 4).ghost_gap);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 4, modes::PART_GHOST_GAP));
+  CHECK(hud::Read(g, BLOCK, 4, 4).ghost_gap);
+  // a stock race's parts are untouched by the part: it has no bit
+  CHECK(hud::PART_BITS[modes::PART_GHOST_GAP] == 0 && hud::PART_BITS[modes::PART_RANK] == 0x20000000);
+
+  // the gap: other ahead, how long ago it was where you are; you ahead, how long ago you were where it is
+  hud::GapTable t;
+  t.Note(0, 10, 100);
+  t.Note(1, 10, 100);
+  CHECK(t.Frames(0, 1, 100) == 0);
+  t.Note(1, 20, 110);
+  t.Note(0, 15, 110);
+  CHECK(t.Frames(0, 1, 110) == 0);     // seat 1 passed 15 in the same frame: no time between them yet
+  t.Note(0, 20, 130);
+  t.Note(1, 20, 130);
+  CHECK(t.Frames(0, 1, 130) == 0);
+  t.Note(0, 30, 140);
+  CHECK(t.Frames(1, 0, 140) == 10);    // seat 0 ahead: it was at 20 at step 130
+  CHECK(t.Frames(0, 1, 140) == -10);
+  // a step going back drops what came later; an entry from the future counts for nothing
+  t.Note(0, 18, 120);
+  CHECK(t.Bucket(0) == 18);
+  t.Note(0, 30, 125);
+  CHECK(t.Frames(1, 0, 125) == 0);
+  t.Note(1, 25, 135);
+  t.Note(0, 30, 135);
+  CHECK(t.Frames(1, 0, 135) == 10);    // seat 0 was at 25 by the end of step 125
+  const hud::GapPicture ahead = hud::GapOf(3600 + 60 + 6, false);
+  CHECK(ahead.colour == 0xFF808000 && ahead.sign == 0x3A && ahead.minutes == 1 && ahead.seconds == 1 && ahead.thousandths == 100);
+  CHECK(hud::GapOf(-60, false).colour == 0x8080FF00 && hud::GapOf(-60, false).sign == 0x3B && hud::GapOf(-60, true).colour == 0x4040BF00);
+  CHECK(hud::GapOf(0, false).colour == 0xFFFFFF00 && hud::GapOf(0, true).colour == 0xBFBFBF00 && hud::GapOf(60, true).colour == 0xBF404000);
+}
+
 void TestTheDisplayWordsRun()
 {
   BEGIN_TEST();
@@ -267,7 +324,7 @@ void TestTheDisplayWordsRun()
   }
 
   // the story's pictures: the vector shows DISTANCE
-  CHECK(hud::NeedsStoryPictures(p->code) && hud::WindowFlags(*p) == hud::STORY_PICTURES);
+  CHECK(hud::NeedsStoryPictures(p->code) && hud::WindowFlags(*p) == (hud::STORY_PICTURES | hud::GHOST_TASK));  // and it has a ghost
   // the race vector awards points and runs danger zones: the points page and the story's pictures
   {
     std::ifstream file(ProtocolFile("protocol/tests/vectors/modes") / "race.mode.json");

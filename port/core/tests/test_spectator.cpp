@@ -183,7 +183,7 @@ void TestTheFollowModes()
 void TestTheCameraKinds()
 {
   BEGIN_TEST();
-  CHECK(KINDS == 9 && ChaseView(Kind::Chase1) == 1 && ChaseView(Kind::Chase3) == 3 && ChaseView(Kind::Course) == 0);
+  CHECK(KINDS == 10 && ChaseView(Kind::FirstPerson) == 0 && ChaseHeight(Kind::FirstPerson) == 3 && ChaseHeight(Kind::Chase1) == 0 && ChaseHeight(Kind::Chase3) == 2 && IsChase(Kind::FirstPerson) && !IsFixed(Kind::FirstPerson) && ChaseView(Kind::Chase1) == 1 && ChaseView(Kind::Chase3) == 3 && ChaseView(Kind::Course) == 0);
   CHECK(FixedType(Kind::Fixed1) == 0 && FixedType(Kind::Fixed4) == 3 && IsFixed(Kind::Fixed2) && !IsFixed(Kind::Auto));
   const Racers r = Field(3);
   Controls c(Role::Spectator, 8, 0);
@@ -191,9 +191,20 @@ void TestTheCameraKinds()
   CHECK(f.kind == Kind::Chase1 && !f.kind_chosen);  // the game's own camera until the watcher picks one
   f = Tap(c, r, PAD_DOWN);
   CHECK(f.kind == Kind::Chase2 && f.kind_changed && f.kind_chosen);
+  {
+    // first person is reached as the other views are: D-pad up from the first chase view, down from it back again
+    Controls v(Role::Spectator, 8, 0);
+    v.Next(Pad{}, r);
+    CHECK(Tap(v, r, PAD_UP).kind == Kind::FirstPerson);
+    CHECK(Tap(v, r, PAD_DOWN).kind == Kind::Chase1);
+    Controls none(Role::Replay, 41, 0);  // a course that allows no camera keeps its own
+    none.Next(Pad{}, r);
+    CHECK(Tap(none, r, PAD_UP).kind == Kind::Chase1);
+  }
   f = Tap(c, r, PAD_UP);
+  CHECK(f.kind == Kind::FirstPerson);  // round, through first person
   f = Tap(c, r, PAD_UP);
-  CHECK(f.kind == Kind::Fixed4);  // round
+  CHECK(f.kind == Kind::Fixed4);
   // the C-stick: a fixed shot's variant, round within its type's
   CHECK(f.variant == 0);
   f = c.Next(Pad{0, 60}, r);

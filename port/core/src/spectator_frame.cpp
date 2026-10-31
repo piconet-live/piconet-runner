@@ -11,7 +11,7 @@
 // an input row or a generator:
 //   - the racer followed: the stand-in seat (SEAT_SLOT + 4), which the chase camera and the HUD follow, as the
 //     scrubber's [ and ] do (playback.cpp SpectateReplay says what follows from a change);
-//   - a chase view: the chase camera record's view ([.bss 0xF6C] + 0xA4, 1 to 3), which fn_1_ABAC otherwise takes
+//   - a chase view: the chase camera record's view ([.bss 0xF6C] + 0xA4, 1 to 3, and 0 for first person), which fn_1_ABAC otherwise takes
 //     from the followed racer's own recorded presses;
 //   - the TV kinds (the course's cameras, the automatic shots, the four manual shot types): the image's spectator
 //     cameras, which run inside every step (frame_spectate.py `specstep`), turned on by the control block's out count
@@ -161,7 +161,7 @@ void LiveCameras(Guest& g, SpectatorState& st, const sp::Controls& c, const sp::
   const bool wants_hud = f.view == sp::View::Game;
   const bool chase = sp::IsChase(f.kind) && !wants_hud;
   const u32 mode = chase ? SPEC_CHASE : sp::IsChase(f.kind) ? ImageMode(sp::Kind::Auto) : ImageMode(f.kind);
-  ImageCameras(g, f, mode, chase ? sp::ChaseView(f.kind) - 1 : f.variant,
+  ImageCameras(g, f, mode, chase ? sp::ChaseHeight(f.kind) : f.variant,
                f.kind_changed || f.follow_changed || !st.tv || std::exchange(st.camera_mode, mode) != mode);
   st.tv = true;
 }
@@ -287,7 +287,7 @@ void SpectatorFrame(Guest& g, Session& s, u32 step, u32 module)
     else if (tv_now && !st.leaving)
     {
       // back to the chase camera: one frame of the image's chase mode sets it up behind the racer
-      ImageCameras(g, f, SPEC_CHASE, sp::ChaseView(f.kind) - 1, true);
+      ImageCameras(g, f, SPEC_CHASE, sp::ChaseHeight(f.kind), true);
       st.tv = st.leaving = true;
     }
     else

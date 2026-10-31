@@ -6,7 +6,7 @@ the game does. Native form only. sites.py calls add().
 | Site | Where | What the game did | Now, with a mode |
 |---|---|---|---|
 | `mode_spare` | fn_1_CA8FC 0xCA920, the spare-machine icon's value (`bl fn_1_3F1D4`, r3 the racer the HUD follows) | R+0x13F6 in a Grand Prix, else -1 (nothing drawn) | the racer's show_number (its record's number + 1 in the block's display page; 0: -1, nothing drawn) |
-| `mode_look` | fn_1_84860 0x84F9C, a machine's draw (`bl fn_1_870BC`, r29 the machine, f1 its alpha) | the machine drawn | by the look this game draws the seat with (the window's MODE_HUD_LOOKS, the core's HUD pass): normal, the stock call; ghost, the call between Time Attack's ghost state (fn_1_ED540's trail pass: the tint 0.7, 0.7, 1.0, fn_80074A60(4, 1), an alpha of GHOST_ALPHA at most) and its reset; invisible, no call; coloured (seat.colour on a machine drawn normally), the call between the tint of the seat's MODE_HUD_TINTS word (its red, green and blue bytes / 255) and the tint's reset |
+| `mode_look` | fn_1_84860 0x84F9C, a machine's draw (`bl fn_1_870BC`, r29 the machine, f1 its alpha) | the machine drawn | by the look this game draws the seat with (the window's MODE_HUD_LOOKS, the core's HUD pass): normal, the stock call; ghost, no call here: the car and its level of detail set aside in MODE_HUD_GHOSTS for this frame's ghost task (sites_ghostdraw.py, Time Attack's two passes after the scene); invisible, no call; coloured (seat.colour on a machine drawn normally), the call between the tint of the seat's MODE_HUD_TINTS word (its red, green and blue bytes / 255) and the tint's reset |
 | `mode_points` | fn_1_14A328 0x14A37C, the first results page's A (`rlwinm. r0, r0, 0, 5, 5`: rule 0x04000000, every race of ours, to the times list, page 7) | page 7 | with the window's MODE_POINTS_PAGE (a mode that awards points or has a results title), the rule's bit read as clear: pages 3 then 4, VS TOTAL RANKING, every record's +0x4 as its points |
 | `mode_story` | the frame routine, after mode_preload (sites.py's `frame`) | — | the story's picture group 0xBA (bmp_sto: the big digit, DANGER, the distance's digits, MISSION CLEAR!/FAILED, Time is up...) loaded once, with fn_1_47F74, on the frame the block is taken, when the core says the mode shows one of them (MODE_STORY_PICTURES): every game and playback of the race at the same point, before step 0 |
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
@@ -30,8 +30,7 @@ SPARE, SPARE_KNOWN = 0xCA920, 0x4BF748B5    # fn_1_CA8FC: bl fn_1_3F1D4
 LOOK, LOOK_KNOWN = 0x84F9C, 0x48002121       # fn_1_84860: bl fn_1_870BC
 POINTS, POINTS_KNOWN = 0x14A37C, 0x5400014B  # fn_1_14A328: rlwinm. r0, r0, 0, 5, 5
 SPARE_GET, DRAW_MACHINE = 0x3F1D4, 0x870BC
-TINT, RESET_STATE = 0x5621C, 0x56000         # fn_1_5621C(r, g, b, a), fn_1_56000(1, 3, 1)
-BLEND_ON, BLEND_OFF = 0x80074A60, 0x80074A6C  # main.dol: as Time Attack's ghost trail sets them (fn_1_ED540)
+TINT = 0x5621C                                # fn_1_5621C(r, g, b, a)
 LOAD_GROUP, STORY_GROUP = 0x47F74, 0xBA
 FINAL_LAP, BOOST_POWER, TIME_BONUS = 0x15E5E4, 0x15E540, 0x15E764
 GAP_POPUP = 0x15E330                          # fn_1_15E330(port, the time, heap): the gap popup, against the leader's line
@@ -49,10 +48,8 @@ CLOCK_Y = 0x43000000   # 128.0: below the rank (its digits at y 49ish, "/30" at 
 BEEP_SITE, BEEP_KNOWN = 0x3A448, 0x801D0030   # fn_1_3A330: lwz r0, 0x30(r29), where the timer's code ends on every path
 HUD_ENTRIES, BANNER_HEAP = 0x8FDA8, 0x25B88   # .bss: port 0's HUD entry (+0 the banners raised); the banners' heap word
 ONCE_BITS = {FINAL_LAP: 0x2, BOOST_POWER: 0x1, TIME_BONUS: 0x0}
-GHOST_TINT = 0x3F333333                       # 0.7: Time Attack's (1.0, 1.0, 0.7) other ghosts; (0.7, 0.7, 1.0) blue
 ONE = 0x3F800000
 BYTE_SCALE = 0x3B808081                       # 1 / 255: seat.colour's bytes to the tint's floats
-GHOST_ALPHA = 0x3F000000                      # 0.5 at most (the stock alpha, a near-camera fade, if lower)
 DISPLAY, SEATS_AT, SEAT_DISPLAY, NUMBER, BANNER, GAP_TIME = 0x6000, 0x6010, 0x20, 4, 10, 24   # mode_hud.h
 assert SEATS_AT + 30 * SEAT_DISPLAY <= memmap.MODE_BLOCK and SEATS_AT + NUMBER < 0x8000
 SLOT_SEAT = memmap.IMAGE + 0x14               # the slot 'FZSI' +4: the local seat (frame_hud.py)
@@ -127,39 +124,11 @@ mlk_stock:
 mlk_out:
     @b {site + 4:#x}
 mlk_ghost:
-    stwu 1, -0x40(1)
-    mflr 0
-    stw 0, 0x44(1)
-    stw 3, 0x10(1)
-    stw 4, 0x14(1)
-    stw 5, 0x18(1)
-    stw 6, 0x1C(1)
-    stw 7, 0x20(1)
-    stfs 1, 0x24(1)
-{floats(("1", GHOST_TINT), ("2", GHOST_TINT), ("3", ONE), ("4", ONE))}    @bl {FN(TINT)}
-    li 3, 4
-    li 4, 1
-    @bl {BLEND_ON:#x}
-{floats(("0", GHOST_ALPHA))}    lfs 1, 0x24(1)
-    fcmpu 0, 1, 0
-    blt mlk_alpha
-    fmr 1, 0
-mlk_alpha:
-    lwz 3, 0x10(1)
-    lwz 4, 0x14(1)
-    lwz 5, 0x18(1)
-    lwz 6, 0x1C(1)
-    lwz 7, 0x20(1)
-    @bl {FN(DRAW_MACHINE)}
-    @bl {BLEND_OFF:#x}
-{floats(("1", ONE), ("2", ONE), ("3", ONE), ("4", ONE))}    @bl {FN(TINT)}
-    li 3, 1
-    li 4, 3
-    li 5, 1
-    @bl {FN(RESET_STATE)}
-    lwz 0, 0x44(1)
-    mtlr 0
-    addi 1, 1, 0x40
+""" + la(12, memmap.MODE_HUD_GHOSTS) + f"""    lha 11, 4(29)
+    slwi 11, 11, 3
+    add 12, 12, 11
+    stw 3, 0(12)
+    stb 4, 4(12)
     @b {site + 4:#x}
 mlk_tint:
     stwu 1, -0x40(1)

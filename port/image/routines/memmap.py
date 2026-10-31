@@ -226,7 +226,7 @@ TRUE_ASPECT = _facts.TRUE_ASPECT  # the host's, for the picture only (sites_view
 # into the cameras inside every step, so a rollback's restore is repaired by the first step run again.
 SPEC_MODE = _facts.SPEC_MODE     # what the spectator follows with: 0 automatic shots, 1 the course's cameras, 2 to 5 a
                                  # manual shot (types 0 to 3), 6 the chase camera behind the watched racer
-SPEC_HEIGHT = _facts.SPEC_HEIGHT  # the camera height: the variant within a manual shot, the chase camera's view less 1
+SPEC_HEIGHT = _facts.SPEC_HEIGHT  # the camera height: the variant within a manual shot, the chase camera's view less 1 (3: view 0, first person)
 SPEC_CHANGE = _facts.SPEC_CHANGE  # the step word (+124) plus 1 of the step the last choice was made in: that step, run
                                  # for the first time or again, sets the shot up (a manual shot's type and variant,
                                  # the chase camera's racer)
@@ -243,8 +243,8 @@ SPEC_STEP = _facts.SPEC_STEP     # 1 from `specstep` until the task manager's pa
                                  # cameras' list: there `specwatch` looks again at who is out (smooth.py's hook)
 SPEC_MODES = 7
 SPEC_AUTOMATIC, SPEC_COURSE, SPEC_MANUAL, SPEC_CHASE = 0, 1, 2, 6
-SPEC_HEIGHTS = (1, 1, 6, 20, 9, 2, 3)   # heights of each mode: a manual shot's variants (fn_1_1138C, fn_1_11748,
-                                        # fn_1_11ABC, fn_1_11E98 draw theirs modulo 6, 20, 9, 2), the chase views 1-3
+SPEC_HEIGHTS = (1, 1, 6, 20, 9, 2, 4)   # heights of each mode: a manual shot's variants (fn_1_1138C, fn_1_11748,
+                                        # fn_1_11ABC, fn_1_11E98 draw theirs modulo 6, 20, 9, 2), the chase views: heights 0 to 3 are views 1, 2, 3, 0
 SPEC_LOG = _facts.SPEC_LOG                  # tests: the spectator's log, one entry a displayed frame while spectating (frame_spectate.py
 SPEC_LOG_ENTRIES = _facts.SPEC_LOG_ENTRIES  # `spechud`): 3584 x 8 bytes (60 s); round when full
 GENERATOR_LOG = _facts.GENERATOR_LOG              # tests: the race's two generator words (the executable's 0x801A63C0, the effects' .data
@@ -291,11 +291,16 @@ assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE
 # from the mode's block, the image reads them in the drawing and at the race's set-up (the flags). Not read by a step.
 MODE_HUD = _facts.MODE_HUD
 MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
-MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_TOGETHER = 1, 2, 4, 8, 32
+MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_TOGETHER, MODE_GHOST_TASK = 1, 2, 4, 8, 32, 64
 MODE_HUD_RANK = MODE_HUD + 8             # not 0: the viewed racer's RANK is hidden, the rank icons with it (mode_hud.h)
 MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
 MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
 # `tag` (nametags.py; mode_hud.h): +0x100 a byte a seat, the text's number from 1 (0: none), +0x120 the texts
 MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HUD + 0x120, 12
+# The ghost draw (sites_ghostdraw.py; mode_hud.h): +0xCC the seats with no machine voice, a bit a seat; +0xD0 the live gap,
+# +0 its colour (0: not drawn), +4 its sign's character, +8 minutes, +0xC seconds, +0x10 thousandths; +0x180 eight bytes a
+# seat the machine's draw sets aside for this frame's ghost task: +0 its car (the task clears it), +4 its level of detail
+MODE_HUD_SILENT, MODE_HUD_GAP, MODE_HUD_GHOSTS = MODE_HUD + 0xCC, MODE_HUD + 0xD0, MODE_HUD + 0x180
+assert MODE_HUD_GAP + 0x14 <= MODE_HUD_TAGS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= MODE_HUD_GHOSTS and MODE_HUD_GHOSTS + 30 * 8 <= RACE
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE
 assert MODE_HUD_TAGS + 30 <= MODE_HUD_TAG_TEXTS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= RACE

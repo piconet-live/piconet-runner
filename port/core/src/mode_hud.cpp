@@ -10,6 +10,7 @@
 
 #include "internal.h"
 #include "mode.h"
+#include "out_test.h"
 #include "rollback.h"
 #include "util.h"
 
@@ -37,6 +38,9 @@ bool IsDisplay(u8 id)
     case ACTION_SHOW:
     case ACTION_HIDE:
     case ACTION_SHOWNUMBER:
+    case ACTION_SHOWNUMBEROFF:
+    case ACTION_SEATGHOSTTINT:
+    case ACTION_SEATGHOSTSOUND:
     case ACTION_STOCKBANNER:
     case ACTION_SEATLOOK:
     case ACTION_SEATOWNLOOK:
@@ -65,6 +69,15 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value)
     case ACTION_SHOWNUMBER:
       // a negative number hides; above 99 shows 99 (the icon draws two digits: 100 would read 00)
       g.Write32(r + NUMBER, static_cast<s32>(value) < 0 ? 0 : std::min<u32>(value, 99) + 1);
+      return true;
+    case ACTION_SHOWNUMBEROFF:
+      g.Write32(r + NUMBER, 0);
+      return true;
+    case ACTION_SEATGHOSTTINT:
+      g.Write32(block + STATS + seat * STAT + STAT_GHOST_TINT, value);
+      return true;
+    case ACTION_SEATGHOSTSOUND:
+      g.Write32(block + GHOST_SOUNDS, value != 0 ? g.Read32(block + GHOST_SOUNDS) | 1u << seat : g.Read32(block + GHOST_SOUNDS) & ~(1u << seat));
       return true;
     case ACTION_STOCKBANNER:
       if (value < BANNER_COUNT)
@@ -136,12 +149,35 @@ bool Uses(const std::vector<u8>& code, u8 id, bool part)
     if (part && op == OP_PUSH && i + 7 <= code.size() && code[i + 5] == OP_ACTION && code[i + 6] == id)
     {
       const u32 value = static_cast<u32>(code[i + 1]) << 24 | code[i + 2] << 16 | code[i + 3] << 8 | code[i + 4];
-      if (value != PART_TIMER && value != PART_LEADER_GAP && value < PART_RANK)
+      if (value != PART_TIMER && value != PART_LEADER_GAP && value != PART_GHOST_GAP && value < PART_RANK)
         return true;
     }
     i += static_cast<size_t>(size);
   }
   return false;
+}
+
+// Whether the code pushes `value` right before the action `id` (a choice's name, ModeEmitter). Code the compiler did not
+// write: yes, rather than miss it.
+bool Pushes(const std::vector<u8>& code, u8 id, u32 value)
+{
+  for (size_t i = 0; i < code.size();)
+  {
+    const u8 op = code[i];
+    const int size = OpSize(op);
+    if (size <= 0)
+      return true;
+    if (op == OP_PUSH && i + 7 <= code.size() && code[i + 5] == OP_ACTION && code[i + 6] == id &&
+        (static_cast<u32>(code[i + 1]) << 24 | code[i + 2] << 16 | code[i + 3] << 8 | code[i + 4]) == value)
+      return true;
+    i += static_cast<size_t>(size);
+  }
+  return false;
+}
+
+bool NeedsGhostTask(const std::vector<u8>& code)
+{
+  return Pushes(code, ACTION_SEATLOOK, LOOK_GHOST) || Pushes(code, ACTION_SEATOWNLOOK, LOOK_GHOST) || Pushes(code, ACTION_SHOW, PART_GHOST_GAP);
 }
 }  // namespace
 
@@ -160,7 +196,8 @@ u32 WindowFlags(const Package& p)
   // the points page holds the only place the game draws the title, so a title takes the results through it, award or none
   const bool points_page = Uses(p.code, ACTION_AWARD, false) || !p.results_title.empty() || !p.points_table.empty();
   return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (points_page ? POINTS_PAGE : 0) |
-         (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0) | (p.start_together ? TOGETHER : 0);
+         (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0) | (p.start_together ? TOGETHER : 0) |
+         (NeedsGhostTask(p.code) ? GHOST_TASK : 0);
 }
 
 void ShowFault(Guest& g, const Package& p, bool broken)
@@ -185,6 +222,9 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
     f.looks[seat] = look < LOOK_COUNT ? look : static_cast<u8>(LOOK_NORMAL);
     f.colours[seat] = g.Read32(r + COLOUR);
     f.tags[seat] = g.Read8(block + TAGS_AT + seat);
+    f.ghost_tints[seat] = g.Read32(block + STATS + seat * STAT + STAT_GHOST_TINT);
+    if (f.looks[seat] == LOOK_GHOST && seat != viewed && !(g.Read32(block + GHOST_SOUNDS) >> seat & 1))
+      f.silent |= 1u << seat;
   }
   if (viewed >= SEATS)
     return f;
@@ -194,6 +234,7 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
     if (parts >> p & 1)
       (p < PART_RANK ? f.parts : f.hidden) |= PART_BITS[p];
   f.faces_hidden = (parts >> PART_FACES & 1) != 0;
+  f.ghost_gap = (parts >> PART_GHOST_GAP & 1) != 0;
   // the danger zone's display (vocabulary 4.4): while its count runs (the race side's, mode.h DANGER: from 60 x
   // seconds + 60 down, the machine exploding at 60) the big digit and the warning, as story chapter 6's, whose digit
   // is the count / 60; the sheet's digits go to 3
@@ -205,6 +246,100 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
   }
   return f;
 }
+
+void GapTable::Clear()
+{
+  *this = GapTable{};
+}
+
+void GapTable::Note(u32 seat, u32 bucket, u32 step)
+{
+  std::vector<u32>& at = m_at[seat];
+  if (step < m_step[seat])  // gone back (a rollback past this frame, a rewind, the scrubber): what came later is gone
+    for (u32& entry : at)
+      if (entry > step + 1)
+        entry = 0;
+  m_step[seat] = step;
+  if (bucket >= at.size())
+    at.resize(bucket + BUCKETS_PER_LAP, 0);
+  for (u32 b = std::min(m_last[seat] + 1, bucket); b <= bucket; ++b)
+    if (at[b] == 0)
+      at[b] = step + 1;
+  m_last[seat] = bucket;
+}
+
+s32 GapTable::Frames(u32 you, u32 other, u32 now) const
+{
+  const u32 mine = m_last[you], theirs = m_last[other];
+  const auto since = [now](const std::vector<u32>& at, u32 bucket) -> s32 {
+    return bucket < at.size() && at[bucket] != 0 && at[bucket] <= now + 1 ? static_cast<s32>(now + 1 - at[bucket]) : 0;
+  };
+  return theirs > mine ? since(m_at[other], mine) : theirs < mine ? -since(m_at[you], theirs) : 0;
+}
+
+GapPicture GapOf(s32 frames, bool other_finished)
+{
+  const u32 ms = (frames < 0 ? 0u - static_cast<u32>(frames) : static_cast<u32>(frames)) * 1000 / 60;
+  const u32 ahead = other_finished ? 0xBF404000 : 0xFF808000, level = other_finished ? 0xBFBFBF00 : 0xFFFFFF00,
+            behind = other_finished ? 0x4040BF00 : 0x8080FF00;  // .rodata 0x6CC8 to 0x6CDC
+  return {frames > 0 ? ahead : frames < 0 ? behind : level, frames > 0 ? 0x3Au : frames < 0 ? 0x3Bu : 0x20u, ms / 60000, ms % 60000 / 1000, ms % 1000};
+}
+
+namespace
+{
+// The gap, once a frame: every seat's bucket into the table, then the picture for the viewed racer against the seat
+// furthest ahead, as Time Attack's largest ghost (0xED654 to 0xED66C). Seats that are out are no one to chase.
+void DrawGap(Guest& g, u32 module, const Frame& f, u32 viewed)
+{
+  static GapTable table;
+  static u32 s_block = 0;
+  if (const u32 block = g.Read32(layout::MODES + 4); block != s_block)
+  {
+    s_block = block;
+    table.Clear();
+  }
+  const u32 window = layout::MODE_HUD + WINDOW_GAP, machines = g.Read32(module + net::MACHINES);
+  const u32 count = std::min<u32>(g.Read8(module + net::MACHINE_COUNT), SEATS);
+  const u32 now = g.Read32(module + game::RACE_CLOCK);
+  if (machines == 0 || now == 0)
+  {
+    g.Write32(window, 0);
+    return;
+  }
+  for (u32 seat = 0; seat < count; ++seat)
+  {
+    const u32 p = g.Read32(machines + seat * game::MACHINE_SIZE + game::MACHINE_PROGRESS);
+    if (p == 0)
+      continue;
+    const float distance = std::bit_cast<float>(g.Read32(p + game::PROGRESS_DISTANCE));
+    const float lap = std::bit_cast<float>(g.Read32(p + game::PROGRESS_LAP_LENGTH));
+    if (distance > 0 && lap > 0)
+      table.Note(seat, static_cast<u32>(distance / lap * GapTable::BUCKETS_PER_LAP), now);
+  }
+  u32 best = SEATS;
+  if (f.ghost_gap && viewed < count)
+    for (u32 seat = 0; seat < count; ++seat)
+    {
+      const u32 m = machines + seat * game::MACHINE_SIZE;
+      if (seat == viewed || (net::out_test::Out(g, module, m) && (g.Read32(m) & game::MACHINE_FLAG_FINISHED) == 0))
+        continue;
+      if (best == SEATS || table.Bucket(seat) > table.Bucket(best))
+        best = seat;
+    }
+  const u32 you = viewed < count ? machines + viewed * game::MACHINE_SIZE : 0;
+  if (best == SEATS || (g.Read32(you) & game::MACHINE_FLAG_FINISHED) != 0 || net::out_test::Out(g, module, you))
+  {
+    g.Write32(window, 0);
+    return;
+  }
+  const GapPicture picture = GapOf(table.Frames(viewed, best, now), (g.Read32(machines + best * game::MACHINE_SIZE) & game::MACHINE_FLAG_FINISHED) != 0);
+  g.Write32(window, picture.colour);
+  g.Write32(window + 4, picture.sign);
+  g.Write32(window + 8, picture.minutes);
+  g.Write32(window + 12, picture.seconds);
+  g.Write32(window + 16, picture.thousandths);
+}
+}  // namespace
 
 void Hud(Guest& g)
 {
@@ -265,14 +400,17 @@ void Hud(Guest& g)
   g.Write32(module + SRC + 8, progress);
   g.Write32(module + SRC + 0xC, progress ? module + R : 0);
   g.Write32(module + SRC + 0x10, 0);
-  // a seat's colour tints its machine drawn normally (a ghost keeps the ghost's tint)
+  // a seat's colour tints its machine drawn normally; a ghost has seat.ghost_tint (0: Time Attack's yellow)
   for (u32 seat = 0; seat < SEATS; ++seat)
   {
     const bool coloured = f.looks[seat] == LOOK_NORMAL && f.colours[seat] != 0;
     g.Write8(window + WINDOW_LOOKS + seat, coloured ? COLOURED : f.looks[seat]);
-    g.Write32(window + WINDOW_TINTS + 4 * seat, coloured ? f.colours[seat] : 0);
+    g.Write32(window + WINDOW_TINTS + 4 * seat, coloured ? f.colours[seat] : f.looks[seat] == LOOK_GHOST ? f.ghost_tints[seat] : 0);
     g.Write8(window + WINDOW_TAGS + seat, f.tags[seat]);
   }
+  g.Write32(window + WINDOW_SILENT, f.silent);
+  if (g.Read32(window + WINDOW_FLAGS) & GHOST_TASK)
+    DrawGap(g, module, f, viewed);
 }
 
 void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour)

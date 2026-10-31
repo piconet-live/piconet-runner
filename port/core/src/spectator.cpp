@@ -15,17 +15,22 @@ bool MayScrub(Role role)
 
 bool IsChase(Kind kind)
 {
-  return kind == Kind::Chase1 || kind == Kind::Chase2 || kind == Kind::Chase3;
+  return kind == Kind::Chase1 || kind == Kind::Chase2 || kind == Kind::Chase3 || kind == Kind::FirstPerson;
 }
 
 bool IsFixed(Kind kind)
 {
-  return static_cast<u32>(kind) >= static_cast<u32>(Kind::Fixed1);
+  return static_cast<u32>(kind) >= static_cast<u32>(Kind::Fixed1) && kind != Kind::FirstPerson;
 }
 
 u32 ChaseView(Kind kind)
 {
-  return IsChase(kind) ? static_cast<u32>(kind) - static_cast<u32>(Kind::Chase1) + 1 : 0;
+  return IsChase(kind) && kind != Kind::FirstPerson ? static_cast<u32>(kind) - static_cast<u32>(Kind::Chase1) + 1 : 0;
+}
+
+u32 ChaseHeight(Kind kind)
+{
+  return (ChaseView(kind) + 3) % 4;
 }
 
 u32 FixedType(Kind kind)
@@ -46,6 +51,7 @@ const char* KindName(Kind kind)
   case Kind::Fixed2: return "Fixed 2";
   case Kind::Fixed3: return "Fixed 3";
   case Kind::Fixed4: return "Fixed 4";
+  case Kind::FirstPerson: return "First person";
   }
   return "";
 }

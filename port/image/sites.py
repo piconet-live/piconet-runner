@@ -30,6 +30,7 @@ import sites_mines
 import sites_combat
 import sites_mode
 import sites_modehud
+import sites_ghostdraw
 import sites_monitors
 import sites_pilot
 import sites_present
@@ -456,6 +457,7 @@ rl_disc:
     sites_mode.add(k, r, patch, stock, test, la, D, middle)
     middle.extend(sites_combat.add(k, r, patch, stock, test, la))
     sites_modehud.add(k, r, patch, stock, test, la, middle)
+    sites_ghostdraw.add(k, r, patch, stock, test, la, middle)
     sites_cpu.add(k, r, patch, stock, test, middle, complete)
     sites_generator.add(k, r, patch, stock, test, middle)
     sites_leadergap.add(k, r, patch, stock, test, middle)
