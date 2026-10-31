@@ -10,6 +10,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "net_internal.h"
+#include "net_modes.h"
 #include "mode.h"
 #include "mode_hud.h"
 #include "files.h"
@@ -21,6 +22,8 @@
 #include <bit>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <string_view>
 
 namespace fzgx::net
 {
@@ -32,9 +35,10 @@ namespace mh = mode::hud;
 constexpr u32 COUNTDOWN = 0x28, RACE = 0x29, COURSE_INTRO = 0x27;
 constexpr u32 RACE_LAPS = 16;                     // the race block's laps (observer_frame.cpp)
 constexpr u32 MACHINE_MAX_ENERGY = 0x5DA;         // a machine's most energy, u16
-constexpr u32 BOOSTING = 0x20;                    // a machine's flag: a boost is running (race-map-machine 3)
 constexpr u32 RULE = BSS + 0x3C30, RULE_LAP_ONE_BOOST = 0x10;  // the rule word: boost on lap 1 (fn_1_331EC 0x33210)
-constexpr float BOOST_LEAST_ENERGY = 1.0f;        // a boost starts above this (fn_1_26F34 0x27288, .rodata 0xBD8 + 0x14)
+constexpr u32 R_TIMER = 0x1BDC70 + 0xA4;          // the timed mode's clock, steps (mode.cpp R_BASE; the game's TIMER part fn_1_CF5B0 0xCF600)
+constexpr u32 CLOCK_MOST = 999;                   // that part's most
+constexpr u32 RACE_MACHINES = 32;                 // in the race block: the seats' machines (files_match.cpp)
 constexpr u32 SURFACE = 0x218, SURFACE_PIT = 0x08000000;  // the refilling surface (fn_1_289B4 0x28C98)
 constexpr u32 TOTAL_TIME = 0x1E4, LAP_TIME = game::PROGRESS_LAP_TIME, LAP_RECORD = 12, BEST = game::PROGRESS_BEST_LAP;
 
@@ -58,6 +62,33 @@ const hl::Layout& TheLayout()
   return layout;
 }
 
+// The names as the observer's tower has them: the race's set-up's, or a machine's name. Once: the set-up does not change.
+struct Names
+{
+  bool read = false;
+  std::array<std::array<char, 24>, 30> name{};
+  std::array<u32, 30> colour{};
+};
+Names s_names;
+
+void ReadNames(Guest& g)
+{
+  if (s_names.read)
+    return;
+  s_names.read = true;
+  Timeline setup;
+  SetupColours(setup);
+  for (u32 i = 0; i < 30; ++i)
+  {
+    s_names.colour[i] = setup.colour[i] & 0xFFFFFF;
+    // (the set-up names every computer racer just CPU: six of those would say nothing, so they go by their machines)
+    if (setup.names[i][0] != 0 && std::string_view(setup.names[i]) != "CPU")
+      std::snprintf(s_names.name[i].data(), s_names.name[i].size(), "%.*s", static_cast<int>(sizeof(setup.names[i])), setup.names[i]);
+    else
+      std::snprintf(s_names.name[i].data(), s_names.name[i].size(), "%s", observer::MachineName(g.Read8(boot::RACE + RACE_MACHINES + i)));
+  }
+}
+
 struct Stats
 {
   u64 frames = 0, shown = 0, stripped = 0;
@@ -78,10 +109,13 @@ void ModernHudFrame(Guest& g)
     return;
   const auto began = std::chrono::steady_clock::now();
   const u32 mask = g.Read32(module + game::HUD_PARTS);
+  // A mode's clock is ours too: the mode's pass set its bit for this frame if the code shows it. (Without a mode that bit
+  // is the default mask's and says nothing.)
+  const u32 clock_bit = g.Read32(layout::MODES + 4) != 0 ? mh::PART_BITS[modes::PART_TIMER] : 0;
   // The game's parts off from the course's intro on, so no part is drawn even once. (A mask 0 stays 0.)
-  if (mask & mh::MODERN_PARTS)
+  if (mask & (mh::MODERN_PARTS | clock_bit))
   {
-    g.Write32(module + game::HUD_PARTS, mask & ~mh::MODERN_PARTS);
+    g.Write32(module + game::HUD_PARTS, mask & ~(mh::MODERN_PARTS | clock_bit));
     ++s_stats.stripped;
   }
   ModernHudShow show;
@@ -105,27 +139,40 @@ void ModernHudFrame(Guest& g)
       up(hl::SlotId::RaceTime, modes::PART_RACE_TIME);
       up(hl::SlotId::LapTimes, modes::PART_LAP_TIMES);
       up(hl::SlotId::Speed, modes::PART_SPEED);
+      up(hl::SlotId::Top6, modes::PART_FACES);
+      show.meter = hl::MeterOf(TheOptions().hud_meter);
+      show.clock = (mask & clock_bit) != 0 && show.layout[hl::SlotId::Clock].shown;
+      show.shown[static_cast<std::size_t>(hl::SlotId::Clock)] = show.clock;
+      show.clock_seconds = std::min<u32>((g.Read16(module + R_TIMER) + 59) / 60, CLOCK_MOST);
       const float energy = std::bit_cast<float>(g.Read32(m + game::MACHINE_ENERGY));
       const u32 most = g.Read16(m + MACHINE_MAX_ENERGY);
       show.energy = std::isfinite(energy) ? energy : 0;
       show.max_energy = most != 0 ? static_cast<float>(most) : 100.0f;
-      show.boosting = (g.Read32(m) & BOOSTING) != 0;
       show.pit = (g.Read32(m + SURFACE) & SURFACE_PIT) != 0;
       const float speed = std::bit_cast<float>(g.Read32(m + game::MACHINE_SPEED));
       show.speed = std::isfinite(speed) ? std::max(speed, 0.0f) : 0;
-      // A press boosts when the game's three tests pass: past lap 1 or the rule's lap-1 boost (fn_1_331EC 0x33220 clears the
-      // request otherwise), energy above 1 (fn_1_26F34 0x27288), and no `boost off` of a mode (the stand-in routine
-      // clears the request). The accelerator's test and the 6-step lockout are the press's own, not a state to show.
+      // Red or rainbow: the game's own meter draws its rainbow on P+0x118 + 1 >= 2 or the rule's lap-1 boost (fn_1_C8DC0
+      // 0xC90F4), the same test that lets a press boost (fn_1_331EC 0x33220); a mode's `boost off` takes the boost too.
       const bool lap_allows = (g.Read32(RULE) & RULE_LAP_ONE_BOOST) != 0 || static_cast<s32>(g.Read32(p + game::PROGRESS_LAPS)) >= 1;
       const bool mode_allows = g.Read32(layout::MODES + 4) == 0 || (g.Read32(mode::Record(g, viewed)) & mode::BOOST_OFF) == 0;
-      show.can_boost = phase == RACE && lap_allows && show.energy > BOOST_LEAST_ENERGY && mode_allows;
+      show.boost_open = lap_allows && mode_allows;
       show.place = g.Read8(p + game::PROGRESS_RANK) + 1u;
       // the face board's entries (.bss 0x7ACD8, 0x64 each, their number at +0xD), which FaceDisp draws into +0x60
       if (const u32 faces = g.Read32(module + BSS + 0x7ACD8); faces != 0)
         for (u32 i = 0; i < std::min<u32>(g.Read8(module + BSS + 0x7ACD8 + 0xD), 6); ++i)
         {
           const u32 entry = faces + i * 0x64;
-          show.heads[i] = {g.Read32(entry + 0x60), g.Read32(entry + 4), g.Read32(entry + 0x10), g.Read32(entry + 0x14)};
+          auto& head = show.heads[i];
+          head.address = g.Read32(entry + 0x60), head.seat = g.Read32(entry + 4), head.row = g.Read32(entry + 0x10), head.rank = g.Read32(entry + 0x14);
+          if (head.seat < 30)
+          {
+            ReadNames(g);
+            head.name = s_names.name[head.seat];
+            std::array<bool, 30> present{};
+            std::array<u32, 30> colour = s_names.colour;
+            mode::hud::MapRacers(g, viewed, false, present, colour);  // (seat.map_mark colours the dot)
+            head.colour = colour[head.seat];
+          }
         }
       for (u32 seat = 0; seat < count; ++seat)
         if ((g.Read32(machines + seat * game::MACHINE_SIZE) & game::MACHINE_FLAG_OUT) == 0)

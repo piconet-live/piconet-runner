@@ -7,6 +7,7 @@
 
 #include "overlay.h"
 
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -163,5 +164,30 @@ void Draw(ImDrawList* list, const Type& type, float x, float top, ImU32 colour, 
     v.pos.x += (foot - v.pos.y) * LEAN;
   }
   NearestSampling(list);
+}
+void DrawOutlined(ImDrawList* list, const Type& type, float x, float baseline, ImU32 colour, ImU32 outline_colour, float outline, float shear, const char* text)
+{
+  ImFont* font = FontOf(type);
+  const float top = baseline - font->GetFontBaked(type.size)->Ascent;
+  const int first = list->VtxBuffer.Size;
+  const auto put = [&](float left, float y, ImU32 c) {
+    if (!type.tabular)
+      list->AddText(font, type.size, ImVec2(left, y), c, text);
+    else
+      Pieces(font, type.size, text, left, [&](const char* begin, const char* end, float at) { list->AddText(font, type.size, ImVec2(at, y), c, begin, end); });
+  };
+  // the outline: the text stamped around a circle, round as a stroke's join; more stamps the wider it is
+  const int stamps = outline < 2.5f ? 8 : outline < 5 ? 12 : 16;
+  for (int i = 0; i < stamps; ++i)
+  {
+    const float turn = 6.2831853f * static_cast<float>(i) / static_cast<float>(stamps);
+    put(x + std::cos(turn) * outline, top + std::sin(turn) * outline, outline_colour);
+  }
+  put(x, top, colour);
+  for (int i = first; i < list->VtxBuffer.Size; ++i)
+  {
+    ImDrawVert& v = list->VtxBuffer[i];
+    v.pos.x += (baseline - v.pos.y) * shear;
+  }
 }
 }  // namespace fzgx_port::overlay

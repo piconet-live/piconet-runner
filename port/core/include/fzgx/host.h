@@ -195,9 +195,9 @@ struct ModernHudShow
   bool on = false;          // the game's HUD would be up (out, finished, the results, the observer's views: off)
   std::array<bool, hud_layout::SLOTS> shown{};  // by hud_layout::SlotId: not hidden by the mode or the layout
   hud_layout::Layout layout;
+  hud_layout::Meter meter = hud_layout::Meter::Blade;
   float energy = 0, max_energy = 100;
-  bool boosting = false;    // a boost is running (flag 0x20: an energy boost or a dash plate)
-  bool can_boost = false;   // a press would boost now: the game's own tests (modern_hud_frame.cpp)
+  bool boost_open = false;  // the game's boost is to be had: the rule its own meter goes rainbow by, and no `boost off` (modern_hud_frame.cpp)
   bool pit = false;         // on a refilling surface
   float speed = 0;          // km/h
   u32 place = 0, racers = 0;
@@ -205,11 +205,15 @@ struct ModernHudShow
   u32 race_ms = 0, lap_ms = 0, best_ms = 0;
   u32 lap_count = 0;        // of `lap_ms_ago`, newest first, the game keeps eight
   std::array<u32, 8> lap_ms_ago{};
-  // The top 6's heads, a spike: each row's picture the game's FaceDisp renders (fn_1_D27B8): its address, 0: none
+  bool clock = false;       // a mode's clock is up (`show s, TIMER`), its seconds as the game's part would draw them
+  u32 clock_seconds = 0;
+  // The top 6: each row's picture FaceDisp renders (fn_1_D27B8), by its address (0: none), and who that is.
   struct Head
   {
     u32 address = 0;
     u32 seat = 0, row = 6, rank = 0;  // whose, on which of the board's rows (6 and over: on none), at what place
+    u32 colour = 0;                   // 0xRRGGBB: that racer's dot on the course map
+    std::array<char, 24> name{};      // as the observer's tower names them
   };
   std::array<Head, 6> heads{};
 };

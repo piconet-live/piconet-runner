@@ -66,14 +66,23 @@ Layout Default()
     Slot& s = l.slots[static_cast<std::size_t>(id)];
     s.anchor = a, s.x = x, s.y = y;
   };
-  // where the game's own parts stand (measured on a Classic capture, 1000 units the picture's height)
-  put(SlotId::Position, Anchor::Top, 0, 50);
-  put(SlotId::Lap, Anchor::TopRight, 410, 50);
-  put(SlotId::Energy, Anchor::TopRight, 114, 50);
-  put(SlotId::RaceTime, Anchor::TopRight, 114, 156);
-  put(SlotId::LapTimes, Anchor::TopRight, 114, 242);
-  put(SlotId::Speed, Anchor::BottomRight, 114, 45);
+  // where the game's own parts stand, in the owner's mockup (1540 by 887; 1000 units the picture's height): every box the
+  // adapter's modern_hud.cpp lays its element in
+  put(SlotId::Position, Anchor::Top, 0, 65.4f);
+  put(SlotId::Lap, Anchor::TopRight, 417.1f, 33.8f);
+  put(SlotId::Energy, Anchor::TopRight, 78.9f, 45.1f);
+  put(SlotId::RaceTime, Anchor::TopRight, 106, 124);
+  put(SlotId::LapTimes, Anchor::TopRight, 106, 198.4f);
+  put(SlotId::Speed, Anchor::BottomRight, 90.2f, 41.7f);
+  put(SlotId::Top6, Anchor::TopLeft, 22.5f, 54.1f);
+  put(SlotId::Clock, Anchor::Top, 0, 219.8f);
   return l;
+}
+
+Meter MeterOf(std::string_view name)
+{
+  const auto at = std::find(METER_NAMES.begin(), METER_NAMES.end(), name);
+  return at == METER_NAMES.end() ? Meter::Blade : static_cast<Meter>(at - METER_NAMES.begin());
 }
 
 float UnitOf(const Slot& slot, const Rect& picture)

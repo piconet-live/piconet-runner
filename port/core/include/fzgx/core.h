@@ -211,6 +211,7 @@ struct Options
   bool modern_hud = false;   // "modernHud": the runner's own HUD in place of the game's energy, rank, laps and times (a
                              // player's setting; picture only: modern_hud_frame.cpp, the adapter's modern_hud.cpp)
   std::string hud_layout;    // "hudLayout": the modern HUD's layout file (fzgx/hud_layout.h); empty or unreadable: the default
+  std::string hud_meter;     // "hudMeter": the modern HUD's energy meter by name (hud_layout::MeterOf)
   bool rumble = true;        // "rumble": the player's controller may rumble (a player's setting); false: no rumble
                              // command reaches a pad in this start (the game still asks for it: RumbleAllowed)
   TaskbarGroup taskbar;      // "taskbar": the launcher's taskbar button, which the game window joins (a player's

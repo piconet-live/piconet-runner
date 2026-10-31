@@ -44,6 +44,8 @@ void TestTheModernHudLayout()
   s.anchor = Anchor::Centre, s.scale = 2;
   r = Place(s, 100, 50, bars);
   CHECK(Near(r.x1 - r.x0, 200) && Near(r.y1 - r.y0, 100) && Near(r.x0, 520) && Near(r.y0, 490));
+  // a meter by name; a name from a later launcher draws the default
+  CHECK(MeterOf("rev") == Meter::Rev && MeterOf("blade") == Meter::Blade && MeterOf("") == Meter::Blade && MeterOf("later") == Meter::Blade);
   // a file moves what it names; the rest stay
   std::string why;
   Layout l = FromText(R"({"lap":{"anchor":"bottom","x":-5,"y":12,"scale":1.5,"shown":false}})", &why);
