@@ -70,8 +70,8 @@ Layout Default()
   put(SlotId::Position, Anchor::Top, 0, 50);
   put(SlotId::Lap, Anchor::TopRight, 410, 50);
   put(SlotId::Energy, Anchor::TopRight, 114, 50);
-  put(SlotId::RaceTime, Anchor::TopRight, 114, 136);
-  put(SlotId::LapTimes, Anchor::TopRight, 114, 218);
+  put(SlotId::RaceTime, Anchor::TopRight, 114, 156);
+  put(SlotId::LapTimes, Anchor::TopRight, 114, 242);
   put(SlotId::Speed, Anchor::BottomRight, 114, 45);
   return l;
 }

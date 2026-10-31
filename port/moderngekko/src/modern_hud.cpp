@@ -37,12 +37,12 @@ constexpr float STEADY = 0.15f;           // the state must stand this long to c
 
 // An element's size, in the layout's units before its scale: each near its counterpart's in the game (measured on a
 // Classic capture; notes modern-hud/plan.md).
-constexpr float ENERGY_W = 276, ENERGY_H = 78;
-constexpr float TIME_W = 290, TIME_H = 74;
-constexpr float LAP_W = 124, LAP_H = 78;
+constexpr float ENERGY_W = 276, ENERGY_H = 98;
+constexpr float TIME_W = 290, TIME_H = 78;
+constexpr float LAP_W = 124, LAP_H = 98;
 constexpr float POSITION_W = 183, POSITION_H = 150;
-constexpr float SPEED_W = 245, SPEED_H = 62;
-constexpr float LAP_ROW = 48;
+constexpr float SPEED_W = 262, SPEED_H = 62;
+constexpr float LAP_ROW = 56;
 constexpr std::size_t LAP_ROWS_MOST = 4;
 
 struct Hud
@@ -118,7 +118,7 @@ void DrawEnergy(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& 
   if (alarm)
     list->AddRectFilled(ImVec2(b.x0, b.y0), ImVec2(b.x1, b.y1), ov::Colour(ov::DANGER, a * 0.28f * pulse), 8 * u);
   const float pad = 10 * u;
-  const ov::Box track{b.x0 + pad, b.y0 + 10 * u, b.x1 - pad, b.y0 + 38 * u};
+  const ov::Box track{b.x0 + pad, b.y0 + 9 * u, b.x1 - pad, b.y0 + 45 * u};
   const float w = track.x1 - track.x0, round = 5 * u;
   list->AddRectFilled(ImVec2(track.x0, track.y0), ImVec2(track.x1, track.y1), ov::Colour(ov::RAISED, a), round);
   const auto fill = [&](float from, float to, ImU32 colour) {
@@ -156,11 +156,11 @@ void DrawEnergy(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& 
     list->AddRect(ImVec2(track.x0 - grow, track.y0 - grow), ImVec2(track.x1 + grow, track.y1 + grow), ov::Colour(ov::ACCENT, a * m.flash), round + grow, 0, 2.5f * u);
   }
   // under the bar: BOOST, lit when a press would boost, and the energy
-  const float line = b.y0 + 58 * u;
-  const ov::Type word = ov::Display(25 * u);
+  const float line = b.y0 + 71 * u;
+  const ov::Type word = ov::Display(30 * u);
   const char* const boost_word = "BOOST";
   const float word_w = ov::Width(word, boost_word) + word.size * ov::LEAN;
-  const ov::Box chip{track.x0, line - 14 * u, track.x0 + word_w + 16 * u, line + 14 * u};
+  const ov::Box chip{track.x0, line - 18 * u, track.x0 + word_w + 16 * u, line + 18 * u};
   if (s.can_boost || m.boost > 0.5f)
   {
     list->AddRectFilled(ImVec2(chip.x0, chip.y0), ImVec2(chip.x1, chip.y1), ov::Colour(m.boost > 0.5f ? ov::TEXT : ov::ACCENT, a), 4 * u);
@@ -174,7 +174,7 @@ void DrawEnergy(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& 
   }
   char text[16];
   std::snprintf(text, sizeof(text), "%d", static_cast<int>(std::ceil(std::max(s.energy, 0.0f))));
-  const ov::Type figure = ov::Figure(38 * u);
+  const ov::Type figure = ov::Figure(58 * u);
   Right(list, figure, track.x1, line - 0.64f * figure.size, ov::Colour(warn ? colour : ov::TEXT, a), text);
 }
 
@@ -186,7 +186,7 @@ void DrawTime(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pi
   Plate(list, b, u, a);
   char text[24];
   TimeText(text, sizeof(text), s.race_ms);
-  const ov::Type figure = ov::Figure(58 * u);
+  const ov::Type figure = ov::Figure(100 * u);
   Right(list, figure, b.x1 - 12 * u, (b.y0 + b.y1) / 2 - 0.64f * figure.size, ov::Colour(ov::TEXT, a), text);
 }
 
@@ -196,15 +196,15 @@ void DrawLap(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pic
   const float u = hl::UnitOf(slot, picture);
   const ov::Box b = BoxOf(hl::Place(slot, LAP_W, LAP_H, picture));
   Plate(list, b, u, a);
-  const ov::Type word = ov::Display(20 * u), figure = ov::Figure(48 * u), rest = ov::Figure(30 * u);
+  const ov::Type word = ov::Display(22 * u), figure = ov::Figure(95 * u), rest = ov::Figure(58 * u);
   char of[16], at[16];
   std::snprintf(at, sizeof(at), "%u", s.lap);
   of[0] = 0;
   if (s.laps != 0)
     std::snprintf(of, sizeof(of), "/%u", s.laps);
-  const float mid = b.y0 + 30 * u, wide = ov::Width(rest, of), x = (b.x0 + b.x1 + ov::Width(figure, at) - wide) / 2;
+  const float mid = b.y0 + 38 * u, wide = ov::Width(rest, of), x = (b.x0 + b.x1 + ov::Width(figure, at) - wide) / 2;
   Right(list, figure, x, mid - 0.64f * figure.size, ov::Colour(ov::TEXT, a), at);
-  ov::Draw(list, rest, x, mid - 0.64f * rest.size + 7 * u, ov::Colour(ov::SECONDARY, a), of);
+  ov::Draw(list, rest, x, mid - 0.64f * rest.size + 13 * u, ov::Colour(ov::SECONDARY, a), of);
   const float wide_word = ov::Width(word, "LAP");
   ov::Draw(list, word, (b.x0 + b.x1 - wide_word) / 2, b.y1 - 25 * u, ov::Colour(ov::SECONDARY, a), "LAP");
 }
@@ -218,7 +218,7 @@ void DrawLapTimes(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect
   const float u = hl::UnitOf(slot, picture);
   const ov::Box b = BoxOf(hl::Place(slot, TIME_W, LAP_ROW * static_cast<float>(rows + 1) + 8, picture));
   Plate(list, b, u, a);
-  const ov::Type figure = ov::Figure(38 * u), word = ov::Display(21 * u), number = ov::Figure(28 * u);
+  const ov::Type figure = ov::Figure(80 * u), word = ov::Display(28 * u), number = ov::Figure(42 * u);
   const auto row_mid = [&](std::size_t r) { return b.y0 + (4 + LAP_ROW * (static_cast<float>(r) + 0.5f)) * u; };
   char text[24];
   TimeText(text, sizeof(text), s.lap_ms);
@@ -247,10 +247,10 @@ void DrawPosition(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect
   char place[16], of[16];
   std::snprintf(place, sizeof(place), "%u", s.place);
   std::snprintf(of, sizeof(of), "/%u", s.racers);
-  const ov::Type big = ov::Display(132 * u), small = ov::Figure(34 * u);
+  const ov::Type big = ov::Display(205 * u), small = ov::Figure(42 * u);
   const float wide = ov::Width(big, place) + big.size * ov::LEAN * 0.5f;
-  ov::Draw(list, big, (b.x0 + b.x1 - wide) / 2, b.y0 + 58 * u - 0.64f * big.size, ov::Colour(s.place == 1 ? ov::GOLD : ov::TEXT, a), place);
-  Right(list, small, b.x1 - 12 * u, b.y1 - 42 * u, ov::Colour(ov::SECONDARY, a), of);
+  ov::Draw(list, big, (b.x0 + b.x1 - wide) / 2, b.y0 + 66 * u - 0.64f * big.size, ov::Colour(s.place == 1 ? ov::GOLD : ov::TEXT, a), place);
+  Right(list, small, b.x1 - 12 * u, b.y1 - 44 * u, ov::Colour(ov::SECONDARY, a), of);
 }
 
 void DrawSpeed(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
@@ -261,11 +261,11 @@ void DrawSpeed(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& p
   Plate(list, b, u, a);
   char text[16];
   std::snprintf(text, sizeof(text), "%d", static_cast<int>(std::lround(s.speed)));
-  ov::Type big = ov::Display(66 * u);
+  ov::Type big = ov::Display(100 * u);
   big.tabular = true;
-  const ov::Type unit = ov::Body(22 * u);
+  const ov::Type unit = ov::Body(26 * u);
   const float mid = (b.y0 + b.y1) / 2, right = b.x1 - 10 * u, unit_w = ov::Width(unit, "km/h");
-  ov::Draw(list, unit, right - unit_w, mid - 0.64f * unit.size + 11 * u, ov::Colour(ov::SECONDARY, a), "km/h");
+  ov::Draw(list, unit, right - unit_w, mid - 0.64f * unit.size + 13 * u, ov::Colour(ov::SECONDARY, a), "km/h");
   Right(list, big, right - unit_w - 14 * u, mid - 0.64f * big.size, ov::Colour(s.boosting ? ov::ACCENT : ov::TEXT, a), text);
 }
 }  // namespace
