@@ -312,9 +312,9 @@ VIEW_PORT_STOCK	site	0x4807BA81		u32		raceview.py:37	the game's instruction at V
 VIEW_BITS_SITE_1	site	0xAD10	REL_TEXT	u32		raceview.py:35	patched site in fn_1_ABAC: the port's newly set control bits read for the next view; the helper gives the followed seat's from the input rows
 VIEW_BITS_SITE_2	site	0xAD24	REL_TEXT	u32		raceview.py:35	patched site in fn_1_ABAC: the same bits read for the view before
 VIEW_BITS_STOCK	site	0x7C0320AE		u32		raceview.py:38	the game's instruction at both VIEW_BITS sites (lbzx r0, r3, r4)
-VIEW_LOW_SITE	site	0xAD3C	REL_TEXT	u32		raceview.py:36	patched site in fn_1_ABAC: the lowest view, 0 in the game and 1 in a race of ours
+VIEW_LOW_SITE	site	0xAD3C	REL_TEXT	u32		raceview.py:36	the site in fn_1_ABAC of the lowest view: 0 in the game, and in a race of the native form (the first person view); 1 only in the fork's image
 VIEW_LOW_STOCK	site	0x3BE00000		u32		raceview.py:39	the game's instruction at VIEW_LOW_SITE (li r31, 0)
-CAMERA_INDEX_VIEW	site	0x725C	REL_TEXT	u32		port/image/build.py:55	patched site: fn_1_725C (a camera record's view) takes its index; in a race it is 0 unless it is one of the four records
+CAMERA_INDEX_VIEW	site	0x725C	REL_TEXT	u32		port/image/build.py:55	patched site: fn_1_725C (a camera record's view) takes its index; in a race it is 0 unless it is one of the four records; a slot not of the four answers view 1 at once (raceview.py)
 CAMERA_INDEX_STATE	site	0x6F14	REL_TEXT	u32		port/image/build.py:55	patched site: fn_1_6EC0 (a camera record's state) takes its index, likewise
 CAMERA_INDEX_PLACE	site	0x686C	REL_TEXT	u32		port/image/build.py:55	patched site: fn_1_681C (a camera record's position) takes its index, likewise
 CAMERA_INDEX_STOCK	site	0x5460063E		u32		port/image/build.py:56	the game's instruction at the three CAMERA_INDEX sites (clrlwi r0, r3, 0x18)

@@ -90,8 +90,8 @@ void Race(Guest& g, u32 step, int local_seat)
 // (frame_tasks.py `racetasks`): the game's camera button changes it in the step (raceview.py), from the input rows,
 // so a rollback makes the change again and the value read after a frame's steps is the player's. Read only while
 // the racer races and this game does not spectate (control block +248 below 180: from there the spectator's
-// controls write the record's view, frame_spectate.py), and only a view a player can choose (1 to 3: 5 is the
-// retired view the game sets while the followed machine is out). The launcher keeps the last one said for the next
+// controls write the record's view, frame_spectate.py), and only a view the launcher keeps (1 to 3: 0, the
+// first person view, starts no race; 5 is the retired view the game sets while the followed machine is out). The launcher keeps the last one said for the next
 // race (protocol/formats.md section 2, "match.camera"). Picture only: reads the game, writes nothing of it.
 void CameraView(Guest& g, bool racing)
 {
