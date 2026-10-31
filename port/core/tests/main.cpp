@@ -191,6 +191,7 @@ void TestAFaultShowsOnTheResults();
 void TestTheHeldWords();
 void TestThePedalLatch();
 void TestTheStatsPage();
+void TestTheEnergyWords();
 void TestTheCombatWords();
 void TestTheOnOffWordsByParameter();
 void TestASquareRootsCostInBothLoops();
@@ -557,6 +558,7 @@ int main(int argc, char** argv)
   TestTheHeldWords();
   TestThePedalLatch();
   TestTheStatsPage();
+  TestTheEnergyWords();
   TestTheCombatWords();
   TestTheOnOffWordsByParameter();
   TestASquareRootsCostInBothLoops();

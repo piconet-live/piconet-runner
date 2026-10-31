@@ -1509,6 +1509,93 @@ void TestTheStatsPage()
   CHECK(g3.Read32(BLOCK + mode::BLOCK) == 0 && g3.Read32(BLOCK + mode::STATS_ON) == 0);
 }
 
+// The energy words: the setup word fills every seat, a write holds to 1..1000 and cuts a real, the energy only falls when
+// it is over; boost_left reads the byte; a mode without them leaves the field and the energy; the checksum counts a
+// written value only; a step run again gives the same memory.
+void TestTheEnergyWords()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("energy_words.mode.json"), &why);
+  CHECK(p.has_value() && p->max_energy == 150);
+  if (!p)
+    return;
+  const auto machine = [](u32 seat) { return MACHINES + seat * game::MACHINE_SIZE; };
+  const auto energy = [&](Guest& g, u32 seat) { return std::bit_cast<float>(g.Read32(machine(seat) + game::MACHINE_ENERGY)); };
+  const auto most = [&](Guest& g, u32 seat) { return g.Read16(machine(seat) + game::MACHINE_MAX_ENERGY); };
+  const auto created = [&](Guest& g, u32 seats) {
+    FakeModeRace(g, seats, 600);
+    for (u32 seat = 0; seat < seats; ++seat)
+    {
+      g.Write16(machine(seat) + game::MACHINE_MAX_ENERGY, 100);
+      g.Write32(machine(seat) + game::MACHINE_ENERGY, std::bit_cast<u32>(100.0f));
+    }
+  };
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  created(g, 6);
+  g.Write8(machine(5) + 0x18A, 37);
+  g.Write8(machine(5) + 0x18B, 200);                            // (the energy's counter: not this word)
+  const std::vector<u8> before = BlockOf(g);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::END) == 0);
+  CHECK(most(g, 0) == 150 && energy(g, 0) == 150.0f);           // begun full
+  CHECK(most(g, 1) == 300 && energy(g, 1) == 150.0f);           // raised: the energy stays
+  CHECK(most(g, 2) == 50 && energy(g, 2) == 50.0f);             // lowered, a real cut: the energy held to it
+  CHECK(most(g, 3) == 1000 && energy(g, 3) == 150.0f);          // past the range
+  CHECK(most(g, 4) == 1 && energy(g, 4) == 1.0f);               // below the range
+  CHECK(most(g, 5) == 160 && energy(g, 5) == 150.0f);           // += reads what the setup word wrote
+  CHECK(g.Read32(BLOCK + mode::GLOBALS) == 37);
+  // a step run again from the same memory: the same machines, the same block
+  const std::vector<u8> after = BlockOf(g);
+  const u16 five = most(g, 5);
+  for (u32 seat = 0; seat < 6; ++seat)
+  {
+    g.Write16(machine(seat) + game::MACHINE_MAX_ENERGY, 100);
+    g.Write32(machine(seat) + game::MACHINE_ENERGY, std::bit_cast<u32>(100.0f));
+  }
+  g.CopyTo(BLOCK, before.data(), before.size());
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(BlockOf(g) == after && most(g, 5) == five && energy(g, 2) == 50.0f);
+  // the energy under the new most stays, to the bit
+  g.Write32(machine(1) + game::MACHINE_ENERGY, std::bit_cast<u32>(33.3f));
+  g.Write32(MODULE + game::RACE_CLOCK, 601);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(energy(g, 1) == 33.3f && most(g, 1) == 300);
+  // a real that is not finite is a mode error, for every game alike; the field stays what the setup word wrote
+  picojson::array bad = {picojson::value(1.0)};
+  const std::optional<mode::Package> q = ReadWith("energy_words.mode.json", "params", picojson::value(bad));
+  CHECK(q.has_value());
+  if (!q)
+    return;
+  TestHost host3;
+  ModData data3;
+  Guest g3(host3, data3);
+  created(g3, 6);
+  mode::Run(g3, *q, BLOCK, MODULE);
+  CHECK(g3.Read32(BLOCK + mode::END) == 1 && g3.Read32(BLOCK + mode::FAULT) == mode::FAULT_REAL);
+  CHECK(most(g3, 0) == 150);
+  // a mode without the words: the field and the energy as the game left them, and the checksum as it was
+  const std::optional<mode::Package> old = mode::Read(Vector("stats.mode.json"), &why);
+  CHECK(old.has_value() && !old->max_energy);
+  if (!old)
+    return;
+  TestHost host2;
+  ModData data2;
+  Guest g2(host2, data2);
+  created(g2, 4);
+  mode::Run(g2, *old, BLOCK, MODULE);
+  CHECK(most(g2, 0) == 100 && energy(g2, 0) == 100.0f);
+  g2.Write32(layout::MODES + 4, BLOCK);
+  const u32 sum = net::StateChecksum(g2, MODULE);
+  g2.Write16(machine(2) + game::MACHINE_MAX_ENERGY, 150);
+  const u32 written = net::StateChecksum(g2, MODULE);
+  CHECK(written != sum);
+  g2.Write16(machine(2) + game::MACHINE_MAX_ENERGY, 100);
+  CHECK(net::StateChecksum(g2, MODULE) == sum);
+}
+
 // The combat values' live words (the sites that read them: test_mode_sites.py), the time bonus and the points table.
 void TestTheCombatWords()
 {

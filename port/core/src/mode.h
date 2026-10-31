@@ -216,6 +216,7 @@ struct Package
   u32 time_bonus = 0;               // time_bonus's steps, 0 none
   std::array<std::optional<u32>, 4> combat{};  // damage, knockback, wall_damage, wall_bounce: binary32 bits
   bool spin_off = false, side_off = false, spin_immune = false;
+  std::optional<u16> max_energy;    // max_energy: every seat's M+0x5DA and M+0x184 at game_start; none, the game's
   bool stats_page = false;          // the compiler's stats_page: the block has the eighth page (a rule writes one of its stats)
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits

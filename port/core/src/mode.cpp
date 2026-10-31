@@ -54,6 +54,8 @@ constexpr u32 M_PITCH = 0x1F4, M_STRAFE = 0x1F8, M_STEER = 0x1FC, M_ACCEL = 0x20
 constexpr u32 M_RESTORING = 0x214, M_SURFACE = 0x218, M_BASE_SPEED = 0x224;   // (u16; the step's surface bits)
 constexpr u32 M_LAST_HIT = 0x4AC, M_SETTLED = 0x481, M_KOS = 0x482, M_CPU = 0x484;  // (u8, u8, the CPU block)
 constexpr u32 M_CONTACT = 0x58C, M_KO_WAIT = 0x593, M_MAX_ENERGY = 0x5DA;     // (u8 at 0x593; u16 at 0x5DA)
+constexpr u32 M_BOOST_LEFT = 0x18A;                                           // (u8: fn_1_26F34 counts it down)
+constexpr float MAX_ENERGY_LEAST = 1.0f, MAX_ENERGY_MOST = 1000.0f;
 constexpr u32 F_RESTORE = 0x1, F_AIRBORNE = 0x2, F_SPIN = 0x8, F_BOOSTING = 0x20, F_BROKEN = 0x80, F_DRIVEN = 0x400,
               F_FALLEN = 0x800, F_FROZEN = 0x8000, F_FINISHED = 0x10000, F_SIDE = 0x20000, F_WALL = 0x00800000,
               F_RETIRED = 0x08000000, F_TIME_OVER = 0x10000000;
@@ -874,6 +876,7 @@ private:
       case SEAT_WRONGWAY: return m_g.Read32(Progress() + P_WRONG_WAY) != 0;
       case SEAT_TOPSPEED: return m_g.Read32(m + M_TOP_SPEED);
       case SEAT_MAXENERGY: return Bits(static_cast<float>(m_g.Read16(m + M_MAX_ENERGY)));
+      case SEAT_BOOSTLEFT: return m_g.Read8(m + M_BOOST_LEFT);
       case SEAT_LASTHITENERGY: return m_g.Read32(m + M_LAST_HIT);
       case SEAT_FALLEN: return (Flags() & F_FALLEN) != 0;
       case SEAT_SPINNING: return (Flags() & F_SPIN) != 0;
@@ -1782,6 +1785,17 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         g.Write32(machine + game::MACHINE_ENERGY, Bits(std::clamp(Real(a.value[0]), 0.0f, most) + 0.0f));
         break;
       }
+      case ACTION_SEATMAXENERGY:
+      {
+        if (!Finite(a.value[0]))
+          return m.Fail(FAULT_REAL);
+        // the game's field is a whole number; the energy stays unless it is over the new most (vocabulary 4.4)
+        const u16 most = static_cast<u16>(std::clamp(Real(a.value[0]), MAX_ENERGY_LEAST, MAX_ENERGY_MOST));
+        g.Write16(machine + M_MAX_ENERGY, most);
+        if (Real(g.Read32(machine + game::MACHINE_ENERGY)) > static_cast<float>(most))
+          g.Write32(machine + game::MACHINE_ENERGY, Bits(static_cast<float>(most)));
+        break;
+      }
       case ACTION_BOOST: g.Write32(record, g.Read32(record) | BOOST); break;
       case ACTION_BOOSTOFF:
         g.Write32(record, g.Read32(record) | BOOST_OFF);
@@ -2103,6 +2117,15 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
       g.Write32(block + NC + 4 * seat, 0xFFFFFFFFu);
   if (p.restore.value_or(false))
     g.Write32(block + RESPAWN, all);
+  // max_energy: machines begin full, as the game's creation fills them from the field (fn_1_22F90 0x2318C). The machines
+  // exist and have not stepped; a later fn_1_22F90 (a Restore's, 0x2C48C) reads the new field
+  if (p.max_energy)
+    for (u32 seat = 0; seat < count; ++seat)
+    {
+      const u32 machine = m.MachineOf(seat);
+      g.Write16(machine + M_MAX_ENERGY, *p.max_energy);
+      g.Write32(machine + game::MACHINE_ENERGY, Bits(static_cast<float>(*p.max_energy)));
+    }
   g.Write8(module + STORY_LEVEL, 0);   // (the CPU modes' difficulty: never another game's story state)
   // (the image's timer site reads CLOCK; show_clock's value is past any race clock, so the tick site stays quiet)
   const bool clock_shown = hud::UsesClock(p);

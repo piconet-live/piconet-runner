@@ -102,6 +102,11 @@ u32 StateChecksum(Guest& g, u32 module)
     if (const u8* p = g.Ram(block, size))
       for (u32 at = 0; at < size; at += 4)
         h = (h ^ LoadBig32(p + at)) * FNV_PRIME;
+    // M+0x5DA is outside the words above (BLOCK_SKIP). A mode's max energy counts: only a value the mode wrote is
+    // summed, so a race that never writes it (the field is the game's 100) sums as before
+    for (u32 i = 0; i < *count; ++i)
+      if (const u32 most = g.Read16(machines + i * game::MACHINE_SIZE + game::MACHINE_MAX_ENERGY); most != 100 && most != 0)
+        h = (h ^ most) * FNV_PRIME;
   }
   return h;
 }

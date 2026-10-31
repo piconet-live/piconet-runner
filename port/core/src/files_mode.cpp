@@ -273,6 +273,12 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
               p.results_title.back() == ' ')
             return Fail(why, "has a results title the game cannot draw");
         }
+        else if (id == modes::SETUP_MAXENERGY)
+        {
+          if (setup_args.size() != 1 || arg(0) < 1 || arg(0) > 1000)
+            return Fail(why, "has a full energy outside 1 to 1000");
+          p.max_energy = static_cast<u16>(arg(0));
+        }
         else if (id == modes::SETUP_STATSPAGE)
         {
           p.stats_page = true;
