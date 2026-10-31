@@ -205,6 +205,13 @@ struct ModernHudShow
   u32 race_ms = 0, lap_ms = 0, best_ms = 0;
   u32 lap_count = 0;        // of `lap_ms_ago`, newest first, the game keeps eight
   std::array<u32, 8> lap_ms_ago{};
+  // The top 6's heads, a spike: each row's picture the game's FaceDisp renders (fn_1_D27B8): its address, 0: none
+  struct Head
+  {
+    u32 address = 0;
+    u32 seat = 0, row = 6, rank = 0;  // whose, on which of the board's rows (6 and over: on none), at what place
+  };
+  std::array<Head, 6> heads{};
 };
 struct MinimapShow
 {

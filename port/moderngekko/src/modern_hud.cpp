@@ -9,12 +9,26 @@
 #include "adapter_internal.h"
 
 #include <algorithm>
+#include <array>
+#include <optional>
+#include <span>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <mutex>
+#include <string>
 
 #include <imgui.h>
+
+#include "Core/HW/Memmap.h"
+#include "Core/System.h"
+#include "VideoCommon/AbstractTexture.h"
+#include "VideoCommon/TextureCacheBase.h"
+#include "VideoCommon/TextureConfig.h"
+#include "VideoCommon/TextureDecoder.h"
+#include "VideoCommon/TextureInfo.h"
+#include "VideoCommon/VideoConfig.h"
 
 #include "fzgx/host.h"
 #include "fzgx/hud_layout.h"
@@ -268,6 +282,55 @@ void DrawSpeed(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& p
   ov::Draw(list, unit, right - unit_w, mid - 0.64f * unit.size + 13 * u, ov::Colour(ov::SECONDARY, a), "km/h");
   Right(list, big, right - unit_w - 14 * u, mid - 0.64f * big.size, ov::Colour(s.boosting ? ov::ACCENT : ov::TEXT, a), text);
 }
+
+// The heads, a spike behind HUD_HEADS (1: squares, 2: slanted), HUD_HEADS_DUMP a folder for their PNGs: the textures
+// the game's FaceDisp copied this frame, found in the emulator's texture cache by the game's address. Picture only.
+void DrawHeads(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
+{
+  static const char* const mode = std::getenv("HUD_HEADS");
+  static const char* const dump = std::getenv("HUD_HEADS_DUMP");
+  static fzgx::u32 frames = 0;
+  static std::array<RcTcacheEntry, 6> held;  // alive until the next frame's: the drawing happens after this returns
+  if (mode == nullptr || g_texture_cache == nullptr)
+    return;
+  ++frames;
+  auto& memory = Core::System::GetInstance().GetMemory();
+  const float u = (picture.y1 - picture.y0) / 1000;
+  ov::SmoothSampling(list);
+  for (std::size_t i = 0; i < s.heads.size(); ++i)
+  {
+    const auto& head = s.heads[i];
+    held[i] = {};
+    if (head.address == 0 || head.row >= 6)
+      continue;
+    const fzgx::u32 at = head.address & 0x01FFFFFF;
+    if (at + 64 * 64 * 2 > memory.GetRamSizeReal())
+      continue;
+    const TextureInfo info(0, std::span<const fzgx::u8>(memory.GetRAM() + at, 64 * 64 * 2), {}, at, TextureFormat::RGB5A3,
+                           TLUTFormat::IA8, 64, 64, false, {}, {}, std::nullopt);
+    held[i] = g_texture_cache->GetTexture(g_ActiveConfig.iSafeTextureCache_ColorSamples, info);
+    if (!held[i] || held[i]->texture == nullptr)
+      continue;
+    const AbstractTexture* texture = held[i]->texture.get();
+    if (frames % 600 == 1)
+      std::fprintf(stderr, "fzgx: head entry %zu: seat %u row %u rank %u address %08x copy %d, %ux%u\n", i, head.seat, head.row,
+                   head.rank, head.address, held[i]->IsEfbCopy() ? 1 : 0, texture->GetWidth(), texture->GetHeight());
+    if (dump != nullptr && (frames == 1800 || frames == 1815 || frames == 1830))
+      texture->Save(std::string(dump) + "/head-" + std::to_string(head.row + 1) + "-" + std::to_string(frames) + ".png", 0);
+    const float size = 92 * u, x = picture.x0 + 24 * u, y = picture.y0 + 90 * u + head.row * (size + 8 * u);
+    const ImTextureRef ref(static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(texture)));
+    const ImU32 white = ov::Colour(0xFFFFFF, a);
+    if (mode[0] == '2')
+    {
+      const float lean = 0.22f;  // of the size: the top moves right; the picture is cropped by the slant, not sheared
+      list->AddImageQuad(ref, ImVec2(x + lean * size, y), ImVec2(x + size, y), ImVec2(x + size - lean * size, y + size), ImVec2(x, y + size),
+                         ImVec2(lean, 0), ImVec2(1, 0), ImVec2(1 - lean, 1), ImVec2(0, 1), white);
+    }
+    else
+      list->AddImage(ref, ImVec2(x, y), ImVec2(x + size, y + size), ImVec2(0, 0), ImVec2(1, 1), white);
+  }
+  ov::NearestSampling(list);
+}
 }  // namespace
 
 void ShowModernHud(const fzgx::ModernHudShow& show)
@@ -334,6 +397,7 @@ void DrawModernHud(float x0, float y0, float x1, float y1)
     DrawPosition(list, s, picture, a);
   if (up(hl::SlotId::Speed))
     DrawSpeed(list, s, picture, a);
+  DrawHeads(list, s, picture, a);
   const auto took = Clock::now() - began;
   s_hud.total += took;
   s_hud.most = std::max<std::chrono::nanoseconds>(s_hud.most, took);

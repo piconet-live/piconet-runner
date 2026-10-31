@@ -120,6 +120,13 @@ void ModernHudFrame(Guest& g)
       const bool mode_allows = g.Read32(layout::MODES + 4) == 0 || (g.Read32(mode::Record(g, viewed)) & mode::BOOST_OFF) == 0;
       show.can_boost = phase == RACE && lap_allows && show.energy > BOOST_LEAST_ENERGY && mode_allows;
       show.place = g.Read8(p + game::PROGRESS_RANK) + 1u;
+      // the face board's entries (.bss 0x7ACD8, 0x64 each, their number at +0xD), which FaceDisp draws into +0x60
+      if (const u32 faces = g.Read32(module + BSS + 0x7ACD8); faces != 0)
+        for (u32 i = 0; i < std::min<u32>(g.Read8(module + BSS + 0x7ACD8 + 0xD), 6); ++i)
+        {
+          const u32 entry = faces + i * 0x64;
+          show.heads[i] = {g.Read32(entry + 0x60), g.Read32(entry + 4), g.Read32(entry + 0x10), g.Read32(entry + 0x14)};
+        }
       for (u32 seat = 0; seat < count; ++seat)
         if ((g.Read32(machines + seat * game::MACHINE_SIZE) & game::MACHINE_FLAG_OUT) == 0)
           ++show.racers;
