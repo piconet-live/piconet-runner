@@ -354,7 +354,9 @@ void RunSession(Guest& g)
     return;
   }
   SayResultsLeavable(g, s);
-  if (!s.exit_sent && g.Read32(EXIT_REQUEST) == 1)
+  // (a playback ends at the recording's last step, frame.cpp: a stop asked at the recording's A, a few steps earlier, can
+  // beat that step and lose the playback's summary)
+  if (!s.exit_sent && !s.playback && g.Read32(EXIT_REQUEST) == 1)
     LeaveTheResults(g, s, "the player left the results");
   PassTheFirstResultsPageInTime(g, s);
   LeaveTheResultsInTime(g, s);
