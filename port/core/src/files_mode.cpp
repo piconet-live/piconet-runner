@@ -217,6 +217,39 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
           else
             p.clock_limit = value;
         }
+        else if (id == modes::SETUP_DAMAGE || id == modes::SETUP_KNOCKBACK || id == modes::SETUP_WALLDAMAGE ||
+                 id == modes::SETUP_WALLBOUNCE)
+        {
+          const float v = std::bit_cast<float>(arg(0));
+          if (setup_args.size() != 1 || !(v >= 0.1f && v <= 10.0f))
+            return Fail(why, "has a combat value outside 10% to 1000%");
+          p.combat[id == modes::SETUP_DAMAGE ? 0 : id == modes::SETUP_KNOCKBACK ? 1 : id == modes::SETUP_WALLDAMAGE ? 2 : 3] =
+              static_cast<u32>(arg(0));
+        }
+        else if (id == modes::SETUP_SPINATTACKS || id == modes::SETUP_SIDEATTACKS || id == modes::SETUP_SPINIMMUNITY)
+        {
+          if (setup_args.size() != 1 || (arg(0) != 0 && arg(0) != 1))
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          (id == modes::SETUP_SPINATTACKS ? p.spin_off : id == modes::SETUP_SIDEATTACKS ? p.side_off : p.spin_immune) =
+              id == modes::SETUP_SPINIMMUNITY ? arg(0) != 0 : arg(0) == 0;
+        }
+        else if (id == modes::SETUP_TIMEBONUS)
+        {
+          if (setup_args.size() != 1 || arg(0) < 0 || arg(0) > 120)
+            return Fail(why, "has a time bonus outside 0 to 120 seconds");
+          p.time_bonus = static_cast<u32>(arg(0)) * 60;
+        }
+        else if (id == modes::SETUP_POINTSTABLE)
+        {
+          if (setup_args.empty() || setup_args.size() > modes::SEATS)
+            return Fail(why, "has a points table of no place or more than the seats");
+          for (const s32 points : setup_args)
+          {
+            if (points < 0 || points > 999)
+              return Fail(why, "has a points table outside 0 to 999");
+            p.points_table.push_back(static_cast<u32>(points));
+          }
+        }
         else if (id == modes::SETUP_RACEWAITSEVERYONE)
         {
           p.race_waits = true;

@@ -954,6 +954,13 @@ private:
     }
     Fail(FAULT_WAITS);
   }
+  // a live factor: 1.0 while its word is the game's own (0)
+  u32 Factor(u32 word) const
+  {
+    const u32 v = m_g.Read32(m_block + COMBAT + word);
+    return v != 0 ? v : 0x3F800000u;
+  }
+
   u32 RaceRead(u32 id)
   {
     switch (id)
@@ -962,6 +969,13 @@ private:
       case RACE_STARTED: return static_cast<s16>(m_g.Read16(m_module + game::PHASE)) >= s16{game::PHASE_RACE};
       case RACE_SEATS: return m_count;
       case RACE_LAPS: return m_g.Read32(layout::RACE_LAPS_AT);
+      case RACE_DAMAGE: return Factor(C_DAMAGE);
+      case RACE_KNOCKBACK: return Factor(C_KNOCK);
+      case RACE_WALLDAMAGE: return Factor(C_WALL);
+      case RACE_WALLBOUNCE: return Factor(C_BOUNCE);
+      case RACE_SPINATTACKS: return m_g.Read32(m_block + COMBAT + C_SPIN_OFF) == 0;
+      case RACE_SIDEATTACKS: return m_g.Read32(m_block + COMBAT + C_SIDE_OFF) == 0;
+      case RACE_SPINIMMUNITY: return m_g.Read32(m_block + COMBAT + C_IMMUNE) != 0;
       default: Fail(FAULT_CODE); return 0;
     }
   }
@@ -1587,6 +1601,28 @@ u32 Members(const Package& p, u32 team, u32 count)
   return set;
 }
 
+// A combat value into its live words (mode.h COMBAT): `index` damage, knockback, wall damage, wall bounce. At exactly the
+// game's own, 0, so the sites take the game's instruction. Held to 10% to 1000%.
+void SetCombat(Mem& g, u32 block, u32 index, u32 bits)
+{
+  const float v = std::clamp(Real(bits), 0.1f, 10.0f);
+  const u32 word = v == 1.0f ? 0 : std::bit_cast<u32>(v), c = block + COMBAT;
+  switch (index)
+  {
+    case 0:
+      g.Write32(c + C_DAMAGE, word);
+      g.Write32(c + C_FACTOR, word == 0 ? 0 : Bits(0.002f * v));   // (.rodata 0x968)
+      g.Write32(c + C_CAP, word == 0 ? 0 : Bits(20.0f * v));       // (.rodata 0x9B8)
+      break;
+    case 1: g.Write32(c + C_KNOCK, word); break;
+    case 2: g.Write32(c + C_WALL, word); break;
+    default:
+      g.Write32(c + C_BOUNCE, word);
+      g.Write32(c + C_ONE, 0x3F800000u);
+      break;
+  }
+}
+
 // The queue, in its order, into the block and the machines; `end` is set by end_race (the end clause runs after).
 // Retired and the seat's own Restore cleared in one write (the verdict would hide 0x08000000 behind 0x1).
 void Retired(Mem& g, u32 machine, u32 flags)
@@ -1623,6 +1659,17 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         g.Write32(module + R_BASE, g.Read32(module + R_BASE) | RULE_STOP);
         continue;
       case ACTION_PADSBACK: g.Write32(block + HANDED, 0); continue;
+      case ACTION_RACEDAMAGE:
+      case ACTION_RACEKNOCKBACK:
+      case ACTION_RACEWALLDAMAGE:
+      case ACTION_RACEWALLBOUNCE:
+        if (!Finite(a.seat))
+          return m.Fail(FAULT_REAL);
+        SetCombat(g, block, a.id - ACTION_RACEDAMAGE, a.seat);
+        continue;
+      case ACTION_RACESPINATTACKS: g.Write32(block + COMBAT + C_SPIN_OFF, a.seat == 0); continue;
+      case ACTION_RACESIDEATTACKS: g.Write32(block + COMBAT + C_SIDE_OFF, a.seat == 0); continue;
+      case ACTION_RACESPINIMMUNITY: g.Write32(block + COMBAT + C_IMMUNE, a.seat != 0); continue;
       case ACTION_NOCONTACT: pairs(a.seat, a.value[0]); continue;
       case ACTION_TEAMNOCONTACT:
       {
@@ -1888,7 +1935,9 @@ void EndClause(Machine& m, Mem& g, u32 block, u32 module, bool ranks_the_out)
       g.Write8(record + 0xE + slot, static_cast<u8>(k));
     }
     // the total stays signed in the block; the results' field is unsigned (`lhz`, no minus sign): below 0 shows 0
-    const s32 points = Int(g.Read32(block + POINTS + 4 * seat));
+    // points_table: what this place earns, on top of award's
+    const s32 points = Int(g.Read32(block + POINTS + 4 * seat)) + static_cast<s32>(g.Read32(block + POINTS_TABLE + 4 * k));
+    g.Write32(block + POINTS + 4 * seat, Word(points));
     if (points != 0)
     {
       const u32 shown = points < 0 ? 0 : static_cast<u32>(points);
@@ -1955,9 +2004,21 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
   if (p.clock_limit != 0)
   {
     const u32 clock = g.Read32(module + game::RACE_CLOCK);
-    g.Write16(module + R_BASE + R_TIMER,
-              static_cast<u16>(std::clamp<std::int64_t>(static_cast<std::int64_t>(p.clock_limit) - clock, 1, 65535)));
-    if (n.started && clock >= p.clock_limit)
+    // time_bonus: the game adds to the timer itself (0x32FD0); what it added since the last write stays earned
+    u32 limit = p.clock_limit;
+    if (p.time_bonus != 0)
+    {
+      const u32 timer = g.Read16(module + R_BASE + R_TIMER), shown = g.Read32(block + CLOCK_SHOWN);
+      if (shown != 0 && timer > shown)
+        g.Write32(block + CLOCK_EARNED, g.Read32(block + CLOCK_EARNED) + (timer - shown));
+      limit += g.Read32(block + CLOCK_EARNED);
+      g.Write32(block + CLOCK, limit);
+    }
+    const u32 left = static_cast<u32>(std::clamp<std::int64_t>(static_cast<std::int64_t>(limit) - clock, 1, 65535));
+    g.Write16(module + R_BASE + R_TIMER, static_cast<u16>(left));
+    if (p.time_bonus != 0)
+      g.Write32(block + CLOCK_SHOWN, left);
+    if (n.started && clock >= limit)
       end = true;
   }
   if (end && m.Faulted() == FAULT_NONE)
@@ -1986,8 +2047,20 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
     g.Write16(r + R_TIME_LIMIT, static_cast<u16>(shown));
     for (u32 at = R_BONUS; at < R_BONUS_END; ++at)
       g.Write8(r + at, 0);
+    // time_bonus: the game's four bonuses (0x32FA0 takes one by the quarter), no decay (R+0x1402 stays 0)
+    if (p.time_bonus != 0 && p.clock_limit != 0)
+      for (u32 k = 0; k < 4; ++k)
+        g.Write16(r + R_BONUS + 2 * k, static_cast<u16>(p.time_bonus));
     g.Write16(r + R_TIMER, static_cast<u16>(shown));
   }
+  for (u32 k = 0; k < p.combat.size(); ++k)
+    if (p.combat[k])
+      SetCombat(g, block, k, *p.combat[k]);
+  g.Write32(block + COMBAT + C_SPIN_OFF, p.spin_off);
+  g.Write32(block + COMBAT + C_SIDE_OFF, p.side_off);
+  g.Write32(block + COMBAT + C_IMMUNE, p.spin_immune);
+  for (u32 k = 0; k < p.points_table.size(); ++k)
+    g.Write32(block + POINTS_TABLE + 4 * k, p.points_table[k]);
   if (p.rolling)
   {
     // fn_1_23500's writes but its reset (rolling-start.md 3): momentum along the nose at v, base speed v / 200,

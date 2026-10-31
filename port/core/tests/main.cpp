@@ -181,6 +181,7 @@ void TestAGonePlayerRetires();
 void TestTheModeTagWords();
 void TestTheCutRaceWords();
 void TestTheStatWords();
+void TestTheCombatWords();
 void TestTheOnOffWordsByParameter();
 void TestASquareRootsCostInBothLoops();
 void TestSoloModesAndTheRelay();
@@ -533,6 +534,7 @@ int main(int argc, char** argv)
   TestTheModeTagWords();
   TestTheCutRaceWords();
   TestTheStatWords();
+  TestTheCombatWords();
   TestTheOnOffWordsByParameter();
   TestASquareRootsCostInBothLoops();
   TestSoloModesAndTheRelay();

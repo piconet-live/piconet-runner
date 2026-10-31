@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <memory>
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -1371,3 +1372,61 @@ void TestTheStatWords()
   mode::Run(g2, *q, BLOCK, MODULE);
   CHECK(g2.Read32(BLOCK + mode::END) == 1 && g2.Read32(BLOCK + mode::FAULT) == mode::FAULT_REAL);
 }
+
+// The combat values' live words (the sites that read them: test_mode_sites.py), the time bonus and the points table.
+void TestTheCombatWords()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("combat.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 4, 0);
+  const auto word = [&](u32 at) { return g.Read32(BLOCK + mode::COMBAT + at); };
+  const auto real = [&](u32 at) { return std::bit_cast<float>(word(at)); };
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(real(mode::C_DAMAGE) == 2.0f && real(mode::C_FACTOR) == 0.002f * 2.0f && real(mode::C_CAP) == 40.0f);
+  CHECK(real(mode::C_KNOCK) == 3.0f && real(mode::C_WALL) == 0.5f && real(mode::C_BOUNCE) == 10.0f && real(mode::C_ONE) == 1.0f);
+  CHECK(word(mode::C_SPIN_OFF) == 1 && word(mode::C_SIDE_OFF) == 1 && word(mode::C_IMMUNE) == 1);
+  // the game's four bonuses in place; a bonus the game adds to the timer is earned, and moves the end
+  constexpr u32 R = 0x1BDC70;
+  CHECK(g.Read16(MODULE + R + 0x13FA) == 600 && g.Read16(MODULE + R + 0x1400) == 600);
+  g.Write32(MODULE + game::RACE_CLOCK, 30);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read16(MODULE + R + 0xA4) == 7200 - 30);
+  g.Write16(MODULE + R + 0xA4, 7200 - 30 + 600);
+  g.Write32(MODULE + game::RACE_CLOCK, 60);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::CLOCK_EARNED) == 600 && g.Read16(MODULE + R + 0xA4) == 7800 - 60);
+  // the live words at the `when`'s run: back to the game's is 0, the ranges hold, a switch flips
+  CHECK(word(mode::C_DAMAGE) == 0 && word(mode::C_FACTOR) == 0 && word(mode::C_CAP) == 0);
+  CHECK(real(mode::C_KNOCK) == 6.0f && real(mode::C_WALL) == 10.0f && real(mode::C_BOUNCE) == 0.1f);
+  CHECK(word(mode::C_SPIN_OFF) == 1 && word(mode::C_SIDE_OFF) == 0 && word(mode::C_IMMUNE) == 0);
+  // a step run again gives the same block
+  const std::vector<u8> before = BlockOf(g);
+  g.Write32(MODULE + game::RACE_CLOCK, 61);
+  mode::Run(g, *p, BLOCK, MODULE);
+  const std::vector<u8> after = BlockOf(g);
+  g.CopyTo(BLOCK, before.data(), before.size());
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(BlockOf(g) == after);
+  // the end at limit + earned, not before; the table pays by the order
+  g.Write32(MODULE + game::RACE_CLOCK, 7300);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::END) == 0);
+  g.Write32(MODULE + game::RACE_CLOCK, 7800);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::END) == 2);
+  std::vector<u32> paid;
+  for (u32 seat = 0; seat < 4; ++seat)
+    paid.push_back(g.Read32(BLOCK + mode::POINTS + 4 * seat));
+  std::sort(paid.begin(), paid.end());
+  CHECK((paid == std::vector<u32>{0, 25, 50, 100}));
+  CHECK(mode::hud::WindowFlags(*p) & mode::hud::POINTS_PAGE);
+}
+
+// vec and cross: a push sideways, in momentum (km/h x W / 216).

@@ -73,6 +73,12 @@ MODE_STATS = 0x6400                      # a seat's stat record (mode.h STATS): 
 MODE_STAT = 0x60                         # (+0x54 damage's amount this run)
 MODE_STAT_DAMAGE = 0x54
 assert MODE_STATS + 30 * MODE_STAT <= MODE_BLOCK
+# the live combat words (mode.h COMBAT; sites_combat.py): 0, the game's own
+MODE_COMBAT = MODE_STATS + 30 * MODE_STAT
+MODE_COMBAT_FACTOR, MODE_COMBAT_CAP, MODE_COMBAT_KNOCK, MODE_COMBAT_WALL, MODE_COMBAT_BOUNCE = 0, 4, 8, 12, 16
+MODE_COMBAT_SPIN, MODE_COMBAT_SIDE, MODE_COMBAT_IMMUNE, MODE_COMBAT_ONE = 20, 24, 28, 32
+MODE_COMBAT_SIZE = 36
+assert MODE_COMBAT + MODE_COMBAT_SIZE <= MODE_BLOCK
 assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_MOVE <= MODE_ROLL_SAVE
 # The race's setup (written by the Dolphin fork from the match file before the game reaches the race; the built-in
 # codes read it, boot-to-race/racecodes.py): 'FZRC', then words: +4 course, +8 port 0's machine, +12 CPU opponents

@@ -25,6 +25,7 @@ import sites_effects
 import sites_grid
 import sites_hfr
 import sites_mines
+import sites_combat
 import sites_mode
 import sites_modehud
 import sites_monitors
@@ -450,6 +451,7 @@ rl_disc:
     sites_grid.add(k, r, patch, stock, test, middle, complete)
     sites_mines.add(k, r, patch, stock, test, la, D, middle)
     sites_mode.add(k, r, patch, stock, test, la, D, middle)
+    middle.extend(sites_combat.add(k, r, patch, stock, test, la))
     sites_modehud.add(k, r, patch, stock, test, la, middle)
     sites_cpu.add(k, r, patch, stock, test, middle, complete)
     sites_generator.add(k, r, patch, stock, test, middle)

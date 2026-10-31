@@ -81,6 +81,15 @@ constexpr u32 DANGER_ON = 1, DANGER_ARMED = 2, DANGER_DONE = 4;
 constexpr u32 STATS = 6 * PAGE + 0x400, STAT = 0x60, STAT_VALUES = 4, STAT_BASE = 0x2C, STAT_DAMAGE = 0x54;
 static_assert(STAT_VALUES + 40 <= STAT_BASE && STAT_BASE + 40 <= STAT_DAMAGE && STAT_DAMAGE + 4 <= STAT &&
               STATS + 30 * STAT <= BLOCK);
+// The live combat values, after the stat records (port/image/sites_combat.py reads them in the step; memmap.py the same
+// offsets). A word of 0 is the game's own, so a mode that names none of them changes nothing. C_DAMAGE, C_KNOCK... as a
+// factor of the game's; C_FACTOR and C_CAP the game's 0.002 and 20 at that factor; C_ONE 1.0 for the bounce's sum.
+constexpr u32 COMBAT = STATS + 30 * STAT;
+constexpr u32 C_FACTOR = 0, C_CAP = 4, C_KNOCK = 8, C_WALL = 12, C_BOUNCE = 16, C_SPIN_OFF = 20, C_SIDE_OFF = 24,
+              C_IMMUNE = 28, C_ONE = 32, C_DAMAGE = 36;
+constexpr u32 CLOCK_SHOWN = COMBAT + 40, CLOCK_EARNED = COMBAT + 44;  // time_bonus: what the mode wrote to the timer, and what the game added
+constexpr u32 POINTS_TABLE = COMBAT + 48;  // points_table's by place, a word each
+static_assert(POINTS_TABLE + 30 * 4 <= BLOCK);
 // By the bit: M's field, in the order of modes.toml's seat.stat.* (port/image/routines/standin_inputs.py STAT_FIELDS is
 // this list, and its test holds the two equal): weight, accel, max_speed, grip, turn, strafe, drag, boost_strength,
 // boost_length, body.
@@ -182,6 +191,10 @@ struct Package
   bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
   bool results_points = false;      // `results points`: the first results page passes by itself
   std::string results_title;        // `results_title "TEXT"`: the string for VS TOTAL RANKING; empty, the game's
+  std::vector<u32> points_table;    // what a place earns when the mode ends the race (none: nothing)
+  u32 time_bonus = 0;               // time_bonus's steps, 0 none
+  std::array<std::optional<u32>, 4> combat{};  // damage, knockback, wall_damage, wall_bounce: binary32 bits
+  bool spin_off = false, side_off = false, spin_immune = false;
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)

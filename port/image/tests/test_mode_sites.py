@@ -10,6 +10,7 @@ from test_raceview import Build, Cpu, get, put, IMAGE, TEXT, native
 from test_race_end import signed
 import memmap
 import sites_mode
+import sites_combat
 import standin_inputs
 
 MODE, MODES = memmap.MODE, memmap.MODES
@@ -20,6 +21,10 @@ I, J = 3, 7                               # their seats (r28, r27)
 
 class ModeCpu(Cpu):
     """rlwnm. (the pair gate's bit test) and the mode point's saving of registers beside what Cpu reads."""
+
+    def taken(self, bo, bi):
+        """cr7 too (combat_wall's): Machine keeps one field, so its test says apart that no compare writes cr0."""
+        return super().taken(bo, bi - 28 if bi >= 28 else bi)
 
     def other(self, pc, w):
         op, d, a, xo = w >> 26, (w >> 21) & 31, (w >> 16) & 31, (w >> 1) & 0x3FF
@@ -42,6 +47,9 @@ class ModeCpu(Cpu):
             if op == 46:                                                                  # lmw
                 for n in range(d, 32):
                     self.r[n] = self.read((at + 4 * (n - d)) & 0xFFFFFFFF, 4)
+                return pc + 4
+            if op == 31 and xo == 339 and spr == 8 and hasattr(self, "lr"):               # mflr, a caller's
+                self.r[d] = self.lr
                 return pc + 4
             if op == 31 and xo == 19:                                                     # mfcr: nothing reads it
                 self.r[d] = 0
@@ -173,6 +181,105 @@ class TheExplosion(Build):
         self.assertEqual(reached, [(TEXT + sites_mode.DESTROY, machine)])
         self.assertEqual({at: get(m.mem, machine + at) for at in motion}, motion)
         self.assertEqual(get(m.mem, machine), 0x40800880)
+
+
+def bits(value):
+    return struct.unpack(">I", struct.pack(">f", value))[0]
+
+
+class TheCombatSites(Build):
+    """Each routine of sites_combat.py as the image holds it: with no mode or a word of 0 the game's own instruction, with a
+    word what the vocabulary says."""
+    M = 0x80D80000
+    R = 0x80D90000                                    # the registers the game's instructions read from
+
+    def run_site(self, name, word=None, value=0, mode=True, lr=None, regs=None, floats=None, stored=None):
+        memory = {}
+        put(memory, MODE, 1)
+        put(memory, MODES + 4, BLOCK if mode else 0)
+        if word is not None:
+            put(memory, BLOCK + memmap.MODE_COMBAT + word, value)
+        put(memory, BLOCK + memmap.MODE_COMBAT + memmap.MODE_COMBAT_ONE, bits(1.0))
+        for at, v in (stored or {}).items():
+            put(memory, at, v)
+        out = []
+        m = ModeCpu(self.image, memory, lambda address, cpu: out.append(address))
+        for n, v in (regs or {}).items():
+            m.r[n] = v
+        m.__dict__.setdefault("f", [0.0] * 32)
+        for n, v in (floats or {}).items():
+            m.f[n] = v
+        if lr is not None:
+            m.lr = lr
+        m.run(self.symbols[name])
+        self.assertEqual(len(out), 1)
+        return m, out[0]
+
+    def test_every_site_is_patched(self):
+        offsets = [a for a, _, _ in sites_combat.FACTORS] + [sites_combat.CAP, sites_combat.KNOCK, sites_combat.WALL,
+                                                             sites_combat.BOUNCE, sites_combat.SPIN, sites_combat.SIDE]
+        for offset in offsets + [a for a, _, _, _ in sites_combat.IMMUNE]:
+            self.assertIn(TEXT + offset, self.patches)
+
+    def test_the_factor_is_the_games_without_a_word_and_the_live_one_with(self):
+        stored = {self.R + 0x128: bits(0.002)}
+        for name in ("combat_factor_a", "combat_factor_b"):
+            for mode in (False, True):
+                m, back = self.run_site(name, mode=mode, regs={31: self.R}, stored=stored)
+                self.assertAlmostEqual(m.f[0], 0.002)
+            m, _ = self.run_site(name, memmap.MODE_COMBAT_FACTOR, bits(0.004), regs={31: self.R}, stored=stored)
+            self.assertAlmostEqual(m.f[0], 0.004)
+
+    def test_the_cap_moves_only_for_a_contacts_call(self):
+        stored = {self.R + 0x178: bits(20.0)}
+        for call in sites_combat.CONTACT_CALLS:
+            m, _ = self.run_site("combat_cap", memmap.MODE_COMBAT_CAP, bits(40.0), lr=TEXT + call + 4, regs={6: self.R}, stored=stored)
+            self.assertEqual(m.f[0], 40.0)
+        m, _ = self.run_site("combat_cap", memmap.MODE_COMBAT_CAP, bits(40.0), lr=TEXT + 0x24AD0, regs={6: self.R}, stored=stored)
+        self.assertEqual(m.f[0], 20.0)
+
+    def test_knockback_scales_both_machines_scales(self):
+        stored = {self.R + 0x94: bits(7.0)}
+        m, _ = self.run_site("combat_knock", memmap.MODE_COMBAT_KNOCK, bits(3.0), regs={24: self.R}, floats={31: 1.5, 30: 2.0}, stored=stored)
+        self.assertEqual((m.f[31], m.f[30], m.f[0]), (4.5, 6.0, 7.0))
+        m, _ = self.run_site("combat_knock", regs={24: self.R}, floats={31: 1.5, 30: 2.0}, stored=stored)
+        self.assertEqual((m.f[31], m.f[30]), (1.5, 2.0))
+
+    def test_the_wall_damage_is_scaled_and_cr0_stays(self):
+        m, _ = self.run_site("combat_wall", memmap.MODE_COMBAT_WALL, bits(0.5), floats={28: 8.0, 0: 3.0})
+        self.assertEqual(m.f[3], 12.0)
+        m, _ = self.run_site("combat_wall", floats={28: 8.0, 0: 3.0})
+        self.assertEqual(m.f[3], 24.0)
+        at = self.symbols["combat_wall"] - IMAGE
+        for k in range(24):                               # no compare of the routine's writes cr0
+            w = struct.unpack(">I", self.image[at + 4 * k:at + 4 * k + 4])[0]
+            if w >> 26 == 18:                             # its way back: the routine's end
+                break
+            if w >> 26 in (10, 11):
+                self.assertEqual((w >> 23) & 7, 7)
+            self.assertNotIn(w >> 26, (28, 29))
+
+    def test_the_bounce_goes_round_one(self):
+        stored = {self.R + 0x238: bits(9.0)}
+        m, _ = self.run_site("combat_bounce", memmap.MODE_COMBAT_BOUNCE, bits(2.0), regs={31: self.R}, floats={1: 1.5}, stored=stored)
+        self.assertEqual((m.f[1], m.f[0]), (2.0, 9.0))
+        m, _ = self.run_site("combat_bounce", regs={31: self.R}, floats={1: 1.5}, stored=stored)
+        self.assertEqual(m.f[1], 1.5)
+
+    def test_spin_and_side_off_clear_the_flag_before_the_game_tests_it(self):
+        stored = {self.M: 0xFFFFFFFF}
+        m, _ = self.run_site("combat_spin", memmap.MODE_COMBAT_SPIN, 1, regs={3: self.M, 0: 0xFFFFFFFF}, stored=stored)
+        self.assertEqual(get(m.mem, self.M), 0xFFFFFFF7)
+        m, _ = self.run_site("combat_spin", regs={3: self.M, 0: 0xFFFFFFFF}, stored=stored)
+        self.assertEqual(get(m.mem, self.M), 0xFFFFFFFF)
+        m, _ = self.run_site("combat_side", memmap.MODE_COMBAT_SIDE, 1, regs={3: self.M, 5: 0xFFFFFFFF}, stored=stored)
+        self.assertEqual((get(m.mem, self.M), m.r[5]), (0xFFFDFFFF, 0xFFFDFFFF))
+
+    def test_a_spinning_machine_is_immune_only_with_the_word(self):
+        for name, register, seat_reg in (("combat_immune_a", 24, 27), ("combat_immune_b", 25, 26)):
+            for flags, word, equal in ((8, 1, True), (0, 1, False), (8, 0, False)):
+                m, _ = self.run_site(name, memmap.MODE_COMBAT_IMMUNE, word, regs={register: self.M, seat_reg: 1}, stored={self.M: flags})
+                self.assertEqual(m.cr0[2], equal, (name, flags, word))
 
 
 class TheDamage(Build):
