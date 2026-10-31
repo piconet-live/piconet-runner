@@ -138,9 +138,10 @@ class ThePreload(Build):
     no-contact row on, before the race's first contact pass."""
     BLOCK_AT = 0x80A01000
 
-    def preload(self, flags):
+    def preload(self, flags, wanted=sites_mode.WANTED):
         memory = {}
-        put(memory, memmap.MODES, sites_mode.WANTED)
+        sizes = []
+        put(memory, memmap.MODES, wanted)
         put(memory, memmap.MODE_HUD_FLAGS, flags)
         put(memory, memmap.REL_BSS + 0x960, 2, 2)
         put(memory, memmap.REL_BSS + 0x3C2A, 0x27, 2)
@@ -149,18 +150,28 @@ class ThePreload(Build):
         put(memory, build.HEAP_TABLE, 0x80E00000)
         put(memory, 0x80E00000 + 12 + 4, 0x80E10000)
         put(memory, 0x80E10000 + 8, 0x200000)
-        for at in range(self.BLOCK_AT, self.BLOCK_AT + memmap.MODE_BLOCK):
+        for at in range(self.BLOCK_AT, self.BLOCK_AT + memmap.MODE_BLOCK + memmap.MODE_STATS_PAGE + 4):
             memory[at] = 0xFF
         calls = []
 
         def game(address, cpu):
             calls.append(address)
+            sizes.append(cpu.r[4])
             cpu.r[3] = {1: 0x80F00000, 2: self.BLOCK_AT}.get(len(calls), 0)
         m = Cpu(self.image, memory, game)
-        m.r[24], m.r[31] = 0x2424, 0x3131
-        m.run(self.symbols["mode_preload"], limit=20000)     # (the block's zeroing is 7,168 turns of a loop)
-        self.assertEqual((m.r[24], m.r[31], get(m.mem, memmap.MODES + 4)), (0x2424, 0x3131, self.BLOCK_AT))
+        m.r[24], m.r[30], m.r[31] = 0x2424, 0x3030, 0x3131
+        m.run(self.symbols["mode_preload"], limit=40000)     # (the block's zeroing is 7,168 turns of a loop)
+        self.assertEqual((m.r[24], m.r[30], m.r[31], get(m.mem, memmap.MODES + 4)), (0x2424, 0x3030, 0x3131, self.BLOCK_AT))
+        self.assertEqual(sizes[1], memmap.MODE_ALLOC + (memmap.MODE_STATS_PAGE if wanted == sites_mode.WANTED_STATS else 0))
         return m.mem
+
+    def test_the_stats_page_is_taken_and_zeroed_only_when_asked(self):
+        plain = self.preload(0)
+        self.assertEqual(plain.get(self.BLOCK_AT + memmap.MODE_BLOCK - 4), 0)
+        self.assertEqual(plain.get(self.BLOCK_AT + memmap.MODE_BLOCK), 0xFF)
+        page = self.preload(0, sites_mode.WANTED_STATS)
+        self.assertEqual(get(page, self.BLOCK_AT + memmap.MODE_BLOCK + memmap.MODE_STATS_PAGE - 4), 0)
+        self.assertEqual(page.get(self.BLOCK_AT + memmap.MODE_BLOCK + memmap.MODE_STATS_PAGE), 0xFF)
 
     def row(self, memory, seat):
         return get(memory, self.BLOCK_AT + memmap.MODE_NC + 4 * seat)
@@ -496,10 +507,17 @@ class TheRuleHookWrapper(Build):
 
         def hook(cpu):
             put(cpu.mem, record, mask)
+            page = BLOCK + memmap.MODE_STATS_TWO + (self.SEAT << memmap.MODE_STAT_TWO_SHIFT)
             for i, value in values.items():
-                put(cpu.mem, record + 4 + 4 * i, value)
+                if i < memmap.MODE_STATS_FIRST:
+                    put(cpu.mem, record + 4 + 4 * i, value)
+                else:
+                    put(cpu.mem, page + 4 * (i - memmap.MODE_STATS_FIRST), value)
             for field, value in rebuilt.items():
-                put(cpu.mem, self.M + field, value)
+                if field == standin_inputs.BYTE_FIELD:
+                    cpu.mem[self.M + field] = value & 0xFF
+                else:
+                    put(cpu.mem, self.M + field, value)
         return self.wrap(hook=hook)[1]
 
     def test_the_stat_fields_are_the_cores(self):
@@ -515,21 +533,41 @@ class TheRuleHookWrapper(Build):
         rebuilt = {field: 0x3F000000 + i for i, field in enumerate(standin_inputs.STAT_FIELDS)}
         changed = {2: 0x40000000, 9: 0x40400000}          # max speed and body
         m = self.stats(1 << 2 | 1 << 9, changed, rebuilt)
-        for i, field in enumerate(standin_inputs.STAT_FIELDS):
-            self.assertEqual(get(m.mem, self.M + field), changed.get(i, rebuilt[field]))
+        self.assert_fields(m, changed, rebuilt)
 
     def test_every_stat_reaches_its_own_field(self):
         rebuilt = {field: 1 for field in standin_inputs.STAT_FIELDS}
         values = {i: 0x41000000 + i for i in range(len(standin_inputs.STAT_FIELDS))}
         m = self.stats((1 << len(values)) - 1, values, rebuilt)
+        self.assert_fields(m, values, rebuilt)
+
+    def test_a_stat_of_the_stats_page_alone_leaves_the_rest_the_games(self):
+        for i in range(memmap.MODE_STATS_FIRST, len(standin_inputs.STAT_FIELDS)):
+            rebuilt = {field: 0x3F000000 + n for n, field in enumerate(standin_inputs.STAT_FIELDS)}
+            changed = {i: 0x40000000 + i}
+            self.assert_fields(self.stats(1 << i, changed, rebuilt), changed, rebuilt)
+
+    def test_the_byte_stat_keeps_its_neighbours(self):
+        at = self.M + standin_inputs.BYTE_FIELD
+        i = standin_inputs.STAT_FIELDS.index(standin_inputs.BYTE_FIELD)
+        rebuilt = {0x474: 0x11223300, standin_inputs.BYTE_FIELD: 7}
+        m = self.stats(1 << i, {i: 3}, rebuilt)
+        self.assertEqual(m.mem[at], 3)
+        self.assertEqual([m.mem[at - 3], m.mem[at - 2], m.mem[at - 1]], [0x11, 0x22, 0x33])
+
+    def assert_fields(self, m, values, rebuilt):
         for i, field in enumerate(standin_inputs.STAT_FIELDS):
-            self.assertEqual(get(m.mem, self.M + field), values[i])
+            want = values.get(i, rebuilt[field])
+            if field == standin_inputs.BYTE_FIELD:
+                self.assertEqual(m.mem[self.M + field], want & 0xFF)
+            else:
+                self.assertEqual(get(m.mem, self.M + field), want)
 
     def test_no_changed_stat_changes_nothing(self):
         rebuilt = {field: 7 for field in standin_inputs.STAT_FIELDS}
         m = self.stats(0, {0: 0x41000000}, rebuilt)
         for field in standin_inputs.STAT_FIELDS:
-            self.assertEqual(get(m.mem, self.M + field), 7)
+            self.assertEqual(m.mem[self.M + field] if field == standin_inputs.BYTE_FIELD else get(m.mem, self.M + field), 7)
 
     def test_another_seats_record_is_not_this_seats(self):
         other = BLOCK + memmap.MODE_STATS + (self.SEAT + 1) * memmap.MODE_STAT

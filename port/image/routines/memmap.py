@@ -73,6 +73,13 @@ MODE_ROLL = 8
 MODE_STATS = 0x6400                      # a seat's stat record (mode.h STATS): +0 the changed stats' bits, +4 their values
 MODE_STAT = 0x60                         # (+0x54 damage's amount this run)
 MODE_STAT_DAMAGE = 0x54
+# the stats page, one page more than MODE_BLOCK, for a mode whose host asked with WANTED_STATS (sites_mode.py): a seat's
+# values of the stats from bit MODE_STATS_FIRST on (mode.h STATS_TWO)
+MODE_STATS_PAGE = 0x1000
+MODE_STATS_TWO = MODE_BLOCK + 0x10
+MODE_STAT_TWO_SHIFT = 7
+MODE_STATS_FIRST = 10
+assert MODE_STATS_TWO + (30 << MODE_STAT_TWO_SHIFT) <= MODE_BLOCK + MODE_STATS_PAGE <= 0x8000
 assert MODE_STATS + 30 * MODE_STAT <= MODE_BLOCK
 # the live combat words (mode.h COMBAT; sites_combat.py): 0, the game's own
 MODE_COMBAT = MODE_STATS + 30 * MODE_STAT
