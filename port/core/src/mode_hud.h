@@ -4,7 +4,8 @@
 //
 // Presentation only. The display words write the block's display page at the mode point, like every action (SIM: the
 // undo log puts the page back with the race, the checksum covers it, so every game holds the same page). Nothing a
-// step reads is on this page. The drawing reads it every frame and keeps nothing of its own: the mode's HUD pass
+// step reads is among these words (the page's room past them holds the seats' stat records, mode.h STATS, which are not
+// the display's). The drawing reads it every frame and keeps nothing of its own: the mode's HUD pass
 // (Hud: the HUD part mask's mode bits, the story parts' source block .bss 0x84, the looks this game draws) and our
 // course map (MapRacers) rewrite their outputs whole from the page, so a rollback, a practice's rewind or the
 // scrubber simply redraws. The image's sites read the page or the window words the pass writes: the spare-machine
@@ -44,7 +45,7 @@ constexpr u32 PARTS = 0, NUMBER = 4, LOOK = 8, OWN_LOOK = 9, BANNER = 10, COLOUR
               ASKED = 11, GAP_TIME = 24, ASKED_AT = 28;
 constexpr u32 MARKED = 0x01000000;
 constexpr u32 TAGS_AT = SEATS_AT + 30 * SEAT_DISPLAY;
-static_assert(TAGS_AT + 30 <= DISPLAY + 0x1000);
+static_assert(TAGS_AT + 30 <= STATS && STATS >= DISPLAY && STATS + 30 * STAT <= DISPLAY + 0x1000);
 
 // The window words the pass writes for the image (memmap.MODE_HUD; port/image/sites_modehud.py): +0 the image's
 // flags (POINTS_PAGE, award or a results title: the results go from their first page to the points page, the site at main.rel 0x14A37C;

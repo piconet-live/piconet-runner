@@ -1296,3 +1296,78 @@ void TestAGonePlayerRetires()
     }
   }
 }
+
+// seat.stat.* and damage on a made-up race (the wrapper that takes the values into the machine, and the game's own damage,
+// are the image's: test_mode_sites.py): the record, what a stat read and the machine's own give, the pack's ranges, a real
+// that is not finite ending the race, a weight that keeps the speed, and a step run again giving the same block.
+void TestTheStatWords()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("stats.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 4, 600);
+  const auto real = [](float f) { return std::bit_cast<u32>(f); };
+  const auto stat = [](u32 seat) { return BLOCK + mode::STATS + seat * mode::STAT; };
+  const auto machine = [](u32 seat) { return MACHINES + seat * game::MACHINE_SIZE; };
+  for (u32 seat = 0; seat < 4; ++seat)
+  {
+    for (const u32 field : mode::STAT_FIELDS)
+      g.Write32(machine(seat) + field, real(0.5f));
+    g.Write32(machine(seat) + 0x8, real(1000.0f));              // the weight
+    g.Write32(machine(seat) + 0x94, real(200.0f));              // the momentum
+    g.Write32(machine(seat) + 0x98, real(-100.0f));
+    g.Write32(machine(seat) + 0x9C, real(50.0f));
+  }
+  mode::Run(g, *p, BLOCK, MODULE);                              // (not yet GO's: nothing is written)
+  CHECK(g.Read32(BLOCK + mode::END) == 0);
+  CHECK(g.Read32(stat(0)) == 1023 && g.Read32(stat(3)) == 1023);
+  const auto value = [&](u32 seat, u32 i) { return std::bit_cast<float>(g.Read32(stat(seat) + mode::STAT_VALUES + 4 * i)); };
+  const auto base = [&](u32 seat, u32 i) { return std::bit_cast<float>(g.Read32(stat(seat) + mode::STAT_BASE + 4 * i)); };
+  // (body: base + 1, then += 1 reads the step as it stood, language 6: 1.5, not 2.5)
+  CHECK(value(0, 0) == 2000.0f && value(0, 1) == 0.75f && value(0, 2) == 0.25f && value(0, 9) == 1.5f);
+  for (u32 i = 0; i < mode::STAT_FIELDS.size(); ++i)
+    CHECK(base(0, i) == (i == 0 ? 1000.0f : 0.5f));
+  // the machine's field is the wrapper's to write; the weight's change has scaled the momentum, so the speed stays
+  CHECK(std::bit_cast<float>(g.Read32(machine(0) + 0x8)) == 1000.0f);
+  CHECK(std::bit_cast<float>(g.Read32(machine(0) + 0x94)) == 400.0f && std::bit_cast<float>(g.Read32(machine(0) + 0x98)) == -200.0f);
+  // the pack's ranges (protocol/stats.toml): drag 0.15, boost length below 4.26, boost strength 220 x 0.57, weight at least 1
+  CHECK(value(1, 6) == 0.15f && value(1, 8) < 4.26f && value(1, 8) > 4.25f);
+  CHECK(value(1, 7) == static_cast<float>(static_cast<double>(220.0f) * 0.57));
+  CHECK(value(1, 0) == 1.0f);
+  // damage: asked for in the record, the run's amounts together
+  for (u32 seat = 0; seat < 4; ++seat)
+    CHECK(g.Read32(BLOCK + mode::RECORDS + seat * mode::RECORD) & mode::DAMAGE);
+  CHECK(std::bit_cast<float>(g.Read32(stat(2) + mode::STAT_DAMAGE)) == 6.0f);
+  // the next run: the wrapper has written the values; the machine's own stays what it was, and the record's bits stay
+  for (u32 i = 0; i < mode::STAT_FIELDS.size(); ++i)
+    g.Write32(machine(0) + mode::STAT_FIELDS[i], g.Read32(stat(0) + mode::STAT_VALUES + 4 * i));
+  const std::vector<u8> before = BlockOf(g);
+  g.Write32(MODULE + game::RACE_CLOCK, 601);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(base(0, 0) == 1000.0f && value(0, 0) == 2000.0f && value(0, 2) == 0.25f);
+  CHECK(!(g.Read32(BLOCK + mode::RECORDS) & mode::DAMAGE));     // (`go`'s one run)
+  CHECK(std::bit_cast<float>(g.Read32(machine(0) + 0x94)) == 400.0f);  // no change of weight, no change of momentum
+  // a step run again from the same memory: the same block
+  const std::vector<u8> after = BlockOf(g);
+  g.CopyTo(BLOCK, before.data(), before.size());
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(BlockOf(g) == after);
+  // a real that is not finite is a mode error, for every game alike
+  picojson::array bad = {picojson::value(1.0), picojson::value(5.0)};
+  const std::optional<mode::Package> q = ReadWith("stats.mode.json", "params", picojson::value(bad));
+  CHECK(q.has_value());
+  if (!q)
+    return;
+  TestHost host2;
+  ModData data2;
+  Guest g2(host2, data2);
+  FakeModeRace(g2, 4, 600);
+  mode::Run(g2, *q, BLOCK, MODULE);
+  CHECK(g2.Read32(BLOCK + mode::END) == 1 && g2.Read32(BLOCK + mode::FAULT) == mode::FAULT_REAL);
+}

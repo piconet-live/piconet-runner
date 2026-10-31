@@ -12,7 +12,9 @@ through a rolling start's countdown) keeps the CPU's controls, as a record that 
 rolling start's countdown (64) the CPU's steering and strafe are saved before the hook and put back after it, with
 the game's own 0.6 accelerator and no brake (the hook's pre-GO hold keeps boosts and attacks off); a seat whose
 record says "boost" (8) has its boost request set before the hook (the mode's `boost seat`), so the game's whole path
-judges it: the hook's start hold and lap-1 rule, then "boost off" after it."""
+judges it: the hook's start hold and lap-1 rule, then "boost off" after it. A seat whose stat record (memmap.MODE_STATS)
+has stats the mode changed (seat.stat.*) takes their values into the machine's fields right after the hook, which has
+just rebuilt them from the car data: the step then drives with them, and a stat the mode never touched stays the game's."""
 import memmap
 
 MODE_SEAT_SHIFT = 4       # a seat's record in the mode's block: 16 bytes
@@ -22,6 +24,27 @@ ROLL_ACCEL = 0x3F19999A   # 0.6: the game's own accelerator before GO (.rodata 0
 ROLL_AT = memmap.MODE_ROLL_SAVE
 assert memmap.MODE_SEAT == 1 << MODE_SEAT_SHIFT and memmap.lo(memmap.MODES) + 4 < 0x8000
 assert memmap.MODE_ROLL == 8 and ROLL_AT + 4 < 0x8000
+# M's field of each stat, by its bit in the stat record (port/core/src/mode.h STAT_FIELDS; the image's test holds them equal)
+STAT_FIELDS = (0x8, 0x220, 0x22C, 0xC, 0x14, 0x1C, 0x23C, 0x230, 0x234, 0x30)
+assert memmap.MODE_STATS + 4 + 4 * len(STAT_FIELDS) < 0x8000
+
+
+def stat_writes():
+    """After the hook, r11 the mode's block: the changed stats into the machine r31. Uses r0, r10, r12, cr0."""
+    writes = "".join(f"""    andi. 0, 10, {1 << i}
+    beq co_stat_{i}
+    lwz 0, {memmap.MODE_STATS + 4 + 4 * i:#x}(12)
+    stw 0, {field:#x}(31)
+co_stat_{i}:
+""" for i, field in enumerate(STAT_FIELDS))
+    return f"""    lha 12, 4(31)
+    mulli 12, 12, {memmap.MODE_STAT}
+    add 12, 12, 11
+    lwz 10, {memmap.MODE_STATS:#x}(12)
+    cmpwi 10, 0
+    beq co_stats_done
+{writes}co_stats_done:
+"""
 
 
 def asm():
@@ -250,7 +273,7 @@ co_plain:
     lwz 11, {memmap.lo(memmap.MODES) + 4}(11)
     cmplwi 11, 0
     beq co_boost
-    lha 9, 4(31)
+{stat_writes()}    lha 9, 4(31)
     slwi 9, 9, {MODE_SEAT_SHIFT}
     add 11, 11, 9
     lwz 9, 0(11)

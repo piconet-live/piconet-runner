@@ -69,6 +69,10 @@ MODE_MOVES = MODE_ENGINE + 0xA80         # a seat's move: +0 1 push, 2 velocity;
 MODE_MOVE = 16
 MODE_ROLL_SAVE = MODE_ENGINE + 0xE40     # a seat's steering (+0 M+0x1FC, +4 M+0x1F8) before the rule hook
 MODE_ROLL = 8
+MODE_STATS = 0x6400                      # a seat's stat record (mode.h STATS): +0 the changed stats' bits, +4 their values
+MODE_STAT = 0x60                         # (+0x54 damage's amount this run)
+MODE_STAT_DAMAGE = 0x54
+assert MODE_STATS + 30 * MODE_STAT <= MODE_BLOCK
 assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_MOVE <= MODE_ROLL_SAVE
 # The race's setup (written by the Dolphin fork from the match file before the game reaches the race; the built-in
 # codes read it, boot-to-race/racecodes.py): 'FZRC', then words: +4 course, +8 port 0's machine, +12 CPU opponents

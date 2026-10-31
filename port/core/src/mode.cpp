@@ -34,6 +34,7 @@
 
 #include "out_test.h"
 #include "rollback.h"
+#include "stat_ranges.g.h"
 #include "files.h"
 #include "util.h"
 
@@ -354,6 +355,29 @@ constexpr u32 SeatState(u32 seat)
 {
   return SEAT_STATE + SEAT_STATE_SIZE * seat;
 }
+
+// What seat.stat.* may hold: the range a stat pack may hold of the same stat (protocol/stats.toml), because the game's
+// physics is safe in it; by STAT_FIELDS' order. Boost strength is the machine's field, a pack's value x 0.57 (fn_1_22E8C).
+struct StatRange
+{
+  float low, high;
+};
+constexpr StatRange RangeAt(u8 at, double scale = 1.0)
+{
+  for (const stats::Rule& rule : stats::RULES)
+    if (rule.at == at)
+    {
+      const float low = static_cast<float>(rule.low * scale), high = static_cast<float>(rule.high * scale);
+      return {low, rule.below ? std::bit_cast<float>(std::bit_cast<u32>(high) - 1) : high};
+    }
+  return {0.0f, 0.0f};
+}
+constexpr std::array<StatRange, STAT_FIELDS.size()> STAT_RANGES = {
+    RangeAt(0x04), RangeAt(0x08), RangeAt(0x0C), RangeAt(0x10), RangeAt(0x20),      RangeAt(0x28),
+    RangeAt(0x40), RangeAt(0x34, 0.57), RangeAt(0x38), RangeAt(0x44)};
+static_assert(STAT_RANGES[0].low == 1.0f && STAT_RANGES[9].high == 13.0f && STAT_RANGES[8].high < 4.26f);
+static_assert(SEAT_STATBODY - SEAT_STATWEIGHT == 9 && SEAT_STATBASEBODY - SEAT_STATBASEWEIGHT == 9 &&
+              ACTION_SEATSTATBODY - ACTION_SEATSTATWEIGHT == 9);
 
 // a queued action: its arguments' cells in order (the first, a seat or a set; a vec three cells)
 struct Action
@@ -782,6 +806,13 @@ private:
     // (read where a word asks for them: reading has no effect on anything)
     const auto Flags = [&] { return m_g.Read32(m + game::MACHINE_FLAGS); };
     const auto Progress = [&] { return m_g.Read32(m + game::MACHINE_PROGRESS); };
+    if (id >= SEAT_STATWEIGHT && id <= SEAT_STATBASEBODY)
+    {
+      // this step's value is the machine's field; the machine's own, the field too until the mode changes it
+      const bool own = id >= SEAT_STATBASEWEIGHT;
+      const u32 i = id - (own ? SEAT_STATBASEWEIGHT : SEAT_STATWEIGHT), stat = m_block + STATS + seat * STAT;
+      return own && (m_g.Read32(stat) >> i & 1) ? m_g.Read32(stat + STAT_BASE + 4 * i) : m_g.Read32(m + STAT_FIELDS[i]);
+    }
     switch (id)
     {
       case SEAT_RACING: return (Flags() & game::MACHINE_FLAG_FINISHED) == 0 && !Out(seat);
@@ -1707,6 +1738,49 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         break;
       }
       case ACTION_DANGERZONEOFF: g.Write32(block + DANGER + 16 * seat + 12, 0); g.Write32(block + DANGER + 16 * seat + 8, NONE); break;
+      case ACTION_DAMAGE:
+      {
+        if (!Finite(a.value[0]))
+          return m.Fail(FAULT_REAL);
+        const float x = std::max(Real(a.value[0]), 0.0f);
+        const u32 amount = block + STATS + seat * STAT + STAT_DAMAGE, was = g.Read32(record);
+        if (finished || !(x > 0.0f))
+          break;
+        g.Write32(amount, Bits(was & DAMAGE ? Real(g.Read32(amount)) + x : x));
+        g.Write32(record, was | DAMAGE);
+        break;
+      }
+      case ACTION_SEATSTATWEIGHT:
+      case ACTION_SEATSTATACCEL:
+      case ACTION_SEATSTATMAXSPEED:
+      case ACTION_SEATSTATGRIP:
+      case ACTION_SEATSTATTURN:
+      case ACTION_SEATSTATSTRAFE:
+      case ACTION_SEATSTATDRAG:
+      case ACTION_SEATSTATBOOSTSTRENGTH:
+      case ACTION_SEATSTATBOOSTLENGTH:
+      case ACTION_SEATSTATBODY:
+      {
+        if (!Finite(a.value[0]))
+          return m.Fail(FAULT_REAL);
+        const u32 i = a.id - ACTION_SEATSTATWEIGHT, stat = block + STATS + seat * STAT, changed = g.Read32(stat);
+        const float v = std::clamp(Real(a.value[0]), STAT_RANGES[i].low, STAT_RANGES[i].high) + 0.0f;  // (-0 as 0)
+        const u32 field = g.Read32(machine + STAT_FIELDS[i]);
+        const float now = changed >> i & 1 ? Real(g.Read32(stat + STAT_VALUES + 4 * i)) : Real(field);
+        if (!(changed >> i & 1))
+          g.Write32(stat + STAT_BASE + 4 * i, field);
+        // the weight: momentum is W x speed, so the momentum goes with it and the speed stays (one binary32 division and
+        // a product a component, as push's km/h)
+        if (a.id == ACTION_SEATSTATWEIGHT && v != now)
+        {
+          const float k = v / now;
+          for (u32 c = 0; c < 3; ++c)
+            g.Write32(machine + M_MOMENTUM + 4 * c, Bits(Real(g.Read32(machine + M_MOMENTUM + 4 * c)) * k));
+        }
+        g.Write32(stat + STAT_VALUES + 4 * i, std::bit_cast<u32>(v));
+        g.Write32(stat, changed | 1u << i);
+        break;
+      }
       default: break;
     }
   }
@@ -2204,6 +2278,12 @@ u32 Move(const Guest& g, u32 seat)
 {
   const u32 block = g.Read32(layout::MODES + 4);
   return block == 0 || seat >= SEATS ? 0 : block + MOVES + 16 * seat;
+}
+
+u32 Stat(const Guest& g, u32 seat)
+{
+  const u32 block = g.Read32(layout::MODES + 4);
+  return block == 0 || seat >= SEATS ? 0 : block + STATS + seat * STAT;
 }
 
 u32 RollSave(const Guest& g, u32 seat)

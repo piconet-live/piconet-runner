@@ -101,6 +101,7 @@ void LayOut(const CPUState* cpu, u32 count, Layout* layout)
     add(fzgx::ModeRecord(i), 16, MODE);  // (the image's mode_speed reads it in the machine's step)
     add(fzgx::ModeMove(i), 16, MODE);    // (mode_speed's push and velocity)
     add(fzgx::ModeRollSave(i), 8, MODE); // (the rule hook wrapper's saved steering in a rolling start)
+    add(fzgx::ModeStat(i), 0x60, MODE);  // (the rule hook wrapper's changed stats, mode.h STAT)
   }
 }
 

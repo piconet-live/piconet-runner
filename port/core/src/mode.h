@@ -46,8 +46,8 @@ constexpr u32 WAIT = 0x3C;                // +0 its rule + 1 (0: free), +4 the i
                                           // +12 the run it ends at, +16 its length, +20 where the code goes on,
                                           // +24 its condition, +28 the locals kept
 constexpr u32 TEAM_PAGE = 4 * PAGE + 0x10;  // team t's words at +0x80 t
-// a record's flags: the stand-in routine reads 1, 2, 8, 32 and 64, the mode point 4 and 16, site L 4
-constexpr u32 PEDALS = 1, BOOST_OFF = 2, HELD = 4, BOOST = 8, EXPLODE = 16, HAND = 32, ROLL = 64;
+// a record's flags: the stand-in routine reads 1, 2, 8, 32 and 64, the mode point 4, 16 and 128, site L 4
+constexpr u32 PEDALS = 1, BOOST_OFF = 2, HELD = 4, BOOST = 8, EXPLODE = 16, HAND = 32, ROLL = 64, DAMAGE = 128;
 // The engine page (the race side, wave 2A). The image reads CLOCK (the timer site), NC_ANY and NC (the pair gate),
 // writes TOUCH (the pair gate, a contact answered), reads MOVES (site L) and ROLL_SAVE (the stand-in routine).
 constexpr u32 ENGINE = 5 * PAGE;
@@ -72,6 +72,19 @@ constexpr u32 MOVES = ENGINE + 0xA80;     // a seat's: +0 1 push, 2 velocity; +4
 constexpr u32 DANGER = ENGINE + 0xC60;    // a seat's danger zone: +0 below, +4 arm (km/h), +8 count, +12 flags
 constexpr u32 ROLL_SAVE = ENGINE + 0xE40, ROLL_SAVE_SIZE = 8;  // a seat's steering (+0) before the rule hook while the rolling start holds it
 constexpr u32 DANGER_ON = 1, DANGER_ARMED = 2, DANGER_DONE = 4;
+// A seat's stat record (seat.stat.*, damage), in the display page's free room (mode_hud.h: the only page with room, and
+// no page more is stamped and summed at every step; the stand-in's rule hook wrapper and the mode point read it):
+// +0 the stats the mode changed, bit i for STAT_WORDS[i]; +4 their values; +STAT_BASE what each was before the first
+// change; +STAT_DAMAGE `damage`'s amount this run (with the record's flag DAMAGE).
+// The wrapper writes each changed value into the machine after the rule hook rebuilt it, so the machine's fields are
+// the game's own from there on: the step reads them, the undo log and the checksum have them with the machine.
+constexpr u32 STATS = 6 * PAGE + 0x400, STAT = 0x60, STAT_VALUES = 4, STAT_BASE = 0x2C, STAT_DAMAGE = 0x54;
+static_assert(STAT_VALUES + 40 <= STAT_BASE && STAT_BASE + 40 <= STAT_DAMAGE && STAT_DAMAGE + 4 <= STAT &&
+              STATS + 30 * STAT <= BLOCK);
+// By the bit: M's field, in the order of modes.toml's seat.stat.* (port/image/routines/standin_inputs.py STAT_FIELDS is
+// this list, and its test holds the two equal): weight, accel, max_speed, grip, turn, strafe, drag, boost_strength,
+// boost_length, body.
+constexpr std::array<u32, 10> STAT_FIELDS = {0x8, 0x220, 0x22C, 0xC, 0x14, 0x1C, 0x23C, 0x230, 0x234, 0x30};
 constexpr float MOST_SPEED = 9000.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
@@ -221,5 +234,7 @@ u32 Record(const Guest& g, u32 seat);
 // steering (ROLL_SAVE: written and read by the stand-in's rule hook wrapper in the machine's task); 0 without a mode.
 u32 Move(const Guest& g, u32 seat);
 u32 RollSave(const Guest& g, u32 seat);
+// Seat `seat`'s stat record (STATS: read by the wrapper in the machine's task); 0 without a mode.
+u32 Stat(const Guest& g, u32 seat);
 // The run with no package past its end: the end clause's order held in the standing (a race the mode ended).
 }  // namespace fzgx::mode

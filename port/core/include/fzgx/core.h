@@ -393,6 +393,7 @@ u32 ModeRecord(u32 seat);
 // read by the stand-in's rule hook wrapper): the per-machine rollback's records too; 0 without a mode.
 u32 ModeMove(u32 seat);
 u32 ModeRollSave(u32 seat);
+u32 ModeStat(u32 seat);
 // The game wrote a word of the data window (the native form: every access of it passes the host). The replay
 // scrubber takes one of them as a call: the frame routine's "the extra steps are done" (control block +12 set to
 // 0), which is the only moment the host has after a frame's last step and before its picture. The image's two

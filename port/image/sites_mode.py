@@ -6,7 +6,7 @@ nothing is taken from the heap. Native form only: the fork's image does not have
 | Site | Where | What the game did | Now, with a mode |
 |---|---|---|---|
 | `mode_preload` | the frame routine, on the black frame before the start gate (sites.py's `frame`, with mines_preload) | — | the mode's block (memmap.MODE_BLOCK bytes on whole pages of 4 KiB, zeroed: MODE_ALLOC taken) from the top of the main heap's largest free block, as mines_preload takes its block, when the host asked for one (MODES +0 = 4) |
-| `mode_point` | fn_1_850C4 0x8548C, after the race pass's callbacks (`lwz r3, 0x15C(r31)`, r31 the car manager) | — | the host call HOST_MODE (the interpreter, port/core/src/mode.cpp: the rules run, their actions go into the block and the machines), then for every seat whose speed is held this step the hold's rescale and the read-out M+0x17C, as the step's start computes it (the vocabulary's "rescale R") |
+| `mode_point` | fn_1_850C4 0x8548C, after the race pass's callbacks (`lwz r3, 0x15C(r31)`, r31 the car manager) | — | the host call HOST_MODE (the interpreter, port/core/src/mode.cpp: the rules run, their actions go into the block and the machines), then for each seat the game's own damage where the run asked for it (`damage`: fn_1_24F10, which calls nothing, so it draws no generator and plays no sound), its explosion, and for every seat whose speed is held this step the hold's rescale and the read-out M+0x17C, as the step's start computes it (the vocabulary's "rescale R") |
 | `mode_rolls` | fn_1_34924 0x34988, the count after its decrement (`lhz r0, 0(r29)`) | the machines' tasks wait for the count below 240 | under `rolling_start` (window flag ROLLING) the mask is lifted from the count's first step: the machines and the mode run through the whole intro; GO's step and the count are the game's |
 | `mode_monitors` | fn_1_1049E0 0x104BFC, the start monitors' placing (`li r4, 0`) | keeps the first step's turn | a rolling start: 1, the machine's turn every step |
 | `mode_speed` | fn_1_236CC 0x23854, after the air drag (`bl fn_1_294D0`) and before the position moves by P / W (`lfs f1, 0x14(r31)`, r30 the machine) | — | for a seat whose speed is held: P scaled to the held speed, keeping its direction (rebuilt along the nose when the drag left it 0), and the base speed M+0x224 the same (the vocabulary's "site L") |
@@ -36,7 +36,7 @@ import memmap
 
 MODES = memmap.MODES
 SEAT, SEATS = memmap.MODE_SEAT, memmap.MODE_SEATS
-PEDALS, BOOST_OFF, HELD, BOOST, EXPLODE, HAND, ROLL = 1, 2, 4, 8, 16, 32, 64   # a seat record's flags
+PEDALS, BOOST_OFF, HELD, BOOST, EXPLODE, HAND, ROLL, DAMAGE = 1, 2, 4, 8, 16, 32, 64, 128   # a seat record's flags
 WANTED, TAKEN, NONE = 4, 1, 3                     # MODES +0: the host asks; the block taken; none
 ROLLS, ROLLS_KNOWN = 0x34988, 0xA01D0000          # fn_1_34924: lhz r0, 0(r29), the count after its decrement
 MONITORS_TURN, MONITORS_TURN_KNOWN = 0x104BFC, 0x38800000   # fn_1_1049E0: li r4, 0, the stock fn_1_104730 call's "oriented"
@@ -49,6 +49,7 @@ PAIR_KNOWN = 0x4BF9E879
 TIMER, TIMER_SKIP = 0x3A36C, 0x3A448              # fn_1_3A330: beq on the rule word's timed bit (cr0)
 TIMER_KNOWN = 0x418200DC                          # beq +0xDC
 DESTROY = 0x25004                                 # fn_1_25004: the game's explosion of a machine (r3)
+HURT = 0x24F10                                    # fn_1_24F10: the game's damage (r3 the machine, f1 the amount; calls nothing)
 SQRT = 0x8006D0B4                                 # main.dol: the game's square root (f1 -> f1)
 NOT_HELD = 0x8000 | 0x80 | 0x800 | 0x10000 | 0x08000000 | 0x40000000
 RESTORING = 0x214                                 # M+0x214: the restore's countdown (u16)
@@ -366,7 +367,15 @@ mrl_stock:
     lbz 26, 0x2A(31)
     extsb. 26, 26
     ble mpt_done
+    addi 25, 28, {memmap.MODE_STATS:#x}
 mpt_seat:
+    lwz 0, 0(28)
+    andi. 0, 0, {DAMAGE}
+    beq mpt_unhurt
+    mr 3, 27
+    lfs 1, {memmap.MODE_STAT_DAMAGE:#x}(25)
+    @bl {FN(HURT)}
+mpt_unhurt:
     lwz 0, 0(28)
     andi. 0, 0, {EXPLODE}
     beq mpt_whole
@@ -388,6 +397,7 @@ mpt_whole:
 mpt_next:
     addi 27, 27, 0x{memmap.MACHINE_SIZE:X}
     addi 28, 28, {SEAT}
+    addi 25, 25, {memmap.MODE_STAT}
     addic. 26, 26, -1
     bne mpt_seat
 mpt_done:

@@ -180,6 +180,7 @@ void TestAnUnknownModeFieldPassesThrough();
 void TestAGonePlayerRetires();
 void TestTheModeTagWords();
 void TestTheCutRaceWords();
+void TestTheStatWords();
 void TestTheOnOffWordsByParameter();
 void TestASquareRootsCostInBothLoops();
 void TestSoloModesAndTheRelay();
@@ -531,6 +532,7 @@ int main(int argc, char** argv)
   TestAGonePlayerRetires();
   TestTheModeTagWords();
   TestTheCutRaceWords();
+  TestTheStatWords();
   TestTheOnOffWordsByParameter();
   TestASquareRootsCostInBothLoops();
   TestSoloModesAndTheRelay();

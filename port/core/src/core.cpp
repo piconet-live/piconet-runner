@@ -336,6 +336,14 @@ u32 ModeMove(u32 seat)
   return mode::Move(g, seat);
 }
 
+u32 ModeStat(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Stat(g, seat);
+}
+
 u32 ModeRollSave(u32 seat)
 {
   if (!s_host)

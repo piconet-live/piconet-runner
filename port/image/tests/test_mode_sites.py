@@ -2,7 +2,7 @@
 the pair gate (a pair the mode keeps apart is not answered and keeps the game's immunity bits; an answered pair goes
 into the touching rows), the timer (the game's countdown skipped under a clock limit) and the explosion that keeps
 the motion. The game's own code at the calls is a stand-in that does what the disassembly says of it. No game data."""
-import os, struct, sys, unittest
+import os, re, struct, sys, unittest
 
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(here, ".."))
@@ -19,9 +19,41 @@ I, J = 3, 7                               # their seats (r28, r27)
 
 
 class ModeCpu(Cpu):
-    """rlwnm. (the pair gate's bit test) beside what Cpu reads."""
+    """rlwnm. (the pair gate's bit test) and the mode point's saving of registers beside what Cpu reads."""
 
     def other(self, pc, w):
+        op, d, a, xo = w >> 26, (w >> 21) & 31, (w >> 16) & 31, (w >> 1) & 0x3FF
+        spr = ((w >> 11) & 31) << 5 | a
+        if IMAGE <= pc < IMAGE + len(self.image):
+            at = (self.r[a] if a else 0) + signed(w & 0xFFFF)
+            if op == 31 and xo == 954 and w & 1:                                          # extsb.
+                self.r[a] = signed(self.r[d] & 0xFF, 8) & 0xFFFFFFFF
+                value = signed(self.r[a], 32)
+                self.compare(value, 0)
+                return pc + 4
+            if op == 13:                                                                  # addic.
+                self.r[d] = (self.r[a] + signed(w & 0xFFFF)) & 0xFFFFFFFF
+                self.compare(signed(self.r[d], 32), 0)
+                return pc + 4
+            if op == 47:                                                                  # stmw
+                for n in range(d, 32):
+                    self.write((at + 4 * (n - d)) & 0xFFFFFFFF, 4, self.r[n])
+                return pc + 4
+            if op == 46:                                                                  # lmw
+                for n in range(d, 32):
+                    self.r[n] = self.read((at + 4 * (n - d)) & 0xFFFFFFFF, 4)
+                return pc + 4
+            if op == 31 and xo == 19:                                                     # mfcr: nothing reads it
+                self.r[d] = 0
+                return pc + 4
+            if op == 31 and xo == 144:                                                    # mtcrf
+                return pc + 4
+            if op == 31 and xo == 339 and spr == 9:                                       # mfctr
+                self.r[d] = 0
+                return pc + 4
+            if op == 31 and xo == 467 and spr == 9:                                       # mtctr
+                self.ctr = self.r[d]
+                return pc + 4
         if w >> 26 == 23:
             s, a, b, mb, me = (w >> 21) & 31, (w >> 16) & 31, (w >> 11) & 31, (w >> 6) & 31, (w >> 1) & 31
             sh = self.r[b] & 31
@@ -143,6 +175,42 @@ class TheExplosion(Build):
         self.assertEqual(get(m.mem, machine), 0x40800880)
 
 
+class TheDamage(Build):
+    """The mode point's loop: `damage` calls the game's own routine with the machine and the amount, for the seat whose
+    record asks; the stand-ins are fn_1_24F10, the interpreter and the mode's banners."""
+    MANAGER, MACHINES = 0x80D60000, 0x80D70000
+
+    def point(self, seat_flags):
+        memory = {}
+        put(memory, MODE, 1)
+        put(memory, MODES + 4, BLOCK)
+        put(memory, self.MANAGER + 0x18, self.MACHINES)
+        memory[self.MANAGER + 0x2A] = 3                    # three machines
+        for seat, flags in seat_flags.items():
+            put(memory, BLOCK + seat * memmap.MODE_SEAT, flags)
+            put(memory, BLOCK + memmap.MODE_STATS + seat * memmap.MODE_STAT + memmap.MODE_STAT_DAMAGE,
+                struct.unpack(">I", struct.pack(">f", 5.0 + seat))[0])
+        hurt = []
+
+        def game(address, cpu):
+            if address == TEXT + sites_mode.HURT:
+                hurt.append((cpu.r[3], cpu.f[1]))
+        m = ModeCpu(self.image, memory, game)
+        m.r[31] = self.MANAGER
+        m.run(self.symbols["mode_point"])
+        return hurt
+
+    def test_the_seat_that_asks_is_hurt_by_the_game_with_its_amount(self):
+        self.assertEqual(self.point({1: sites_mode.DAMAGE}), [(self.MACHINES + memmap.MACHINE_SIZE, 6.0)])
+
+    def test_each_seat_with_its_own_amount(self):
+        self.assertEqual(self.point({0: sites_mode.DAMAGE, 2: sites_mode.DAMAGE}),
+                         [(self.MACHINES, 5.0), (self.MACHINES + 2 * memmap.MACHINE_SIZE, 7.0)])
+
+    def test_no_seat_asks(self):
+        self.assertEqual(self.point({0: sites_mode.PEDALS}), [])
+
+
 class TheRuleHookWrapper(Build):
     """standin_inputs.py from `ps_yes` and `call_orig`: a seat's record against the game's rule hook, run as the image
     holds it; the hook is a stand-in that clears what the game's start hold or lap-1 rule would."""
@@ -240,6 +308,57 @@ class TheRuleHookWrapper(Build):
         self.assertEqual((seen[0], get(m.mem, self.M)), (0x41, 1))
         _, m = self.wrap(record=2 | standin_inputs.BOOST, flags=1)
         self.assertEqual(get(m.mem, self.M), 1)
+
+    def stats(self, mask, values, rebuilt):
+        """Through the wrapper with a stat record; the hook rebuilds the fields as fn_1_22E8C does."""
+        record = BLOCK + memmap.MODE_STATS + self.SEAT * memmap.MODE_STAT
+
+        def hook(cpu):
+            put(cpu.mem, record, mask)
+            for i, value in values.items():
+                put(cpu.mem, record + 4 + 4 * i, value)
+            for field, value in rebuilt.items():
+                put(cpu.mem, self.M + field, value)
+        return self.wrap(hook=hook)[1]
+
+    def test_the_stat_fields_are_the_cores(self):
+        path = os.path.join(here, "..", "..", "core", "src", "mode.h")
+        with open(path) as file:
+            header = file.read()
+        text = re.search(r"STAT_FIELDS = \{([^}]*)\}", header).group(1)
+        self.assertEqual(tuple(int(w, 16) for w in text.split(",")), standin_inputs.STAT_FIELDS)
+        self.assertEqual(int(re.search(r"STATS = 6 \* PAGE \+ (0x[0-9A-F]+)", header).group(1), 16) + 0x6000,
+                         memmap.MODE_STATS)
+
+    def test_a_changed_stat_goes_over_the_rebuild_and_the_others_stay_the_games(self):
+        rebuilt = {field: 0x3F000000 + i for i, field in enumerate(standin_inputs.STAT_FIELDS)}
+        changed = {2: 0x40000000, 9: 0x40400000}          # max speed and body
+        m = self.stats(1 << 2 | 1 << 9, changed, rebuilt)
+        for i, field in enumerate(standin_inputs.STAT_FIELDS):
+            self.assertEqual(get(m.mem, self.M + field), changed.get(i, rebuilt[field]))
+
+    def test_every_stat_reaches_its_own_field(self):
+        rebuilt = {field: 1 for field in standin_inputs.STAT_FIELDS}
+        values = {i: 0x41000000 + i for i in range(len(standin_inputs.STAT_FIELDS))}
+        m = self.stats((1 << len(values)) - 1, values, rebuilt)
+        for i, field in enumerate(standin_inputs.STAT_FIELDS):
+            self.assertEqual(get(m.mem, self.M + field), values[i])
+
+    def test_no_changed_stat_changes_nothing(self):
+        rebuilt = {field: 7 for field in standin_inputs.STAT_FIELDS}
+        m = self.stats(0, {0: 0x41000000}, rebuilt)
+        for field in standin_inputs.STAT_FIELDS:
+            self.assertEqual(get(m.mem, self.M + field), 7)
+
+    def test_another_seats_record_is_not_this_seats(self):
+        other = BLOCK + memmap.MODE_STATS + (self.SEAT + 1) * memmap.MODE_STAT
+
+        def hook(cpu):
+            put(cpu.mem, other, 1)
+            put(cpu.mem, other + 4, 0x41000000)
+            put(cpu.mem, self.M + 8, 7)
+        _, m = self.wrap(hook=hook)
+        self.assertEqual(get(m.mem, self.M + 8), 7)
 
     def test_pedals_locked_before_the_hook_no_press(self):
         seen, m = self.wrap(record=1, flags=0x2041)
