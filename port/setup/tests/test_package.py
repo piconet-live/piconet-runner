@@ -249,8 +249,8 @@ class ACopy(Parts):
             self.assertEqual(json.load(f)["stack"], {"name": "T1", "server_address": "wss://t1.example/ws", "kind": "test"})
 
     def test_a_launcher_that_was_not_made_for_the_copys_stack_is_refused(self):
-        """A copy named for stack B whose launcher was published without the stack's properties plays on the first
-        server under B's name; one stamped as a test build must not go out as the public one."""
+        """A copy named for a stack whose launcher was published without the stack's properties plays on the first
+        server under that name; one stamped as a test build must not go out as the public one."""
         for stamped, why in (({"stack": None, "address": None, "kind": None}, "its ServerStack, StackServer, StackKind say otherwise, or nothing"),
                              ({"stack": "T2"}, "its ServerStack says otherwise, or nothing"),
                              ({"address": "wss://t1.example/ws2"}, "its StackServer says otherwise, or nothing"),
