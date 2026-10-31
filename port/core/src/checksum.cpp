@@ -97,8 +97,10 @@ u32 StateChecksum(Guest& g, u32 module)
   // a game mode's block, every word (mode.h): its state is the race's. A race without one hashes as before.
   if (const u32 block = g.Read32(layout::MODES + 4); block != 0)
   {
-    if (const u8* p = g.Ram(block, mode::BLOCK))
-      for (u32 at = 0; at < mode::BLOCK; at += 4)
+    // (the stats page only in a mode that has it: every other mode's block sums as it did)
+    const u32 size = g.Read32(block + mode::STATS_ON) != 0 ? mode::BLOCK_WITH_STATS : mode::BLOCK;
+    if (const u8* p = g.Ram(block, size))
+      for (u32 at = 0; at < size; at += 4)
         h = (h ^ LoadBig32(p + at)) * FNV_PRIME;
   }
   return h;

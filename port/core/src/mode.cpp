@@ -372,12 +372,28 @@ constexpr StatRange RangeAt(u8 at, double scale = 1.0)
     }
   return {0.0f, 0.0f};
 }
+// (grip_window: the byte +0x48 of the car data, any whole number a byte holds; the pack's rule for that word speaks of the
+// second byte, so it is not this one's)
 constexpr std::array<StatRange, STAT_FIELDS.size()> STAT_RANGES = {
-    RangeAt(0x04), RangeAt(0x08), RangeAt(0x0C), RangeAt(0x10), RangeAt(0x20),      RangeAt(0x28),
-    RangeAt(0x40), RangeAt(0x34, 0.57), RangeAt(0x38), RangeAt(0x44)};
-static_assert(STAT_RANGES[0].low == 1.0f && STAT_RANGES[9].high == 13.0f && STAT_RANGES[8].high < 4.26f);
-static_assert(SEAT_STATBODY - SEAT_STATWEIGHT == 9 && SEAT_STATBASEBODY - SEAT_STATBASEWEIGHT == 9 &&
-              ACTION_SEATSTATBODY - ACTION_SEATSTATWEIGHT == 9);
+    RangeAt(0x04), RangeAt(0x08), RangeAt(0x0C), RangeAt(0x10), RangeAt(0x20), RangeAt(0x28),
+    RangeAt(0x40), RangeAt(0x34, 0.57), RangeAt(0x38), RangeAt(0x44),
+    RangeAt(0x30), RangeAt(0x14), RangeAt(0x18), RangeAt(0x2C), RangeAt(0x24), RangeAt(0x1C), RangeAt(0x3C), {0.0f, 255.0f}};
+static_assert(STAT_RANGES[0].low == 1.0f && STAT_RANGES[9].high == 13.0f && STAT_RANGES[8].high < 4.26f &&
+              STAT_RANGES[10].high == 10.0f && STAT_RANGES[11].high == 3.5f && STAT_RANGES[12].high == 2.2f &&
+              STAT_RANGES[13].high == 300.0f && STAT_RANGES[14].high == 1000.0f && STAT_RANGES[15].high == 19.0f &&
+              STAT_RANGES[16].high == 0.7f);
+static_assert(SEAT_STATBODY - SEAT_STATWEIGHT == STATS_FIRST - 1 && SEAT_STATBASEBODY - SEAT_STATBASEWEIGHT == STATS_FIRST - 1 &&
+              ACTION_SEATSTATBODY - ACTION_SEATSTATWEIGHT == STATS_FIRST - 1 &&
+              SEAT_STATGRIPWINDOW - SEAT_STATDRIFTROTATIONRESISTANCE == STAT_GRIP_WINDOW - STATS_FIRST &&
+              SEAT_STATBASEGRIPWINDOW - SEAT_STATBASEDRIFTROTATIONRESISTANCE == STAT_GRIP_WINDOW - STATS_FIRST &&
+              ACTION_SEATSTATGRIPWINDOW - ACTION_SEATSTATDRIFTROTATIONRESISTANCE == STAT_GRIP_WINDOW - STATS_FIRST);
+
+// A stat's field as a real's bits (grip_window's is a byte, its whole number).
+u32 StatField(Mem& g, u32 machine, u32 i)
+{
+  return i == STAT_GRIP_WINDOW ? std::bit_cast<u32>(static_cast<float>(g.Read8(machine + STAT_FIELDS[i])))
+                             : g.Read32(machine + STAT_FIELDS[i]);
+}
 
 // a queued action: its arguments' cells in order (the first, a seat or a set; a vec three cells)
 struct Action
@@ -806,12 +822,15 @@ private:
     // (read where a word asks for them: reading has no effect on anything)
     const auto Flags = [&] { return m_g.Read32(m + game::MACHINE_FLAGS); };
     const auto Progress = [&] { return m_g.Read32(m + game::MACHINE_PROGRESS); };
-    if (id >= SEAT_STATWEIGHT && id <= SEAT_STATBASEBODY)
+    if ((id >= SEAT_STATWEIGHT && id <= SEAT_STATBASEBODY) || (id >= SEAT_STATDRIFTROTATIONRESISTANCE && id <= SEAT_STATBASEGRIPWINDOW))
     {
       // this step's value is the machine's field; the machine's own, the field too until the mode changes it
-      const bool own = id >= SEAT_STATBASEWEIGHT;
-      const u32 i = id - (own ? SEAT_STATBASEWEIGHT : SEAT_STATWEIGHT), stat = m_block + STATS + seat * STAT;
-      return own && (m_g.Read32(stat) >> i & 1) ? m_g.Read32(stat + STAT_BASE + 4 * i) : m_g.Read32(m + STAT_FIELDS[i]);
+      const bool page = id >= SEAT_STATDRIFTROTATIONRESISTANCE;
+      const bool own = page ? id >= SEAT_STATBASEDRIFTROTATIONRESISTANCE : id >= SEAT_STATBASEWEIGHT;
+      const u32 i = page ? STATS_FIRST + id - (own ? SEAT_STATBASEDRIFTROTATIONRESISTANCE : SEAT_STATDRIFTROTATIONRESISTANCE)
+                         : id - (own ? SEAT_STATBASEWEIGHT : SEAT_STATWEIGHT);
+      return own && (m_g.Read32(m_block + STATS + seat * STAT) >> i & 1) ? m_g.Read32(m_block + StatBaseAt(seat, i))
+                                                                         : StatField(m_g, m, i);
     }
     switch (id)
     {
@@ -1244,10 +1263,10 @@ private:
 
 // The step stamps: the block's every page changes at every run, so the undo log watches each from the race's first
 // steps (undo_log.cpp: a page first seen changing later is a late page).
-void Stamp(Mem& g, u32 block, u32 runs)
+void Stamp(Mem& g, const Package& p, u32 block, u32 runs)
 {
   g.Write32(block + RUNS, runs);
-  for (u32 page = PAGE; page < BLOCK; page += PAGE)
+  for (u32 page = PAGE; page < (p.stats_page ? BLOCK_WITH_STATS : BLOCK); page += PAGE)
     g.Write32(block + page, runs);
 }
 
@@ -1823,15 +1842,33 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
       case ACTION_SEATSTATBOOSTSTRENGTH:
       case ACTION_SEATSTATBOOSTLENGTH:
       case ACTION_SEATSTATBODY:
+      case ACTION_SEATSTATDRIFTROTATIONRESISTANCE:
+      case ACTION_SEATSTATDRIFTFRICTION:
+      case ACTION_SEATSTATTURNTENSION:
+      case ACTION_SEATSTATTURNREACTION:
+      case ACTION_SEATSTATSTRAFETURN:
+      case ACTION_SEATSTATDRIFTACCEL:
+      case ACTION_SEATSTATTURNDECEL:
+      case ACTION_SEATSTATGRIPWINDOW:
       {
         if (!Finite(a.value[0]))
           return m.Fail(FAULT_REAL);
-        const u32 i = a.id - ACTION_SEATSTATWEIGHT, stat = block + STATS + seat * STAT, changed = g.Read32(stat);
+        const u32 i = a.id >= ACTION_SEATSTATDRIFTROTATIONRESISTANCE ? STATS_FIRST + a.id - ACTION_SEATSTATDRIFTROTATIONRESISTANCE : a.id - ACTION_SEATSTATWEIGHT;
+        // a package that writes the stats page's stats without the compiler's word: its block has no such page
+        if (i >= STATS_FIRST && !p.stats_page)
+          return m.Fail(FAULT_CODE);
+        const u32 stat = block + STATS + seat * STAT, changed = g.Read32(stat);
         const float v = std::clamp(Real(a.value[0]), STAT_RANGES[i].low, STAT_RANGES[i].high) + 0.0f;  // (-0 as 0)
-        const u32 field = g.Read32(machine + STAT_FIELDS[i]);
-        const float now = changed >> i & 1 ? Real(g.Read32(stat + STAT_VALUES + 4 * i)) : Real(field);
+        const u32 field = StatField(g, machine, i);
         if (!(changed >> i & 1))
-          g.Write32(stat + STAT_BASE + 4 * i, field);
+          g.Write32(block + StatBaseAt(seat, i), field);
+        if (i == STAT_GRIP_WINDOW)
+        {
+          g.Write32(block + StatValueAt(seat, i), static_cast<u32>(v));
+          g.Write32(stat, changed | 1u << i);
+          break;
+        }
+        const float now = changed >> i & 1 ? Real(g.Read32(block + StatValueAt(seat, i))) : Real(field);
         // the weight: momentum is W x speed, so the momentum goes with it and the speed stays (one binary32 division and
         // a product a component, as push's km/h)
         if (a.id == ACTION_SEATSTATWEIGHT && v != now)
@@ -1840,7 +1877,7 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
           for (u32 c = 0; c < 3; ++c)
             g.Write32(machine + M_MOMENTUM + 4 * c, Bits(Real(g.Read32(machine + M_MOMENTUM + 4 * c)) * k));
         }
-        g.Write32(stat + STAT_VALUES + 4 * i, std::bit_cast<u32>(v));
+        g.Write32(block + StatValueAt(seat, i), std::bit_cast<u32>(v));
         g.Write32(stat, changed | 1u << i);
         break;
       }
@@ -2209,7 +2246,9 @@ void GameStartPass(Guest& guest, Mem& g, const Package& p, u32 block, u32 module
       g.Write32(block + TeamWord(team, static_cast<u32>(w)), Word(p.team_words[w]));
   for (u32 k = 0; k < 4; ++k)
     g.Write32(block + RANDOM + 4 * k, p.seed[k]);
-  Stamp(g, block, 1);
+  Stamp(g, p, block, 1);
+  if (p.stats_page)
+    g.Write32(block + STATS_ON, 1);
   hud::BeginRun(guest, block);
   Machine m(g, p, block, module);
   const Now n = ReadNow(m, g, block, module);
@@ -2243,7 +2282,7 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
   if (g.Read32(block + END) != 0)
     return;
   const u32 runs = g.Read32(block + RUNS);
-  Stamp(g, block, runs + 1);
+  Stamp(g, p, block, runs + 1);
   hud::BeginRun(guest, block);
   Machine m(g, p, block, module);
   const Now n = ReadNow(m, g, block, module);

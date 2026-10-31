@@ -273,6 +273,10 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
               p.results_title.back() == ' ')
             return Fail(why, "has a results title the game cannot draw");
         }
+        else if (id == modes::SETUP_STATSPAGE)
+        {
+          p.stats_page = true;
+        }
         else if (id == modes::SETUP_TAGTEXTS)
         {
           // a value a byte and a 0 between texts, as the compiler's ModeTagTexts holds them: font 5's characters

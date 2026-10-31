@@ -1393,8 +1393,8 @@ void TestTheStatWords()
   const auto machine = [](u32 seat) { return MACHINES + seat * game::MACHINE_SIZE; };
   for (u32 seat = 0; seat < 4; ++seat)
   {
-    for (const u32 field : mode::STAT_FIELDS)
-      g.Write32(machine(seat) + field, real(0.5f));
+    for (u32 i = 0; i < mode::STATS_FIRST; ++i)
+      g.Write32(machine(seat) + mode::STAT_FIELDS[i], real(0.5f));
     g.Write32(machine(seat) + 0x8, real(1000.0f));              // the weight
     g.Write32(machine(seat) + 0x94, real(200.0f));              // the momentum
     g.Write32(machine(seat) + 0x98, real(-100.0f));
@@ -1407,7 +1407,7 @@ void TestTheStatWords()
   const auto base = [&](u32 seat, u32 i) { return std::bit_cast<float>(g.Read32(stat(seat) + mode::STAT_BASE + 4 * i)); };
   // (body: base + 1, then += 1 reads the step as it stood, language 6: 1.5, not 2.5)
   CHECK(value(0, 0) == 2000.0f && value(0, 1) == 0.75f && value(0, 2) == 0.25f && value(0, 9) == 1.5f);
-  for (u32 i = 0; i < mode::STAT_FIELDS.size(); ++i)
+  for (u32 i = 0; i < mode::STATS_FIRST; ++i)
     CHECK(base(0, i) == (i == 0 ? 1000.0f : 0.5f));
   // the machine's field is the wrapper's to write; the weight's change has scaled the momentum, so the speed stays
   CHECK(std::bit_cast<float>(g.Read32(machine(0) + 0x8)) == 1000.0f);
@@ -1421,7 +1421,7 @@ void TestTheStatWords()
     CHECK(g.Read32(BLOCK + mode::RECORDS + seat * mode::RECORD) & mode::DAMAGE);
   CHECK(std::bit_cast<float>(g.Read32(stat(2) + mode::STAT_DAMAGE)) == 6.0f);
   // the next run: the wrapper has written the values; the machine's own stays what it was, and the record's bits stay
-  for (u32 i = 0; i < mode::STAT_FIELDS.size(); ++i)
+  for (u32 i = 0; i < mode::STATS_FIRST; ++i)
     g.Write32(machine(0) + mode::STAT_FIELDS[i], g.Read32(stat(0) + mode::STAT_VALUES + 4 * i));
   const std::vector<u8> before = BlockOf(g);
   g.Write32(MODULE + game::RACE_CLOCK, 601);
@@ -1446,6 +1446,67 @@ void TestTheStatWords()
   FakeModeRace(g2, 4, 600);
   mode::Run(g2, *q, BLOCK, MODULE);
   CHECK(g2.Read32(BLOCK + mode::END) == 1 && g2.Read32(BLOCK + mode::FAULT) == mode::FAULT_REAL);
+}
+
+// The stats page: values and bases on the eighth page, bits in the first record, the pack's ranges, a byte's whole
+// number; the page is stamped only for a mode with the word, and a package without it cannot reach it.
+void TestTheStatsPage()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("stats_page.mode.json"), &why);
+  CHECK(p.has_value() && p->stats_page);
+  if (!p)
+    return;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 2, 600);
+  const auto machine = [](u32 seat) { return MACHINES + seat * game::MACHINE_SIZE; };
+  for (u32 seat = 0; seat < 2; ++seat)
+  {
+    for (u32 i = mode::STATS_FIRST; i < mode::STAT_GRIP_WINDOW; ++i)
+      g.Write32(machine(seat) + mode::STAT_FIELDS[i], std::bit_cast<u32>(0.5f));
+    g.Write8(machine(seat) + 0x477, 7);
+  }
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::END) == 0);
+  const auto value = [&](u32 seat, u32 i) { return std::bit_cast<float>(g.Read32(BLOCK + mode::StatValueAt(seat, i))); };
+  const auto base = [&](u32 seat, u32 i) { return std::bit_cast<float>(g.Read32(BLOCK + mode::StatBaseAt(seat, i))); };
+  constexpr u32 PAGE_BITS = ((1u << mode::STAT_FIELDS.size()) - 1) & ~((1u << mode::STATS_FIRST) - 1);
+  CHECK(g.Read32(BLOCK + mode::STATS) == PAGE_BITS && g.Read32(BLOCK + mode::STATS + mode::STAT) == PAGE_BITS);
+  CHECK(g.Read32(BLOCK + mode::BLOCK) == g.Read32(BLOCK + mode::RUNS) && g.Read32(BLOCK + mode::STATS_ON) == 1);
+  CHECK(value(0, 10) == 1.5f && value(0, 11) == 0.25f && value(0, 12) == 0.125f && value(0, 13) == 20.0f &&
+        value(0, 14) == 30.0f && value(0, 15) == 2.0f && value(0, 16) == 0.5f);
+  CHECK(g.Read32(BLOCK + mode::StatValueAt(0, mode::STAT_GRIP_WINDOW)) == 3);
+  for (u32 i = mode::STATS_FIRST; i < mode::STAT_GRIP_WINDOW; ++i)
+    CHECK(base(0, i) == 0.5f);
+  CHECK(base(0, mode::STAT_GRIP_WINDOW) == 7.0f);
+  // the pack's ranges; the byte's own
+  CHECK(value(1, 10) == 10.0f && value(1, 11) == 3.5f && value(1, 12) == 2.2f && value(1, 13) == 300.0f &&
+        value(1, 14) == 1000.0f && value(1, 15) == 19.0f && value(1, 16) == 0.7f);
+  CHECK(g.Read32(BLOCK + mode::StatValueAt(1, mode::STAT_GRIP_WINDOW)) == 255);
+  // a package that writes them without the word: a mode error, and nothing past the seven pages
+  mode::Package q = *p;
+  q.stats_page = false;
+  TestHost host2;
+  ModData data2;
+  Guest g2(host2, data2);
+  FakeModeRace(g2, 2, 600);
+  mode::Run(g2, q, BLOCK, MODULE);
+  CHECK(g2.Read32(BLOCK + mode::END) == 1 && g2.Read32(BLOCK + mode::FAULT) == mode::FAULT_CODE);
+  CHECK(g2.Read32(BLOCK + mode::BLOCK) == 0 && g2.Read32(BLOCK + mode::STATS_ON) == 0);
+  // a mode without the word leaves the page as it found it, and STATS_ON 0: its block sums as before
+  const std::optional<mode::Package> old = mode::Read(Vector("stats.mode.json"), &why);
+  CHECK(old.has_value() && !old->stats_page);
+  if (!old)
+    return;
+  TestHost host3;
+  ModData data3;
+  Guest g3(host3, data3);
+  FakeModeRace(g3, 2, 600);
+  mode::Run(g3, *old, BLOCK, MODULE);
+  CHECK(g3.Read32(BLOCK + mode::BLOCK) == 0 && g3.Read32(BLOCK + mode::STATS_ON) == 0);
 }
 
 // The combat values' live words (the sites that read them: test_mode_sites.py), the time bonus and the points table.

@@ -27,8 +27,10 @@ namespace fzgx::mode
 // word, the engine page's clock, no-contact rows, touching rows, moves and the rolling start's saved steering). Seven
 // pages: the run's words, the globals, the edges, the generator and the waiting rules' bits; two of seat words; the
 // wait records; the team words; the engine page (the race side's state: what the events compare with, the places,
-// the points, the contact table); the displays (mode_hud.h). Every page's first word is its step stamp.
-constexpr u32 BLOCK = 0x7000, PAGE = 0x1000;
+// the points, the contact table); the displays (mode_hud.h). Every page's first word is its step stamp. A mode whose
+// rules write a stat of the stats page (the compiler's setup word stats_page; below, STATS_TWO) has an eighth page; the
+// block of every other mode is these seven, byte for byte.
+constexpr u32 BLOCK = 0x7000, PAGE = 0x1000, BLOCK_WITH_STATS = BLOCK + PAGE;
 constexpr u32 RECORDS = 0, RECORD = 16;   // a seat's: +0 flags, +4 accelerator, +8 brake, +12 the held speed
 constexpr u32 END = RECORDS + 30 * RECORD;  // 0x1E0: 0 the race goes on; 1 a mode error; 2 the mode ended it
 constexpr u32 FAULT = END + 4;            // the fault's reason (Fault), and +8 its step
@@ -72,6 +74,7 @@ constexpr u32 MOVES = ENGINE + 0xA80;     // a seat's: +0 1 push, 2 velocity; +4
 constexpr u32 DANGER = ENGINE + 0xC60;    // a seat's danger zone: +0 below, +4 arm (km/h), +8 count, +12 flags
 constexpr u32 ROLL_SAVE = ENGINE + 0xE40, ROLL_SAVE_SIZE = 8;  // a seat's steering (+0) before the rule hook while the rolling start holds it
 constexpr u32 DANGER_ON = 1, DANGER_ARMED = 2, DANGER_DONE = 4;
+constexpr u32 STATS_ON = ENGINE + 0xF30;  // not 0: this block has the stats page (written once at game_start; checksum.cpp)
 // A seat's stat record (seat.stat.*, damage), in the display page's free room (mode_hud.h: the only page with room, and
 // no page more is stamped and summed at every step; the stand-in's rule hook wrapper and the mode point read it):
 // +0 the stats the mode changed, bit i for STAT_WORDS[i]; +4 their values; +STAT_BASE what each was before the first
@@ -93,8 +96,25 @@ constexpr u32 BOOST_OFF_SEATS = POINTS_TABLE + 30 * 4;  // boost s off's, a bit 
 static_assert(BOOST_OFF_SEATS + 4 <= BLOCK);
 // By the bit: M's field, in the order of modes.toml's seat.stat.* (port/image/routines/standin_inputs.py STAT_FIELDS is
 // this list, and its test holds the two equal): weight, accel, max_speed, grip, turn, strafe, drag, boost_strength,
-// boost_length, body.
-constexpr std::array<u32, 10> STAT_FIELDS = {0x8, 0x220, 0x22C, 0xC, 0x14, 0x1C, 0x23C, 0x230, 0x234, 0x30};
+// boost_length, body; then the stats page's: drift_rotation_resistance, drift_friction, turn_tension, turn_reaction, strafe_turn, drift_accel,
+// turn_decel, grip_window. The first record's bits say for them too (bit i), so a mode that writes none has no other
+// byte changed. A stat from bit STATS_FIRST on keeps its value and its base on the stats page, a record of STAT_TWO a
+// seat. grip_window's field is a byte: its value is the whole number and the wrapper stores the low byte; its base is a real.
+constexpr std::array<u32, 18> STAT_FIELDS = {0x8,  0x220, 0x22C, 0xC,  0x14, 0x1C, 0x23C, 0x230, 0x234,
+                                             0x30, 0x24,  0x28,  0x10, 0x20, 0x18, 0x2C,  0x238, 0x477};
+constexpr u32 STATS_FIRST = 10, STAT_GRIP_WINDOW = 17;
+constexpr u32 STATS_TWO = BLOCK + 0x10, STAT_TWO = 0x80, STAT_TWO_BASE = 0x40;
+static_assert(STATS_TWO + 30 * STAT_TWO <= BLOCK_WITH_STATS && (STAT_FIELDS.size() - STATS_FIRST) * 4 <= STAT_TWO_BASE &&
+              STAT_FIELDS.size() <= 32 && STAT_FIELDS[STAT_GRIP_WINDOW] == 0x477);
+constexpr u32 StatValueAt(u32 seat, u32 i)
+{
+  return i < STATS_FIRST ? STATS + seat * STAT + STAT_VALUES + 4 * i : STATS_TWO + seat * STAT_TWO + 4 * (i - STATS_FIRST);
+}
+constexpr u32 StatBaseAt(u32 seat, u32 i)
+{
+  return i < STATS_FIRST ? STATS + seat * STAT + STAT_BASE + 4 * i
+                         : STATS_TWO + seat * STAT_TWO + STAT_TWO_BASE + 4 * (i - STATS_FIRST);
+}
 constexpr float MOST_SPEED = 9000.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
@@ -103,7 +123,7 @@ static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS
               TOUCH + 30 * 4 <= TOUCH_PREV && TOUCH_PREV + 30 * 4 <= RESPAWN && TEAM_NC + 30 * 4 <= END_ORDER &&
               END_ORDER + 30 <= PLACES && PLACES + 30 <= POINTS && POINTS + 30 * 4 <= RANKS && RANKS + 30 <= SEAT_STATE &&
               SEAT_STATE + 30 * SEAT_STATE_SIZE <= MOVES && MOVES + 30 * 16 <= DANGER && DANGER + 30 * 16 <= ROLL_SAVE &&
-              ROLL_SAVE + 30 * ROLL_SAVE_SIZE <= 6 * PAGE);
+              ROLL_SAVE + 30 * ROLL_SAVE_SIZE <= STATS_ON && STATS_ON + 4 <= 6 * PAGE);
 
 constexpr u32 SeatWord(u32 seat, u32 word)
 {
@@ -196,6 +216,7 @@ struct Package
   u32 time_bonus = 0;               // time_bonus's steps, 0 none
   std::array<std::optional<u32>, 4> combat{};  // damage, knockback, wall_damage, wall_bounce: binary32 bits
   bool spin_off = false, side_off = false, spin_immune = false;
+  bool stats_page = false;          // the compiler's stats_page: the block has the eighth page (a rule writes one of its stats)
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   bool start_together = false;      // start_together: every machine on slot 0, every no-contact row on from before step 0
