@@ -165,17 +165,39 @@ class ThePreload(Build):
     def row(self, memory, seat):
         return get(memory, self.BLOCK_AT + memmap.MODE_NC + 4 * seat)
 
-    def test_start_together_comes_with_every_row_on(self):
-        memory = self.preload(memmap.MODE_TOGETHER)
-        self.assertEqual(get(memory, self.BLOCK_AT + memmap.MODE_NC_ANY), 0xFFFFFFFF)
-        self.assertEqual({self.row(memory, seat) for seat in range(30)}, {0xFFFFFFFF})
-        # only the rows: the word after them and the one before are zero as the rest of the block
-        self.assertEqual(self.row(memory, 30), 0)
-        self.assertEqual(get(memory, self.BLOCK_AT + memmap.MODE_NC_ANY - 4), 0)
+    def test_the_block_comes_zeroed_whatever_the_mode(self):
+        for flags in (memmap.MODE_ROLLING, memmap.MODE_TOGETHER):
+            memory = self.preload(flags)
+            self.assertEqual({memory[a] for a in range(self.BLOCK_AT, self.BLOCK_AT + memmap.MODE_BLOCK)}, {0})
 
-    def test_any_other_mode_comes_zeroed(self):
-        memory = self.preload(memmap.MODE_ROLLING)
-        self.assertEqual({memory[a] for a in range(self.BLOCK_AT, self.BLOCK_AT + memmap.MODE_BLOCK)}, {0})
+
+class TheFirstPass(Build):
+    """mode_begin: the host's game_start at the countdown task's entry, while the block's run count is 0."""
+
+    def enter(self, mode=1, block=BLOCK, runs=0):
+        memory = {}
+        put(memory, MODE, mode)
+        put(memory, MODES + 4, block)
+        put(memory, BLOCK + memmap.MODE_RUNS, runs)
+        reached = []
+        m = ModeCpu(self.image, memory, lambda address, cpu: reached.append(address))
+        m.r[3] = 0x80123456
+        m.r[1] = 0x80F00000
+        m.lr = 0x80000111
+        m.run(self.symbols["mode_begin"])
+        return m, reached
+
+    def test_the_first_entry_calls_the_host_and_keeps_the_tasks_argument(self):
+        m, reached = self.enter()
+        self.assertEqual(reached, [memmap.HOST_MODE, TEXT + sites_mode.BEGIN + 4])
+        self.assertEqual((m.r[3], m.r[1], m.lr), (0x80123456, 0x80F00000 - 0x20, 0x80000111))   # (r1: the game's own first word has run)
+
+    def test_later_entries_and_other_starts_call_nothing(self):
+        for mode, block, runs in ((1, BLOCK, 1), (1, 0, 0), (0, BLOCK, 0)):
+            self.assertEqual(self.enter(mode, block, runs)[1], [TEXT + sites_mode.BEGIN + 4])
+
+    def test_the_count_is_the_interpreters(self):
+        self.assertEqual(memmap.MODE_RUNS, 0x1E0 + 12)     # mode.h RUNS
 
 
 class TheTimer(Build):

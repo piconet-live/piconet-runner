@@ -57,6 +57,7 @@ MODE_ALLOC = MODE_BLOCK + 0x1000   # taken from the heap: the block starts on a 
 MODE_SEAT = 16
 MODE_SEATS = 0
 MODE_END = MODE_SEATS + 30 * MODE_SEAT   # the block's word: not 0, the mode ended the race (the step after which, plus 1)
+MODE_RUNS = MODE_END + 12                # the interpreter's runs so far; 0: game_start has not run (mode_begin)
 # the engine page's words the image reads and writes (port/core/src/mode.h: the same offsets)
 MODE_ENGINE = 0x5000
 MODE_WAITS = MODE_ENGINE                 # race_waits: not 0, the race-over test counts every seat (raceend.py)
@@ -291,6 +292,7 @@ assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE
 MODE_HUD = _facts.MODE_HUD
 MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
 MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_TOGETHER = 1, 2, 4, 8, 32
+MODE_HUD_RANK = MODE_HUD + 8             # not 0: the viewed racer's RANK is hidden, the rank icons with it (mode_hud.h)
 MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
 MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
 # `tag` (nametags.py; mode_hud.h): +0x100 a byte a seat, the text's number from 1 (0: none), +0x120 the texts

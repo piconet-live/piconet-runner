@@ -1509,10 +1509,11 @@ void Events(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const N
   };
   const auto rose = [&](u32 seat, u32 bit) { return (n.flags[seat] & bit) && !(was(seat, S_FLAGS) & bit); };
   const auto fell = [&](u32 seat, u32 bit) { return !(n.flags[seat] & bit) && (was(seat, S_FLAGS) & bit); };
-  if (runs == 0)
-    Fire(m, g, p, block, EVENT_RACESTART, NONE);
+  // (runs 0 was game_start's, GameStart below; the mode point's first run is 1)
+  if (runs == 1)
+    Fire(m, g, p, block, EVENT_COUNTDOWN, NONE);
   if (n.started && !(g.Read32(block + FLAGS) & 1))
-    Fire(m, g, p, block, EVENT_GO, NONE);
+    Fire(m, g, p, block, EVENT_RACESTART, NONE);
   const u32 newly = n.out & ~g.Read32(block + OUT_MASK);
   for (u32 seat = 0; seat < count && m.Faulted() == FAULT_NONE; ++seat)
     if (newly >> seat & 1)
@@ -2045,12 +2046,11 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
     EndClause(m, g, block, module, p.race_waits);
 }
 
-// The mode's first run (the first step after the start gate): the setup words that act on the race from its start.
+// The setup words that act on the race from its start, in game_start's pass.
 void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
 {
   const u32 count = m.Count();
   const u32 all = count >= 32 ? ~0u : (1u << count) - 1;
-  // (start_together: the image's mode_preload wrote these rows before this run's own contact pass; here as for contact off)
   if (p.contact_off || p.start_together)
     for (u32 seat = 0; seat < count; ++seat)
       g.Write32(block + NC + 4 * seat, 0xFFFFFFFFu);
@@ -2146,48 +2146,11 @@ void GonePlayers(Mem& g, const Package& p, u32 block, u32 module, u32 step, u32 
     g.Write32(block + DRIVEN, driven);
 }
 
-void Run(Guest& guest, const Package& p, u32 block, u32 module)
+// The records' start for a run: the setup words' every step, no speed held until a rule holds it (a frozen seat's at 0);
+// the CPU drives the seats handed to it, and every seat through a rolling start's countdown, the pedals held and every
+// seat's speed exactly the rolling start's, whatever the pedals and a dash plate do, until GO
+void FillRecords(Mem& g, const Package& p, u32 block, const Now& n)
 {
-  Mem g(guest);
-  if (const u32 end = g.Read32(block + END); end != 0)
-  {
-    // the race is over (the image's race-end clause has it); a race the mode ended keeps the mode's order
-    if (end == 2)
-      HoldOrder(g, block, module);
-    return;
-  }
-  const FloatControl control;
-  const u32 runs = g.Read32(block + RUNS);
-  if (runs == 0)
-  {
-    for (size_t i = 0; i < p.globals.size(); ++i)
-      g.Write32(block + GLOBALS + 4 * static_cast<u32>(i), Word(p.globals[i]));
-    for (u32 seat = 0; seat < SEATS; ++seat)
-      for (size_t w = 0; w < p.seat_words.size(); ++w)
-        g.Write32(block + SeatWord(seat, static_cast<u32>(w)), Word(p.seat_words[w]));
-    for (u32 team = 0; team < modes::TEAMS; ++team)
-      for (size_t w = 0; w < p.team_words.size(); ++w)
-        g.Write32(block + TeamWord(team, static_cast<u32>(w)), Word(p.team_words[w]));
-    for (u32 k = 0; k < 4; ++k)
-      g.Write32(block + RANDOM + 4 * k, p.seed[k]);
-  }
-  Stamp(g, block, runs + 1);
-  hud::BeginRun(guest, block);
-  Machine m(g, p, block, module);
-  const Now n = ReadNow(m, g, block, module);
-  if (runs == 0)
-  {
-    // the first run's events compare the step with itself (race_start; and out for a seat already out, as before)
-    Remember(m, g, block, n);
-    g.Write32(block + OUT_MASK, 0);
-    g.Write32(block + FLAGS, 0);
-    Begin(m, g, p, block, module);
-  }
-  if (!p.cpus_allowed && !p.solo)
-    GonePlayers(g, p, block, module, guest.Read32(net::STEP), m.Count());
-  // the records: the setup words' every step, no speed held until a rule holds it (a frozen seat's at 0); the CPU
-  // drives the seats handed to it, and every seat through a rolling start's countdown, the pedals held
-  // and every seat's speed exactly the rolling start's, whatever the pedals and a dash plate do, until GO
   const bool rolling = p.rolling.has_value() && !n.started;
   const u32 handed = g.Read32(block + HANDED), frozen = g.Read32(block + FROZEN);
   const u32 boost_off_seats = g.Read32(block + BOOST_OFF_SEATS);
@@ -2201,6 +2164,96 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
     g.Write32(record + 12, rolling && !(frozen >> seat & 1) ? *p.rolling : 0);
     g.Write32(block + MOVES + 16 * seat, 0);
   }
+}
+
+// What ends every run: the trace, the state the next run compares with, the operations, a mode error.
+void CloseRun(Machine& m, Mem& g, u32 block, u32 module, u32 runs, bool running, const Now& n)
+{
+  TraceSeats(m, g, block, module, runs, running, n);
+  Remember(m, g, block, n);
+  g.Write32(block + OPS, m.Ops());
+  g.Write32(block + OPS + 4, std::max(g.Read32(block + OPS + 4), m.Ops()));
+  if (m.Faulted() != FAULT_NONE)
+  {
+    // a mode error: the race ends for everyone at this step, the results as they stand (D6)
+    g.Write32(block + FAULT, m.Faulted());
+    g.Write32(block + FAULT + 4, g.Read32(module + game::RACE_CLOCK));
+    g.Write32(block + END, 1);
+  }
+}
+
+// game_start, the mode's first pass: once, called from the countdown task's first entry (the image's mode_begin, in the
+// step before the first picture with machines in it). The machines
+// exist and have not stepped. Every game runs it at the same step and a rollback that goes back to before it runs it
+// again from the same memory. What it writes is the mode's state from then on: the variables' first values, the setup
+// words (Begin) and the game_start rules. Only these rules run: the rest needs a step, so `countdown` is the next run's.
+void GameStartPass(Guest& guest, Mem& g, const Package& p, u32 block, u32 module)
+{
+  for (size_t i = 0; i < p.globals.size(); ++i)
+    g.Write32(block + GLOBALS + 4 * static_cast<u32>(i), Word(p.globals[i]));
+  for (u32 seat = 0; seat < SEATS; ++seat)
+    for (size_t w = 0; w < p.seat_words.size(); ++w)
+      g.Write32(block + SeatWord(seat, static_cast<u32>(w)), Word(p.seat_words[w]));
+  for (u32 team = 0; team < modes::TEAMS; ++team)
+    for (size_t w = 0; w < p.team_words.size(); ++w)
+      g.Write32(block + TeamWord(team, static_cast<u32>(w)), Word(p.team_words[w]));
+  for (u32 k = 0; k < 4; ++k)
+    g.Write32(block + RANDOM + 4 * k, p.seed[k]);
+  Stamp(g, block, 1);
+  hud::BeginRun(guest, block);
+  Machine m(g, p, block, module);
+  const Now n = ReadNow(m, g, block, module);
+  Remember(m, g, block, n);
+  g.Write32(block + OUT_MASK, 0);
+  g.Write32(block + FLAGS, 0);
+  Begin(m, g, p, block, module);
+  FillRecords(g, p, block, n);
+  Fire(m, g, p, block, EVENT_GAMESTART, NONE);
+  bool end = false;
+  if (m.Faulted() == FAULT_NONE)
+    Apply(m, g, p, block, module, &end);
+  if (m.Faulted() == FAULT_NONE)
+    After(m, g, p, block, module, n, end);
+  CloseRun(m, g, block, module, 0, false, n);
+}
+
+void Run(Guest& guest, const Package& p, u32 block, u32 module)
+{
+  Mem g(guest);
+  if (const u32 end = g.Read32(block + END); end != 0)
+  {
+    // the race is over (the image's race-end clause has it); a race the mode ended keeps the mode's order
+    if (end == 2)
+      HoldOrder(g, block, module);
+    return;
+  }
+  const FloatControl control;
+  if (g.Read32(block + RUNS) == 0)
+    GameStartPass(guest, g, p, block, module);
+  if (g.Read32(block + END) != 0)
+    return;
+  const u32 runs = g.Read32(block + RUNS);
+  Stamp(g, block, runs + 1);
+  hud::BeginRun(guest, block);
+  Machine m(g, p, block, module);
+  const Now n = ReadNow(m, g, block, module);
+  // the mode point's first run compares the step with itself (out for a seat already out, as ever): game_start's state
+  // is many steps old
+  if (runs == 1)
+  {
+    Remember(m, g, block, n);
+    g.Write32(block + OUT_MASK, 0);
+    g.Write32(block + FLAGS, g.Read32(block + FLAGS) & ~1u);
+    static bool said = false;  // (as game_start's)
+    if (!said)
+    {
+      said = true;
+      Notice("fzgx: game mode: countdown at step {}", guest.Read32(net::STEP));
+    }
+  }
+  if (!p.cpus_allowed && !p.solo)
+    GonePlayers(g, p, block, module, guest.Read32(net::STEP), m.Count());
+  FillRecords(g, p, block, n);
   // the discrete events, in the language's order
   Events(m, g, p, block, module, n, runs);
   // the waits whose time has come (none in a package that has no Wait)
@@ -2229,16 +2282,19 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
     Apply(m, g, p, block, module, &end);
   if (m.Faulted() == FAULT_NONE)
     After(m, g, p, block, module, n, end);
-  TraceSeats(m, g, block, module, runs, n.started && !end, n);
-  Remember(m, g, block, n);
-  g.Write32(block + OPS, m.Ops());
-  g.Write32(block + OPS + 4, std::max(g.Read32(block + OPS + 4), m.Ops()));
-  if (m.Faulted() != FAULT_NONE)
+  CloseRun(m, g, block, module, runs, n.started && !end, n);
+}
+
+void GameStart(Guest& guest, const Package& p, u32 block, u32 module)
+{
+  Mem g(guest);
+  const FloatControl control;
+  GameStartPass(guest, g, p, block, module);
+  static bool said = false;  // (where it fell, once a run of the game: every game says the same step)
+  if (!said)
   {
-    // a mode error: the race ends for everyone at this step, the results as they stand (D6)
-    g.Write32(block + FAULT, m.Faulted());
-    g.Write32(block + FAULT + 4, g.Read32(module + game::RACE_CLOCK));
-    g.Write32(block + END, 1);
+    said = true;
+    Notice("fzgx: game mode: game_start at step {}, phase {:#x}", guest.Read32(net::STEP), g.Read16(module + game::PHASE));
   }
 }
 
@@ -2352,7 +2408,11 @@ void Step(Guest& g)
   const u32 block = g.Read32(layout::MODES + 4);
   if (!m || !m->game_mode || block == 0)
     return;
-  Run(g, *m->game_mode, block, g.Read32(net::MODULE_POINTER));
+  // (runs 0: mode_begin's call, or the mode point's in a start with no countdown task: game_start and nothing else)
+  if (g.Read32(block + RUNS) == 0)
+    GameStart(g, *m->game_mode, block, g.Read32(net::MODULE_POINTER));
+  else
+    Run(g, *m->game_mode, block, g.Read32(net::MODULE_POINTER));
   hud::ShowFault(g, *m->game_mode, g.Read32(block + END) == 1);
   // the log, once a run of the game (a step run again says nothing new); the block holds what the race is
   static bool said = false;

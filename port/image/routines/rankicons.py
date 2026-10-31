@@ -12,7 +12,10 @@ camera at it every frame), so nothing changes there. The fork's image keeps `f30
 
 Tests: in a game told to keep the logs (memmap.IMAGE_LOGS) the first read counts each racer's drawn frames at
 memmap.ICONS: held back (+0, a word a racer) or let through to the icon's own tests (+120). Picture only: the icons
-are drawn, no step reads the counters."""
+are drawn, no step reads the counters.
+
+A game mode's `hide s, RANK` (memmap.MODE_HUD_RANK, the core's HUD pass) hides the icons too: they say the same thing as
+the rank, so a mode that hides a racer's place hides them all from that racer."""
 import memmap
 
 H = memmap.hi(memmap.IMAGE + 0x14)          # the slot 'FZSI' +4: the local seat
@@ -69,7 +72,11 @@ def icon(p, count):
     drawn frame), and a game told to keep the logs: the racer's counter at memmap.ICONS, held back (+0) or let through
     (+120). Uses r0, r12 and CR0 only (r3 holds fn_1_5910's answer at 0x129AC0; `addi 0, 0, 1` would read rA as the
     number 0, so the count goes up as -(~n)). Labels start with `p`."""
-    text = followed("@") + f"""    lha 0, 4(30)
+    text = f"""    lis 12, {memmap.hi(memmap.MODE_HUD_RANK)}
+    lwz 0, {memmap.lo(memmap.MODE_HUD_RANK)}(12)
+    cmpwi 0, 0
+    bne @hide
+""" + followed("@") + f"""    lha 0, 4(30)
     cmpw 0, 12
     beq @hide
 """

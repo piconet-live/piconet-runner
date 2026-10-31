@@ -52,14 +52,14 @@ static_assert(TAGS_AT + 30 <= STATS && STATS >= DISPLAY && STATS + 30 * STAT <= 
 // STORY_PICTURES: the story's picture group 0xBA is loaded at the race's set-up), +4 the DIGIT part's value (the
 // source block's +0 points here), +0x10 a byte a seat: the look this game draws the seat's machine with (a
 // modes::LOOK_*, or COLOURED: normal, tinted by the seat's word at +0x30, seat.colour's 0xRRGGBBAA).
+// +8, not 0: the viewed racer's RANK is hidden, and the rank icons above the machines with it (routines/rankicons.py).
 // +0xC, not 0: the wrong-way sign starts this frame (the image's mode_wrong clears it).
-constexpr u32 WINDOW_FLAGS = 0, WINDOW_DIGIT = 4, WINDOW_WRONG = 0xC, WINDOW_LOOKS = 0x10, WINDOW_TINTS = 0x30;
+constexpr u32 WINDOW_FLAGS = 0, WINDOW_DIGIT = 4, WINDOW_RANK = 8, WINDOW_WRONG = 0xC, WINDOW_LOOKS = 0x10, WINDOW_TINTS = 0x30;
 constexpr u8 COLOURED = modes::LOOK_COUNT;
 static_assert(WINDOW_TINTS + 30 * 4 <= 0x100);
 // ROLLING: rolling_start: the machines' tasks run from the countdown's first step (the site at main.rel 0x34988).
 constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
-// TOGETHER: start_together: the grid's placing puts every machine on slot 0 (sites_grid.py grid_place) and mode_preload
-// writes every no-contact row as it takes the block (sites_mode.py), before the race's first contact pass.
+// TOGETHER: start_together: the grid's placing puts every machine on slot 0 (sites_grid.py grid_place).
 constexpr u32 TOGETHER = 32;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
@@ -76,13 +76,13 @@ static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WIND
               WINDOW_TAG_TEXTS + modes::TAG_TEXTS * WINDOW_TAG_TEXT <= 0x700);  // (0x700: RACE, the next in the window)
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
-// modes::PART_*: the drawers fn_1_CF5B0 (TIMER), fn_1_CDC8C (DISTANCE, SPEED_GAUGE, OBJECTS) and fn_1_CEB38 (the
+// modes::PART_*: LEADER_GAP the gap popup's own bit (fn_1_15EFEC's test, GAP_PART below), which needs no story picture; the drawers fn_1_CF5B0 (TIMER), fn_1_CDC8C (DISTANCE, SPEED_GAUGE, OBJECTS) and fn_1_CEB38 (the
 // others), read from their mask tests and the pictures each draws (group 0xBA, bmp_sto: 0xBA0A the digits 0 to 3,
 // 0xBA0B DANGER, 0xBA09 MISSION CLEAR!, 0xBA0C MISSION FAILED, 0xBA15 Time is up..., 0xBA0D the object icon).
 // From PART_RANK on the standard parts, read from the drawers' tests of the same mask (rank, laps and speed in their drawers; energy
 // fn_1_C8F34, race time 0xCBC24, lap times 0xCB424 and 0xCB028); FACES has no bit (WINDOW_FACES).
 constexpr std::array<u32, modes::PART_COUNT> PART_BITS = {0x20000, 0x1000, 0x8, 0x400, 0x200, 0x100, 0x80, 0x2000,
-                                                          0x4000, 0x20000000, 0x04000000, 0x08000000, 0x40000000,
+                                                          0x4000, 0x400000, 0x20000000, 0x04000000, 0x08000000, 0x40000000,
                                                           0x01000000, 0x02000000, 0};
 // Every bit of the story's parts (the two drawers' tests and TIMER's), which the game's default mask 0xFF9FFFFF has
 // on: once group 0xBA is loaded they would draw, DIGIT a "0" from a source of none, so the pass clears every one
