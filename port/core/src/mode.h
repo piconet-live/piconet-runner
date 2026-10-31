@@ -89,7 +89,8 @@ constexpr u32 C_FACTOR = 0, C_CAP = 4, C_KNOCK = 8, C_WALL = 12, C_BOUNCE = 16, 
               C_IMMUNE = 28, C_ONE = 32, C_DAMAGE = 36;
 constexpr u32 CLOCK_SHOWN = COMBAT + 40, CLOCK_EARNED = COMBAT + 44;  // time_bonus: what the mode wrote to the timer, and what the game added
 constexpr u32 POINTS_TABLE = COMBAT + 48;  // points_table's by place, a word each
-static_assert(POINTS_TABLE + 30 * 4 <= BLOCK);
+constexpr u32 BOOST_OFF_SEATS = POINTS_TABLE + 30 * 4;  // boost s off's, a bit a seat, to the race's end
+static_assert(BOOST_OFF_SEATS + 4 <= BLOCK);
 // By the bit: M's field, in the order of modes.toml's seat.stat.* (port/image/routines/standin_inputs.py STAT_FIELDS is
 // this list, and its test holds the two equal): weight, accel, max_speed, grip, turn, strafe, drag, boost_strength,
 // boost_length, body.

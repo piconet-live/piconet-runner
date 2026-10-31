@@ -482,9 +482,14 @@ void TestTheRaceWordsRun()
     return (g.Read32(BLOCK + mode::RECORDS + 8 * mode::RECORD) & mode::EXPLODE) != 0;
   };
   CHECK(!at(700.0f));
-  u32 counted = 0;
+  u32 counted = 0, ticks = 0;
+  const auto ticked = [&] { return g.Read8(BLOCK + mode::hud::SEATS_AT + 8 * mode::hud::SEAT_DISPLAY + mode::hud::BANNER) == modes::BANNER_TICK + 1; };
   while (!at(200.0f) && counted < 400)
+  {
+    ticks += ticked();
     ++counted;
+  }
+  CHECK(ticks == 3);                                                                  // a tick at each new digit, 3, 2, 1
   CHECK(counted == 179);                                                              // the 180th step under 300
   CHECK(!at(200.0f));                                                                 // once
   // the clock limit: the timer counts down from the race clock; at the limit the race ends in the mode's order
@@ -1430,6 +1435,69 @@ void TestTheCombatWords()
 }
 
 // vec and cross: a push sideways, in momentum (km/h x W / 216).
+// boost s off lasts, race.course reads the game's, lives takes a parameter's count.
+void TestTheHeldWords()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("held_words.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  p->params = {4};
+  mode::Prepare(*p);
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 2, 600);
+  g.Write32(table::RACE + 4, 17);
+  u32 step = 600;
+  const auto run = [&] { g.Write32(MODULE + game::RACE_CLOCK, step++); mode::Run(g, *p, BLOCK, MODULE); };
+  run();
+  CHECK(g.Read32(BLOCK + mode::END) == 0);
+  CHECK(g.Read32(BLOCK + mode::SeatWord(0, 0)) == 4 && g.Read32(BLOCK + mode::SeatWord(1, 0)) == 4);
+  CHECK(g.Read32(BLOCK + mode::GLOBALS) == 17);
+  CHECK(g.Read32(BLOCK + mode::RESPAWN) == 3);
+  Explode(g, 1);
+  run();
+  CHECK(g.Read32(BLOCK + mode::SeatWord(1, 0)) == 3);
+  CHECK((g.Read32(BLOCK + mode::RECORDS + 1 * mode::RECORD) & mode::BOOST_OFF) != 0);
+  run();
+  run();
+  CHECK((g.Read32(BLOCK + mode::RECORDS + 1 * mode::RECORD) & mode::BOOST_OFF) != 0);   // to the race's end
+  CHECK((g.Read32(BLOCK + mode::RECORDS) & mode::BOOST_OFF) == 0);                      // that seat's only
+}
+
+// Pedals locked under 0.3: at GO driven and settled at 90, once; at 0.3 and over, neither.
+void TestThePedalLatch()
+{
+  BEGIN_TEST();
+  std::string why;
+  for (const float accel : {0.2f, 0.3f})
+  {
+    std::optional<mode::Package> p = mode::Read(Vector("held_words.mode.json"), &why);
+    CHECK(p.has_value());
+    if (!p)
+      return;
+    p->pedals = true;
+    p->accel = std::bit_cast<u32>(accel);
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 2, 0);
+    g.Write16(MODULE + game::PHASE, game::PHASE_RACE - 1);
+    mode::Run(g, *p, BLOCK, MODULE);
+    CHECK((g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 0x400) == 0);
+    g.Write16(MODULE + game::PHASE, game::PHASE_RACE);
+    mode::Run(g, *p, BLOCK, MODULE);
+    CHECK(((g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 0x400) != 0) == (accel < 0.3f));
+    CHECK((g.Read8(MachineAt(1) + 0x481) == 90) == (accel < 0.3f));
+    g.Write8(MachineAt(1) + 0x481, 7);
+    mode::Run(g, *p, BLOCK, MODULE);
+    CHECK(g.Read8(MachineAt(1) + 0x481) == 7);                                          // once
+  }
+}
+
 void TestAVecIsBuilt()
 {
   BEGIN_TEST();

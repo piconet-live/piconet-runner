@@ -969,6 +969,7 @@ private:
       case RACE_STARTED: return static_cast<s16>(m_g.Read16(m_module + game::PHASE)) >= s16{game::PHASE_RACE};
       case RACE_SEATS: return m_count;
       case RACE_LAPS: return m_g.Read32(layout::RACE_LAPS_AT);
+      case RACE_COURSE: return m_g.Read32(RACE_COURSE_AT);
       case RACE_DAMAGE: return Factor(C_DAMAGE);
       case RACE_KNOCKBACK: return Factor(C_KNOCK);
       case RACE_WALLDAMAGE: return Factor(C_WALL);
@@ -1752,6 +1753,10 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         break;
       }
       case ACTION_BOOST: g.Write32(record, g.Read32(record) | BOOST); break;
+      case ACTION_BOOSTOFF:
+        g.Write32(record, g.Read32(record) | BOOST_OFF);
+        g.Write32(block + BOOST_OFF_SEATS, g.Read32(block + BOOST_OFF_SEATS) | 1u << seat);
+        break;
       case ACTION_PUSH:
       case ACTION_SEATVELOCITY:
       {
@@ -1956,6 +1961,14 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
 {
   const u32 count = m.Count(), respawn = g.Read32(block + RESPAWN);
   u32 any = 0;
+  // pedals locked under 0.3: at GO what fn_1_23500 does for a start without the accelerator, once (vocabulary 4.2)
+  if (p.pedals && Real(p.accel) < 0.3f && n.started && !(g.Read32(block + FLAGS) & 1))
+    for (u32 seat = 0; seat < count; ++seat)
+    {
+      const u32 machine = m.MachineOf(seat);
+      g.Write32(machine + game::MACHINE_FLAGS, g.Read32(machine + game::MACHINE_FLAGS) | F_DRIVEN);
+      g.Write8(machine + M_SETTLED, 90);
+    }
   for (u32 seat = 0; seat < count; ++seat)
   {
     const u32 machine = m.MachineOf(seat), flags = g.Read32(machine + game::MACHINE_FLAGS);
@@ -1982,6 +1995,9 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
         left = static_cast<s32>(60 * (state >> 8 & 0xFF) + 60);
       if (left >= 0)
         left -= 1;
+      // the digit's change, heard by that seat's player: the game's own countdown beep (no story sound was found)
+      if (left > 60 && (left + 1) % 60 == 0)
+        hud::Apply(g.Plain(), block, ACTION_STOCKBANNER, seat, BANNER_TICK);
       if (left == 60 && !(state & DANGER_DONE))
       {
         next |= DANGER_DONE;
@@ -2169,10 +2185,11 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
   // and every seat's speed exactly the rolling start's, whatever the pedals and a dash plate do, until GO
   const bool rolling = p.rolling.has_value() && !n.started;
   const u32 handed = g.Read32(block + HANDED), frozen = g.Read32(block + FROZEN);
+  const u32 boost_off_seats = g.Read32(block + BOOST_OFF_SEATS);
   for (u32 seat = 0; seat < SEATS; ++seat)
   {
     const u32 record = block + RECORDS + seat * RECORD;
-    g.Write32(record, (p.pedals ? PEDALS : 0) | (p.boost_off ? BOOST_OFF : 0) | (frozen >> seat & 1 || rolling ? HELD : 0) |
+    g.Write32(record, (p.pedals ? PEDALS : 0) | (p.boost_off || (boost_off_seats >> seat & 1) ? BOOST_OFF : 0) | (frozen >> seat & 1 || rolling ? HELD : 0) |
                           ((handed >> seat & 1) || rolling ? HAND : 0) | (rolling ? ROLL : 0));
     g.Write32(record + 4, p.pedals ? p.accel : 0);
     g.Write32(record + 8, p.pedals ? p.brake : 0);
