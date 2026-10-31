@@ -104,11 +104,24 @@ void Card(const fzgx::SpectatorShow& show, Layout& l, float clear, fzgx::u32 fol
 }
 }  // namespace
 
+// Every kind is a shot of exactly one group, whatever order they are numbered in.
+static_assert([] {
+  std::array<int, fzgx::spectator::KINDS> seen{};
+  for (const Group& group : GROUP)
+    for (int i = 0; i < group.count; ++i)
+      ++seen[static_cast<size_t>(group.kinds[static_cast<size_t>(i)])];
+  for (const int times : seen)
+    if (times != 1)
+      return false;
+  return true;
+}());
+
 int GroupOf(fzgx::u32 kind)
 {
-  for (int g = GROUPS - 1; g >= 0; --g)
-    if (static_cast<int>(kind) >= GROUP[static_cast<size_t>(g)].first)
-      return g;
+  for (int g = 0; g < GROUPS; ++g)
+    for (int i = 0; i < GROUP[static_cast<size_t>(g)].count; ++i)
+      if (static_cast<int>(kind) == GROUP[static_cast<size_t>(g)].kinds[static_cast<size_t>(i)])
+        return g;
   return 0;
 }
 
@@ -192,10 +205,10 @@ bool Hit(const fzgx::SpectatorShow& show, const Layout& l, float x, float y, fzg
     {
       const Group& group = GROUP[static_cast<size_t>(g)];
       if (g != l.group || !show.kind_chosen)
-        for (int k = group.first; k < group.first + group.count; ++k)
-          if (allowed(k))
+        for (int k = 0; k < group.count; ++k)
+          if (allowed(group.kinds[static_cast<size_t>(k)]))
           {
-            click->kind = k;
+            click->kind = group.kinds[static_cast<size_t>(k)];
             break;
           }
       return true;
@@ -203,7 +216,7 @@ bool Hit(const fzgx::SpectatorShow& show, const Layout& l, float x, float y, fzg
   for (int i = 0; i < l.shot_count; ++i)
     if (l.shots[static_cast<size_t>(i)].Has(x, y))
     {
-      const int kind = GROUP[static_cast<size_t>(l.group)].first + i;
+      const int kind = GROUP[static_cast<size_t>(l.group)].kinds[static_cast<size_t>(i)];
       if (allowed(kind))
         click->kind = kind;
       return true;
