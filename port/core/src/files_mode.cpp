@@ -254,6 +254,10 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.race_waits = true;
         }
+        else if (id == modes::SETUP_STARTTOGETHER)
+        {
+          p.start_together = true;
+        }
         else if (id == modes::SETUP_RESULTSPOINTS)
         {
           p.results_points = true;

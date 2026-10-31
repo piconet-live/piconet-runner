@@ -376,6 +376,30 @@ float RealAt(Guest& g, u32 at)
 constexpr u32 R = MODULE + 0x1BDC70, CM = MODULE + 0x227860;
 }  // namespace
 
+// start_together: the image's preload wrote the rows before the first contact pass (test_mode_sites.py); the first run
+// keeps them, a seat reads as a ghost in that run's own rules, and their OR stands for the next step's pair gate.
+void TestStartTogetherKeepsEveryPairApart()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("together.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->start_together && !p->contact_off);
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 30, 0);
+  g.Write16(MODULE + game::PHASE, game::PHASE_RACE - 1);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
+  CHECK(g.Read32(BLOCK + mode::GLOBALS) == 30);
+  for (u32 seat = 0; seat < 30; ++seat)
+    CHECK(g.Read32(BLOCK + mode::NC + 4 * seat) == 0xFFFFFFFF);
+  CHECK(g.Read32(BLOCK + mode::NC_ANY) == 0xFFFFFFFF);
+}
+
 // The race words vector on thirty seats through the countdown and past GO: its setup words act at the first run
 // (every no-contact row on, every seat's Restore, the timed rule with its limit, the rolling start's writes); the
 // countdown hands every seat to the CPU with the rolling hold; the events fire on the game's changes (a lap's award,

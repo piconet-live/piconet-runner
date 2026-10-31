@@ -198,6 +198,7 @@ struct Package
   bool spin_off = false, side_off = false, spin_immune = false;
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
+  bool start_together = false;      // start_together: every machine on slot 0, every no-contact row on from before step 0
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
   bool cpus_allowed = false;        // `cpus on`: a player gone is driven by the AI; left out, their seat retires
   bool solo = false, pause = false, save_state = false;

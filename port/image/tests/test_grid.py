@@ -55,6 +55,31 @@ class TheStartGrid(Build):
             left, out = self.sort(memory, n)
             self.assertEqual((left, out), ([QSORT, AFTER], list(range(n))))   # the list untouched: qsort, then on
 
+    def place(self, flags, mode=1):
+        """The placing's site run with k in r28: the slot it leaves in r3, where it leaves for, and cr0's condition."""
+        memory = {}
+        put(memory, memmap.MODE, mode)
+        put(memory, memmap.MODE_HUD_FLAGS, flags)
+        left = []
+        m = Cpu(self.image, memory, lambda address, cpu: left.append(address))
+        m.r[3], m.r[28], m.r[1] = 0x1234, 7, STACK
+        m.run(self.symbols["grid_place"])
+        self.assertEqual(left, [TEXT + sites_grid.PLACE + 4])
+        return m.r[3]
+
+    def test_the_placing_site_is_the_slots_argument(self):
+        at = TEXT + sites_grid.PLACE
+        self.assertEqual(int(self.patches[at]["new"], 16), build.branch(at, self.symbols["grid_place"]))
+        self.assertEqual(int(self.patches[at]["original"], 16), sites_grid.PLACE_KNOWN)   # mr r3, r28
+
+    def test_start_together_places_every_machine_on_slot_0(self):
+        self.assertEqual(self.place(memmap.MODE_TOGETHER), 0)
+        self.assertEqual(self.place(memmap.MODE_TOGETHER | memmap.MODE_ROLLING), 0)
+
+    def test_without_it_each_machine_takes_its_own_slot(self):
+        for flags, mode in ((0, 1), (memmap.MODE_ROLLING, 1), (memmap.MODE_TOGETHER, 0)):
+            self.assertEqual(self.place(flags, mode), 7)
+
 
 if __name__ == "__main__":
     unittest.main()
