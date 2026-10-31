@@ -464,11 +464,11 @@ class TheRuleHookWrapper(Build):
         self.assertEqual(get(m.mem, self.M + 0x204), 0)
         self.assertEqual(get(m.mem, self.M) & 0x40, 0)              # the hold's refusal stands
 
-    def test_the_rolling_start_clears_a_boost_request_the_hook_left(self):
+    def test_the_rolling_start_clears_a_boost_or_spin_request_the_hook_left(self):
         # the record of mode.cpp's FillRecords until GO: a CPU's request gets through the game's pre-GO hold (mi12's trace)
         record = 2 | standin_inputs.HAND | standin_inputs.ROLL
-        _, m = self.wrap(record=record)
-        self.assertEqual(get(m.mem, self.M) & 0x40, 0)
+        _, m = self.wrap(record=record, flags=0x49)
+        self.assertEqual(get(m.mem, self.M) & 0x48, 0)               # no boost, no spin
         self.assertEqual(get(m.mem, self.M + 0x200), standin_inputs.ROLL_ACCEL)
 
     def test_another_seats_save_is_left_alone(self):
