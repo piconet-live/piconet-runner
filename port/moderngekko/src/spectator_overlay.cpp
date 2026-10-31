@@ -146,6 +146,7 @@ void DrawOverlays()
   if (show.on)
     hud::DrawGround(list, l, a.observer);
   DrawMinimap();
+  DrawModernHud(picture.x0, picture.y0, picture.x1, picture.y1);
   {
     const float h = picture.y1 - picture.y0;
     DrawInputs(corner.x0 - 0.02f * h, picture.y1 - clear - 0.02f * h, h);

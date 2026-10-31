@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "fzgx/hud_layout.h"
+
 namespace fzgx
 {
 using u8 = std::uint8_t;
@@ -185,6 +187,22 @@ struct InputsShow
   std::uint8_t l = 0, r = 0;
   bool operator==(const InputsShow&) const = default;
 };
+// The modern HUD (Options::modern_hud or a mode's `hud modern`; modern_hud_frame.cpp, the adapter's modern_hud.cpp): what
+// the game's own parts would show this frame, for the racer the picture follows, told once a displayed frame after the
+// frame's steps. Picture only.
+struct ModernHudShow
+{
+  bool on = false;          // the game's HUD would be up (out, finished, the results, the observer's views: off)
+  std::array<bool, hud_layout::SLOTS> shown{};  // by hud_layout::SlotId: not hidden by the mode or the layout
+  hud_layout::Layout layout;
+  float energy = 0, max_energy = 100;
+  bool boost = false;       // the game's boost lightning would draw
+  u32 place = 0, racers = 0;
+  u32 lap = 0, laps = 0;
+  u32 race_ms = 0, lap_ms = 0, best_ms = 0;
+  u32 lap_count = 0;        // of `lap_ms_ago`, newest first, the game keeps eight
+  std::array<u32, 8> lap_ms_ago{};
+};
 struct MinimapShow
 {
   bool on = false;   // the map shows: the game's HUD does (fzgx/minimap.h Shows)
@@ -303,6 +321,8 @@ public:
   virtual void ShowMinimap(const MinimapShow& show);
   // The player's pad for "Show inputs" (InputsShow above), on the game's thread, when it changed; the default shows nothing.
   virtual void ShowInputs(const InputsShow& show);
+  // The modern HUD (ModernHudShow above), on the game's thread, once a displayed frame while it is on; the default shows nothing.
+  virtual void ShowModernHud(const ModernHudShow& show);
   // The scrubber's undo log is packed by the host's packer: `out` takes the packed bytes, which may refer to `prefix`
   // (the bytes packed before them, given again to Unpack); Unpack fills exactly `out_size` bytes. False (the
   // default): none, and the bytes are kept as they are.

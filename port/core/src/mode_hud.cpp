@@ -31,6 +31,12 @@ u32 Seat(u32 block, u32 seat)
 }
 }  // namespace
 
+u32 SeatParts(const Guest& g, u32 seat)
+{
+  const u32 block = g.Read32(layout::MODES + 4);
+  return block != 0 && seat < SEATS ? g.Read32(Seat(block, seat) + PARTS) : 0;
+}
+
 bool IsDisplay(u8 id)
 {
   switch (id)
@@ -197,7 +203,7 @@ u32 WindowFlags(const Package& p)
   const bool points_page = Uses(p.code, ACTION_AWARD, false) || !p.results_title.empty() || !p.points_table.empty();
   return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (points_page ? POINTS_PAGE : 0) |
          (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0) | (p.start_together ? TOGETHER : 0) |
-         (NeedsGhostTask(p.code) ? GHOST_TASK : 0);
+         (NeedsGhostTask(p.code) ? GHOST_TASK : 0) | (p.hud_modern ? HUD_MODERN : 0);
 }
 
 void ShowFault(Guest& g, const Package& p, bool broken)

@@ -76,6 +76,10 @@ void Host::ShowMinimap(const MinimapShow&)
 {
 }
 
+void Host::ShowModernHud(const ModernHudShow&)
+{
+}
+
 void Host::ShowInputs(const InputsShow&)
 {
 }

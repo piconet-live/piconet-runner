@@ -163,6 +163,7 @@ public:
   void MinimapCourseLoaded(const fzgx::MinimapCourse& course) override { fzgx_port::MinimapCourseLoaded(course); }
   void ShowMinimap(const fzgx::MinimapShow& show) override { fzgx_port::ShowMinimap(show); }
   void ShowInputs(const fzgx::InputsShow& show) override { fzgx_port::ShowInputs(show); }
+  void ShowModernHud(const fzgx::ModernHudShow& show) override { fzgx_port::ShowModernHud(show); }
   bool Pack(const fzgx::u8* data, std::size_t size, const fzgx::u8* prefix, std::size_t prefix_size,
             std::vector<fzgx::u8>* out) override
   {

@@ -67,6 +67,8 @@ constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
 constexpr u32 TOGETHER = 32;
 // GHOST_TASK: the code asks the look ghost or GHOST_GAP: the race's set-up makes the ghost task (sites_ghostdraw.py ghost_make).
 constexpr u32 GHOST_TASK = 64;
+// HUD_MODERN: `hud modern`: the core's own (modern_hud_frame.cpp); no site reads it.
+constexpr u32 HUD_MODERN = 128;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
@@ -108,9 +110,16 @@ constexpr u32 PHASE_INTRO = 0x27;  // the course's intro: from it on the race's 
 constexpr u32 GAP_PART = 0x400000;
 constexpr u32 GAP_STEPS = 60;
 
+// The game's mask bits the modern HUD draws itself: the energy meter (and its lightning, inside the meter's test), rank,
+// lap counter, race time, lap list. Speed, the skulls, the spare icon, wrong way, banners and the face board stay the game's.
+constexpr u32 MODERN_PARTS = PART_BITS[modes::PART_ENERGY] | PART_BITS[modes::PART_RANK] | PART_BITS[modes::PART_LAPS] |
+                             PART_BITS[modes::PART_RACE_TIME] | PART_BITS[modes::PART_LAP_TIMES];
+
 // Whether action `id` is a display word: the interpreter applies it at once, in the order the rules run (a mode's
 // variable is written so too), without a place in the step's queue of actions on the game.
 bool IsDisplay(u8 id);
+// The seat's parts word (modes::PART_*, bit p), or 0 with no mode: `hide` of a standard part sets its bit.
+u32 SeatParts(const Guest& g, u32 seat);
 // A display word into the seat's record: true when `id` is one.
 bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value);
 // The start of every run: the banners asked at the last one are gone.

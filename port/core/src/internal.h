@@ -89,6 +89,8 @@ void InputsFrame(Guest& g);
 // the image spectates for (minimap_frame.cpp; the game mode's displays, mode_hud.cpp).
 u32 ViewedRacer(Guest& g);
 u32 OwnSeat(Guest& g);
+void ModernHudFrame(Guest& g);  // the modern HUD: after the mode's display pass, before the drawing (modern_hud_frame.cpp)
+void ModernHudSummary();  // its line in the log, at the end
 void MinimapSummary();  // its line in the log, at the end
 // A late frame's drawing skipped (present.cpp): the frame tick; NormalStep's word that the frame is a race frame
 // that may skip; the image's store into DRAW_ASK (WindowWritten); the session's end (its line in the log).

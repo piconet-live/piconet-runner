@@ -190,6 +190,7 @@ struct Package
   bool contact_off = false;
   u32 clock_limit = 0;              // steps, 0 none
   bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
+  bool hud_modern = false;          // `hud modern`: everyone on the modern HUD, whatever the player's setting
   bool results_points = false;      // `results points`: the first results page passes by itself
   std::string results_title;        // `results_title "TEXT"`: the string for VS TOTAL RANKING; empty, the game's
   std::vector<u32> points_table;    // what a place earns when the mode ends the race (none: nothing)
