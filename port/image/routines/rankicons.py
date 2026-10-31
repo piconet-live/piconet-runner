@@ -22,21 +22,18 @@ C = memmap.hi(memmap.CONTROL)
 SITES = (0x129AA8, 0x129AC0)   # fn_1_12999C's two reads of the machine's port (r30 the machine)
 
 
-def icon(p, count):
-    """r0 = 0 when the machine at r30 is the racer the HUD follows (fn_1_6B48(0), read here as it reads it: the
-    camera block [.bss 0xF68], none or its +0 bit 0 set: none; its mode +0x48: 11 none, 9 and 10 the TV cameras'
-    racer in use ([.bss 0xF70] +0x6), any other the chase camera's (viewport 0's record, [.bss 0xF6C] +0x2)), or the
-    local seat when it follows none; -1 for any other. With `count` (the first read, 0x129AA8, asked once a machine and
-    drawn frame), and a game told to keep the logs: the racer's counter at memmap.ICONS, held back (+0) or let through
-    (+120). Uses r0, r12 and CR0 only (r3 holds fn_1_5910's answer at 0x129AC0; `addi 0, 0, 1` would read rA as the
-    number 0, so the count goes up as -(~n)). Labels start with `p`."""
+def followed(p):
+    """r12 = the racer the HUD follows, fn_1_6B48(0) read here as it reads it: the camera block [.bss 0xF68], none or
+    its +0 bit 0 set: none; its mode +0x48: 11 none, 9 and 10 the TV cameras' racer in use ([.bss 0xF70] +0x6), any
+    other the chase camera's (viewport 0's record, [.bss 0xF6C] +0x2); or the local seat when it follows none. Uses
+    r0, r12 and CR0 only; a caller may branch to the label `own` for the local seat. Labels start with `p`."""
     bss = lambda off: f"""    lis 12, 0x8000
     lwz 12, 0x30C8(12)
     addis 12, 12, 0x1C
     lwz 12, {0xF68 + off - 0x5FC0}(12)
 """
     assert 0x1C0000 - 0x5FC0 == 0x1BA040 == memmap.REL_BSS - memmap.REL
-    text = bss(0) + f"""    cmplwi 12, 0
+    return (bss(0) + f"""    cmplwi 12, 0
     beq @own
     lwz 0, 0(12)
     cmpwi 0, 0
@@ -61,7 +58,18 @@ def icon(p, count):
     lis 12, {H}
     lwz 12, 0x14(12)
 @cmp:
-    lha 0, 4(30)
+""").replace("@", p)
+
+
+def icon(p, count):
+    """r0 = 0 when the machine at r30 is the racer the HUD follows (fn_1_6B48(0), read here as it reads it: the
+    camera block [.bss 0xF68], none or its +0 bit 0 set: none; its mode +0x48: 11 none, 9 and 10 the TV cameras'
+    racer in use ([.bss 0xF70] +0x6), any other the chase camera's (viewport 0's record, [.bss 0xF6C] +0x2)), or the
+    local seat when it follows none; -1 for any other. With `count` (the first read, 0x129AA8, asked once a machine and
+    drawn frame), and a game told to keep the logs: the racer's counter at memmap.ICONS, held back (+0) or let through
+    (+120). Uses r0, r12 and CR0 only (r3 holds fn_1_5910's answer at 0x129AC0; `addi 0, 0, 1` would read rA as the
+    number 0, so the count goes up as -(~n)). Labels start with `p`."""
+    text = followed("@") + f"""    lha 0, 4(30)
     cmpw 0, 12
     beq @hide
 """
