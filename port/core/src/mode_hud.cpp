@@ -62,8 +62,8 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value)
                                                                         : g.Read32(r + PARTS) & ~(1u << value));
       return true;
     case ACTION_SHOWNUMBER:
-      // 0 to 99 shows; anything else hides (the icon draws two digits: 100 would read 00)
-      g.Write32(r + NUMBER, value <= 99 ? value + 1 : 0);
+      // a negative number hides; above 99 shows 99 (the icon draws two digits: 100 would read 00)
+      g.Write32(r + NUMBER, static_cast<s32>(value) < 0 ? 0 : std::min<u32>(value, 99) + 1);
       return true;
     case ACTION_STOCKBANNER:
       if (value < BANNER_COUNT)
@@ -156,7 +156,9 @@ bool UsesClock(const Package& p)
 
 u32 WindowFlags(const Package& p)
 {
-  return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (Uses(p.code, ACTION_AWARD, false) ? POINTS_PAGE : 0) |
+  // the points page holds the only place the game draws the title, so a title takes the results through it, award or none
+  const bool points_page = Uses(p.code, ACTION_AWARD, false) || !p.results_title.empty();
+  return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (points_page ? POINTS_PAGE : 0) |
          (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0);
 }
 

@@ -243,6 +243,13 @@ void TestTheDisplayWordsRun()
   hud::MapRacers(g, 1, false, present, colour);
   CHECK(present[1] && present[OUT_SEAT] && present[7]);
 
+  // show_number's range: 0 to 99 as it is, above 99 clamped to 99, a negative hidden (the record holds number + 1)
+  for (const auto& [value, record] : std::array<std::pair<s32, u32>, 6>{{{0, 1}, {99, 100}, {100, 100}, {12345, 100}, {-1, 0}, {-50, 0}}})
+  {
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWNUMBER, 2, static_cast<u32>(value)));
+    CHECK(g.Read32(Record(2) + hud::NUMBER) == record);
+  }
+
   // the story's pictures: the vector shows DISTANCE
   CHECK(hud::NeedsStoryPictures(p->code) && hud::WindowFlags(*p) == hud::STORY_PICTURES);
   // the race vector awards points and runs danger zones: the points page and the story's pictures

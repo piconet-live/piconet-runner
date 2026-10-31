@@ -68,5 +68,24 @@ class TheWrongWaySign(Build):
         self.assertEqual(self.sign(0), ([TEXT + hud.WRONG_SITE + 4], 0))
 
 
+class ThePointsOrder(Build):
+    def fields(self, totals):
+        memory = {}
+        race = memmap.REL_BSS + hud.RACE if hasattr(memmap, "REL_BSS") else hud.REL_BSS + hud.RACE
+        put(memory, memmap.MODE_HUD_FLAGS, memmap.MODE_POINTS_PAGE)
+        put(memory, memmap.MODES + 4, BLOCK)
+        put(memory, race + 8, len(totals) << 16)                     # R+0x9: the racers
+        for seat, total in enumerate(totals):
+            put(memory, BLOCK + memmap.MODE_POINTS + 4 * seat, total & 0xFFFFFFFF)
+        reached = []
+        m = HudCpu(self.image, memory, lambda address, cpu: reached.append(address))
+        m.run(self.symbols["mode_sort"])
+        self.assertIn(TEXT + hud.SORT, reached)
+        return [get(m.mem, race + hud.RECORDS + hud.RECORD * seat + 4) >> 16 for seat in range(len(totals))]
+
+    def test_a_negative_total_is_0_and_a_large_one_the_fields_end(self):
+        self.assertEqual(self.fields([-5, 0, 7, 70000, -70000]), [0, 0, 7, 0xFFFF, 0])
+
+
 if __name__ == "__main__":
     unittest.main()

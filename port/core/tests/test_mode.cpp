@@ -516,10 +516,18 @@ void TestTheKnockoutEndsWithItsPlaces()
     for (u32 k = 0; k < 4; ++k)
       g.Write8(R + 0xD4 + 0xA0 * i + 0xE + k, 0xFF);
   }
+  g.Write16(R + 0xD4 + 0xA0 * 1 + 0x4, 1234);
+  g.Write8(R + 0xD4 + 0xA0 * 1 + 0x9, 123);
   for (u32 step = 0; step <= 2700; ++step)
   {
     g.Write32(MODULE + game::RACE_CLOCK, step);
     mode::Run(g, *p, BLOCK, MODULE);
+    if (step == 0)
+    {
+      // totals as award leaves them: a negative one and one past the field
+      g.Write32(BLOCK + mode::POINTS + 4 * 1, static_cast<u32>(-5));
+      g.Write32(BLOCK + mode::POINTS + 4 * 2, 70000);
+    }
     for (u32 seat = 0; seat < 4; ++seat)
     {
       const u32 record = BLOCK + mode::RECORDS + seat * mode::RECORD;
@@ -544,6 +552,11 @@ void TestTheKnockoutEndsWithItsPlaces()
   const u32 runs = g.Read32(BLOCK + mode::RUNS);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(g.Read32(BLOCK + mode::RUNS) == runs);
+  // a negative total shows 0 and stays as it is in the block; a total past the field shows its end; no total: untouched
+  CHECK(g.Read16(R + 0xD4 + 0xA0 * 1 + 0x4) == 0 && g.Read8(R + 0xD4 + 0xA0 * 1 + 0x9) == 0);
+  CHECK(g.Read32(BLOCK + mode::POINTS + 4 * 1) == static_cast<u32>(-5));
+  CHECK(g.Read16(R + 0xD4 + 0xA0 * 2 + 0x4) == 0xFFFF && g.Read8(R + 0xD4 + 0xA0 * 2 + 0x9) == 0xFF);
+  CHECK(g.Read16(R + 0xD4 + 0xA0 * 3 + 0x4) == 0);
   // places: seat 3 first, 2 second, 1 third, 0 fourth
   for (u32 seat = 0; seat < 4; ++seat)
   {
@@ -747,28 +760,84 @@ void TestTheLivesLibraryRuns()
   const auto run = [&] { g.Write32(MODULE + game::RACE_CLOCK, step++); mode::Run(g, *p, BLOCK, MODULE); };
   run();
   CHECK(g.Read32(BLOCK + mode::RESPAWN) == 0x7 && (g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1));
-  const auto wreck = [&](u32 seat) {
+  const auto number = [&](u32 seat) { return g.Read32(BLOCK + mode::hud::SEATS_AT + seat * mode::hud::SEAT_DISPLAY + mode::hud::NUMBER); };
+  const auto left = [&](u32 seat) { return g.Read32(BLOCK + mode::SeatWord(seat, 0)); };
+  const auto restore = [&](u32 seat) {
     g.Write16(MachineAt(seat) + 0x214, 120);
     run();
     g.Write16(MachineAt(seat) + 0x214, 60);
     run();
     g.Write16(MachineAt(seat) + 0x214, 0);
+    SetFlags(g, seat, 0, 0x800 | 0x80 | 0x00800000);
+    g.Write32(MachineAt(seat) + 0x58C, g.Read32(MachineAt(seat) + 0x58C) & ~0x10u);
     run();
   };
-  wreck(0);
-  CHECK(g.Read32(BLOCK + mode::SeatWord(0, 0)) == 2 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
+  CHECK(left(0) == 3 && number(0) == 3 + 1);
+  // a fall, restored: costs nothing
+  SetFlags(g, 0, 0x800);
+  run();
+  restore(0);
+  CHECK(left(0) == 3 && number(0) == 3 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
+  // a breakdown, restored: costs nothing
+  SetFlags(g, 0, 0x80);
+  run();
+  restore(0);
+  CHECK(left(0) == 3 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
+  // an explosion costs one, once
+  Explode(g, 0);
+  run();
+  CHECK(left(0) == 2 && number(0) == 2 + 1 && (g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1));
+  restore(0);
+  CHECK(left(0) == 2 && number(0) == 2 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
+  // the one that leaves one life: still restored (the flag stays until the restore has begun and reaches its exit)
+  Explode(g, 0);
+  run();
+  CHECK(left(0) == 1 && (g.Read32(BLOCK + mode::RESPAWN) & 1) && (g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1));
   g.Write16(MachineAt(0) + 0x214, 120);
   run();
-  CHECK(g.Read32(BLOCK + mode::SeatWord(0, 0)) == 1 && !(g.Read32(BLOCK + mode::RESPAWN) & 1));
+  CHECK(!(g.Read32(BLOCK + mode::RESPAWN) & 1));
   CHECK(g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1);                 // kept through the wreck
   g.Write16(MachineAt(0) + 0x214, 20);
   run();
   CHECK(!(g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1));              // off at its exit
+  g.Write16(MachineAt(0) + 0x214, 0);
+  SetFlags(g, 0, 0, 0x800 | 0x80 | 0x00800000);
+  g.Write32(MachineAt(0) + 0x58C, g.Read32(MachineAt(0) + 0x58C) & ~0x10u);
+  run();
+  CHECK(left(0) == 1 && number(0) == 1 + 1);
+  // the last: out, nothing shown, the count at 0; an explosion after the out takes it no lower
+  Explode(g, 0);
+  run();
+  CHECK(left(0) == 0 && number(0) == 0);
+  run();
+  CHECK(left(0) == 0 && number(0) == 0);
   // a finished seat keeps its flag whatever the words say
   SetFlags(g, 1, 0x10000);
   g.Write32(BLOCK + mode::RESPAWN, 0x4);
   run();
   CHECK(g.Read32(MachineAt(1) + game::MACHINE_FLAGS) & 1);
+}
+
+// cpu_mode 18 takes: the sim generator draws for it. The player's seat stays out of it.
+void TestCpuModeEighteen()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("edges.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  p->players = 0x1;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 3, 0);
+  g.Write16(MODULE + game::PHASE, game::PHASE_RACE - 1);
+  for (u32 i = 0; i < 3; ++i)
+    g.Write32(MachineAt(i) + 0x484, 0x80700000 + 0x100 * i);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read8(0x80700000 + 0x100 * 2 + 0x32) == 18);
+  CHECK(g.Read8(0x80700000 + 0x32) == 0);
 }
 
 // The prepared interpreter is the plain one (mode.h, Prepared): every vector on a moving race gives the same block and
@@ -1113,6 +1182,7 @@ void TestTheCutRaceWords()
   CHECK((mode::hud::WindowFlags(*p) & mode::hud::POINTS_ONLY) != 0);
   std::optional<mode::Package> old = mode::Read(Vector("overdrive.mode.json"), &why);
   CHECK(old && !old->race_waits && !old->results_points && old->results_title.empty() && !mode::hud::UsesClock(*old));
+  CHECK(old && !(mode::hud::WindowFlags(*old) & mode::hud::POINTS_PAGE));
 }
 
 // The on/off setup words as a switch parameter gives them, and the title with its space.
@@ -1127,6 +1197,8 @@ void TestTheOnOffWordsByParameter()
   CHECK(p->boost_off && p->contact_off && p->restore == true && p->cpus_allowed);
   CHECK(p->mine_regen == static_cast<u32>(modes::SETUP_MINEREGEN_ON));
   CHECK(p->results_title == "A B");
+  // a title with no award still takes the results through the points page, the title's only place
+  CHECK(mode::hud::WindowFlags(*p) & mode::hud::POINTS_PAGE);
   picojson::array flipped = {picojson::value(1.0), picojson::value(0.0)};
   std::optional<mode::Package> q = ReadWith("switches.mode.json", "params", picojson::value(flipped));
   CHECK(q.has_value());

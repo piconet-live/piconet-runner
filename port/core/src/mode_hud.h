@@ -47,7 +47,7 @@ constexpr u32 TAGS_AT = SEATS_AT + 30 * SEAT_DISPLAY;
 static_assert(TAGS_AT + 30 <= DISPLAY + 0x1000);
 
 // The window words the pass writes for the image (memmap.MODE_HUD; port/image/sites_modehud.py): +0 the image's
-// flags (POINTS_PAGE: the results go from their first page to the points page, the site at main.rel 0x14A37C;
+// flags (POINTS_PAGE, award or a results title: the results go from their first page to the points page, the site at main.rel 0x14A37C;
 // STORY_PICTURES: the story's picture group 0xBA is loaded at the race's set-up), +4 the DIGIT part's value (the
 // source block's +0 points here), +0x10 a byte a seat: the look this game draws the seat's machine with (a
 // modes::LOOK_*, or COLOURED: normal, tinted by the seat's word at +0x30, seat.colour's 0xRRGGBBAA).

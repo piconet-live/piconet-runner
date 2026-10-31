@@ -1649,13 +1649,14 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
       case ACTION_CPUMODE:
       {
         // story action 14 (mode-open-words 2), on a CPU's seat or one handed to the CPU (a mode writes machine flags
-        // the stand-in would let through); never 18, which draws the shared generator 0x801A63C0; never the rock
-        // dodgers 5-8 on the courses whose hazards run outside the step (37, 38, 41)
+        // the stand-in would let through); 17 and 18 draw the sim generator (sites_generator.py's simgen_cpu, on in
+        // every race with a mode); never the rock dodgers 5-8 on the courses whose hazards run outside the step (37,
+        // 38, 41)
         const s32 n = Int(a.value[0]);
         const u32 course = g.Read32(RACE_COURSE_AT);
         const u32 cb = g.Read32(machine + M_CPU);
         const bool cpu = !(p.players >> seat & 1) || (g.Read32(block + HANDED) >> seat & 1);
-        if (!cpu || n < 0 || n > 33 || n == 18 || cb == 0 ||
+        if (!cpu || n < 0 || n > 33 || cb == 0 ||
             (n >= 5 && n <= 8 && (course == 37 || course == 38 || course == 41)))
           break;
         g.Write32(cb, n == 0 ? g.Read32(cb) & ~1u : g.Read32(cb) | 1u);
@@ -1812,11 +1813,13 @@ void EndClause(Machine& m, Mem& g, u32 block, u32 module, bool ranks_the_out)
     {
       g.Write8(record + 0xE + slot, static_cast<u8>(k));
     }
-    const u32 points = g.Read32(block + POINTS + 4 * seat);
+    // the total stays signed in the block; the results' field is unsigned (`lhz`, no minus sign): below 0 shows 0
+    const s32 points = Int(g.Read32(block + POINTS + 4 * seat));
     if (points != 0)
     {
-      g.Write16(record + 0x4, static_cast<u16>(std::min<u32>(points, 0xFFFF)));
-      g.Write8(record + 0x9 + slot, static_cast<u8>(std::min<u32>(points, 0xFF)));
+      const u32 shown = points < 0 ? 0 : static_cast<u32>(points);
+      g.Write16(record + 0x4, static_cast<u16>(std::min<u32>(shown, 0xFFFF)));
+      g.Write8(record + 0x9 + slot, static_cast<u8>(std::min<u32>(shown, 0xFF)));
     }
   }
   HoldOrder(g, block, module);

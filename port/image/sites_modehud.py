@@ -7,7 +7,7 @@ the game does. Native form only. sites.py calls add().
 |---|---|---|---|
 | `mode_spare` | fn_1_CA8FC 0xCA920, the spare-machine icon's value (`bl fn_1_3F1D4`, r3 the racer the HUD follows) | R+0x13F6 in a Grand Prix, else -1 (nothing drawn) | the racer's show_number (its record's number + 1 in the block's display page; 0: -1, nothing drawn) |
 | `mode_look` | fn_1_84860 0x84F9C, a machine's draw (`bl fn_1_870BC`, r29 the machine, f1 its alpha) | the machine drawn | by the look this game draws the seat with (the window's MODE_HUD_LOOKS, the core's HUD pass): normal, the stock call; ghost, the call between Time Attack's ghost state (fn_1_ED540's trail pass: the tint 0.7, 0.7, 1.0, fn_80074A60(4, 1), an alpha of GHOST_ALPHA at most) and its reset; invisible, no call; coloured (seat.colour on a machine drawn normally), the call between the tint of the seat's MODE_HUD_TINTS word (its red, green and blue bytes / 255) and the tint's reset |
-| `mode_points` | fn_1_14A328 0x14A37C, the first results page's A (`rlwinm. r0, r0, 0, 5, 5`: rule 0x04000000, every race of ours, to the times list, page 7) | page 7 | with the window's MODE_POINTS_PAGE (a mode that awards points), the rule's bit read as clear: pages 3 then 4, VS TOTAL RANKING, every record's +0x4 as its points |
+| `mode_points` | fn_1_14A328 0x14A37C, the first results page's A (`rlwinm. r0, r0, 0, 5, 5`: rule 0x04000000, every race of ours, to the times list, page 7) | page 7 | with the window's MODE_POINTS_PAGE (a mode that awards points or has a results title), the rule's bit read as clear: pages 3 then 4, VS TOTAL RANKING, every record's +0x4 as its points |
 | `mode_story` | the frame routine, after mode_preload (sites.py's `frame`) | — | the story's picture group 0xBA (bmp_sto: the big digit, DANGER, the distance's digits, MISSION CLEAR!/FAILED, Time is up...) loaded once, with fn_1_47F74, on the frame the block is taken, when the core says the mode shows one of them (MODE_STORY_PICTURES): every game and playback of the race at the same point, before step 0 |
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
 
@@ -16,7 +16,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_faces` | fn_1_D27B8's entry, the faces board's task (`stwu r1, -0x150(r1)`) | the board | not drawn while the viewed racer's FACES is hidden |
 | `mode_title` | fn_1_1461C8 0x146304, VS TOTAL RANKING's string (`addi r3, r21, 0x404`) | the game's | the window's title, when there is one |
 | `tag_cell`, `tag_cpu` | fn_1_147188 0x1473D8 (`lwz r7, 0x4c(r30)`), 0x14740C (`lis r4, 1`); with follow.py's 0x147390 | row's tag: P1 to P4 by racer, CPU for the others | the local seat's row P1; a row with a name in memmap.NAMES no tag (as a player row, to 0x147494). Every race; drawing only |
-| `mode_clock_at`, `mode_clock_label` | fn_1_CF5B0's ten calls of fn_1_496FC (the digits' place, f2 its y) and 0xCF9EC (the TIME label's y, `stfs f0, 0x18(r1)`) | at the top, on the rank | in a race with a mode, below the rank: y 120 and 151 (the rank's own stay). Stock races never draw this clock |
+| `mode_clock_at`, `mode_clock_label` | fn_1_CF5B0's ten calls of fn_1_496FC (the digits' place, f2 its y) and 0xCF9EC (the TIME label's y, `stfs f0, 0x18(r1)`) | at the top, on the rank | in a race with a mode, below the rank: digits at y 128 (CLOCK_Y; the owner's choice, 2026-10-30) and the label at 151 (the rank's own stay). Stock races never draw this clock |
 | `mode_beep` | fn_1_3A330 0x3A448, where the timed mode's countdown ends on every path (`lwz r0, 0x30(r29)`) | — | under clock_limit (whose timer the game no longer counts) the countdown's own tick: 0xA9092700 when the time left is a whole second below ten, including 0, as the code it skips does. Only a sound: the mute of a step run again (mute.py) as for the game's |
 
 Registers: each routine replaces a call (`mode_spare`, `mode_look`), so the volatile registers are free there; or a
@@ -323,7 +323,7 @@ mtt_stock:
     patch(site, word, 0, "mode_title")
     middle.append((site, ["r12", "cr0"], "mode_title"))
 
-    # the results' points page: rule 0x04000000 read as clear while the core says the mode awards points
+    # the results' points page: rule 0x04000000 read as clear while the core says the mode needs it (award, results_title)
     site = TEXT + POINTS
     word = stock(site, POINTS_KNOWN)
     r.add("mode_points", test + """    beq mpts_stock
@@ -338,7 +338,7 @@ mpts_stock:
     patch(site, word, 0, "mode_points")
     middle.append((site, ["r12", "cr0"], "mode_points"))
 
-    # the points page's rows: every racer's (RANKING_COUNTS), while the core says the mode awards points
+    # the points page's rows: every racer's (RANKING_COUNTS), while the core says the mode needs the page
     for at, known in RANKING_COUNTS:
         site = TEXT + at
         word = stock(site, known)
@@ -358,7 +358,8 @@ mrw{at:x}_stock:
 
     # the points page's order: the game's sort as a Grand Prix's (R+0x5 set for the call alone: every racer, by its
     # record's +0x4, which the call outside a Grand Prix overwrites with the VS points R+0x1480), each record's +0x4
-    # first written from award's points (the block's, whatever the race or the results' set-up left there)
+    # first written from award's points (the block's, whatever the race or the results' set-up left there): a total
+    # below 0 as 0, as the field is unsigned and the sort compares it so; ties keep the mode's results order
     sort_fn = FN(SORT)
     r.add("mode_sort", la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
     andi. 12, 12, {memmap.MODE_POINTS_PAGE}
@@ -382,6 +383,10 @@ msrt_seat:
     cmpw 9, 10
     bge msrt_sorted
     lwzu 0, 4(12)
+    cmpwi 0, 0
+    bge msrt_above
+    li 0, 0
+msrt_above:
     cmplwi 0, 0xFFFF
     ble msrt_fits
     li 0, -1
