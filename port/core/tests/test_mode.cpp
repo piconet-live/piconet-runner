@@ -1430,3 +1430,23 @@ void TestTheCombatWords()
 }
 
 // vec and cross: a push sideways, in momentum (km/h x W / 216).
+void TestAVecIsBuilt()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("vecs.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 2, 600);
+  g.Write32(MACHINES + 0x8, std::bit_cast<u32>(1000.0f));
+  g.Write32(MACHINES + game::MACHINE_SIZE + 0x8, std::bit_cast<u32>(1000.0f));
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::END) == 0);
+  const auto at = [&](u32 c) { return std::bit_cast<float>(g.Read32(BLOCK + mode::MOVES + 4 + 4 * c)); };
+  CHECK(g.Read32(BLOCK + mode::MOVES) == 1);
+  CHECK(at(0) == 2000.0f && at(1) == -1000.0f && at(2) == 0.0f);   // cross((1, 2, 0), (0, 0, 1)) x 216 = (2, -1, 0) x 216
+}
