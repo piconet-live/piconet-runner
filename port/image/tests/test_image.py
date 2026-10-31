@@ -130,7 +130,7 @@ class Bundle(unittest.TestCase):
         self.assertFalse(any((a, b) == old for a, b in zip(words, words[1:])))
 
     def test_every_patch_enters_the_image(self):
-        self.assertEqual(len(self.patches), 305)   # 305: mode_monitors; 286: the simulation's own generator (2), the mode's sites from the board, display and race words; 250: the game mode's displays' three (sites_modehud.py); 247: the game mode's pair gate and timer; 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
+        self.assertEqual(len(self.patches), 306)   # 306: the leader's gap popup in the step; 305: mode_monitors; 286: the simulation's own generator (2), the mode's sites from the board, display and race words; 250: the game mode's displays' three (sites_modehud.py); 247: the game mode's pair gate and timer; 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
         executable = [a for a in self.patches if a < memmap.REL]
         # the last: frame begin's copy to the display buffer (sites_present.py)
         self.assertEqual(sorted(executable), [0x80005940, 0x800059A8, 0x80067898, 0x8006FDA4])
