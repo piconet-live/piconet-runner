@@ -186,7 +186,9 @@ struct PacedRelay
       // (the last twelve; from the game's own count when it has fewer, as the real relay sends again: closing
       // early at a race's end, this relay can close more than twelve frames at once)
       // (what the game is told of: the frames closed, less those still on their way back to it)
-      const u32 told = closed > pace.relay_back_steps ? closed - pace.relay_back_steps : 0;
+      u32 told = closed > pace.relay_back_steps ? closed - pace.relay_back_steps : 0;
+      if (pace.rows_together != 0 && told >= pace.together_from && told < pace.together_to)
+        told -= (told - pace.together_from) % pace.rows_together;
       for (u32 first = std::min(game_has, told > 12 ? told - 12 : 0); first < told; first += 6)
       {
         const u32 count = std::min<u32>(6, told - first);

@@ -307,6 +307,30 @@ bool BeginRollbackFrame(Guest& g, Session& s, u32 step, bool settle, bool check)
   return true;
 }
 
+// The rows from the last check up to `arrived`, when they are a burst: for the summary line (BurstTally). Host memory
+// only, no allocation; the rows are compared only in a frame that has a burst.
+void NoteBurst(Session& s, u32 step, u32 arrived, u32 depth)
+{
+  BurstTally& bursts = s.summary.bursts;
+  const u32 from = std::max(bursts.checked_to, s.checked);
+  bursts.checked_to = std::max(bursts.checked_to, arrived);
+  if (arrived < from + BurstTally::LEAST_ROWS)
+    return;
+  const u32 rows = arrived - from;
+  bursts.Burst(rows);
+  for (std::size_t j = 0; j < s.seats.size(); ++j)
+    for (u32 t = from; t < arrived; ++t)
+    {
+      const auto it = s.used.find(t);
+      if (it != s.used.end() &&
+          !std::equal(it->second.begin() + j * RECORD, it->second.begin() + (j + 1) * RECORD, s.official[t].begin() + j * RECORD))
+      {
+        bursts.Corrected({.step = step, .seat = s.seats[j], .rows = rows, .depth = depth});
+        break;
+      }
+    }
+}
+
 // The predictions checked against the official frames that are here; the memory back to before the first wrong step
 // (or, tests, a forced rollback's).
 FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const Forcing& forcing)
@@ -352,6 +376,7 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
     s.max_depth = std::max(s.max_depth, step - run_from);
     s.summary.Rollback(step - run_from);
   }
+  NoteBurst(s, step, arrived, step - run_from);
   return {known, run_from};
 }
 
