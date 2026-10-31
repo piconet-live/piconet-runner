@@ -7,6 +7,7 @@
 
 #include "internal.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <string>
@@ -53,6 +54,35 @@ struct PhaseTally
 // hook's own clock is even to 0.2 ms on a PC that holds the pace, the pictures to 0.7).
 constexpr double SLOW_MS = 2, UNEVEN_MS = 2;
 
+// Official rows that reached one check of the predictions together (CheckPredictions, frame.cpp): how many such
+// bursts by their size, and the last few seats a burst corrected. A row holds every seat, so a burst's size is the same
+// for all of them; a seat is named when a row of the burst differs from what the game ran its machine on. Why: a burst
+// that corrected a held button once lost a boost press under the per-machine rollback, and the next live desync
+// should be matched to what the game saw.
+struct BurstTally
+{
+  static constexpr u32 LEAST_ROWS = 4;   // fewer rows at one check are no burst
+  static constexpr u32 MOST_SIZE = 16;   // this size and larger are counted together
+  static constexpr u32 SEATS_KEPT = 64;  // two whole bursts of a full race
+  struct Seat
+  {
+    u32 step = 0;   // the displayed frame's step
+    int seat = 0;
+    u32 rows = 0;   // the burst's size
+    u32 depth = 0;  // the frame's rollback in steps (0: none)
+  };
+
+  void Burst(u32 rows) { ++sizes[std::min(rows, MOST_SIZE) - LEAST_ROWS]; }
+  void Corrected(const Seat& s) { last[seats++ % SEATS_KEPT] = s; }
+  // Its words in the summary line: bursts, burstseats, burstlast.
+  std::string Words() const;
+
+  u32 checked_to = 0;  // the rows up to here have been counted
+  std::array<u32, MOST_SIZE - LEAST_ROWS + 1> sizes{};
+  std::array<Seat, SEATS_KEPT> last{};
+  u32 seats = 0;       // seats named so far: the newest SEATS_KEPT of them are kept
+};
+
 struct RaceSummary
 {
   enum Phase { Countdown, Race, After };
@@ -71,6 +101,7 @@ struct RaceSummary
 
   std::array<PhaseTally, 3> phases;
   Spread depths{0, 1};            // the race's rollbacks: steps gone back
+  BurstTally bursts;
   Phase phase = Countdown;
   bool begun = false;             // a frame was seen: the relay's go was taken
   u32 last_step = 0;

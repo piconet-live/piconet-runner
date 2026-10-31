@@ -69,6 +69,7 @@ void TestAGameAheadOfItsScheduleFallsBack();
 void TestASlowHostSendsItsInputsInTime();
 void TestTheScheduleAtALowerDelay();
 void TestARaceLeavesItsSummaryLine();
+void TestTheSummaryCountsBursts();
 void TestTheSummarysEndsAndItsFile();
 void TestTheHostsPicturesReachTheSummaryLine();
 void TestASummaryThatFailsCostsNoReplay();
@@ -473,6 +474,7 @@ int main(int argc, char** argv)
   TestASlowHostSendsItsInputsInTime();
   TestTheScheduleAtALowerDelay();
   TestARaceLeavesItsSummaryLine();
+  TestTheSummaryCountsBursts();
   TestTheSummarysEndsAndItsFile();
   TestTheHostsPicturesReachTheSummaryLine();
   TestASummaryThatFailsCostsNoReplay();

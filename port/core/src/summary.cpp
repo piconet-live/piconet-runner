@@ -161,6 +161,23 @@ void NoteOfficialRow(Session& s, u32 t)
     s.summary.Late(t);
 }
 
+std::string BurstTally::Words() const
+{
+  std::string counted;
+  for (u32 i = 0; i < sizes.size(); ++i)
+    if (sizes[i] != 0)
+      counted += std::format("{}{}{}:{}", counted.empty() ? "" : ",", i + LEAST_ROWS,
+                             i + LEAST_ROWS == MOST_SIZE ? "+" : "", sizes[i]);
+  std::string kept;
+  for (u32 n = seats > SEATS_KEPT ? seats - SEATS_KEPT : 0; n < seats; ++n)
+  {
+    const Seat& seat = last[n % SEATS_KEPT];
+    kept += std::format("{}{}/{}/{}/{}", kept.empty() ? "" : ",", seat.step, seat.seat, seat.rows, seat.depth);
+  }
+  return std::format("bursts={} burstseats={} burstlast={}", counted.empty() ? "-" : counted, seats,
+                     kept.empty() ? "-" : kept);
+}
+
 std::string SummaryLine(const Session& s, const std::string& utc)
 {
   const RaceSummary& r = s.summary;
@@ -177,8 +194,8 @@ std::string SummaryLine(const Session& s, const std::string& utc)
     line += std::format(" frame={} slow={} shown={} uneven={}", Pair(p.frame, p.frame.Most(), 1), p.slow,
                         Pair(p.shown, p.shown.Most(), 1), p.uneven);
     if (i == RaceSummary::Race)
-      line += std::format(" rollbacks={} depth={} catchups={} held={}", r.depths.Count(),
-                          Pair(r.depths, r.depths.Most(), 0), s.catch_ups, s.holds);
+      line += std::format(" rollbacks={} depth={} catchups={} held={} {}", r.depths.Count(),
+                          Pair(r.depths, r.depths.Most(), 0), s.catch_ups, s.holds, r.bursts.Words());
   }
   return line;
 }
