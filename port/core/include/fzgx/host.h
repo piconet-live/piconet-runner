@@ -196,7 +196,10 @@ struct ModernHudShow
   std::array<bool, hud_layout::SLOTS> shown{};  // by hud_layout::SlotId: not hidden by the mode or the layout
   hud_layout::Layout layout;
   float energy = 0, max_energy = 100;
-  bool boost = false;       // the game's boost lightning would draw
+  bool boosting = false;    // a boost is running (flag 0x20: an energy boost or a dash plate)
+  bool can_boost = false;   // a press would boost now: the game's own tests (modern_hud_frame.cpp)
+  bool pit = false;         // on a refilling surface
+  float speed = 0;          // km/h
   u32 place = 0, racers = 0;
   u32 lap = 0, laps = 0;
   u32 race_ms = 0, lap_ms = 0, best_ms = 0;

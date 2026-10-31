@@ -32,7 +32,10 @@ namespace mh = mode::hud;
 constexpr u32 COUNTDOWN = 0x28, RACE = 0x29, COURSE_INTRO = 0x27;
 constexpr u32 RACE_LAPS = 16;                     // the race block's laps (observer_frame.cpp)
 constexpr u32 MACHINE_MAX_ENERGY = 0x5DA;         // a machine's most energy, u16
-constexpr u32 BOOST_ASK = 0x40, DEAD = 0x800;     // the lightning's test on the flags (fn_1_C8DC0 0xC9580 on)
+constexpr u32 BOOSTING = 0x20;                    // a machine's flag: a boost is running (race-map-machine 3)
+constexpr u32 RULE = BSS + 0x3C30, RULE_LAP_ONE_BOOST = 0x10;  // the rule word: boost on lap 1 (fn_1_331EC 0x33210)
+constexpr float BOOST_LEAST_ENERGY = 1.0f;        // a boost starts above this (fn_1_26F34 0x27288, .rodata 0xBD8 + 0x14)
+constexpr u32 SURFACE = 0x218, SURFACE_PIT = 0x08000000;  // the refilling surface (fn_1_289B4 0x28C98)
 constexpr u32 TOTAL_TIME = 0x1E4, LAP_TIME = game::PROGRESS_LAP_TIME, LAP_RECORD = 12, BEST = game::PROGRESS_BEST_LAP;
 
 u32 Ms(const Guest& g, u32 record)
@@ -101,12 +104,21 @@ void ModernHudFrame(Guest& g)
       up(hl::SlotId::Lap, modes::PART_LAPS);
       up(hl::SlotId::RaceTime, modes::PART_RACE_TIME);
       up(hl::SlotId::LapTimes, modes::PART_LAP_TIMES);
+      up(hl::SlotId::Speed, modes::PART_SPEED);
       const float energy = std::bit_cast<float>(g.Read32(m + game::MACHINE_ENERGY));
       const u32 most = g.Read16(m + MACHINE_MAX_ENERGY);
       show.energy = std::isfinite(energy) ? energy : 0;
       show.max_energy = most != 0 ? static_cast<float>(most) : 100.0f;
-      const u32 flags = g.Read32(m);
-      show.boost = (flags & BOOST_ASK) != 0 && (flags & DEAD) == 0;
+      show.boosting = (g.Read32(m) & BOOSTING) != 0;
+      show.pit = (g.Read32(m + SURFACE) & SURFACE_PIT) != 0;
+      const float speed = std::bit_cast<float>(g.Read32(m + game::MACHINE_SPEED));
+      show.speed = std::isfinite(speed) ? std::max(speed, 0.0f) : 0;
+      // A press boosts when the game's three tests pass: past lap 1 or the rule's lap-1 boost (fn_1_331EC 0x33220 clears the
+      // request otherwise), energy above 1 (fn_1_26F34 0x27288), and no `boost off` of a mode (the stand-in routine
+      // clears the request). The accelerator's test and the 6-step lockout are the press's own, not a state to show.
+      const bool lap_allows = (g.Read32(RULE) & RULE_LAP_ONE_BOOST) != 0 || static_cast<s32>(g.Read32(p + game::PROGRESS_LAPS)) >= 1;
+      const bool mode_allows = g.Read32(layout::MODES + 4) == 0 || (g.Read32(mode::Record(g, viewed)) & mode::BOOST_OFF) == 0;
+      show.can_boost = phase == RACE && lap_allows && show.energy > BOOST_LEAST_ENERGY && mode_allows;
       show.place = g.Read8(p + game::PROGRESS_RANK) + 1u;
       for (u32 seat = 0; seat < count; ++seat)
         if ((g.Read32(machines + seat * game::MACHINE_SIZE) & game::MACHINE_FLAG_OUT) == 0)

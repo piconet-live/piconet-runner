@@ -66,11 +66,13 @@ Layout Default()
     Slot& s = l.slots[static_cast<std::size_t>(id)];
     s.anchor = a, s.x = x, s.y = y;
   };
-  put(SlotId::Energy, Anchor::TopRight, 28, 28);
-  put(SlotId::RaceTime, Anchor::TopRight, 28, 86);
-  put(SlotId::Lap, Anchor::TopRight, 268, 86);
-  put(SlotId::LapTimes, Anchor::TopRight, 28, 150);
-  put(SlotId::Position, Anchor::BottomLeft, 28, 28);
+  // where the game's own parts stand (measured on a Classic capture, 1000 units the picture's height)
+  put(SlotId::Position, Anchor::Top, 0, 50);
+  put(SlotId::Lap, Anchor::TopRight, 410, 50);
+  put(SlotId::Energy, Anchor::TopRight, 114, 50);
+  put(SlotId::RaceTime, Anchor::TopRight, 114, 136);
+  put(SlotId::LapTimes, Anchor::TopRight, 114, 218);
+  put(SlotId::Speed, Anchor::BottomRight, 114, 45);
   return l;
 }
 

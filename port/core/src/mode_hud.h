@@ -111,9 +111,9 @@ constexpr u32 GAP_PART = 0x400000;
 constexpr u32 GAP_STEPS = 60;
 
 // The game's mask bits the modern HUD draws itself: the energy meter (and its lightning, inside the meter's test), rank,
-// lap counter, race time, lap list. Speed, the skulls, the spare icon, wrong way, banners and the face board stay the game's.
+// lap counter, race time, lap list, speed. The skulls, the spare icon, wrong way, banners and the face board stay the game's.
 constexpr u32 MODERN_PARTS = PART_BITS[modes::PART_ENERGY] | PART_BITS[modes::PART_RANK] | PART_BITS[modes::PART_LAPS] |
-                             PART_BITS[modes::PART_RACE_TIME] | PART_BITS[modes::PART_LAP_TIMES];
+                             PART_BITS[modes::PART_RACE_TIME] | PART_BITS[modes::PART_LAP_TIMES] | PART_BITS[modes::PART_SPEED];
 
 // Whether action `id` is a display word: the interpreter applies it at once, in the order the rules run (a mode's
 // variable is written so too), without a place in the step's queue of actions on the game.

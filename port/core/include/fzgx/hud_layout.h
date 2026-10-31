@@ -22,10 +22,10 @@ enum class Anchor
 // The elements, in the order of a Layout's slots. Modern-only elements to come are added at the end.
 enum class SlotId
 {
-  Energy, Position, Lap, RaceTime, LapTimes, Count
+  Energy, Position, Lap, RaceTime, LapTimes, Speed, Count
 };
 inline constexpr std::size_t SLOTS = static_cast<std::size_t>(SlotId::Count);
-inline constexpr std::array<std::string_view, SLOTS> SLOT_NAMES = {"energy", "position", "lap", "race_time", "lap_times"};
+inline constexpr std::array<std::string_view, SLOTS> SLOT_NAMES = {"energy", "position", "lap", "race_time", "lap_times", "speed"};
 
 struct Slot
 {
@@ -41,7 +41,7 @@ struct Layout
   const Slot& operator[](SlotId id) const { return slots[static_cast<std::size_t>(id)]; }
 };
 
-// The game-like arrangement every player starts from: energy, time and laps at the top right, the place at the bottom left.
+// The arrangement every player starts from: each element where the game's own part stands, near its size.
 Layout Default();
 
 struct Rect
