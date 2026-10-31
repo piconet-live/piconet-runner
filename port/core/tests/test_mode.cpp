@@ -423,16 +423,16 @@ void TestGameStartComesFirst()
   const auto before = host.ram;
   mode::GameStart(g, *p, BLOCK, MODULE);
   CHECK(g.Read32(BLOCK + mode::RUNS) == 1 && g.Read32(BLOCK + mode::END) == 0);
-  // game_start's look is on the page; countdown's rule (respawns on every seat) has not run
+  // game_start's look is on the page; countdown's rule (the CPUs handed to the CPU driver) has not run
   CHECK(g.Read8(BLOCK + mode::hud::SEATS_AT + mode::hud::LOOK) == modes::LOOK_INVISIBLE);
   CHECK(g.Read8(BLOCK + mode::hud::SEATS_AT + mode::hud::OWN_LOOK) == 1 + modes::LOOK_NORMAL);
-  CHECK(g.Read32(BLOCK + mode::RESPAWN) == 0);
+  CHECK(g.Read32(BLOCK + mode::HANDED) == 0);
   const auto after = host.ram;
   host.ram = before;
   mode::GameStart(g, *p, BLOCK, MODULE);
   CHECK(host.ram == after);
   mode::Run(g, *p, BLOCK, MODULE);
-  CHECK(g.Read32(BLOCK + mode::RUNS) == 2 && g.Read32(BLOCK + mode::RESPAWN) == 0xF);
+  CHECK(g.Read32(BLOCK + mode::RUNS) == 2 && g.Read32(BLOCK + mode::HANDED) != 0);
   CHECK(g.Read8(BLOCK + mode::hud::SEATS_AT + mode::hud::LOOK) == modes::LOOK_INVISIBLE);
 }
 

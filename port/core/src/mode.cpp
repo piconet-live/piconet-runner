@@ -2244,12 +2244,6 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
     Remember(m, g, block, n);
     g.Write32(block + OUT_MASK, 0);
     g.Write32(block + FLAGS, g.Read32(block + FLAGS) & ~1u);
-    static bool said = false;  // (as game_start's)
-    if (!said)
-    {
-      said = true;
-      Notice("fzgx: game mode: countdown at step {}", guest.Read32(net::STEP));
-    }
   }
   if (!p.cpus_allowed && !p.solo)
     GonePlayers(g, p, block, module, guest.Read32(net::STEP), m.Count());
@@ -2290,12 +2284,6 @@ void GameStart(Guest& guest, const Package& p, u32 block, u32 module)
   Mem g(guest);
   const FloatControl control;
   GameStartPass(guest, g, p, block, module);
-  static bool said = false;  // (where it fell, once a run of the game: every game says the same step)
-  if (!said)
-  {
-    said = true;
-    Notice("fzgx: game mode: game_start at step {}, phase {:#x}", guest.Read32(net::STEP), g.Read16(module + game::PHASE));
-  }
 }
 
 void Prepare(Package& p)
@@ -2408,8 +2396,17 @@ void Step(Guest& g)
   const u32 block = g.Read32(layout::MODES + 4);
   if (!m || !m->game_mode || block == 0)
     return;
+  // where the starts fell, once each a run of the game: every game says the same steps
+  const u32 runs = g.Read32(block + RUNS);
+  static u32 told = 0;
+  if (runs < 2 && told == runs)
+  {
+    told = runs + 1;
+    Notice("fzgx: game mode: {} at step {}, phase {:#x}", runs == 0 ? "game_start" : "countdown", g.Read32(net::STEP),
+           g.Read16(g.Read32(net::MODULE_POINTER) + game::PHASE));
+  }
   // (runs 0: mode_begin's call, or the mode point's in a start with no countdown task: game_start and nothing else)
-  if (g.Read32(block + RUNS) == 0)
+  if (runs == 0)
     GameStart(g, *m->game_mode, block, g.Read32(net::MODULE_POINTER));
   else
     Run(g, *m->game_mode, block, g.Read32(net::MODULE_POINTER));
