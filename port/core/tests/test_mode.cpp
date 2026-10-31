@@ -470,7 +470,7 @@ void TestTheRaceWordsRun()
   const u32 m0 = MachineAt(0);
   CHECK(RealAt(g, m0 + 0x224) == 5.0f && RealAt(g, m0 + 0x98) == 5000.0f);   // 1000 / 200; 1000 / 216 x 1080
   CHECK((g.Read32(m0 + game::MACHINE_FLAGS) & 0x8401) == 0x401 && g.Read8(m0 + 0x481) == 90);
-  CHECK(g.Read32(BLOCK + mode::RECORDS) == (mode::HELD | mode::HAND | mode::ROLL));  // and the speed held, to GO
+  CHECK(g.Read32(BLOCK + mode::RECORDS) == (mode::BOOST_OFF | mode::HELD | mode::HAND | mode::ROLL));  // and the speed held and no boost, to GO
   CHECK(g.Read32(BLOCK + mode::RECORDS + 12) == 0x447A0000);  // 1000 km/h
   // race_start: cpu_mode 23 and hand_to_cpu on the CPUs only
   CHECK(g.Read8(0x80700000 + 0x32) == 0 && g.Read8(0x80700000 + 0x100 * 2 + 0x32) == 23);
@@ -1427,7 +1427,7 @@ void TestTheStatWords()
   g.Write32(MODULE + game::RACE_CLOCK, 601);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(base(0, 0) == 1000.0f && value(0, 0) == 2000.0f && value(0, 2) == 0.25f);
-  CHECK(!(g.Read32(BLOCK + mode::RECORDS) & mode::DAMAGE));     // (`go`'s one run)
+  CHECK(!(g.Read32(BLOCK + mode::RECORDS) & mode::DAMAGE));     // (`race_start`'s one run)
   CHECK(std::bit_cast<float>(g.Read32(machine(0) + 0x94)) == 400.0f);  // no change of weight, no change of momentum
   // a step run again from the same memory: the same block
   const std::vector<u8> after = BlockOf(g);

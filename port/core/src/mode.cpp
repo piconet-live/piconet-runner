@@ -2157,7 +2157,7 @@ void FillRecords(Mem& g, const Package& p, u32 block, const Now& n)
   for (u32 seat = 0; seat < SEATS; ++seat)
   {
     const u32 record = block + RECORDS + seat * RECORD;
-    g.Write32(record, (p.pedals ? PEDALS : 0) | (p.boost_off || (boost_off_seats >> seat & 1) ? BOOST_OFF : 0) | (frozen >> seat & 1 || rolling ? HELD : 0) |
+    g.Write32(record, (p.pedals ? PEDALS : 0) | (p.boost_off || (boost_off_seats >> seat & 1) || rolling ? BOOST_OFF : 0) | (frozen >> seat & 1 || rolling ? HELD : 0) |
                           ((handed >> seat & 1) || rolling ? HAND : 0) | (rolling ? ROLL : 0));
     g.Write32(record + 4, p.pedals ? p.accel : 0);
     g.Write32(record + 8, p.pedals ? p.brake : 0);

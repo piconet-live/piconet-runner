@@ -10,7 +10,8 @@ accelerator press (flag 0x2000): after both input sources, so CPUs are held too,
 one test each. The race side's words (mode.h's record flags): a seat handed to the CPU (32: hand_to_cpu, and every seat
 through a rolling start's countdown) keeps the CPU's controls, as a record that says "the AI drives"; through the
 rolling start's countdown (64) the CPU's steering and strafe are saved before the hook and put back after it, with
-the game's own 0.6 accelerator and no brake (the hook's pre-GO hold keeps boosts and attacks off); a seat whose
+the game's own 0.6 accelerator and no brake, and its record says "boost off" as well: the hook's pre-GO hold does not
+stop a CPU's boost request, so it is cleared here until GO (attacks: the hold does stop them); a seat whose
 record says "boost" (8) has its boost request set before the hook (the mode's `boost seat`), so the game's whole path
 judges it: the hook's start hold and lap-1 rule, then "boost off" after it. A seat whose stat record (memmap.MODE_STATS)
 has stats the mode changed (seat.stat.*) takes their values into the machine's fields right after the hook, which has
@@ -291,7 +292,6 @@ co_plain:
     stw 0, 0x200(31)
     li 0, 0
     stw 0, 0x204(31)
-    b co_boost
 co_off:
     andi. 0, 9, 2
     beq co_boost
