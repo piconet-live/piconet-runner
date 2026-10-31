@@ -88,8 +88,10 @@ class ThePointsOrder(Build):
 
 
 class TheLapShown(Build):
-    def shown(self, at, lap, laps):
-        m = HudCpu(self.image, {}, lambda address, cpu: None)
+    def shown(self, at, lap, laps, mode=1):
+        memory = {}
+        put(memory, memmap.MODE, mode)
+        m = HudCpu(self.image, memory, lambda address, cpu: None)
         m.r[4], m.r[6] = lap, laps
         m.run(self.symbols[f"hud_lap_{at:x}"])
         return m.r[5]
@@ -104,6 +106,10 @@ class TheLapShown(Build):
     def test_no_race_is_as_it_was(self):
         for at in hud.HUD_LAPS:
             self.assertEqual(self.shown(at, 3, 0), 4)
+
+    def test_a_plain_start_is_as_it_was(self):
+        for at in hud.HUD_LAPS:
+            self.assertEqual(self.shown(at, 3, 3, mode=0), 4)
 
 
 if __name__ == "__main__":
