@@ -2013,6 +2013,10 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
       g.Write32(machine + M_START_CHARGE, 0);
       g.Write32(machine + game::MACHINE_FLAGS, g.Read32(machine + game::MACHINE_FLAGS) & ~F_FROZEN);
     }
+    // the rolling start holds the energy full (the owner, 2026-10-31), whatever the walls and other machines do, up to
+    // and including GO's run, which undoes the last countdown step's machine task; a broken machine stays broken
+    if (p.rolling && (!n.started || !(g.Read32(block + FLAGS) & 1)) && !(flags & (F_BROKEN | F_FINISHED | F_RETIRED)))
+      g.Write32(machine + game::MACHINE_ENERGY, Bits(static_cast<float>(g.Read16(machine + M_MAX_ENERGY))));
   }
   g.Write32(block + NC_ANY, any);
   // the clock limit: the timer the game shows, from the race clock, never 0 (its zero paths never run); at the limit

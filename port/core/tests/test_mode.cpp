@@ -449,9 +449,24 @@ void TestTheRaceWordsRun()
   g.Write32(MachineAt(4) + 0xDC, 7);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(!(g.Read32(MachineAt(4) + game::MACHINE_FLAGS) & 0x8000) && g.Read32(MachineAt(4) + 0xDC) == 0);
-  // GO: pads_back, the records without the hand
+  // the energy stays full through the countdown, a broken machine's excepted
+  g.Write32(MachineAt(4) + game::MACHINE_ENERGY, std::bit_cast<u32>(82.0f));
+  g.Write32(MachineAt(5) + game::MACHINE_ENERGY, 0);
+  SetFlags(g, 5, 0x80);
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(RealAt(g, MachineAt(4) + game::MACHINE_ENERGY) == 100.0f);
+  CHECK(g.Read32(MachineAt(5) + game::MACHINE_ENERGY) == 0);
+  SetFlags(g, 5, 0, 0x80);
+  g.Write32(MachineAt(5) + game::MACHINE_ENERGY, std::bit_cast<u32>(100.0f));
+  // GO: pads_back, the records without the hand; the last countdown step's dent is put right at GO's run, not after
+  g.Write32(MachineAt(4) + game::MACHINE_ENERGY, std::bit_cast<u32>(91.0f));
   g.Write16(MODULE + game::PHASE, game::PHASE_RACE);
   mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(RealAt(g, MachineAt(4) + game::MACHINE_ENERGY) == 100.0f);
+  g.Write32(MachineAt(4) + game::MACHINE_ENERGY, std::bit_cast<u32>(91.0f));
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(RealAt(g, MachineAt(4) + game::MACHINE_ENERGY) == 91.0f);
+  g.Write32(MachineAt(4) + game::MACHINE_ENERGY, std::bit_cast<u32>(100.0f));
   CHECK(g.Read32(BLOCK + mode::HANDED) == 0 && g.Read32(BLOCK + mode::NC) == 0);   // ghost off: no team rows
   for (u32 step = 1; step < 200; ++step)
   {
