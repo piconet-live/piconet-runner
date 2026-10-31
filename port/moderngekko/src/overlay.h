@@ -145,6 +145,10 @@ inline Type Figure(float size) { return {TheFonts().semi, size, false, true}; }
 // How wide `text` comes out (a leaning run's reach not counted), and the run drawn with its top left at (x, top),
 // cut at `clip` when given (the picture's pixels). overlay.cpp.
 float Width(const Type& type, const char* text);
+// The emulator's on-screen drawing samples every texture at its nearest texel (OnScreenUI.cpp), which only serves a
+// picture laid 1:1. Anything sheared or scaled goes between these two, or its edges show stair-steps.
+void SmoothSampling(ImDrawList* list);
+void NearestSampling(ImDrawList* list);
 void Draw(ImDrawList* list, const Type& type, float x, float top, ImU32 colour, const char* text,
           const ImVec4* clip = nullptr);
 }  // namespace fzgx_port::overlay

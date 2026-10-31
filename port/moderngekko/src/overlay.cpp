@@ -11,6 +11,9 @@
 #include <filesystem>
 #include <string>
 
+#include "VideoCommon/AbstractGfx.h"
+#include "VideoCommon/RenderState.h"
+
 #include "fzgx/strip.h"
 
 #ifdef _WIN32
@@ -99,6 +102,22 @@ float Pieces(ImFont* font, float size, const char* text, float x, Draw draw)
 }
 }  // namespace
 
+void SmoothSampling(ImDrawList* list)
+{
+  // (the on-screen drawing stops at a list with no vertices: this callback must not be all a list holds)
+  if (list->VtxBuffer.Size == 0)
+  {
+    list->PrimReserve(6, 4);
+    list->PrimRect(ImVec2(0, 0), ImVec2(0, 0), 0);
+  }
+  list->AddCallback([](const ImDrawList*, const ImDrawCmd*) { if (g_gfx) g_gfx->SetSamplerState(0, RenderState::GetLinearSamplerState()); }, nullptr);
+}
+
+void NearestSampling(ImDrawList* list)
+{
+  list->AddCallback([](const ImDrawList*, const ImDrawCmd*) { if (g_gfx) g_gfx->SetSamplerState(0, RenderState::GetPointSamplerState()); }, nullptr);
+}
+
 const Fonts& TheFonts()
 {
   static Fonts fonts;
@@ -124,6 +143,8 @@ float Width(const Type& type, const char* text)
 void Draw(ImDrawList* list, const Type& type, float x, float top, ImU32 colour, const char* text, const ImVec4* clip)
 {
   ImFont* font = FontOf(type);
+  if (type.lean)
+    SmoothSampling(list);
   const int first = list->VtxBuffer.Size;
   const ImVec2 at(x, top);
   if (!type.tabular)
@@ -141,5 +162,6 @@ void Draw(ImDrawList* list, const Type& type, float x, float top, ImU32 colour, 
     ImDrawVert& v = list->VtxBuffer[i];
     v.pos.x += (foot - v.pos.y) * LEAN;
   }
+  NearestSampling(list);
 }
 }  // namespace fzgx_port::overlay
