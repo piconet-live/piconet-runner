@@ -56,5 +56,5 @@ void TestInputsTriggerIsFullAtItsRangeOrAPress()
 {
   BEGIN_TEST();
   CHECK(Near(Trigger(0, false), 0) && Near(Trigger(150, false), 1) && Near(Trigger(10, true), 1));
-  CHECK(Near(Trigger(50, false), 0.4f));
+  CHECK(Near(Trigger(75, false), 0.5f));
 }

@@ -15,7 +15,8 @@
 namespace fzgx::inputs
 {
 constexpr float WIDTH = 512, HEIGHT = 256, CELL = 128;
-constexpr float STICK_RANGE = 72, CSTICK_RANGE = 59, TRIGGER_RANGE = 125;
+// What PADClamp leaves (the game's table at 0x8008FF40: stick 72, C-stick 59, triggers cut to 30..180, then less 30).
+constexpr float STICK_RANGE = 72, CSTICK_RANGE = 59, TRIGGER_RANGE = 150;
 
 struct Point
 {
