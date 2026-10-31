@@ -87,5 +87,30 @@ class ThePointsOrder(Build):
         self.assertEqual(self.fields([-5, 0, 7, 70000, -70000]), [0, 0, 7, 0xFFFF, 0])
 
 
+class TheLapShown(Build):
+    def shown(self, at, lap, laps, mode=1):
+        memory = {}
+        put(memory, memmap.MODE, mode)
+        m = HudCpu(self.image, memory, lambda address, cpu: None)
+        m.r[4], m.r[6] = lap, laps
+        m.run(self.symbols[f"hud_lap_{at:x}"])
+        return m.r[5]
+
+    def test_the_lap_shown_stops_at_the_races_laps(self):
+        for at in hud.HUD_LAPS:
+            self.assertEqual(self.shown(at, 0, 3), 1)
+            self.assertEqual(self.shown(at, 2, 3), 3)
+            self.assertEqual(self.shown(at, 3, 3), 3)
+            self.assertEqual(self.shown(at, 7, 3), 3)
+
+    def test_no_race_is_as_it_was(self):
+        for at in hud.HUD_LAPS:
+            self.assertEqual(self.shown(at, 3, 0), 4)
+
+    def test_a_plain_start_is_as_it_was(self):
+        for at in hud.HUD_LAPS:
+            self.assertEqual(self.shown(at, 3, 3, mode=0), 4)
+
+
 if __name__ == "__main__":
     unittest.main()

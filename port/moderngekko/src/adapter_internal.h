@@ -215,6 +215,10 @@ void ShowSpectatorOverlay(const fzgx::SpectatorShow& show);
 void MinimapCourseLoaded(const fzgx::MinimapCourse& course);
 void ShowMinimap(const fzgx::MinimapShow& show);
 void DrawMinimap();
+// inputs_overlay.cpp: "Show inputs", m-overlay's controller over the picture: told the player's pad (the game's thread),
+// drawn before every present in the corner left of the course map (`right`, `bottom`: where it ends, in the picture).
+void ShowInputs(const fzgx::InputsShow& show);
+void DrawInputs(float right, float bottom, float picture_height);
 fzgx::SpectatorClick TakeSpectatorClicks();
 void DrawOverlays();
 bool SpectatorMouse(void* window, unsigned message, std::intptr_t lparam);

@@ -17,6 +17,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_title` | fn_1_1461C8 0x146304, VS TOTAL RANKING's string (`addi r3, r21, 0x404`) | the game's | the window's title, when there is one |
 | `tag_cell`, `tag_cpu` | fn_1_147188 0x1473D8 (`lwz r7, 0x4c(r30)`), 0x14740C (`lis r4, 1`); with follow.py's 0x147390 | row's tag: P1 to P4 by racer, CPU for the others | the local seat's row P1; a row with a name in memmap.NAMES no tag (as a player row, to 0x147494). Every race; drawing only |
 | `mode_clock_at`, `mode_clock_label` | fn_1_CF5B0's ten calls of fn_1_496FC (the digits' place, f2 its y) and 0xCF9EC (the TIME label's y, `stfs f0, 0x18(r1)`) | at the top, on the rank | in a race with a mode, below the rank: digits at y 128 (CLOCK_Y; the owner's choice, 2026-10-30) and the label at 151 (the rank's own stay). Stock races never draw this clock |
+| `hud_lap_*` (2) | fn_1_C72D4 0xC73A0 and fn_1_C771C 0xC77E8, `addi r5, r4, 1`: the lap shown, P+0x118 + 1, r6 the race's laps | a finished racer's HUD shows 4/3 | the lap shown stops at the race's laps (r6 0: no race, as it was). In every race of ours, the mode word set: a spectator follows a finished racer with the game's HUD up. r5 only, for fn_1_CC280's digits: nothing a step reads |
 | `mode_beep` | fn_1_3A330 0x3A448, where the timed mode's countdown ends on every path (`lwz r0, 0x30(r29)`) | — | under clock_limit (whose timer the game no longer counts) the countdown's own tick: 0xA9092700 when the time left is a whole second below ten, including 0, as the code it skips does. Only a sound: the mute of a step run again (mute.py) as for the game's |
 
 Registers: each routine replaces a call (`mode_spare`, `mode_look`), so the volatile registers are free there; or a
@@ -48,6 +49,7 @@ CLOCK_Y = 0x43000000   # 128.0: below the rank (its digits at y 49ish, "/30" at 
 BEEP_SITE, BEEP_KNOWN = 0x3A448, 0x801D0030   # fn_1_3A330: lwz r0, 0x30(r29), where the timer's code ends on every path
 HUD_ENTRIES, BANNER_HEAP = 0x8FDA8, 0x25B88   # .bss: port 0's HUD entry (+0 the banners raised); the banners' heap word
 ONCE_BITS = {FINAL_LAP: 0x2, BOOST_POWER: 0x1, TIME_BONUS: 0x0}
+HUD_LAPS, HUD_LAP_KNOWN = (0xC73A0, 0xC77E8), 0x38A40001  # fn_1_C72D4, fn_1_C771C: addi r5, r4, 1, before fn_1_CC280
 ONE = 0x3F800000
 BYTE_SCALE = 0x3B808081                       # 1 / 255: seat.colour's bytes to the tint's floats
 DISPLAY, SEATS_AT, SEAT_DISPLAY, NUMBER, BANNER, GAP_TIME = 0x6000, 0x6010, 0x20, 4, 10, 24   # mode_hud.h
@@ -180,6 +182,24 @@ mlk_tint:
 """)
     patch(site, word, 0, "mode_look")
     middle.append((site, ["r11", "r12", "cr0", "lr"], "mode_look"))
+
+    # the lap shown never above the race's laps (r6, for fn_1_CC280): drawing only, in every race of ours
+    for at in HUD_LAPS:
+        site = TEXT + at
+        word = stock(site, HUD_LAP_KNOWN)
+        name = f"hud_lap_{at:x}"
+        r.add(name, test + f"""    addi 5, 4, 1
+    beq hl_{at:x}_done
+    cmpwi 6, 0
+    beq hl_{at:x}_done
+    cmpw 5, 6
+    ble hl_{at:x}_done
+    mr 5, 6
+hl_{at:x}_done:
+    @b {site + 4:#x}
+""")
+        patch(site, word, 0, name)
+        middle.append((site, ["r12", "cr0"], name))
 
     # the clock below the rank: the digits' y at each of the drawer's place calls; no TIME label (its draw, the next call, left out) (nothing a step reads)
     r.add("mode_clock_at", test + """    beq mca_stock

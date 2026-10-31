@@ -43,6 +43,23 @@ class TheGhostDraw(Build):
         self.assertIn(TEXT + hud.DRAW_MACHINE, reached)
         self.assertEqual(get(memory, memmap.MODE_HUD_GHOSTS + 8 * 3), 0)
 
+    def pilot(self, look, block=BLOCK, mode=1, seat=3):
+        memory = {memmap.MODE_HUD_LOOKS + seat: look, MACHINE + 4: 0, MACHINE + 5: seat}
+        put(memory, memmap.MODE, mode)
+        put(memory, memmap.MODES + 4, block)
+        _, reached, _ = self.run_routine("ghost_pilot", memory, r3=CAR, r4=0, r29=MACHINE)
+        return TEXT + ghost.PILOT_DRAW in reached
+
+    def test_a_ghost_or_invisible_seat_has_no_pilot(self):
+        self.assertFalse(self.pilot(1))
+        self.assertFalse(self.pilot(2))
+
+    def test_any_other_seat_keeps_the_games_pilot(self):
+        self.assertTrue(self.pilot(0))
+        self.assertTrue(self.pilot(3))
+        self.assertTrue(self.pilot(1, block=0))
+        self.assertTrue(self.pilot(1, mode=0))
+
     def voice(self, mask, seat, mode=1):
         memory = {}
         put(memory, memmap.MODE, mode)

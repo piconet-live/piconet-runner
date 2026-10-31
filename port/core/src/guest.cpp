@@ -76,6 +76,10 @@ void Host::ShowMinimap(const MinimapShow&)
 {
 }
 
+void Host::ShowInputs(const InputsShow&)
+{
+}
+
 bool Host::Pack(const u8*, std::size_t, const u8*, std::size_t, std::vector<u8>*)
 {
   return false;

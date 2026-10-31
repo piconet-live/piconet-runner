@@ -175,6 +175,19 @@ void ModeDots(Guest& g, mm::Racers& racers, u32 you)
     racers[i].present = present[i], racers[i].colour = colour[i];
 }
 
+// What decides whether the map shows, and with it "Show inputs".
+mm::Seen SeenNow(Guest& g, u32 module, u32 phase)
+{
+  const Session* s = s_session.get();
+  mm::Seen seen;
+  seen.phase = phase;
+  seen.hud_parts = g.Read32(module + game::HUD_PARTS);
+  seen.watched = s && s->spectator.shown;
+  seen.overlay = !s || s->spectator.overlay;
+  seen.practice_paused = s && s->practice && PracticePaused();
+  return seen;
+}
+
 void Tell(const MinimapShow& show)
 {
   if (!show.on && !s_map.shown)
@@ -202,13 +215,7 @@ void MinimapFrame(Guest& g)
     Load(g, module);
   if (s_map.course == 0)
     return;
-  const Session* s = s_session.get();
-  mm::Seen seen;
-  seen.phase = phase;
-  seen.hud_parts = g.Read32(module + game::HUD_PARTS);
-  seen.watched = s && s->spectator.shown;
-  seen.overlay = !s || s->spectator.overlay;
-  seen.practice_paused = s && s->practice && PracticePaused();
+  const mm::Seen seen = SeenNow(g, module, phase);
   MinimapShow show;
   s_map.race_frames += phase == 0x28 || phase == 0x29;
   const u32 machines = g.Read32(module + MACHINES);
@@ -241,6 +248,39 @@ void MinimapFrame(Guest& g)
   }
   show.course = s_map.course;
   Tell(show);
+}
+
+// "Show inputs": the local player's pad while the map shows and this game has a driver of its own. A racer followed in
+// a replay or a watched race has none to show: its record holds the game's actions after that player's own bindings
+// (steering, pitch, strafe, pedals, action bits), not a pad's buttons, triggers and C-stick.
+void InputsFrame(Guest& g)
+{
+  if (!TheOptions().show_inputs)
+    return;
+  static InputsShow last;
+  InputsShow show;
+  if (g.Ram(MODULE_POINTER, 4) && g.Read32(MODULE_POINTER) == layout::MAIN_REL)
+  {
+    const u32 module = layout::MAIN_REL;
+    const u32 phase = g.Read16(module + PHASE);
+    if (phase >= COURSE_INTRO && mm::Shows(SeenNow(g, module, phase)) && OwnSeat(g) != 0xFFFFFFFF)
+    {
+      const u32 pad = module + PAD_STATUS;
+      show.on = true;
+      show.buttons = static_cast<std::uint16_t>(g.Read16(pad));
+      show.stick_x = static_cast<std::int8_t>(g.Read8(pad + 2));
+      show.stick_y = static_cast<std::int8_t>(g.Read8(pad + 3));
+      show.cstick_x = static_cast<std::int8_t>(g.Read8(pad + 4));
+      show.cstick_y = static_cast<std::int8_t>(g.Read8(pad + 5));
+      show.l = g.Read8(pad + 6);
+      show.r = g.Read8(pad + 7);
+    }
+  }
+  if (show != last)
+  {
+    last = show;
+    TheHost().ShowInputs(show);
+  }
 }
 
 // The racer the picture follows (see the head).

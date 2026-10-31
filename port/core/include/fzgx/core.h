@@ -206,6 +206,8 @@ struct Options
                              // runner has no name of its own); none: the strip shows no name
   WindowPicture window_name_picture;  // "windowNamePicture": the name as a picture, drawn in place of the text
   bool show_frame_rate = false;  // "showFrameRate": the game window's strip shows the frame rate (a player's setting)
+  bool show_inputs = false;  // "showInputs": a controller over the picture shows the player's pad (a player's setting;
+                             // picture only: inputs_overlay.cpp)
   bool rumble = true;        // "rumble": the player's controller may rumble (a player's setting); false: no rumble
                              // command reaches a pad in this start (the game still asks for it: RumbleAllowed)
   TaskbarGroup taskbar;      // "taskbar": the launcher's taskbar button, which the game window joins (a player's
