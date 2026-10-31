@@ -202,6 +202,8 @@ void TestTheCameraKinds()
     CHECK(Tap(none, r, PAD_UP).kind == Kind::Chase1);
   }
   f = Tap(c, r, PAD_UP);
+  CHECK(f.kind == Kind::Chase1);
+  f = Tap(c, r, PAD_UP);
   CHECK(f.kind == Kind::FirstPerson);  // round, through first person
   f = Tap(c, r, PAD_UP);
   CHECK(f.kind == Kind::Fixed4);
