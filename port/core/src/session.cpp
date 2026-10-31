@@ -284,19 +284,29 @@ void LeaveTheResultsInTime(Guest& g, Session& s)
 // The game takes no A while a finish countdown runs (0x14A094) or .bss 0x25BA0 is set: should the page stay, the
 // A is pressed again every RESULTS_LEAVE_GRACE. A player's own A before the time moves the page, and nothing is
 // pressed. The same racers as RESULTS_LEAVE; the wall clock, as there: the pages are this game's own.
+// A mode with points or a results title goes from that A to VS RESULTS (state 3), then VS TOTAL RANKING (state 4,
+// site mode_points), whose A leaves: each gets the same time and the same A, or a player who pressed nothing would
+// stay there for good (run g9c3: only the first page was passed).
 void PassTheFirstResultsPageInTime(Guest& g, Session& s)
 {
   if (s.leavable_said || s.exit_sent || s.watcher || s.playback || s.practice)
     return;
   const u32 module = g.Read32(MODULE_POINTER);
-  if (module == 0 || g.Read16(module + PHASE) != 0x2A || !(g.Read32(module + RULES) & RULE_RESULTS) ||
-      g.Read8(module + RESULTS_STATE) != 0)
+  if (module == 0 || g.Read16(module + PHASE) != 0x2A || !(g.Read32(module + RULES) & RULE_RESULTS))
+    return;
+  const u8 state = g.Read8(module + RESULTS_STATE);
+  if (state != 0 && state != 3 && state != 4)
     return;
   const auto now = Clock::now();
-  if (!s.first_page_seen)
+  if (!s.first_page_seen || state != s.first_page_state)
   {
+    const bool first = !s.first_page_seen;
     s.first_page_seen = true;
+    s.first_page_state = state;
     s.first_page_at = now;
+    s.first_page_presses = 0;
+    if (!first)
+      return;
     Notice("fzgx: the race's own results page stands from step {} (rule word {:08x})", g.Read32(STEP),
            g.Read32(module + RULES));
     return;

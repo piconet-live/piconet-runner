@@ -195,6 +195,33 @@ void TestTheFirstResultsPageIsPassedAfterFifteenSeconds()
     CHECK(g.Read32(net::PRESS_A) == 1 && s.leave_pressed);
     g.Write32(net::PRESS_A, 0);
   }
+  // a mode's pages: the first, VS RESULTS (3), VS TOTAL RANKING (4): each stands 15 s and gets its own A
+  {
+    net::Session s;
+    Racing(s);
+    page(0, 0x04001000);
+    at(std::chrono::seconds(200));
+    both(s);
+    page(3, 0x04001000);  // `results points`: the first page's A was taken at once
+    at(std::chrono::seconds(201));
+    both(s);
+    CHECK(s.first_page_presses == 0 && g.Read32(net::PRESS_A) == 0);
+    at(std::chrono::milliseconds(215'999));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 0);
+    at(std::chrono::seconds(216));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 1 && s.first_page_presses == 1);
+    g.Write32(net::PRESS_A, 0);
+    page(4, 0x04001000);
+    at(std::chrono::seconds(217));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 0 && s.first_page_presses == 0);
+    at(std::chrono::seconds(232));
+    both(s);
+    CHECK(g.Read32(net::PRESS_A) == 1 && s.first_page_presses == 1 && host.stops == 0);
+    g.Write32(net::PRESS_A, 0);
+  }
   // the player's own A before the 15 s: every racer's page, and no press on the first
   {
     net::Session s;

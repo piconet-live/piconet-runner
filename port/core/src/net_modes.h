@@ -64,7 +64,7 @@ bool LeftWhileRacing(const Session& s);
 void SayResultsLeavable(Guest& g, Session& s);
 void LeaveTheResultsInTime(Guest& g, Session& s);
 // session.cpp: a racer's game passes the race's own results page (the first) by itself RESULTS_FIRST_PAGE after it
-// stood, with the same A, so that every racer's page and its RESULTS_LEAVE follow.
+// stood, with the same A, so that every racer's page and its RESULTS_LEAVE follow; a mode's two points pages alike.
 void PassTheFirstResultsPageInTime(Guest& g, Session& s);
 // rumble.cpp: whether the player's controllers may rumble (fzgx::RumbleAllowed): `s` the session (none: a plain start,
 // or a race before its session), `step` the step about to run.
