@@ -2348,6 +2348,7 @@ void Step(Guest& g)
   if (!m || !m->game_mode || block == 0)
     return;
   Run(g, *m->game_mode, block, g.Read32(net::MODULE_POINTER));
+  hud::ShowFault(g, *m->game_mode, g.Read32(block + END) == 1);
   // the log, once a run of the game (a step run again says nothing new); the block holds what the race is
   static bool said = false;
   if (!said && g.Read32(block + END) == 1)

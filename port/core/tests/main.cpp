@@ -182,6 +182,7 @@ void TestTheModeTagWords();
 void TestTheCutRaceWords();
 void TestTheStatWords();
 void TestAVecIsBuilt();
+void TestAFaultShowsOnTheResults();
 void TestTheHeldWords();
 void TestThePedalLatch();
 void TestTheCombatWords();
@@ -538,6 +539,7 @@ int main(int argc, char** argv)
   TestTheCutRaceWords();
   TestTheStatWords();
   TestAVecIsBuilt();
+  TestAFaultShowsOnTheResults();
   TestTheHeldWords();
   TestThePedalLatch();
   TestTheCombatWords();

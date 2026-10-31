@@ -58,6 +58,7 @@ constexpr u8 COLOURED = modes::LOOK_COUNT;
 static_assert(WINDOW_TINTS + 30 * 4 <= 0x100);
 // ROLLING: rolling_start: the machines' tasks run from the countdown's first step (the site at main.rel 0x34988).
 constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
+constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
 static_assert(modes::RESULTS_TITLE + 1 <= WINDOW_TITLE_SIZE);  // (with its NUL: the api's limit fits the window)
@@ -102,6 +103,9 @@ void BeginRun(Guest& g, u32 block);
 // changes them in the race): the story's pictures when its code shows a story part; the points page when it awards
 // points (`award`: the race side writes each record's +0x4 at the end, mode.cpp).
 u32 WindowFlags(const Package& p);
+// A mode's break on the results (D6): the points page under the title MODE ERROR, every run of the step, so a step run
+// again that does not break puts the mode's own back. Every game breaks at the same step.
+void ShowFault(Guest& g, const Package& p, bool broken);
 // Whether a package's code uses a word that shows a story part (the picture group 0xBA must then be loaded): any
 // show of a part other than TIMER, or danger_zone (its digit and warning).
 bool NeedsStoryPictures(const std::vector<u8>& code);

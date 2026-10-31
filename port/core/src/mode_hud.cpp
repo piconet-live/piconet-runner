@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <string_view>
 
 #include "internal.h"
 #include "mode.h"
@@ -160,6 +161,17 @@ u32 WindowFlags(const Package& p)
   const bool points_page = Uses(p.code, ACTION_AWARD, false) || !p.results_title.empty() || !p.points_table.empty();
   return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (points_page ? POINTS_PAGE : 0) |
          (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0);
+}
+
+void ShowFault(Guest& g, const Package& p, bool broken)
+{
+  // (the flag first: this runs every step, and WindowFlags walks the code)
+  if (((g.Read32(layout::MODE_HUD + WINDOW_FLAGS) & FAULT_SHOWN) != 0) == broken)
+    return;
+  g.Write32(layout::MODE_HUD + WINDOW_FLAGS, WindowFlags(p) | (broken ? POINTS_PAGE | FAULT_SHOWN : 0));
+  const std::string_view title = broken ? std::string_view("MODE ERROR") : std::string_view(p.results_title);
+  for (u32 k = 0; k < WINDOW_TITLE_SIZE; ++k)
+    g.Write8(layout::MODE_HUD + WINDOW_TITLE + k, k < title.size() ? static_cast<u8>(title[k]) : 0);
 }
 
 Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)

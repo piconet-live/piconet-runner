@@ -97,11 +97,14 @@ void Board(const Guest& g)
   const Package& p = *m->game_mode;
   if (!board::ModeHeadWritten())
     board::PutModeHead(BoardHead(p));
-  if (p.board.empty())
+  // (a mode's break is written with no `board` line too: the launcher says what happened, D6)
+  const u32 fault = g.Read32(block + FAULT);
+  if (p.board.empty() && fault == FAULT_NONE)
     return;
   static board::ModeValues values;  // (its 2 KiB: this game's one race at a time)
   BoardValues(g, p, block, &values);
   values.frame = g.Read32(net::STEP);
+  values.fault = fault;
   board::PutModeValues(values);
 }
 }  // namespace fzgx::mode::hud

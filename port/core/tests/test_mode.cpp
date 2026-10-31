@@ -1498,6 +1498,30 @@ void TestThePedalLatch()
   }
 }
 
+// A mode's break on the results: MODE ERROR over the points page; a step that does not break puts the mode's own back.
+void TestAFaultShowsOnTheResults()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("held_words.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 2, 600);
+  const u32 own = mode::hud::WindowFlags(*p);
+  CHECK((own & mode::hud::POINTS_PAGE) == 0);
+  g.Write32(layout::MODE_HUD + mode::hud::WINDOW_FLAGS, own);
+  mode::hud::ShowFault(g, *p, true);
+  CHECK((g.Read32(layout::MODE_HUD + mode::hud::WINDOW_FLAGS) & mode::hud::POINTS_PAGE) != 0);
+  CHECK(g.Read8(layout::MODE_HUD + mode::hud::WINDOW_TITLE) == 'M' && g.Read8(layout::MODE_HUD + mode::hud::WINDOW_TITLE + 9) == 'R');
+  mode::hud::ShowFault(g, *p, false);
+  CHECK(g.Read32(layout::MODE_HUD + mode::hud::WINDOW_FLAGS) == own);
+  CHECK(g.Read8(layout::MODE_HUD + mode::hud::WINDOW_TITLE) == 0);
+}
+
 void TestAVecIsBuilt()
 {
   BEGIN_TEST();
