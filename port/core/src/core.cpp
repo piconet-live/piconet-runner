@@ -251,6 +251,7 @@ void FrameTick()
   boot::OnFrame(g);
   net::PresentTick(g);
   net::MinimapFrame(g);
+  net::InputsFrame(g);
   // the panel comes down when the course is loaded (one load of a flag once it is down)
   panel::Board& board = panel::TheBoard();
   if (board.Now() == panel::Shows::Loading && g.Ram(net::MODULE_POINTER, 4) &&

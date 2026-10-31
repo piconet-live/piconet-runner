@@ -76,7 +76,7 @@ void TestALaunchFile()
   CHECK(!ParseLaunchFile(Launch(""), &plain));
   CHECK(DebugSettingsOn(plain.debug).empty() && plain.delay == 2 && plain.cpu_clock == 6.0f && plain.widescreen);
   // the game window's strip: no name unless the launcher gives one, and no frame rate unless the player asked
-  CHECK(plain.window_name.empty() && !plain.show_frame_rate);
+  CHECK(plain.window_name.empty() && !plain.show_frame_rate && !plain.show_inputs);
   // the controllers rumble unless the player switched it off
   CHECK(plain.rumble);
   const Debug off;

@@ -144,7 +144,7 @@ changes on Piconet's [Discord](https://discord.gg/DcauFmsGh) first. The details 
 ## Licence
 
 GPL-3.0-or-later (`LICENSE`). Files derived from Dolphin keep their GPL-2.0-or-later headers
-(`port/core/src/util.h`); `port/core/third_party/picojson` is BSD-2-Clause. The forks keep their upstreams' licences.
+(`port/core/src/util.h`); `port/core/third_party/picojson` is BSD-2-Clause. The controller pictures in `port/moderngekko/art/inputs` are m-overlay's, MIT (`THIRD-PARTY-NOTICES.md`). The forks keep their upstreams' licences.
 
 The source of a released build is this repository at the release's tag (`vX.Y.Z`) with its submodules at the
 commits that tag records (`forks/`: our forks of DolRecomp, RecompCore and ModernGekko; `external/protocol`), and

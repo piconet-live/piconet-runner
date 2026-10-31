@@ -119,6 +119,10 @@ void TestTheCourseMapsStartLine();
 void TestTheCourseMapsStartMark();
 // test_minimap_view.cpp
 void TestTheCourseMapsViewTilts();
+void TestInputsStickAtRestStandsInItsGate();
+void TestInputsStickUpMovesUpAndLeansAway();
+void TestInputsProjectiveMapsCornersAndBack();
+void TestInputsTriggerIsFullAtItsRangeOrAPress();
 void TestTheCourseMapStaysInItsSquare();
 void TestAKnockedOutRacerNeverScrubs();
 void TestTheLeaderAndTheClosestBattle();
@@ -394,6 +398,10 @@ void TestTheSpectatorControls()
   TestTheCourseMapsStartLine();
   TestTheCourseMapsStartMark();
   TestTheCourseMapsViewTilts();
+  TestInputsStickAtRestStandsInItsGate();
+  TestInputsStickUpMovesUpAndLeansAway();
+  TestInputsProjectiveMapsCornersAndBack();
+  TestInputsTriggerIsFullAtItsRangeOrAPress();
   TestTheCourseMapStaysInItsSquare();
   TestAKnockedOutRacerNeverScrubs();
   TestTheLeaderAndTheClosestBattle();

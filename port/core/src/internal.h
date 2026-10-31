@@ -82,6 +82,8 @@ void SetExitCode(int code);
 void StepsDone(Guest& g);
 // Our course map (minimap_frame.cpp), at every game frame of a race or replay start.
 void MinimapFrame(Guest& g);
+// "Show inputs" (minimap_frame.cpp), once a game frame: one flag read when it is off. Reads only: nothing a step uses.
+void InputsFrame(Guest& g);
 // The racer this game's picture follows (the spectator controls', the image's own spectating, else the stand-in
 // seat), and the seat whose driver this game's player is: none (-1) for a spectator, a watcher, a replay, or a racer
 // the image spectates for (minimap_frame.cpp; the game mode's displays, mode_hud.cpp).
