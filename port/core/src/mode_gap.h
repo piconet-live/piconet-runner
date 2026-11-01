@@ -19,6 +19,7 @@
 #include <array>
 #include <algorithm>
 #include <bit>
+#include <cstdint>
 
 #include "fzgx/guest.h"
 #include "mode.h"
@@ -77,7 +78,7 @@ TimeGap TimeGapOf(const M& g, u32 block, u32 you, u32 other)
   const u32 at = std::min(mine, theirs) - 1;
   const auto between = [&](u32 sector) {
     const u16 a = g.Read16(block + GapRow(you, sector)), b = g.Read16(block + GapRow(other, sector));
-    return mine <= theirs ? static_cast<s32>(static_cast<u16>(a - b)) : -static_cast<s32>(static_cast<u16>(b - a));
+    return static_cast<s32>(static_cast<std::int16_t>(static_cast<u16>(a - b)));  // (signed: on one mini-sector either may have come first; 9 minutes either way)
   };
   gap.known = true;
   gap.steps = between(at);

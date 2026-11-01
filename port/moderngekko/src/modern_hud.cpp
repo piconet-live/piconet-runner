@@ -470,7 +470,7 @@ void DrawTop6(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pi
     {
       char text[24];
       GapText(text, sizeof(text), s.row_gap[i]);
-      Text(list, m, Bold(22), X + W + SL + 8, y + 58, TrendColour(s.row_gap[i]), a, false, text);
+      Text(list, m, Bold(24), X + W + SL + 8, y + 60, TrendColour(s.row_gap[i]), a, false, text);
     }
   }
 }

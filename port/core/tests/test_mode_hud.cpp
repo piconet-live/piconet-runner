@@ -103,6 +103,12 @@ void TestTheModeHudSlotsAndGaps()
   CHECK(gap.known && gap.steps == 5 && gap.laps == 0 && gap.trend == 0);
   CHECK(hud::TimeGapOf(g, BLOCK, 0, 1).steps == -5);
   CHECK(!hud::TimeGapOf(g, BLOCK, 2, 0).known && !hud::TimeGapOf(g, BLOCK, 0, 0).known);
+  // on the same mini-sector, whoever came first is ahead
+  at(2, 300.0f);
+  hud::NoteGaps(g, BLOCK, MODULE, ++run);
+  at(3, 300.0f);
+  hud::NoteGaps(g, BLOCK, MODULE, ++run);
+  CHECK(hud::TimeGapOf(g, BLOCK, 2, 3).steps == -1 && hud::TimeGapOf(g, BLOCK, 3, 2).steps == 1);
   // driving back changes nothing
   const u32 row = g.Read16(BLOCK + hud::GapRow(0, 5));
   step(100, 1000);
