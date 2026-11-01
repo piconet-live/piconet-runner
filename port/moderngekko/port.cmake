@@ -12,6 +12,11 @@ target_include_directories(fzgx_core
     PUBLIC "${_fzgx}/core/include" "${_fzgx}/protocol/generated"
     PRIVATE "${_fzgx}/core/src" "${_fzgx}/core/third_party/picojson")
 target_compile_features(fzgx_core PUBLIC cxx_std_20)
+# No fused multiply-add from an expression, on any host (language 5). On today's targets it changes no code: MSVC's
+# /fp:precise does not contract, and neither target has FMA; it is here for a target that has one (ARM).
+if(NOT MSVC)
+    target_compile_options(fzgx_core PRIVATE -ffp-contract=off)
+endif()
 # liblzma (xz-utils): the compact replay file's xz parts (protocol/generated/replay_compact.g.h). The emulator's own
 # build already has it for its disc formats (WIA, RVZ): Dolphin's Externals/liblzma, or the system's
 # (dolphin_find_optional_system_library), as LibLZMA::LibLZMA; a system's is found again here, where its imported
