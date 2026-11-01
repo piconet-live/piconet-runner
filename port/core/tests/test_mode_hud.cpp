@@ -214,9 +214,9 @@ void TestTheDisplayWordsRun()
   g.Write32(net::SEAT_SLOT + 4, 1);
   g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
   hud::Hud(g);
-  CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS & ~hud::PART_BITS[modes::PART_FACES]) | 0x20000));
+  CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS) | 0x20000));
   // the standard parts: hide clears the part's bit for the viewed seat only, show puts it back, the stock mask stays,
-  // FACES has no bit but the window's word; a seat not viewed holds nothing
+  // FACES clears the board's bit as well as the window's word; a seat not viewed holds nothing
   CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_FACES) == 0);
   for (const u32 part : {modes::PART_RANK, modes::PART_LAPS, modes::PART_SPEED, modes::PART_ENERGY,
                          modes::PART_LAP_TIMES, modes::PART_RACE_TIME})
@@ -228,7 +228,7 @@ void TestTheDisplayWordsRun()
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 1, part));
     g.Write32(MODULE + game::HUD_PARTS, 0xFF9FFFFF);
     hud::Hud(g);
-    CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS & ~hud::PART_BITS[modes::PART_FACES]) | 0x20000));
+    CHECK(g.Read32(MODULE + game::HUD_PARTS) == ((0xFF9FFFFF & ~hud::STORY_BITS) | 0x20000));
   }
   // the game's gap popup: its bit on while shown; a part of the game's own pictures, so no story pictures to load
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 1, modes::PART_LEADER_GAP));
