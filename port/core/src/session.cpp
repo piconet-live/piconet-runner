@@ -427,6 +427,7 @@ void Run(Guest& g)
 void Shutdown()
 {
   MinimapSummary();
+  ModernHudSummary();
   PresentEnd();
   // (a stop the launcher asked for through its status board keeps no race for a rejoin: the launcher wanted it)
   if (s_session && ExitCode() == 0 && !board::LauncherStopped() && LeftWhileRacing(*s_session))

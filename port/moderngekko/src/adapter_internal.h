@@ -218,6 +218,9 @@ void DrawMinimap();
 // inputs_overlay.cpp: "Show inputs", m-overlay's controller over the picture: told the player's pad (the game's thread),
 // drawn before every present in the corner left of the course map (`right`, `bottom`: where it ends, in the picture).
 void ShowInputs(const fzgx::InputsShow& show);
+// modern_hud.cpp: the modern HUD, told once a displayed frame (the game's thread), drawn with the overlays over the picture's box.
+void ShowModernHud(const fzgx::ModernHudShow& show);
+void DrawModernHud(float x0, float y0, float x1, float y1);
 void DrawInputs(float right, float bottom, float picture_height);
 fzgx::SpectatorClick TakeSpectatorClicks();
 void DrawOverlays();

@@ -67,6 +67,8 @@ constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
 constexpr u32 TOGETHER = 32;
 // GHOST_TASK: the code asks the look ghost or GHOST_GAP: the race's set-up makes the ghost task (sites_ghostdraw.py ghost_make).
 constexpr u32 GHOST_TASK = 64;
+// HUD_MODERN: `hud modern`: the core's own (modern_hud_frame.cpp); no site reads it.
+constexpr u32 HUD_MODERN = 128;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
@@ -92,11 +94,11 @@ static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WIND
 // others), read from their mask tests and the pictures each draws (group 0xBA, bmp_sto: 0xBA0A the digits 0 to 3,
 // 0xBA0B DANGER, 0xBA09 MISSION CLEAR!, 0xBA0C MISSION FAILED, 0xBA15 Time is up..., 0xBA0D the object icon).
 // From PART_RANK on the standard parts, read from the drawers' tests of the same mask (rank, laps and speed in their drawers; energy
-// fn_1_C8F34, race time 0xCBC24, lap times 0xCB424 and 0xCB028); FACES has no bit (WINDOW_FACES).
+// fn_1_C8F34, race time 0xCBC24, lap times 0xCB424 and 0xCB028); FACES the whole board's bit (fn_1_C6F8C 0xC70C8: rings, numbers, highlight), with the heads' task off too (WINDOW_FACES).
 // GHOST_GAP has no bit: the ghost task draws it (WINDOW_GAP).
 constexpr std::array<u32, modes::PART_COUNT> PART_BITS = {0x20000, 0x1000, 0x8, 0x400, 0x200, 0x100, 0x80, 0x2000,
                                                           0x4000, 0x400000, 0, 0x20000000, 0x04000000, 0x08000000, 0x40000000,
-                                                          0x01000000, 0x02000000, 0};
+                                                          0x01000000, 0x02000000, 0x80000000};
 // Every bit of the story's parts (the two drawers' tests and TIMER's), which the game's default mask 0xFF9FFFFF has
 // on: once group 0xBA is loaded they would draw, DIGIT a "0" from a source of none, so the pass clears every one
 // the mode does not show.
@@ -108,9 +110,17 @@ constexpr u32 PHASE_INTRO = 0x27;  // the course's intro: from it on the race's 
 constexpr u32 GAP_PART = 0x400000;
 constexpr u32 GAP_STEPS = 60;
 
+// The game's mask bits the modern HUD draws itself: the energy meter (and its lightning, inside the meter's test), rank,
+// lap counter, race time, lap list, speed, the top 6 (the owner: portraits hidden on Modern). The skulls, the spare icon, wrong way and banners stay the game's.
+constexpr u32 MODERN_PARTS = PART_BITS[modes::PART_ENERGY] | PART_BITS[modes::PART_RANK] | PART_BITS[modes::PART_LAPS] |
+                             PART_BITS[modes::PART_RACE_TIME] | PART_BITS[modes::PART_LAP_TIMES] | PART_BITS[modes::PART_SPEED] |
+                             PART_BITS[modes::PART_FACES];
+
 // Whether action `id` is a display word: the interpreter applies it at once, in the order the rules run (a mode's
 // variable is written so too), without a place in the step's queue of actions on the game.
 bool IsDisplay(u8 id);
+// The seat's parts word (modes::PART_*, bit p), or 0 with no mode: `hide` of a standard part sets its bit.
+u32 SeatParts(const Guest& g, u32 seat);
 // A display word into the seat's record: true when `id` is one.
 bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value);
 // The start of every run: the banners asked at the last one are gone.

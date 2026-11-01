@@ -258,6 +258,10 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.start_together = true;
         }
+        else if (id == modes::SETUP_HUDMODERN)
+        {
+          p.hud_modern = true;
+        }
         else if (id == modes::SETUP_RESULTSPOINTS)
         {
           p.results_points = true;
