@@ -1284,6 +1284,7 @@ void TestFinishSeat()
   CHECK(g.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
   CHECK((g.Read32(machine + game::MACHINE_FLAGS) & 0x10000) != 0);
   CHECK(g.Read32(progress + game::PROGRESS_LAP_SUM) == 1199);
+  CHECK(g.Read8(progress + 0x1E0) == 0 && g.Read8(progress + 0x1E1) == 19 && g.Read16(progress + 0x1E2) == 983);
   CHECK((g.Read32(MACHINES + game::MACHINE_SIZE + game::MACHINE_FLAGS) & 0x10000) == 0);
 }
 

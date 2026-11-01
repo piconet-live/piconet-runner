@@ -1769,8 +1769,13 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         if (!finished && !(flags & (F_RETIRED | F_FALLEN | F_TIME_OVER | F_DESTROYED)) && g.Read16(machine + M_RESTORING) == 0)
         {
           g.Write32(machine + game::MACHINE_FLAGS, flags | F_FINISHED);
-          g.Write32(g.Read32(machine + game::MACHINE_PROGRESS) + game::PROGRESS_LAP_SUM,
-                    g.Read32(module + game::RACE_CLOCK) - 1);
+          const u32 progress = g.Read32(machine + game::MACHINE_PROGRESS), steps = g.Read32(module + game::RACE_CLOCK) - 1;
+          const u32 ms = static_cast<u32>(u64{steps} * 1000 / 60);
+          g.Write32(progress + game::PROGRESS_LAP_SUM, steps);
+          // the sum again as minutes, seconds, thousandths: what the results' TOTAL and the record read (P+0x1E0)
+          g.Write8(progress + 0x1E0, static_cast<u8>(ms / 60000));
+          g.Write8(progress + 0x1E1, static_cast<u8>(ms / 1000 % 60));
+          g.Write16(progress + 0x1E2, static_cast<u16>(ms % 1000));
         }
         break;
       case ACTION_BREAKDOWN:
