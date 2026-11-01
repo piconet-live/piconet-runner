@@ -206,6 +206,13 @@ struct Options
                              // runner has no name of its own); none: the strip shows no name
   WindowPicture window_name_picture;  // "windowNamePicture": the name as a picture, drawn in place of the text
   bool show_frame_rate = false;  // "showFrameRate": the game window's strip shows the frame rate (a player's setting)
+  // "renderer", "auroraSize", "auroraEdges", "auroraTextures", "auroraColourblind": the player's picture engine
+  // (aurora.cpp in the adapter). Empty or 0: left out
+  std::string picture_renderer;
+  std::string aurora_size;
+  u32 aurora_edges = 0;
+  u32 aurora_textures = 0;
+  std::string aurora_colourblind;
   bool rumble = true;        // "rumble": the player's controller may rumble (a player's setting); false: no rumble
                              // command reaches a pad in this start (the game still asks for it: RumbleAllowed)
   TaskbarGroup taskbar;      // "taskbar": the launcher's taskbar button, which the game window joins (a player's

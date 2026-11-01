@@ -1,4 +1,4 @@
-// Aurora as the presenter (the launch file's "debug.renderer": "aurora"): the emulator's side is VideoCommon's
+// Aurora as the presenter (the launch file's "renderer", or its test key "debug.renderer": "aurora"): the emulator's side is VideoCommon's
 // AuroraPresent, which hands Aurora (GXRuntime's aurora-present library, beside the runner) a copy of the command
 // stream the GPU thread reads and shows Aurora's pictures in place of the emulator's own. Presentation only: the
 // emulator's GPU still runs every command, so the race is the same whatever Aurora does. Here: its settings from the
@@ -11,7 +11,12 @@
 #include <filesystem>
 #include <system_error>
 
+#include "Common/Config/Config.h"
+#include "Core/Config/MainSettings.h"
 #include "VideoCommon/AuroraPresent.h"
+
+#include <cstdlib>
+#include <string>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -51,13 +56,52 @@ std::string Utf8(const std::filesystem::path& p)
   const std::u8string s = p.u8string();
   return std::string(s.begin(), s.end());
 }
+
+// One of Aurora's switches, which the library reads for itself once it starts
+void SetSwitch(const char* name, const std::string& value)
+{
+#ifdef _WIN32
+  _putenv_s(name, value.c_str());
+#else
+  setenv(name, value.c_str(), 1);
+#endif
+}
+
+// The player's settings in the launch file. A key left out leaves its switch alone, so a test's own switches stay.
+void SetSwitches(const fzgx::Options& o)
+{
+  if (o.aurora_size == "native")
+    SetSwitch("AURORA_NATIVE", "1");
+  if (o.aurora_edges >= 4)  // (1 or 4 are the only counts every graphics card has)
+    SetSwitch("AURORA_MSAA", "4");
+  if (o.aurora_textures > 1)
+  {
+    SetSwitch("AURORA_ANISO", std::to_string(o.aurora_textures));
+    SetSwitch("AURORA_ANISO_GX", "0");
+    SetSwitch("AURORA_ANISO_ALL", "1");
+  }
+  if (!o.aurora_colourblind.empty() && o.aurora_colourblind != "off")
+    SetSwitch("AURORA_COLOURBLIND", o.aurora_colourblind);
+}
+
+u32 AskedScale(const fzgx::Options& o)
+{
+  if (o.debug.aurora_scale != 0)
+    return o.debug.aurora_scale;
+  return o.aurora_size == "2" ? 2 : o.aurora_size == "3" ? 3 : o.aurora_size == "4" ? 4 : 0;
+}
 }  // namespace
 
 void StartAurora()
 {
-  const fzgx::Debug& d = s_state.options.debug;
-  if (d.renderer != "aurora")
+  const fzgx::Options& o = s_state.options;
+  const fzgx::Debug& d = o.debug;
+  if (d.renderer != "aurora" && o.picture_renderer != "aurora")
     return;
+  // The player's key means the emulator's video is off; the test key leaves it to the start's --graphics
+  if (o.picture_renderer == "aurora")
+    Config::SetCurrent(Config::MAIN_GFX_BACKEND, std::string("Null"));
+  SetSwitches(o);
   // Aurora's caches (pipelines, Dawn's) in the runner's own data folder, made before Aurora starts: Aurora does not
   // make a missing one and runs on with no caches at all
   const std::filesystem::path folder = s_state.user_folder / "Aurora";
@@ -76,14 +120,15 @@ void StartAurora()
   s.shot_prefix = d.aurora_log;
   s.shots.assign(d.aurora_shots.begin(), d.aurora_shots.end());
   s.log_path = d.aurora_log;
-  s.scale = d.aurora_scale != 0 ? d.aurora_scale : fzgx::AutoAuroraScale(DisplayHeight());
+  const u32 asked_scale = AskedScale(o);
+  s.scale = asked_scale != 0 ? asked_scale : fzgx::AutoAuroraScale(DisplayHeight());
   VideoCommon::AuroraPresent::Configure(s);
   s_core_host.Log(fzgx::LogLevel::Notice,
                   std::string("fzgx: aurora: ") +
                       (VideoCommon::AuroraPresent::On() ? "Aurora draws the pictures shown (presentation only)" :
                                                           "the library is missing: the emulator's own pictures") +
                       ", data folder " + Utf8(folder) + ", scale " + std::to_string(s.scale) +
-                      (d.aurora_scale != 0 ? " (asked for)" : " (Auto)"));
+                      (asked_scale != 0 ? " (asked for)" : " (Auto)"));
 }
 
 void StopAurora()
