@@ -12,7 +12,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
 
 | `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
-| `mode_points_free` | fn_1_14A328 0x14A5A4, the race type switch's `b` to leaving, reached only with the rule read as clear | leave | under the same flag, race type 3 (`laps unlimited`) goes to VS RESULTS as type 6 does |
+| `mode_points_free` | fn_1_14A328 0x14A5A4, the race type switch's `b` to leaving, reached only with the rule read as clear | leave | race type 3 (`laps unlimited`) goes to VS RESULTS as type 6 does; a stock path has the rule set and never gets here with type 3 |
 | `mode_only` | fn_1_14A328 0x14A368, the first results page's A (`extrwi. r0, r0, 1, 23`; its gate 0x14A358 stays) | the page waits for A | under `results points` as pressed |
 | `mode_faces` | fn_1_D27B8's entry, the faces board's task (`stwu r1, -0x150(r1)`) | the board | not drawn while the viewed racer's FACES is hidden |
 | `mode_title` | fn_1_1461C8 0x146304, VS TOTAL RANKING's string (`addi r3, r21, 0x404`) | the game's | the window's title, when there is one |
@@ -32,7 +32,7 @@ SPARE, SPARE_KNOWN = 0xCA920, 0x4BF748B5    # fn_1_CA8FC: bl fn_1_3F1D4
 LOOK, LOOK_KNOWN = 0x84F9C, 0x48002121       # fn_1_84860: bl fn_1_870BC
 POINTS, POINTS_KNOWN = 0x14A37C, 0x5400014B  # fn_1_14A328: rlwinm. r0, r0, 0, 5, 5
 POINTS_TYPE, POINTS_TYPE_KNOWN = 0x14A5A4, 0x48000400  # fn_1_14A328: b 0x14A9A4, its race type switch's "leave"
-POINTS_VS, POINTS_LEAVE = 0x14A7A8, 0x14A9A4     # that switch: VS RESULTS; state 8, leaving
+POINTS_VS = 0x14A7A8                           # that switch: VS RESULTS
 SPARE_GET, DRAW_MACHINE = 0x3F1D4, 0x870BC
 TINT = 0x5621C                                # fn_1_5621C(r, g, b, a)
 LOAD_GROUP, STORY_GROUP = 0x47F74, 0xBA
@@ -330,22 +330,12 @@ mpts_stock:
     patch(site, word, 0, "mode_points")
     middle.append((site, ["r12", "cr0"], "mode_points"))
 
-    # the same A with the rule read as clear, in a race of `laps unlimited` (race type 3): the game's switch knows no
-    # points page for that type and leaves the results; VS RESULTS, as type 6 goes, under the same flag
+    # the same A with the rule read as clear, which only the site above does: in a race of `laps unlimited` (race type 3)
+    # the game's switch knows no points page and leaves the results; VS RESULTS, as type 6 goes. A word, no routine:
+    # the image has no room left, and no stock path reaches this with type 3
     site = TEXT + POINTS_TYPE
-    word = stock(site, POINTS_TYPE_KNOWN)
-    r.add("mode_points_free", test + """    beq mpf_stock
-""" + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
-    andi. 12, 12, {memmap.MODE_POINTS_PAGE}
-    beq mpf_stock
-    cmpwi 0, 3
-    bne mpf_stock
-    @b {TEXT + POINTS_VS:#x}
-mpf_stock:
-    @b {TEXT + POINTS_LEAVE:#x}
-""")
-    patch(site, word, 0, "mode_points_free")
-    middle.append((site, ["r12", "cr0"], "mode_points_free"))
+    stock(site, POINTS_TYPE_KNOWN)
+    patch(site, POINTS_TYPE_KNOWN, 0x48000000 | (POINTS_VS - POINTS_TYPE), "mode_points_free")
 
     # the points page's rows: every racer's (RANKING_COUNTS), while the core says the mode needs the page
     for at, known in RANKING_COUNTS:
