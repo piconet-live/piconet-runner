@@ -15,6 +15,8 @@
 # Targets:
 #   recompiler   PORT_WORK/work/dolrecomp-port/dolrecomp.exe    (DolRecomp with the LLVM backend; part of all)
 #   runner       PORT_WORK/ModernGekko/build/moderngekko-run.exe (ModernGekko with the port; part of all)
+#   aurora       PORT_WORK/ModernGekko/build/aurora-present.dll and the libraries it loads (Aurora as the presenter,
+#                the launch file's debug.renderer; not part of all)
 #   image        PORT_WORK/port/bundle-NAME (port/image/build.py; a Python with keystone, PORT_PYTHON)
 #   module       PORT_WORK/work/mod-cg-NAME/gGFZE01_recomp.dll  (the recompiler's code, compiled with clang)
 # NAME is PORT_BUILD_NAME. What follows a build (the game folder, the staged launcher, the build manifests, a PC's
@@ -135,6 +137,31 @@ ExternalProject_Add(runner
   INSTALL_COMMAND ""
   DEPENDS port_sources
   BUILD_ALWAYS ON
+  USES_TERMINAL_CONFIGURE ON
+  USES_TERMINAL_BUILD ON)
+
+# ---- Aurora as the presenter (the launch file's debug.renderer "aurora"): GXRuntime's aurora-present library -------
+# Not part of all: a runner without it shows the emulator's own pictures. Built from the emulator core's tree
+# (GXRuntime, beside Dolphin's sources in ModernGekko/vendor/dolphin), with upstream Aurora's pinned prebuilt Dawn
+# (Aurora's own AuroraDawnProvider downloads it), and copied beside the runner with the libraries it loads.
+set(AURORA_SOURCE "${W}/ModernGekko/vendor/dolphin/GXRuntime")
+set(AURORA_BUILD "${W}/aurora/build")
+ExternalProject_Add(aurora
+  PREFIX "${CMAKE_CURRENT_BINARY_DIR}/ep-aurora"
+  SOURCE_DIR "${AURORA_SOURCE}"
+  BINARY_DIR "${AURORA_BUILD}"
+  CMAKE_GENERATOR Ninja
+  CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGXRUNTIME_ENABLE_AURORA=ON
+             -DGXRUNTIME_ENABLE_AURORA_RECOMP=ON -DAURORA_DAWN_PROVIDER=package
+             "-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Zi" "-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Zi"
+             "-DCMAKE_SHARED_LINKER_FLAGS_RELEASE=/DEBUG /OPT:REF /OPT:ICF"
+             -DFETCHCONTENT_BASE_DIR=${W}/aurora/deps
+  BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target gxruntime_aurora_present -j${PORT_JOBS}
+  BUILD_BYPRODUCTS "${AURORA_BUILD}/aurora-present.dll"
+  INSTALL_COMMAND ${CMAKE_COMMAND} -DFROM=${AURORA_BUILD} -DDEPS=${W}/aurora/deps -DTO=${W}/ModernGekko/build
+                  -P "${PORT_CMAKE_DIR}/AuroraCopy.cmake"
+  BUILD_ALWAYS ON
+  EXCLUDE_FROM_ALL ON
   USES_TERMINAL_CONFIGURE ON
   USES_TERMINAL_BUILD ON)
 

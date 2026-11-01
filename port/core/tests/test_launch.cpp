@@ -108,7 +108,12 @@ void TestALaunchFile()
         DebugSettingsOn(plain.debug) ==
             std::vector<std::string>({"debug.renderer", "debug.auroraShots", "debug.auroraLog"}));
   CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain) && DebugSettingsOn(plain.debug).empty());
-  // its render scale: the emulator's own unless given, 1 to 8
+  // its render scale: unless given (1 to 8, the file's word stands), the smallest that covers the display, at most 4
+  CHECK(AutoAuroraScale(0) == 1 && AutoAuroraScale(1) == 1 && AutoAuroraScale(448) == 1 && AutoAuroraScale(449) == 2);
+  CHECK(AutoAuroraScale(720) == 2 && AutoAuroraScale(896) == 2 && AutoAuroraScale(897) == 3);
+  CHECK(AutoAuroraScale(1080) == 3 && AutoAuroraScale(1344) == 3 && AutoAuroraScale(1345) == 4);
+  CHECK(AutoAuroraScale(1440) == 4 && AutoAuroraScale(2160) == 4 && AutoAuroraScale(4320) == 4);
+  CHECK(AutoAuroraScale(0xFFFFFFFFu) == 4);
   CHECK(plain.debug.aurora_scale == 0);
   CHECK(!ParseLaunchFile(Launch(R"({"renderer": "aurora", "auroraScale": 3})"), &plain) && plain.debug.aurora_scale == 3 &&
         DebugSettingsOn(plain.debug) == std::vector<std::string>({"debug.renderer", "debug.auroraScale"}));

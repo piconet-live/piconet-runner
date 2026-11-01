@@ -15,6 +15,14 @@
 
 #include "adapter_internal.h"
 
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+
+#include "Core/System.h"
+#include "VideoCommon/AuroraPresent.h"
+#include "VideoCommon/PerformanceMetrics.h"
+
 #include <algorithm>
 #include <cmath>
 #include <mutex>
@@ -103,6 +111,35 @@ ov::Box MovedMapSquare(const ov::Box& square)
   return {x0, y0, x0 + (square.x1 - square.x0), y0 + (square.y1 - square.y0)};
 }
 
+// With Dolphin's video off there is no window strip at full screen: pictures and steps a second at the top of the
+// picture, whenever the launch file's "showFrameRate" asks for the figure (the steps measured here, a second at a time).
+void DrawRates(ImDrawList* list, const ImVec2& display)
+{
+  if (!VideoCommon::AuroraPresent::CountsFrames() || !s_state.options.show_frame_rate)
+    return;
+  static auto since = ov::Eased::Clock::now();
+  static fzgx::u64 steps_then = 0;
+  static int steps_a_second = 0;
+  const auto now = ov::Eased::Clock::now();
+  const float passed = std::chrono::duration<float>(now - since).count();
+  if (passed >= 1.0f)
+  {
+    const fzgx::u64 steps = s_state.steps;
+    steps_a_second = static_cast<int>(std::lround(static_cast<float>(steps - steps_then) / passed));
+    steps_then = steps;
+    since = now;
+  }
+  const double pictures = Core::System::GetInstance().GetPerfMetrics().GetFPS();
+  char text[64];
+  std::snprintf(text, sizeof(text), "%d FPS   %d steps/s", std::isfinite(pictures) ? static_cast<int>(std::lround(pictures)) : 0, steps_a_second);
+  const float size = std::max(16.0f, display.y * 0.018f);
+  const ov::Type type = ov::Figure(size);
+  const float x = (display.x - ov::Width(type, text)) / 2, top = size * 0.2f, edge = std::max(1.0f, size * 0.07f);
+  for (const auto& [dx, dy] : {std::pair{-1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, -1.0f}, {0.0f, 1.0f}, {-0.7f, -0.7f}, {0.7f, -0.7f}, {-0.7f, 0.7f}, {0.7f, 0.7f}})
+    ov::Draw(list, type, x + dx * edge, top + dy * edge, ov::Colour(ov::GROUND, 1), text);
+  ov::Draw(list, type, x, top, ov::Colour(ov::TEXT, 1), text);
+}
+
 void DrawOverlays()
 {
   if (ImGui::GetCurrentContext() == nullptr)
@@ -163,6 +200,7 @@ void DrawOverlays()
     last.role = 0;  // (the knocked-out mark goes at once)
     hud::Draw(list, last, hud::Lay(last, picture, clear, corner.x1 - corner.x0), a, -1, -1);
   }
+  DrawRates(list, display);
   std::lock_guard<std::mutex> hold(s_overlay.lock);
   s_overlay.laid = l;
   s_overlay.drawn = show.on;

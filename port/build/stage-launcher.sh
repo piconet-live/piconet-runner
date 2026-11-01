@@ -50,6 +50,8 @@ for j in Sys game; do [ -e "$OUT/recomp/$j" ] && win rmdir "$OUTW\\recomp\\$j" |
 rm -rf "$OUT"; mkdir -p "$OUT/recomp"
 dotnet publish "$APP_LAUNCHER" -c Release -r win-x64 --self-contained true -p:DebugType=none "${stack[@]}" -o "$OUT" -v q -nologo
 cp "${RUNNER:-$W/ModernGekko/build/moderngekko-run.exe}" "$OUT/recomp/moderngekko-run.exe"
+# Aurora's libraries beside the runner, when its folder has them (debug.renderer "aurora" loads aurora-present.dll from there)
+for f in "$(dirname "${RUNNER:-$W/ModernGekko/build/moderngekko-run.exe}")"/*.dll; do [ ! -f "$f" ] || cp "$f" "$OUT/recomp/"; done
 cp "$W/work/mod-$M/gGFZE01_recomp.dll" "$OUT/recomp/"
 # the game window's strip is drawn in the launcher's type (port/core/include/fzgx/strip.h names the three files):
 # the same files the launcher carries, with their licence; without them the runner uses the system's font

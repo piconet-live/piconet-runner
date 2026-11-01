@@ -168,7 +168,7 @@ struct Debug
   // logs' file prefix
   std::string renderer = "dolphin";
   std::vector<u32> aurora_shots;
-  u32 aurora_scale = 0;  // "auroraScale": its render scale, 1 to 8; 0 (or none): the same as the emulator's resolution
+  u32 aurora_scale = 0;  // "auroraScale": its render scale, 1 to 8; 0 (or none): AutoAuroraScale of the display's height
   std::string aurora_log;
   std::vector<EmulatorSetting> emulator;  // every other key of the emulator's side that was given (files_launch.cpp
                                           // holds the table: "pad", "poke", "probe", "paceLog", ...)
@@ -212,6 +212,13 @@ struct Options
                              // player's setting; picture only: modern_hud_frame.cpp, the adapter's modern_hud.cpp)
   std::string hud_layout;    // "hudLayout": the modern HUD's layout file (fzgx/hud_layout.h); empty or unreadable: the default
   std::string hud_meter;     // "hudMeter": the modern HUD's energy meter by name (hud_layout::MeterOf)
+  // "renderer", "auroraSize", "auroraEdges", "auroraTextures", "auroraColourblind": the player's picture engine
+  // (aurora.cpp in the adapter). Empty or 0: left out
+  std::string picture_renderer;
+  std::string aurora_size;
+  u32 aurora_edges = 0;
+  u32 aurora_textures = 0;
+  std::string aurora_colourblind;
   bool rumble = true;        // "rumble": the player's controller may rumble (a player's setting); false: no rumble
                              // command reaches a pad in this start (the game still asks for it: RumbleAllowed)
   TaskbarGroup taskbar;      // "taskbar": the launcher's taskbar button, which the game window joins (a player's
@@ -280,6 +287,20 @@ std::vector<std::string> DebugSettingsOn(const Debug& debug);
 
 // The input delay a race starts with unless its player chose less, and the most a race takes (each player picks 0,
 // 1 or 2 for their own game; never above 2). A launch file that asks for more is refused.
+// Aurora's render scale when the launch file gives none: the smallest whole number whose picture (448 lines of the
+// game's, each drawn this many times) covers the display's height, at most 4 (720 lines: 2, 1080: 3, 1440 and more: 4).
+// A height not known (0) is 1, the game's own size.
+constexpr u32 AUTO_AURORA_SCALE_LINES = 448;
+constexpr u32 AUTO_AURORA_SCALE_MOST = 4;
+constexpr u32 AutoAuroraScale(u32 display_height)
+{
+  // (with the height at its top the sum would wrap: anything that tall is at the cap anyway)
+  if (display_height > (AUTO_AURORA_SCALE_MOST - 1) * AUTO_AURORA_SCALE_LINES)
+    return AUTO_AURORA_SCALE_MOST;
+  const u32 scale = (display_height + AUTO_AURORA_SCALE_LINES - 1) / AUTO_AURORA_SCALE_LINES;
+  return scale == 0 ? 1 : scale;
+}
+
 constexpr u32 PLAYERS_INPUT_DELAY = 2;
 // The ways of showing a picture that are kept for comparison and are on in a start, a sentence each for the log
 // "present" as "field" or "copy". None: a start as players have it.
