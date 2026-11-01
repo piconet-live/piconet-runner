@@ -25,6 +25,8 @@ bool IsTask(u32 address);
 bool Holds(u32 start, u32 end);
 // The task's call, from the run loop. False: left to the normal path (the task then runs on the CPU core).
 bool TaskCall(CPUState* cpu);
+// A run of this step that does not count as its last (a step run ahead, on another stack): the next run is a first.
+void PartialForget(u32 step);
 // When the game stops: the log gets its lines.
 void Stop();
 }  // namespace fzgx_port::lanes

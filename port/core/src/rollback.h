@@ -86,6 +86,9 @@ public:
   // Save a step. Before step t runs: what changed since the previous call goes to step t - 1's undo entry.
   // frame_step: the step is a displayed frame's own (not a re-simulated one).
   void SaveStep(Guest& g, u32 t, bool frame_step);
+  // The next SaveStep(t) saves a step already saved since a restore to it: what it finds joins step t - 1's entry and
+  // does not replace it (a run ahead, fzgx/runahead.h, has saved and restored in between).
+  void SaveAgain(u32 t);
   // Steps below `step` are final: their undo entries are dropped. No later RestoreTo may name a step below it.
   void Final(u32 step);
 

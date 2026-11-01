@@ -28,6 +28,7 @@
 #include "net_internal.h"
 
 #include "fzgx/hfr.h"
+#include "fzgx/runahead.h"
 
 #include <algorithm>
 #include <chrono>
@@ -76,7 +77,7 @@ bool Decide(Guest& g, Clock::time_point now)
     return false;
   ++p.race_frames;
   const Debug& d = TheOptions().debug;
-  if (hfr::On() || g.Read32(layout::RACE + 4) == NO_SKIP_COURSE)
+  if (hfr::On() || runahead::On() || g.Read32(layout::RACE + 4) == NO_SKIP_COURSE)
     return false;
   if (d.skip_draws != 0 && p.race_frames % d.skip_draws == 0)
   {

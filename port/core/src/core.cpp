@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "internal.h"
+#include "fzgx/runahead.h"
 #include "mode.h"
 #include "mode_hud.h"
 
@@ -281,6 +282,7 @@ void WindowWritten(u32 address, u64 value)
       net::ModernHudFrame(g);  // the modern HUD: last, over the mask as the mode's pass left it
     }
     net::PresentAsked(g, static_cast<u32>(value));
+    runahead::TimeTheDrawing(static_cast<u32>(value));
     return;
   }
   if (address != layout::CONTROL + 12 || value != 0 || !s_options.replay_scrubber)
@@ -315,7 +317,7 @@ void NetSync()
 
 void ModeCall()
 {
-  if (!s_host)
+  if (!s_host || runahead::Inside())  // (a step run ahead is undone, and the mode's rules keep state of their own)
     return;
   Guest g(*s_host, Data());
   FZGX_TIME(Mode);
