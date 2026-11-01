@@ -22,10 +22,13 @@ enum class Anchor
 // The elements, in the order of a Layout's slots. Modern-only elements to come are added at the end.
 enum class SlotId
 {
-  Energy, Position, Lap, RaceTime, LapTimes, Speed, Top6, Clock, Count
+  Energy, Position, Lap, RaceTime, LapTimes, Speed, Top6, Clock,
+  // where a mode's words draw (show_bar, show_figure, show_text, show_gap: protocol/modes.toml's choice `slot`)
+  UnderPlace, BesidePlace, UnderTimes, OverSpeed, UnderSpeed, Message, UnderTop6, Count
 };
 inline constexpr std::size_t SLOTS = static_cast<std::size_t>(SlotId::Count);
-inline constexpr std::array<std::string_view, SLOTS> SLOT_NAMES = {"energy", "position", "lap", "race_time", "lap_times", "speed", "top6", "clock"};
+inline constexpr std::array<std::string_view, SLOTS> SLOT_NAMES = {"energy", "position", "lap", "race_time", "lap_times", "speed", "top6", "clock",
+                                                                  "under_place", "beside_place", "under_times", "over_speed", "under_speed", "message", "under_top6"};
 
 // The energy meters a player chooses from (the launch file's "hudMeter"; the launcher's LauncherSettings.HudMeters), the
 // default first. A new meter is a name here and a drawer in the adapter's table (modern_hud.cpp).

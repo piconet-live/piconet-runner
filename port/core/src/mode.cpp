@@ -13,6 +13,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mode.h"
+#include "mode_gap.h"
 #include "mode_hud.h"
 
 #include <algorithm>
@@ -402,7 +403,7 @@ struct Action
 {
   u8 id;
   u32 seat;
-  std::array<u32, 4> value;
+  std::array<u32, 5> value;  // (the HUD's words have the most: five after the seat)
 };
 
 // the cells an action pops: its arguments, a vec three
@@ -455,6 +456,20 @@ public:
   // an event's second value (ko's credited seat, hit's other seat, out's cause): local 1 of the runs that follow
   void Second(u32 value) { m_second = value; }
   u32 Rank(u32 seat) const { return seat < SEATS ? m_ranks[seat] : SEATS; }
+  // seat.gap_*: steps between the seat and the one at `place`; -1 with none there, or no place in common yet
+  u32 GapRead(u32 seat, u32 place, bool none) const
+  {
+    if (none)
+      return 0xFFFFFFFF;
+    for (u32 other = 0; other < m_count; ++other)
+      if (m_ranks[other] == place && other != seat)
+      {
+        const hud::TimeGap gap = hud::TimeGapOf(m_g, m_block, seat, other);
+        const s32 steps = gap.steps < 0 ? -gap.steps : gap.steps;
+        return gap.known ? static_cast<u32>(steps) : 0xFFFFFFFF;
+      }
+    return 0xFFFFFFFF;
+  }
   u32 Progress(u32 seat) const { return m_g.Read32(MachineOf(seat) + game::MACHINE_PROGRESS); }
 
   u32 Count() const { return m_count; }
@@ -870,6 +885,9 @@ private:
       case SEAT_DAMAGETAKEN: return m_g.Read32(m_block + SeatState(seat) + S_DAMAGE);
       case SEAT_TOUCHING: return SetOfRow(m_g.Read32(m_block + TOUCH + 4 * seat));
       case SEAT_LAPDISTANCE: return m_g.Read32(Progress() + P_LAP_DISTANCE);
+      case SEAT_GAPAHEAD: return GapRead(seat, Rank(seat) - 1, Rank(seat) == 0);
+      case SEAT_GAPBEHIND: return GapRead(seat, Rank(seat) + 1, false);
+      case SEAT_GAPLEADER: return Rank(seat) == 0 ? 0 : GapRead(seat, 0, false);
       case SEAT_CHECKPOINT: return m_g.Read32(Progress() + P_CHECKPOINT);
       case SEAT_CHECKPOINTFRACTION: return m_g.Read32(Progress() + P_FRACTION);
       case SEAT_GAMELAPSTEPS: return m_g.Read32(Progress() + P_LAP_STEPS);
@@ -1235,6 +1253,12 @@ private:
       // (its one cell is the number: `seat` holds it) the clock's word, never 0: the game's zero paths never run
       m_g.Plain().Write16(m_module + R_BASE + R_TIMER,
                           static_cast<u16>(std::clamp<std::int64_t>(static_cast<s32>(a.seat), 1, 65535)));
+      return;
+    }
+    if (hud::IsSlotWord(a.id))
+    {
+      if (a.seat < m_count)
+        hud::ApplySlot(m_g.Plain(), m_block, a.id, a.seat, a.value);
       return;
     }
     if (hud::IsDisplay(a.id))
@@ -2307,6 +2331,8 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
   const u32 runs = g.Read32(block + RUNS);
   Stamp(g, p, block, runs + 1);
   hud::BeginRun(guest, block);
+  if (p.time_gaps)
+    hud::NoteGaps(guest, block, module, runs + 1);
   Machine m(g, p, block, module);
   const Now n = ReadNow(m, g, block, module);
   // the mode point's first run compares the step with itself (out for a seat already out, as ever): game_start's state

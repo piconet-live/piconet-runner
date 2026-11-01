@@ -199,6 +199,7 @@ struct ModernHudShow
   float energy = 0, max_energy = 100;
   bool boost_open = false;  // the game's boost is to be had: the rule its own meter goes rainbow by, and no `boost off` (modern_hud_frame.cpp)
   bool pit = false;         // on a refilling surface
+  u32 boost_left = 0;       // the game's count of an energy boost's steps (M+0x18B): up, a boost was pressed
   float speed = 0;          // km/h
   u32 place = 0, racers = 0;
   u32 lap = 0, laps = 0;
@@ -216,6 +217,33 @@ struct ModernHudShow
     std::array<char, 24> name{};      // as the observer's tower names them
   };
   std::array<Head, 6> heads{};
+  // What a mode's words draw (`show_bar`, `show_figure`, `show_text`, `show_gap`), for the racer followed.
+  enum class ModeKind : u8
+  {
+    None, Bar, Figure, Text, Gap
+  };
+  struct Gap
+  {
+    bool known = false;
+    s32 steps = 0;           // above 0: they are ahead of the racer followed
+    u32 laps = 0;            // a lap or more apart
+    s32 trend = 0;           // above 0 losing time on them, below 0 gaining
+  };
+  struct ModeSlot
+  {
+    ModeKind kind = ModeKind::None;
+    u8 bar = 0;              // modes::BAR_*
+    bool coloured = false;   // false: white, or a gap's trend colours
+    u32 rgb = 0xFFFFFF;
+    float value = 0, most = 1;
+    s32 figure = 0;
+    Gap gap;
+    std::array<char, 80> text{};  // UTF-8, its values written in
+  };
+  bool mode_slots = false;  // any below
+  std::array<ModeSlot, 7> mode_slot{};  // by SlotId from UnderPlace on
+  bool row_gaps = false;    // `show_gap s, you, top6`
+  std::array<Gap, 6> row_gap{};  // by entry of `heads`
 };
 struct MinimapShow
 {

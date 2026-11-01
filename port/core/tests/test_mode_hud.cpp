@@ -13,6 +13,7 @@
 #include "harness.h"
 #include "mode.h"
 #include "mode_hud.h"
+#include "mode_gap.h"
 #include "net_internal.h"
 #include "parts.h"
 #include "rollback.h"
@@ -56,6 +57,72 @@ u32 Record(u32 seat)
   return BLOCK + hud::SEATS_AT + seat * hud::SEAT_DISPLAY;
 }
 }  // namespace
+
+// The modern HUD's slots: each word's record, the ranges, a clear; and the time gaps from the seats' distances.
+void TestTheModeHudSlotsAndGaps()
+{
+  BEGIN_TEST();
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeDisplayRace(g);
+  const auto word = [&](u8 id, u32 seat, std::array<u32, 5> a) { hud::ApplySlot(g, BLOCK, id, seat, a); };
+  word(modes::ACTION_SHOWBAR, 2, {modes::BAR_WEDGE, std::bit_cast<u32>(3.0f), std::bit_cast<u32>(4.0f), modes::SLOT_UNDER_TIMES, modes::COLOUR_GOLD});
+  const u32 bar = BLOCK + hud::SlotRecord(2, modes::SLOT_UNDER_TIMES);
+  CHECK(g.Read8(bar + hud::SLOT_KIND) == hud::SLOT_BAR && g.Read8(bar + hud::SLOT_WHAT) == modes::BAR_WEDGE &&
+        g.Read8(bar + hud::SLOT_COLOUR) == modes::COLOUR_GOLD && g.Read32(bar + hud::SLOT_A) == std::bit_cast<u32>(3.0f));
+  CHECK(g.Read8(BLOCK + hud::SlotRecord(1, modes::SLOT_UNDER_TIMES) + hud::SLOT_KIND) == hud::SLOT_NONE);
+  word(modes::ACTION_SHOWFIGURE, 2, {7, modes::SLOT_BESIDE_PLACE, 0xFFFFFFFF, 0, 0});
+  const u32 figure = BLOCK + hud::SlotRecord(2, modes::SLOT_BESIDE_PLACE);
+  CHECK(g.Read8(figure + hud::SLOT_KIND) == hud::SLOT_FIGURE && g.Read8(figure + hud::SLOT_COLOUR) == hud::COLOUR_NONE && g.Read32(figure + hud::SLOT_A) == 7);
+  word(modes::ACTION_SHOWTEXT, 2, {modes::HUD_TEXTS + 1, 0, 0, modes::SLOT_MESSAGE, 0});  // a text the package cannot hold: nothing
+  CHECK(g.Read8(BLOCK + hud::SlotRecord(2, modes::SLOT_MESSAGE) + hud::SLOT_KIND) == hud::SLOT_NONE);
+  word(modes::ACTION_SHOWBAR, 2, {0, 0, 0, modes::SLOT_COUNT, 0});  // no such slot: nothing, and no other record
+  word(modes::ACTION_HUDCLEAR, 2, {modes::SLOT_UNDER_TIMES, 0, 0, 0, 0});
+  CHECK(g.Read8(bar + hud::SLOT_KIND) == hud::SLOT_NONE);
+
+  // seats 0 and 1 run the same road, seat 0 five steps ahead, then seat 1 gains; lap length 6400: 100 a mini-sector
+  const auto at = [&](u32 seat, float distance) {
+    const u32 p = PROGRESS + seat * game::PROGRESS_SIZE;
+    g.Write32(p + game::PROGRESS_DISTANCE, std::bit_cast<u32>(distance));
+    g.Write32(p + game::PROGRESS_LAP_LENGTH, std::bit_cast<u32>(6400.0f));
+  };
+  for (u32 seat = 0; seat < 30; ++seat)
+    at(seat, -1.0f);  // (behind the line: none yet)
+  CHECK(!hud::TimeGapOf(g, BLOCK, 1, 0).known);
+  u32 run = 100;
+  const auto step = [&](float zero, float one) {
+    at(0, zero), at(1, one);
+    hud::NoteGaps(g, BLOCK, MODULE, ++run);
+  };
+  // every five steps a mini-sector: seat 1 five steps behind at first
+  for (u32 i = 0; i < 12; ++i)
+    for (u32 k = 0; k < 5; ++k)
+      step(static_cast<float>(i) * 100 + static_cast<float>(k) * 20, i == 0 ? 0.0f : static_cast<float>(i - 1) * 100 + static_cast<float>(k) * 20);
+  hud::TimeGap gap = hud::TimeGapOf(g, BLOCK, 1, 0);
+  CHECK(gap.known && gap.steps == 5 && gap.laps == 0 && gap.trend == 0);
+  CHECK(hud::TimeGapOf(g, BLOCK, 0, 1).steps == -5);
+  CHECK(!hud::TimeGapOf(g, BLOCK, 2, 0).known && !hud::TimeGapOf(g, BLOCK, 0, 0).known);
+  // on the same mini-sector, whoever came first is ahead
+  at(2, 300.0f);
+  hud::NoteGaps(g, BLOCK, MODULE, ++run);
+  at(3, 300.0f);
+  hud::NoteGaps(g, BLOCK, MODULE, ++run);
+  CHECK(hud::TimeGapOf(g, BLOCK, 2, 3).steps == -1 && hud::TimeGapOf(g, BLOCK, 3, 2).steps == 1);
+  // driving back changes nothing
+  const u32 row = g.Read16(BLOCK + hud::GapRow(0, 5));
+  step(100, 1000);
+  CHECK(g.Read16(BLOCK + hud::GapRow(0, 5)) == row);
+  // seat 1 at half seat 0's speed: losing time
+  for (u32 i = 12; i < 30; ++i)
+    for (u32 k = 0; k < 5; ++k)
+      step(static_cast<float>(i) * 100 + static_cast<float>(k) * 20, 1100.0f + static_cast<float>(i - 12) * 50 + static_cast<float>(k) * 10);
+  gap = hud::TimeGapOf(g, BLOCK, 1, 0);
+  CHECK(gap.known && gap.steps > 5 && gap.trend > 0);
+  // a lap and more ahead: says so
+  step(6400 * 3, 2900);
+  CHECK(hud::TimeGapOf(g, BLOCK, 1, 0).laps == 2 && hud::TimeGapOf(g, BLOCK, 0, 1).laps == 2);
+}
 
 // `tag` and `tag off` on the page: a number the package cannot hold is no tag, and a word on one seat touches no other.
 void TestTheModeTagWords()

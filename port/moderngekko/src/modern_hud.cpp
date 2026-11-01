@@ -54,6 +54,10 @@ constexpr float STEADY = 0.15f;                // the state must stand this long
 constexpr float HIT_DROP = 0.006f;             // a fall in one picture of this much of the meter is a hit; a boost's drain is far less
 constexpr float SHAKE = 0.2f, SHAKE_APART = 0.25f, CHUNK_LINGERS = 0.25f;
 constexpr std::uint32_t LOCKED = 0xE60000;     // the game's meter on lap 1
+// A boost's effects, the mockup's: a burst of lightning as long as the game's sprite (14 of its frames, a new shape every 2), a kick
+// on the speed and the meter. Place and lap pop once a change has stood, so a rollback's correction, there and back, pops nothing.
+constexpr float BURST = 14.0f / 60, BURST_SHAPE = 2.0f / 60, KICK = 0.4f, BURST_APART = 0.15f;
+constexpr float POP_PLACE = 0.35f, POP_LAP = 0.4f, POP_STANDS = 0.1f;
 
 // The game's rainbow, fixed along the meter, sampled from a full meter in Classic frames.
 struct Stop
@@ -76,9 +80,17 @@ struct Hud
   Clock::time_point start = Clock::now(), last{}, hit{}, shake{};
   bool open = false, seen_open = false;
   Clock::time_point open_changed{}, opened{};
+  std::uint32_t boost_left = 0;  // the last picture's
+  Clock::time_point burst{};
+  // a figure that pops: what it says, what was last seen and since when, when it last popped
+  struct Pops
+  {
+    std::uint32_t standing = 0, seen = 0;
+    Clock::time_point changed{}, popped{};
+  } place, lap;
   std::array<ov::Eased, 6> rows;
   std::array<fzgx::u32, 6> row_seat{};
-  std::uint64_t draws = 0;
+  std::uint64_t draws = 0, bursts = 0;
   std::chrono::nanoseconds total{}, most{};
 };
 Hud s_hud;
@@ -102,11 +114,21 @@ ov::Type Heavy(float size) { return {ov::TheFonts().display, size, false, true};
 ov::Type Bold(float size) { return {ov::TheFonts().semi, size, false, true}; }      // its weight 700
 
 // The mockup's t(): a run at a baseline, ending at x (`end`) or beginning there; the outline max(3, 7% of the size) wide as an SVG stroke
-void Text(ImDrawList* list, const Mock& m, const ov::Type& type, float x, float y, std::uint32_t rgb, float a, bool end, const char* text)
+// `grow`: larger by that about the run's anchor and baseline, the vertices scaled and the font kept at its one size, so a kick bakes no new glyphs.
+void Text(ImDrawList* list, const Mock& m, const ov::Type& type, float x, float y, std::uint32_t rgb, float a, bool end, const char* text, float grow = 1, float stroke = 0)
 {
   const ov::Type at{type.font, type.size * m.k, false, type.tabular};
   const float left = m.X(x) - (end ? ov::Width(at, text) : 0);
-  ov::DrawOutlined(list, at, left, m.Y(y), ov::Colour(rgb, a), ov::Colour(ov::GROUND, a), std::max(3.0f, type.size * 0.07f) / 2 * m.k, TEXT_SHEAR, text);
+  const int first = list->VtxBuffer.Size;
+  ov::DrawOutlined(list, at, left, m.Y(y), ov::Colour(rgb, a), ov::Colour(ov::GROUND, a), (stroke > 0 ? stroke : std::max(3.0f, type.size * 0.07f)) / 2 * m.k, TEXT_SHEAR, text);
+  if (grow == 1)
+    return;
+  const ImVec2 about = m.P(x, y);
+  for (int i = first; i < list->VtxBuffer.Size; ++i)
+  {
+    ImDrawVert& v = list->VtxBuffer[i];
+    v.pos = ImVec2(about.x + (v.pos.x - about.x) * grow, about.y + (v.pos.y - about.y) * grow);
+  }
 }
 
 // 1'23"456, as the game writes a time
@@ -140,6 +162,9 @@ struct MeterState
   bool open = false;  // the rainbow, else solid red
   bool refill = false;
   float alpha = 1;
+  float kick = 0;     // 1 as a boost is pressed, to 0
+  float burst = -1;   // seconds into the lightning; below 0 none
+  float pop_place = 0, pop_lap = 0;  // 1 as the figure changes, to 0
   bool Low() const { return level <= LOW_AT && !refill; }
   float Pulse() const { return 0.5f + 0.5f * std::sin(seconds * (level <= VERY_LOW_AT ? 4.0f : 2.0f) * 6.2831853f); }
   std::uint32_t At(float f) const { return !open || (run > 0 && f > 1 - run) ? LOCKED : Rainbow(f); }
@@ -170,8 +195,11 @@ void DrawBlade(ImDrawList* list, const Mock& m, const MeterState& d)
 {
   constexpr float X0 = 1190, X1 = 1450, YB = 92, SLANT = 0.42f;
   const auto height = [](float f) { return 8 + 40 * f; };
-  const auto foot = [&](float f) { return m.P(X0 + (X1 - X0) * f + d.shake, YB); };
-  const auto head = [&](float f) { return m.P(X0 + (X1 - X0) * f + height(f) * SLANT + d.shake, YB - height(f)); };
+  // (the kick: larger about the wide end's foot, as the mockup's group)
+  const float grow = 1 + d.kick * 0.12f;
+  const auto place = [&](float x, float y) { return m.P(X1 + (x - X1) * grow + d.shake, YB + (y - YB) * grow); };
+  const auto foot = [&](float f) { return place(X0 + (X1 - X0) * f, YB); };
+  const auto head = [&](float f) { return place(X0 + (X1 - X0) * f + height(f) * SLANT, YB - height(f)); };
   const auto quad = [&](float a, float b, ImU32 c) { list->AddQuadFilled(foot(a), foot(b), head(b), head(a), c); };
   quad(0, 1, ov::Colour(ov::GROUND, d.alpha * 0.62f));
   if (d.trail > d.level)
@@ -224,7 +252,7 @@ void DrawRev(ImDrawList* list, const Mock& m, const MeterState& d)
     std::uint32_t colour = ov::GROUND;
     float opacity = 0.55f;
     if (on)
-      colour = d.At(f), opacity = 1;
+      colour = d.kick > 0.4f ? ov::TEXT : d.At(f), opacity = 1;
     else if (chunk)
       colour = ov::TEXT, opacity = 1;
     if (d.refill && on)
@@ -243,10 +271,46 @@ void DrawRev(ImDrawList* list, const Mock& m, const MeterState& d)
 using MeterDrawer = void (*)(ImDrawList*, const Mock&, const MeterState&);
 constexpr std::array<MeterDrawer, hl::METERS> METER_DRAWERS = {DrawBlade, DrawRev};
 
+// A number from 0 to 1 that only depends on its seed: the lightning's shape, the same however often it is drawn. (No generator of the game's.)
+float Scatter(std::uint32_t seed)
+{
+  seed = (seed ^ 0x9E3779B9u) * 0x85EBCA6Bu;
+  seed ^= seed >> 13;
+  seed *= 0xC2B2AE35u;
+  return static_cast<float>((seed ^ seed >> 16) & 0xFFFF) / 65535.0f;
+}
+
+// The lightning over the meter, as long as the game's: three jagged bolts along it, a new shape every 2 of the game's frames, thinning as it ends.
+void DrawLightning(ImDrawList* list, const Mock& m, const MeterState& d)
+{
+  if (d.burst < 0 || d.burst >= BURST)
+    return;
+  constexpr int BOLTS = 3, BENDS = 9;
+  constexpr float X0 = 1192, X1 = 1468, YB = 92;
+  const std::uint32_t shape = static_cast<std::uint32_t>(d.burst / BURST_SHAPE);
+  const float left = 1 - d.burst / BURST;
+  for (int b = 0; b < BOLTS; ++b)
+  {
+    std::array<ImVec2, BENDS + 1> line;
+    for (int i = 0; i <= BENDS; ++i)
+    {
+      const float f = static_cast<float>(i) / BENDS;
+      const std::uint32_t seed = shape * 131 + static_cast<std::uint32_t>(b) * 17 + static_cast<std::uint32_t>(i);
+      const float tall = 8 + 40 * f;  // (as high as the blade there, and leaning as it does)
+      const float y = YB - tall * (0.12f + 0.76f * Scatter(seed));
+      const float x = X0 + (X1 - X0) * f + (YB - y) * 0.42f + (i == 0 || i == BENDS ? 0 : (Scatter(seed + 977) - 0.5f) * 16);
+      line[static_cast<std::size_t>(i)] = m.P(x + d.shake, y);
+    }
+    list->AddPolyline(line.data(), BENDS + 1, ov::Colour(ov::GROUND, d.alpha * 0.55f), ImDrawFlags_None, (3.5f + 3 * left) * m.k);
+    list->AddPolyline(line.data(), BENDS + 1, ov::Colour(ov::TEXT, d.alpha * (0.4f + 0.6f * left)), ImDrawFlags_None, (1 + 1.6f * left) * m.k);
+  }
+}
+
 void DrawEnergy(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, const MeterState& d)
 {
   const Mock m = MockOf(s, hl::SlotId::Energy, picture, METER_X0, METER_Y0, METER_X1, METER_Y1);
   METER_DRAWERS[static_cast<std::size_t>(s.meter)](list, m, d);
+  DrawLightning(list, m, d);
 }
 
 void DrawTime(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
@@ -257,7 +321,7 @@ void DrawTime(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pi
   Text(list, m, Heavy(72), 1446, 166, ov::TEXT, a, true, text);
 }
 
-void DrawLap(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
+void DrawLap(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a, float pop)
 {
   const Mock m = MockOf(s, hl::SlotId::Lap, picture, 1060, 30, 1170, 88);
   char at[16], of[16] = {};
@@ -266,7 +330,7 @@ void DrawLap(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pic
     std::snprintf(of, sizeof(of), "/%u", s.laps);
   Text(list, m, Bold(38), 1170, 88, ov::TEXT, a, true, of);
   const float wide = ov::Width(Bold(38 * m.k), of) / m.k;
-  Text(list, m, Heavy(76), 1170 - wide - 2, 88, ov::TEXT, a, true, at);
+  Text(list, m, Heavy(76), 1170 - wide - 2, 88, pop > 0.1f ? ov::GOLD : ov::TEXT, a, true, at, 1 + pop * 0.35f);
 }
 
 // The current lap, and under it the best lap in gold with its number.
@@ -289,13 +353,13 @@ void DrawLapTimes(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect
     }
 }
 
-void DrawPosition(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
+void DrawPosition(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a, float pop)
 {
   const Mock m = MockOf(s, hl::SlotId::Position, picture, 640, 58, 900, 178);
   char place[16], of[16];
   std::snprintf(place, sizeof(place), "%u", s.place);
   std::snprintf(of, sizeof(of), "/%u", s.racers);
-  Text(list, m, Heavy(150), 790, 178, ov::TEXT, a, true, place);
+  Text(list, m, Heavy(150), 790, 178, pop > 0.1f ? ov::GOLD : ov::TEXT, a, true, place, 1 + pop * 0.3f);
   Text(list, m, Bold(44), 800, 178, ov::TEXT, a * 0.9f, false, of);
 }
 
@@ -308,12 +372,12 @@ void DrawClock(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& p
   Text(list, m, Heavy(74), 770 + wide / 2, 250, s.clock_seconds < 10 ? ov::DANGER : ov::TEXT, a, true, text);
 }
 
-void DrawSpeed(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
+void DrawSpeed(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a, float kick)
 {
   const Mock m = MockOf(s, hl::SlotId::Speed, picture, 1200, 775, 1460, 850);
   char text[16];
   std::snprintf(text, sizeof(text), "%d", static_cast<int>(std::lround(s.speed)));
-  Text(list, m, Heavy(88), 1390, 850, ov::TEXT, a, true, text);
+  Text(list, m, Heavy(88), 1390, 850, ov::TEXT, a, true, text, 1 + kick * 0.28f);
   Text(list, m, Bold(32), 1398, 850, ov::TEXT, a, false, "km/h");
 }
 
@@ -340,11 +404,33 @@ ImTextureRef HeadPicture(std::size_t entry, fzgx::u32 address, bool* has)
   return ImTextureRef(static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(held[entry]->texture.get())));
 }
 
+// A gap as its row or slot writes it: -6.4 a racer ahead of you, +2.1 behind, in tenths; +1 LAP a lap or more apart.
+void GapText(char* to, std::size_t size, const fzgx::ModernHudShow::Gap& gap)
+{
+  const char sign = gap.steps > 0 ? '-' : '+';
+  if (gap.laps > 0)
+  {
+    std::snprintf(to, size, "%c%u LAP%s", sign, gap.laps, gap.laps == 1 ? "" : "S");
+    return;
+  }
+  const std::uint32_t tenths = static_cast<std::uint32_t>(std::abs(gap.steps)) * 10 / 60;
+  if (tenths >= 600)
+    std::snprintf(to, size, "%c%u:%02u.%u", sign, tenths / 600, tenths / 10 % 60, tenths % 10);
+  else
+    std::snprintf(to, size, "%c%u.%u", sign, tenths / 10, tenths % 10);
+}
+
+// The owner's rule: green gaining, red losing, white holding.
+std::uint32_t TrendColour(const fzgx::ModernHudShow::Gap& gap)
+{
+  return gap.laps > 0 || gap.trend == 0 ? ov::TEXT : gap.trend < 0 ? ov::ACCENT : ov::DANGER;
+}
+
 // The mockup's Portraits rows: a black slanted box, the head cut by the slant, the racer's colour on its left edge, the place
 // overlapping, the name to the right. No gap, no energy.
 void DrawTop6(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a, Clock::time_point now)
 {
-  constexpr float X = 56, Y0 = 48, APART = 90, H = 74, W = 80, SL = 14, EDGE = 8, SQUARE = W + SL;
+  constexpr float X = 56, Y0 = 48, APART = 90, H = 74, W = 80, SL = 14, EDGE = 8, SQUARE = W + SL, PLACE_SIZE = 62, PLACE_OUTLINE = 8;
   const Mock m = MockOf(s, hl::SlotId::Top6, picture, 20, Y0, 340, Y0 + 5 * APART + H);
   for (std::size_t i = 0; i < s.heads.size(); ++i)
   {
@@ -375,8 +461,123 @@ void DrawTop6(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pi
       list->AddQuadFilled(m.P(X - EDGE, y + H), bl, tl, m.P(X + SL - EDGE, y), ov::Colour(head.colour, a));
     char place[8];
     std::snprintf(place, sizeof(place), "%u", head.row + 1);
-    Text(list, m, Heavy(38), X - 14 + SL * 0.2f, y + H - 2, head.row == 0 ? ov::GOLD : ov::TEXT, a, true, place);
-    Text(list, m, ov::Type{ov::TheFonts().semi, 27, false, false}, X + W + SL + 8, y + 46, ov::TEXT, a, false, head.name.data());
+    // large, on the head's corner, with a wider outline than the other figures': it must read over any picture
+    Text(list, m, Heavy(PLACE_SIZE), X + 4, y + H + 2, head.row == 0 ? ov::GOLD : ov::TEXT, a, true, place, 1, PLACE_OUTLINE);
+    // the name, and under it this racer's gap to you if the mode shows them (the mockup's Portraits rows)
+    const bool gap = s.row_gaps && s.row_gap[i].known;
+    Text(list, m, ov::Type{ov::TheFonts().semi, 27, false, false}, X + W + SL + 8, y + (gap ? 32 : 46), ov::TEXT, a, false, head.name.data());
+    if (gap)
+    {
+      char text[24];
+      GapText(text, sizeof(text), s.row_gap[i]);
+      Text(list, m, Bold(24), X + W + SL + 8, y + 60, TrendColour(s.row_gap[i]), a, false, text);
+    }
+  }
+}
+
+// The mode's words' slots, drawn where the mockup's "Bars" drew them: where a bar starts and how long, where a text ends or begins.
+struct SlotShape
+{
+  hl::SlotId id;
+  float x0, y0, x1, y1;   // the slot's box
+  float bar_x, bar_y, bar_w;
+  float text_x, text_y, text_size;
+  char text_at;           // 'l' beginning at text_x, 'r' ending there, 'c' about it
+};
+constexpr std::array<SlotShape, 7> SLOT_SHAPES = {{
+    {hl::SlotId::UnderPlace, 640, 190, 900, 240, 692, 226, 156, 770, 230, 40, 'c'},
+    {hl::SlotId::BesidePlace, 850, 186, 960, 234, 866, 226, 88, 866, 226, 40, 'l'},
+    {hl::SlotId::UnderTimes, 1190, 300, 1460, 345, 1196, 334, 250, 1446, 338, 34, 'r'},
+    {hl::SlotId::OverSpeed, 1200, 745, 1460, 772, 1212, 764, 236, 1448, 768, 28, 'r'},
+    {hl::SlotId::UnderSpeed, 1200, 855, 1460, 880, 1212, 874, 236, 1448, 878, 28, 'r'},
+    {hl::SlotId::Message, 854, 385, 1166, 425, 900, 415, 220, 1010, 415, 28, 'c'},
+    {hl::SlotId::UnderTop6, 30, 610, 340, 650, 56, 640, 240, 56, 642, 32, 'l'},
+}};
+
+// The mockup's strip(): a thin slanted bar; wedge(): as the energy meter widens; cells(): one slanted cell a whole unit.
+void DrawModeBar(ImDrawList* list, const Mock& m, const SlotShape& at, const fzgx::ModernHudShow::ModeSlot& slot, float a)
+{
+  const float f = std::clamp(slot.value / slot.most, 0.0f, 1.0f);
+  const float x = at.bar_x, y = at.bar_y, w = at.bar_w;
+  const ImU32 fill = ov::Colour(slot.rgb, a), under = ov::Colour(ov::GROUND, a * 0.62f);
+  if (slot.bar == 0)
+  {
+    list->AddQuadFilled(m.P(x, y), m.P(x + w, y), m.P(x + w + 3, y - 9), m.P(x + 3, y - 9), under);
+    if (f > 0)
+      list->AddQuadFilled(m.P(x, y), m.P(x + w * f, y), m.P(x + w * f + 3, y - 9), m.P(x + 3, y - 9), fill);
+  }
+  else if (slot.bar == 1)
+  {
+    constexpr float HIGH = 26, SLANT = 0.42f;
+    const auto quad = [&](float g, ImU32 c, bool line) {
+      const float k = HIGH * (0.25f + 0.75f * g);
+      const ImVec2 p0 = m.P(x, y), p1 = m.P(x + w * g, y), p2 = m.P(x + w * g + k * SLANT, y - k), p3 = m.P(x + HIGH * 0.25f * SLANT, y - HIGH * 0.25f);
+      if (line)
+        list->AddQuad(p0, p1, p2, p3, c, 1.5f * m.k);
+      else
+        list->AddQuadFilled(p0, p1, p2, p3, c);
+    };
+    quad(1, under, false);
+    quad(1, ov::Colour(ov::TEXT, a * 0.55f), true);
+    if (f > 0)
+      quad(f, fill, false);
+  }
+  else
+  {
+    constexpr int MOST_CELLS = 12;
+    const int cells = std::clamp(static_cast<int>(slot.most), 1, MOST_CELLS);
+    const int lit = std::clamp(static_cast<int>(slot.value), 0, cells);
+    const float wide = std::min(20.0f, (w - 10) / static_cast<float>(cells) - 5), high = 24, slant = high * 0.42f;
+    for (int i = 0; i < cells; ++i)
+    {
+      const float left = x + static_cast<float>(i) * (wide + 5);
+      const ImVec2 p0 = m.P(left, y), p1 = m.P(left + wide, y), p2 = m.P(left + wide + slant, y - high), p3 = m.P(left + slant, y - high);
+      list->AddQuadFilled(p0, p1, p2, p3, i < lit ? fill : ov::Colour(ov::GROUND, a * 0.55f));
+      if (i >= lit)
+        list->AddQuad(p0, p1, p2, p3, ov::Colour(ov::TEXT, a * 0.35f), m.k);
+    }
+  }
+}
+
+void DrawModeSlots(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
+{
+  using Kind = fzgx::ModernHudShow::ModeKind;
+  for (std::size_t i = 0; i < SLOT_SHAPES.size(); ++i)
+  {
+    const fzgx::ModernHudShow::ModeSlot& slot = s.mode_slot[i];
+    const SlotShape& at = SLOT_SHAPES[i];
+    if (slot.kind == Kind::None || !s.layout[at.id].shown)
+      continue;
+    const Mock m = MockOf(s, at.id, picture, at.x0, at.y0, at.x1, at.y1);
+    if (slot.kind == Kind::Bar)
+    {
+      DrawModeBar(list, m, at, slot, a);
+      continue;
+    }
+    char text[32];
+    const char* run = text;
+    std::uint32_t rgb = slot.rgb;
+    float size = at.text_size;
+    if (slot.kind == Kind::Figure)
+    {
+      std::snprintf(text, sizeof(text), "%d", slot.figure);
+      size *= 1.25f;
+    }
+    else if (slot.kind == Kind::Gap)
+    {
+      if (!slot.gap.known)
+        continue;
+      GapText(text, sizeof(text), slot.gap);
+      if (!slot.coloured)
+        rgb = TrendColour(slot.gap);
+    }
+    else
+    {
+      run = slot.text.data();
+    }
+    const ov::Type type = Heavy(size);
+    const float wide = at.text_at == 'c' ? ov::Width(ov::Type{type.font, size * m.k, false, true}, run) / m.k / 2 : 0;
+    Text(list, m, type, at.text_x + wide, at.text_y, rgb, a, at.text_at != 'l', run);
   }
 }
 
@@ -395,6 +596,10 @@ MeterState Effects(const fzgx::ModernHudShow& s, Clock::time_point now, float a)
     h.chunk = false;
     h.open = h.seen_open = s.boost_open;
     h.opened = {};
+    h.boost_left = s.boost_left;
+    h.burst = {};
+    h.place = {s.place, s.place, now, {}};
+    h.lap = {s.lap, s.lap, now, {}};
   }
   if (h.raw - raw >= HIT_DROP)
   {
@@ -420,7 +625,26 @@ MeterState Effects(const fzgx::ModernHudShow& s, Clock::time_point now, float a)
     if (h.open)
       h.opened = now;
   }
+  // A press: the game's count of an energy boost's steps went up. The presented value of the game's own word: a step run
+  // again by a rollback sets it to the same, so it goes up once; a press a rollback takes back is seen once at most.
+  if (s.boost_left > h.boost_left && s.boost_open && (h.burst == Clock::time_point{} || since(h.burst) >= BURST_APART))
+    h.burst = now, ++h.bursts;
+  h.boost_left = s.boost_left;
+  const auto pop = [&](Hud::Pops& p, std::uint32_t value, float seconds) {
+    if (value != p.seen)
+      p.seen = value, p.changed = now;
+    if (p.seen != p.standing && since(p.changed) >= POP_STANDS)
+      p.standing = p.seen, p.popped = now;
+    return p.popped == Clock::time_point{} ? 0.0f : std::max(0.0f, 1 - since(p.popped) / seconds);
+  };
   MeterState d;
+  d.pop_place = pop(h.place, s.place, POP_PLACE);
+  d.pop_lap = pop(h.lap, s.lap, POP_LAP);
+  if (h.burst != Clock::time_point{})
+  {
+    d.burst = since(h.burst);
+    d.kick = std::max(0.0f, 1 - d.burst / KICK);
+  }
   d.level = h.meter, d.trail = h.trail, d.open = h.open, d.alpha = a;
   d.seconds = since(h.start);
   d.refill = s.pit && h.meter < 1;
@@ -465,17 +689,19 @@ void DrawModernHud(float x0, float y0, float x1, float y1)
   if (up(hl::SlotId::Energy))
     DrawEnergy(list, s, picture, meter);
   if (up(hl::SlotId::Lap))
-    DrawLap(list, s, picture, a);
+    DrawLap(list, s, picture, a, meter.pop_lap);
   if (up(hl::SlotId::RaceTime))
     DrawTime(list, s, picture, a);
   if (up(hl::SlotId::LapTimes))
     DrawLapTimes(list, s, picture, a);
   if (up(hl::SlotId::Position))
-    DrawPosition(list, s, picture, a);
+    DrawPosition(list, s, picture, a, meter.pop_place);
   if (up(hl::SlotId::Clock))
     DrawClock(list, s, picture, a);
+  if (s.mode_slots)
+    DrawModeSlots(list, s, picture, a);
   if (up(hl::SlotId::Speed))
-    DrawSpeed(list, s, picture, a);
+    DrawSpeed(list, s, picture, a, meter.kick);
   ov::NearestSampling(list);
   const auto took = Clock::now() - began;
   s_hud.total += took;
@@ -483,8 +709,8 @@ void DrawModernHud(float x0, float y0, float x1, float y1)
   // for the log: the cost of the drawing, every minute of pictures
   if (++s_hud.draws % 3600 == 0)
   {
-    char line[120];
-    std::snprintf(line, sizeof(line), "fzgx: modern HUD: drawn %llu times, mean %lld ns, most %lld ns", static_cast<unsigned long long>(s_hud.draws),
+    char line[140];
+    std::snprintf(line, sizeof(line), "fzgx: modern HUD: drawn %llu times, %llu boost bursts, mean %lld ns, most %lld ns", static_cast<unsigned long long>(s_hud.draws), static_cast<unsigned long long>(s_hud.bursts),
                   static_cast<long long>(s_hud.total.count() / static_cast<long long>(s_hud.draws)), static_cast<long long>(s_hud.most.count()));
     s_core_host.Log(fzgx::LogLevel::Notice, line);
   }

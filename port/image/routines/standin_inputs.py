@@ -30,7 +30,7 @@ STAT_FIELDS = (0x8, 0x220, 0x22C, 0xC, 0x14, 0x1C, 0x23C, 0x230, 0x234, 0x30, 0x
 BYTE_FIELD = 0x477        # the grip window (byte), a byte: the record holds its whole number
 FIRST_TWO = memmap.MODE_STATS_FIRST
 assert memmap.MODE_STATS + 4 + 4 * FIRST_TWO < 0x8000
-assert memmap.MODE_STATS_TWO + 4 * (len(STAT_FIELDS) - FIRST_TWO) < 0x8000 and FIRST_TWO <= 16
+assert memmap.MODE_STATS_REACH & 0xFFFF == 0 and FIRST_TWO <= 16
 
 
 def stat_writes():
@@ -45,7 +45,7 @@ co_stat_{i}:
     last = len(STAT_FIELDS) - 1
     page = "".join(f"""    rlwinm. 0, 10, 0, {31 - i}, {31 - i}
     beq co_stat_{i}
-    lwz 0, {memmap.MODE_STATS_TWO + 4 * (i - FIRST_TWO):#x}(12)
+    lwz 0, {memmap.MODE_STATS_TWO - memmap.MODE_STATS_REACH + 4 * (i - FIRST_TWO)}(12)
     {"stb" if field == BYTE_FIELD else "stw"} 0, {field:#x}(31)
 co_stat_{i}:
 """ for i, field in enumerate(STAT_FIELDS) if i >= FIRST_TWO)
@@ -60,6 +60,7 @@ co_stat_{i}:
     lha 12, 4(31)
     slwi 12, 12, {memmap.MODE_STAT_TWO_SHIFT}
     add 12, 12, 11
+    addis 12, 12, {memmap.MODE_STATS_REACH >> 16}
 {page}co_stats_done:
 """
 

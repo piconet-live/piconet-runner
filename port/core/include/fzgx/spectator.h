@@ -208,6 +208,7 @@ public:
   Follow how() const { return m_how; }
   Kind kind() const { return m_kind; }
   View view() const { return m_view; }
+  void SetView(View view) { m_view = view; }
   const CourseRule& rule() const { return m_rule; }
 
 private:

@@ -52,7 +52,7 @@ MINE_BLOCK = MINE_COUNTS + 2 * MINE_TABLE
 # the start gate, as MINES; the block itself is the undo log's and the checksum's (MODE_BLOCK bytes: MODE_SEATS, a
 # seat's record of MODE_SEAT bytes that the image's sites read, then the interpreter's state).
 MODES = _facts.MODES
-MODE_BLOCK = 0x7000
+MODE_BLOCK = 0x9000
 MODE_ALLOC = MODE_BLOCK + 0x1000   # taken from the heap: the block starts on a page (the undo log's pages, mode.cpp)
 MODE_SEAT = 16
 MODE_SEATS = 0
@@ -79,7 +79,10 @@ MODE_STATS_PAGE = 0x1000
 MODE_STATS_TWO = MODE_BLOCK + 0x10
 MODE_STAT_TWO_SHIFT = 7
 MODE_STATS_FIRST = 10
-assert MODE_STATS_TWO + (30 << MODE_STAT_TWO_SHIFT) <= MODE_BLOCK + MODE_STATS_PAGE <= 0x8000
+assert MODE_STATS_TWO + (30 << MODE_STAT_TWO_SHIFT) <= MODE_BLOCK + MODE_STATS_PAGE
+# past a load's reach from the block's start, so the wrapper reaches it from the block + MODE_STATS_REACH
+MODE_STATS_REACH = 0x10000
+assert -0x8000 <= MODE_STATS_TWO - MODE_STATS_REACH and MODE_BLOCK + MODE_STATS_PAGE - MODE_STATS_REACH < 0x8000
 assert MODE_STATS + 30 * MODE_STAT <= MODE_BLOCK
 # the live combat words (mode.h COMBAT; sites_combat.py): 0, the game's own
 MODE_COMBAT = MODE_STATS + 30 * MODE_STAT

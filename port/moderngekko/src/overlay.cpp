@@ -8,6 +8,7 @@
 #include "overlay.h"
 
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -129,6 +130,23 @@ const Fonts& TheFonts()
     fonts.body = Load(fzgx::strip::TEXT_FONT);
     fonts.semi = Load(fzgx::strip::FIGURE_FONT);
     fonts.display = Load(fzgx::strip::DISPLAY_FONT);
+    // for a mode's texts: what Saira lacks comes from the system's Segoe UI, if there (Greek, Cyrillic, more of Latin), and from its
+    // Yu Gothic (kana, kanji): glyphs of a merged font load when first drawn
+    if (fonts.display != nullptr)
+      if (const char* windows = std::getenv("WINDIR"))
+        for (const char* file : {"segoeui.ttf", "YuGothM.ttc"})
+        {
+          const std::filesystem::path path = std::filesystem::path(windows) / "Fonts" / file;
+          std::error_code e;
+          if (!std::filesystem::is_regular_file(path, e))
+            continue;
+          ImFontConfig config;
+          config.MergeMode = true;
+          config.DstFont = fonts.display;
+          std::snprintf(config.Name, sizeof(config.Name), "%s", file);
+          const std::u8string name = path.u8string();
+          ImGui::GetIO().Fonts->AddFontFromFileTTF(reinterpret_cast<const char*>(name.c_str()), 16.0f, &config);
+        }
   }
   return fonts;
 }

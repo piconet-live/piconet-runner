@@ -1448,7 +1448,7 @@ void TestTheStatWords()
   CHECK(g2.Read32(BLOCK + mode::END) == 1 && g2.Read32(BLOCK + mode::FAULT) == mode::FAULT_REAL);
 }
 
-// The stats page: values and bases on the eighth page, bits in the first record, the pack's ranges, a byte's whole
+// The stats page: values and bases on the stats page, bits in the first record, the pack's ranges, a byte's whole
 // number; the page is stamped only for a mode with the word, and a package without it cannot reach it.
 void TestTheStatsPage()
 {
@@ -1486,7 +1486,7 @@ void TestTheStatsPage()
   CHECK(value(1, 10) == 10.0f && value(1, 11) == 3.5f && value(1, 12) == 2.2f && value(1, 13) == 300.0f &&
         value(1, 14) == 1000.0f && value(1, 15) == 19.0f && value(1, 16) == 0.7f);
   CHECK(g.Read32(BLOCK + mode::StatValueAt(1, mode::STAT_GRIP_WINDOW)) == 255);
-  // a package that writes them without the word: a mode error, and nothing past the seven pages
+  // a package that writes them without the word: a mode error, and nothing past the block
   mode::Package q = *p;
   q.stats_page = false;
   TestHost host2;
