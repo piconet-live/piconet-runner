@@ -81,8 +81,8 @@ SPEC_LOG	window	0x81815000		u32		memmap.py:82	tests: the spectator's log, SPEC_L
 SPEC_LOG_ENTRIES	window	3584		u32		memmap.py:83	tests: entries of 8 bytes the spectator's log at SPEC_LOG holds before it goes round
 GENERATOR_LOG	window	0x8181C000		u32		memmap.py:84	tests: the race's two generator words after every step, 8 bytes at step & (GENERATOR_LOG_STEPS - 1): the executable's, then the effects'
 GENERATOR_LOG_STEPS	window	2048		u32		memmap.py:85	tests: steps the generator log holds
-SMOOTH_LOG	window	0x8180C000		u32		memmap.py:93	tests: the rivals' smoothing log, 8 bytes at frame & (SMOOTH_LOG_FRAMES - 1): the step, the seat, the frame's flags, the part of the offset that was cut and the square of a body's distance to its shadow (a float's upper half each)
-SMOOTH_LOG_FRAMES	window	2048		u32		memmap.py:94	tests: displayed race frames the smoothing log holds
+SMOOTH_LOG	window	0x8180E000		u32		memmap.py:93	tests: the rivals' smoothing log, 8 bytes at frame & (SMOOTH_LOG_FRAMES - 1): the step, the seat, the frame's flags, the part of the offset that was cut and the square of a body's distance to its shadow (a float's upper half each)
+SMOOTH_LOG_FRAMES	window	1024		u32		memmap.py:94	tests: displayed race frames the smoothing log holds
 SMOOTH_FRAMES	window	0x608	SMOOTH	u32		smooth.py:62	the smoothing's count of displayed race frames: the log's place of the last frame
 EFFECTS	window	0x640	SMOOTH	u32		memmap.py:7	tests: the effects' counters (sites_effects.py): how far a rival's effects were drawn from its body before and after they were moved with it
 HOSTCALLS	window	0x81860000		u32		memmap.py:38	host calls: a call to one of these addresses leaves the game's code for the host program
