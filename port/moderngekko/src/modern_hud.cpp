@@ -115,12 +115,12 @@ ov::Type Bold(float size) { return {ov::TheFonts().semi, size, false, true}; }  
 
 // The mockup's t(): a run at a baseline, ending at x (`end`) or beginning there; the outline max(3, 7% of the size) wide as an SVG stroke
 // `grow`: larger by that about the run's anchor and baseline, the vertices scaled and the font kept at its one size, so a kick bakes no new glyphs.
-void Text(ImDrawList* list, const Mock& m, const ov::Type& type, float x, float y, std::uint32_t rgb, float a, bool end, const char* text, float grow = 1)
+void Text(ImDrawList* list, const Mock& m, const ov::Type& type, float x, float y, std::uint32_t rgb, float a, bool end, const char* text, float grow = 1, float stroke = 0)
 {
   const ov::Type at{type.font, type.size * m.k, false, type.tabular};
   const float left = m.X(x) - (end ? ov::Width(at, text) : 0);
   const int first = list->VtxBuffer.Size;
-  ov::DrawOutlined(list, at, left, m.Y(y), ov::Colour(rgb, a), ov::Colour(ov::GROUND, a), std::max(3.0f, type.size * 0.07f) / 2 * m.k, TEXT_SHEAR, text);
+  ov::DrawOutlined(list, at, left, m.Y(y), ov::Colour(rgb, a), ov::Colour(ov::GROUND, a), (stroke > 0 ? stroke : std::max(3.0f, type.size * 0.07f)) / 2 * m.k, TEXT_SHEAR, text);
   if (grow == 1)
     return;
   const ImVec2 about = m.P(x, y);
@@ -408,7 +408,7 @@ ImTextureRef HeadPicture(std::size_t entry, fzgx::u32 address, bool* has)
 // overlapping, the name to the right. No gap, no energy.
 void DrawTop6(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a, Clock::time_point now)
 {
-  constexpr float X = 56, Y0 = 48, APART = 90, H = 74, W = 80, SL = 14, EDGE = 8, SQUARE = W + SL;
+  constexpr float X = 56, Y0 = 48, APART = 90, H = 74, W = 80, SL = 14, EDGE = 8, SQUARE = W + SL, PLACE_SIZE = 62, PLACE_OUTLINE = 8;
   const Mock m = MockOf(s, hl::SlotId::Top6, picture, 20, Y0, 340, Y0 + 5 * APART + H);
   for (std::size_t i = 0; i < s.heads.size(); ++i)
   {
@@ -439,7 +439,8 @@ void DrawTop6(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pi
       list->AddQuadFilled(m.P(X - EDGE, y + H), bl, tl, m.P(X + SL - EDGE, y), ov::Colour(head.colour, a));
     char place[8];
     std::snprintf(place, sizeof(place), "%u", head.row + 1);
-    Text(list, m, Heavy(38), X - 14 + SL * 0.2f, y + H - 2, head.row == 0 ? ov::GOLD : ov::TEXT, a, true, place);
+    // large, on the head's corner, with a wider outline than the other figures': it must read over any picture
+    Text(list, m, Heavy(PLACE_SIZE), X + 4, y + H + 2, head.row == 0 ? ov::GOLD : ov::TEXT, a, true, place, 1, PLACE_OUTLINE);
     Text(list, m, ov::Type{ov::TheFonts().semi, 27, false, false}, X + W + SL + 8, y + 46, ov::TEXT, a, false, head.name.data());
   }
 }
