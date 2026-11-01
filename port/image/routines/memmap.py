@@ -305,6 +305,7 @@ MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_TOGE
 MODE_HUD_RANK = MODE_HUD + 8             # not 0: the viewed racer's RANK is hidden, the rank icons with it (mode_hud.h)
 MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
 MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
+MODE_HUD_HEADING = MODE_HUD + 0xE4       # the results heading, the game's PRACTICE (mode_hud.h)
 # `tag` (nametags.py; mode_hud.h): +0x100 a byte a seat, the text's number from 1 (0: none), +0x120 the texts
 MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HUD + 0x120, 12
 # The ghost draw (sites_ghostdraw.py; mode_hud.h): +0xCC the seats with no machine voice, a bit a seat; +0xD0 the live gap,

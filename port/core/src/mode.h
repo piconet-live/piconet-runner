@@ -212,6 +212,7 @@ struct Package
   bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
   bool hud_modern = false;          // `hud modern`: everyone on the modern HUD, whatever the player's setting
   bool results_points = false;      // `results points`: the first results page passes by itself
+  std::string results_heading;      // `results_heading "TEXT"`: the string for the game's PRACTICE page; empty, RESULTS
   std::string results_title;        // `results_title "TEXT"`: the string for VS TOTAL RANKING; empty, the game's
   std::vector<u32> points_table;    // what a place earns when the mode ends the race (none: nothing)
   u32 time_bonus = 0;               // time_bonus's steps, 0 none

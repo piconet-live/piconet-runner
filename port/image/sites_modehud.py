@@ -16,6 +16,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_only` | fn_1_14A328 0x14A368, the first results page's A (`extrwi. r0, r0, 1, 23`; its gate 0x14A358 stays) | the page waits for A | under `results points` as pressed |
 | `mode_faces` | fn_1_D27B8's entry, the faces board's task (`stwu r1, -0x150(r1)`) | the board | not drawn while the viewed racer's FACES is hidden |
 | `mode_title` | fn_1_1461C8 0x146304, VS TOTAL RANKING's string (`addi r3, r21, 0x404`) | the game's | the window's title, when there is one |
+| `mode_heading` | fn_1_1461C8 0x146324, the times list's string (`addi r3, r21, 0x424`: PRACTICE, what every race of ours ends on without a points page) | the game's | the window's heading (the core writes `results_heading`, or RESULTS) |
 | `tag_cell`, `tag_cpu` | fn_1_147188 0x1473D8 (`lwz r7, 0x4c(r30)`), 0x14740C (`lis r4, 1`); with follow.py's 0x147390 | row's tag: P1 to P4 by racer, CPU for the others | the local seat's row P1; a row with a name in memmap.NAMES no tag (as a player row, to 0x147494). Every race; drawing only |
 | `mode_clock_at`, `mode_clock_label` | fn_1_CF5B0's ten calls of fn_1_496FC (the digits' place, f2 its y) and 0xCF9EC (the TIME label's y, `stfs f0, 0x18(r1)`) | at the top, on the rank | in a race with a mode, below the rank: digits at y 128 (CLOCK_Y; the owner's choice, 2026-10-30) and the label at 151 (the rank's own stay). Stock races never draw this clock |
 | `hud_lap_*` (2) | fn_1_C72D4 0xC73A0 and fn_1_C771C 0xC77E8, `addi r5, r4, 1`: the lap shown, P+0x118 + 1, r6 the race's laps | a finished racer's HUD shows 4/3 | the lap shown stops at the race's laps (r6 0: no race, as it was). In every race of ours, the mode word set: a spectator follows a finished racer with the game's HUD up. r5 only, for fn_1_CC280's digits: nothing a step reads |
@@ -43,6 +44,7 @@ WRONG_WAY_VOICE, TICK = (-0x56FA, 0x1800), (-0x56F7, 0x2700)  # 0xA9061800 (fn_1
 WRONG_SITE, WRONG_KNOWN, WRONG_SIGN = 0xCD560, 0x8003010C, 0xCD578  # fn_1_CD51C: lwz r0, 0x10c(r3); the sign's making
 ONLY, ONLY_KNOWN = 0x14A368, 0x5400C7FF        # fn_1_14A328: extrwi. r0, r0, 1, 23
 TITLE, TITLE_KNOWN = 0x146304, 0x38750404      # fn_1_1461C8: addi r3, r21, 0x404
+HEADING, HEADING_KNOWN = 0x146324, 0x38750424  # fn_1_1461C8: addi r3, r21, 0x424 (PRACTICE)
 FACES, FACES_KNOWN = 0xD27B8, 0x9421FEB0       # fn_1_D27B8: stwu r1, -0x150(r1)
 TAG_CELL, TAG_CELL_KNOWN = 0x1473D8, 0x80FE004C  # fn_1_147188: lwz r7, 0x4c(r30)
 TAG_CPU, TAG_CPU_KNOWN, TAG_DONE = 0x14740C, 0x3C800001, 0x147494  # lis r4, 1; where a player row's tag ends
@@ -314,6 +316,18 @@ mtt_stock:
 """)
     patch(site, word, 0, "mode_title")
     middle.append((site, ["r12", "cr0"], "mode_title"))
+
+    # `results_heading "TEXT"`, or RESULTS: the times list's string, with a mode always the window's
+    site = TEXT + HEADING
+    word = stock(site, HEADING_KNOWN)
+    r.add("mode_heading", test + """    beq mhd_stock
+""" + la(3, memmap.MODE_HUD_HEADING) + f"""    @b {site + 4:#x}
+mhd_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_heading")
+    middle.append((site, ["r12", "cr0"], "mode_heading"))
 
     # the results' points page: rule 0x04000000 read as clear while the core says the mode needs it (award, results_title)
     site = TEXT + POINTS

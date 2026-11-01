@@ -187,6 +187,7 @@ void TestAGonePlayerRetires();
 void TestTheModeTagWords();
 void TestTheModeHudSlotsAndGaps();
 void TestTheCutRaceWords();
+void TestFinishSeat();
 void TestTheStatWords();
 void TestAVecIsBuilt();
 void TestAFaultShowsOnTheResults();
@@ -556,6 +557,7 @@ int main(int argc, char** argv)
   TestTheModeTagWords();
   TestTheModeHudSlotsAndGaps();
   TestTheCutRaceWords();
+  TestFinishSeat();
   TestTheStatWords();
   TestAVecIsBuilt();
   TestAFaultShowsOnTheResults();
