@@ -160,6 +160,7 @@ struct Run
   Rollback own;  // (never with a race's log at once: Begin)
   Rollback* log = nullptr;
   Tick::time_point tick{}, began{};
+  double blend = 0;  // this picture's share of the way, by when it can be shown
   double spent_ms = 0;  // this pass's, of the tick's time to the drawing's end
   Tick::time_point waiting{};
   Mean step_ms, picture_ms, real_ms;
@@ -285,6 +286,17 @@ bool Judge()
   return std::sqrt(eye) <= CAMERA_STEP_SHARE * followed + CAMERA_MARGIN && hfr::Arc(c.b, d.b) <= MOST_CAMERA_TURN;
 }
 
+// How far between the two steps a picture is drawn: by its turn, or later when it cannot be shown before that (what it
+// shows then is where the machine is by the time it is on screen). None past LATEST_BLEND: the true picture is too near.
+constexpr double LATEST_BLEND = 0.85;
+bool ChooseBlend()
+{
+  const double turn = double(s.picture) / (s.pictures + 1);
+  const double by = (Ms(Tick::now() - s.tick) + (s.picture_ms.any ? s.picture_ms.ms : PICTURE_MS_AT_FIRST)) / FIELD_MS;
+  s.blend = std::max(turn, by);
+  return s.blend <= LATEST_BLEND;
+}
+
 // A line for the measure of the on-screen path: the followed machine and the camera as a picture holds them.
 void TracePath(const Guest& g, u32 step, double t)
 {
@@ -294,8 +306,8 @@ void TracePath(const Guest& g, u32 step, double t)
   if (follow >= SEATS)
     return;
   const Mtx pose = ReadMtx(g, g.Read32(MACHINES) + follow * BLOCK + POSE), a = ReadMtx(g, r + 0xAC), b = ReadMtx(g, r + 0xDC);
-  std::fprintf(s.path, "%u,%.3f,%.4f,%.4f,%.4f,%u,%.3f", step, t, pose.m[3], pose.m[7], pose.m[11],
-               s.now.machine[follow].flags, F(g, r + 0x10));
+  std::fprintf(s.path, "%u,%.3f,%.4f,%.4f,%.4f,%u,%.3f,%.3f,%.3f", step, t, pose.m[3], pose.m[7], pose.m[11],
+               s.now.machine[follow].flags, F(g, r + 0x10), F(g, r + 0x14), F(g, r + 0x18));
   for (const Mtx* m : {&a, &b})
     for (const float v : m->m)
       std::fprintf(s.path, ",%.6f", v);
@@ -577,7 +589,15 @@ bool Next(u32 returned, Call* call)
       }
       s.picture = 1;
       s.began = Tick::now();
-      WriteBlend(g, double(s.picture) / (s.pictures + 1));
+      if (!ChooseBlend())
+      {
+        ++s.stats.none_time;
+        s.log->SaveAgain(s.step);
+        s.inside = false;
+        s.stage = Stage::OFF;
+        return false;
+      }
+      WriteBlend(g, s.blend);
       g.Write32(MUTE, 1);
       s.stage = Stage::PICTURE;
       s.index = 0;
@@ -608,7 +628,7 @@ bool Next(u32 returned, Call* call)
       ++s.index;
       return true;
     }
-    s.between(static_cast<float>(double(s.picture) / (s.pictures + 1)));
+    s.between(static_cast<float>(s.blend));
     s.stage = Stage::BEGIN;
     *call = {FRAME_BEGIN, 0};
     return true;
@@ -633,11 +653,11 @@ bool Next(u32 returned, Call* call)
     s.stats.wait_sum += Ms(drawn - s.waiting);
     Note(s.stats.draw_hist, Ms(undone - s.began));
     ++s.stats.pictures;
-    if (s.picture < s.pictures)
+    ++s.picture;
+    if (s.picture <= s.pictures && ChooseBlend())
     {
-      ++s.picture;
       s.began = Tick::now();
-      WriteBlend(g, double(s.picture) / (s.pictures + 1));
+      WriteBlend(g, s.blend);
       g.Write32(MUTE, 1);
       s.stage = Stage::PICTURE;
       s.index = 0;
