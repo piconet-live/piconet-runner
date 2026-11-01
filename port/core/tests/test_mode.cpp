@@ -1259,6 +1259,32 @@ void TestTheCutRaceWords()
   std::optional<mode::Package> old = mode::Read(Vector("overdrive.mode.json"), &why);
   CHECK(old && !old->race_waits && !old->results_points && old->results_title.empty() && !mode::hud::UsesClock(*old));
   CHECK(old && !(mode::hud::WindowFlags(*old) & mode::hud::POINTS_PAGE));
+  // `results_heading`: the word's text; left out, empty (boot.cpp then writes RESULTS), and no points page either way
+  CHECK(old && old->results_heading.empty());
+  std::optional<mode::Package> headed = mode::Read(Vector("words.mode.json"), &why);
+  CHECK(headed && headed->results_heading == "ALL DONE");
+}
+
+// `finish_seat`: the finished flag and the finish time of a line crossed at this step; the mode's place reaches the
+// results record; an out seat is left alone.
+void TestFinishSeat()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("cuts.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 2, 1200);
+  const u32 machine = MACHINES, progress = PROGRESS;
+  mode::Run(g, *p, BLOCK, MODULE);
+  CHECK(g.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
+  CHECK((g.Read32(machine + game::MACHINE_FLAGS) & 0x10000) != 0);
+  CHECK(g.Read32(progress + game::PROGRESS_LAP_SUM) == 1199);
+  CHECK((g.Read32(MACHINES + game::MACHINE_SIZE + game::MACHINE_FLAGS) & 0x10000) == 0);
 }
 
 // The on/off setup words as a switch parameter gives them, and the title with its space.

@@ -310,6 +310,17 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
               p.results_title.back() == ' ')
             return Fail(why, "has a results title the game cannot draw");
         }
+        else if (id == modes::SETUP_RESULTSHEADING)
+        {
+          // as results_title
+          p.results_heading.clear();
+          for (const s32 c : setup_args)
+            p.results_heading.push_back(static_cast<char>(c >= 'A' && c <= 'Z' ? c : c == ' ' ? ' ' : '\0'));
+          if (p.results_heading.empty() || p.results_heading.size() > modes::RESULTS_TITLE ||
+              p.results_heading.find('\0') != std::string::npos || p.results_heading.front() == ' ' ||
+              p.results_heading.back() == ' ')
+            return Fail(why, "has a results heading the game cannot draw");
+        }
         else if (id == modes::SETUP_MAXENERGY)
         {
           if (setup_args.size() != 1 || arg(0) < 1 || arg(0) > 1000)

@@ -1763,6 +1763,16 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         if (!finished)
           Retired(g, machine, flags);
         break;
+      case ACTION_FINISHSEAT:
+        // the end of fn_1_250F8, without its finish bonus; the time of a line crossed at this step (raceend.py: finish
+        // time = the clock at the step - 1), so the game books the finish at the next pass (fn_1_32A40)
+        if (!finished && !(flags & (F_RETIRED | F_FALLEN | F_TIME_OVER | F_DESTROYED)) && g.Read16(machine + M_RESTORING) == 0)
+        {
+          g.Write32(machine + game::MACHINE_FLAGS, flags | F_FINISHED);
+          g.Write32(g.Read32(machine + game::MACHINE_PROGRESS) + game::PROGRESS_LAP_SUM,
+                    g.Read32(module + game::RACE_CLOCK) - 1);
+        }
+        break;
       case ACTION_BREAKDOWN:
         // fn_1_24F10's end, as a last hit (0x24FB0-0x24FEC): no second breakdown, no wait on a finished machine
         if (!finished && g.Read16(machine + M_RESTORING) == 0)
@@ -2065,6 +2075,15 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
         g.Write32(machine + game::MACHINE_FLAGS, flags | F_RESTORE);
       else if (!(respawn >> seat & 1) && (flags & F_RESTORE) && restoring <= 20)
         g.Write32(machine + game::MACHINE_FLAGS, flags & ~F_RESTORE);
+    }
+    // a finished seat the mode has placed (`finish_seat`'s banner, fn_1_15C6C0, reads the record): the mode's place, not
+    // the standing's that the game's booking wrote
+    if (const u32 place = g.Read8(block + PLACES + seat); (flags & F_FINISHED) && place != 0)
+    {
+      const u32 r = module + R_BASE;
+      const u32 record = r + R_RECORDS + R_RECORD * seat + 0xE + g.Read8(r + R_SLOT);
+      if (g.Read8(record) < 0xFE)
+        g.Write8(record, static_cast<u8>(place - 1));
     }
     any |= g.Read32(block + NC + 4 * seat);
     // the danger zone (story chapter 6): armed at `arm`, under `below` a count from 60 x seconds + 60, at 60 explode

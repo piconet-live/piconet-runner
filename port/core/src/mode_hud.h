@@ -78,7 +78,12 @@ constexpr u32 WINDOW_FACES = WINDOW_TITLE + WINDOW_TITLE_SIZE;
 // +0xCC the seats this game gives no machine voice (a bit a seat: the ghosts but the viewed racer, the site in fn_1_A3D5C).
 // +0xD0 GHOST_GAP as the ghost task draws it: its colour (0: not drawn), its sign's character, minutes, seconds, thousandths.
 constexpr u32 WINDOW_SILENT = WINDOW_FACES + 4, WINDOW_GAP = WINDOW_SILENT + 4;
-static_assert(WINDOW_TINTS + 30 * 4 <= WINDOW_TITLE && WINDOW_GAP + 20 <= 0x100);
+// +0xE4: the results' heading, 24 bytes, NUL-terminated (the site at main.rel 0x146324, the game's PRACTICE): with a mode
+// always written, `results_heading` or DEFAULT_HEADING.
+constexpr u32 WINDOW_HEADING = WINDOW_GAP + 20, WINDOW_HEADING_SIZE = 24;
+inline constexpr char DEFAULT_HEADING[] = "RESULTS";
+static_assert(WINDOW_TINTS + 30 * 4 <= WINDOW_TITLE && WINDOW_HEADING + WINDOW_HEADING_SIZE <= 0x100);
+static_assert(modes::RESULTS_TITLE + 1 <= WINDOW_HEADING_SIZE);
 // +0x100: `tag`, for the name tags (port/image/routines/nametags.py): a byte a seat, the page's tag byte, written by the
 // pass once a frame; +0x120 the package's texts, WINDOW_TAG_TEXT bytes each with the NUL, written at the start (boot.cpp).
 // A race without tags holds zeros, so the name tags draw what they always did.

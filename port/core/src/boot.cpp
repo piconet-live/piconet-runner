@@ -292,6 +292,16 @@ void Prepare(ModData& data)
       data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TITLE, title.data(), title.size());
     }
     {
+      std::array<u8, mode::hud::WINDOW_HEADING_SIZE> heading{};
+      if (m->game_mode)
+      {
+        const std::string_view text = m->game_mode->results_heading.empty() ? std::string_view(mode::hud::DEFAULT_HEADING)
+                                                                            : std::string_view(m->game_mode->results_heading);
+        std::copy_n(text.begin(), text.size(), heading.begin());
+      }
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_HEADING, heading.data(), heading.size());
+    }
+    {
       // `tag`: no seat tagged yet (the HUD pass writes them from the block), and the package's texts
       std::array<u8, mode::hud::WINDOW_TAG_TEXTS - mode::hud::WINDOW_TAGS + modes::TAG_TEXTS * mode::hud::WINDOW_TAG_TEXT> tags{};
       if (m->game_mode)
