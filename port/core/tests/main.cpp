@@ -190,6 +190,8 @@ void TestAVecIsBuilt();
 void TestAFaultShowsOnTheResults();
 void TestTheHeldWords();
 void TestThePedalLatch();
+void TestTheStatsPage();
+void TestTheEnergyWords();
 void TestTheCombatWords();
 void TestTheOnOffWordsByParameter();
 void TestASquareRootsCostInBothLoops();
@@ -555,6 +557,8 @@ int main(int argc, char** argv)
   TestAFaultShowsOnTheResults();
   TestTheHeldWords();
   TestThePedalLatch();
+  TestTheStatsPage();
+  TestTheEnergyWords();
   TestTheCombatWords();
   TestTheOnOffWordsByParameter();
   TestASquareRootsCostInBothLoops();

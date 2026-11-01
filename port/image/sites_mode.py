@@ -39,6 +39,7 @@ MODES = memmap.MODES
 SEAT, SEATS = memmap.MODE_SEAT, memmap.MODE_SEATS
 PEDALS, BOOST_OFF, HELD, BOOST, EXPLODE, HAND, ROLL, DAMAGE = 1, 2, 4, 8, 16, 32, 64, 128   # a seat record's flags
 WANTED, TAKEN, NONE = 4, 1, 3                     # MODES +0: the host asks; the block taken; none
+WANTED_STATS = 5                                  # the host asks, with the stats page (memmap.MODE_STATS_PAGE more)
 BEGIN, BEGIN_KNOWN = 0x34924, 0x9421FFE0          # fn_1_34924's first word: stwu r1, -0x20(r1)
 ROLLS, ROLLS_KNOWN = 0x34988, 0xA01D0000          # fn_1_34924: lhz r0, 0(r29), the count after its decrement
 MONITORS_TURN, MONITORS_TURN_KNOWN = 0x104BFC, 0x38800000   # fn_1_1049E0: li r4, 0, the stock fn_1_104730 call's "oriented"
@@ -78,8 +79,13 @@ def add(k, r, patch, stock, test, la, D, middle):
     # the block, once, on the black frame before the start gate, when the host asked for one (its state 4); the
     # frame and the test as mines_preload's. No room: state 3, and the host's interpreter says it (a mode error)
     r.add("mode_preload", la(12, MODES) + f"""    lwz 0, 0(12)
+    li 10, 0
     cmpwi 0, {WANTED}
+    beq mpre_asked
+    li 10, {memmap.MODE_STATS_PAGE}
+    cmpwi 0, {WANTED_STATS}
     bnelr
+mpre_asked:
 """ + la(11, memmap.REL_BSS) + f"""    lha 9, 0x960(11)
     cmpwi 9, 2
     bnelr
@@ -100,6 +106,8 @@ def add(k, r, patch, stock, test, la, D, middle):
     stw 26, 0x18(1)
     stw 27, 0x1C(1)
     stw 31, 0x20(1)
+    stw 30, 0x24(1)
+    mr 30, 10
 """ + la(31, MODES) + la(9, MAIN_HEAP) + "    lwz 27, 0(9)\n" + la(9, HEAP_TABLE) + """    lwz 9, 0(9)
     mulli 0, 27, 12
     add 9, 9, 0
@@ -116,16 +124,18 @@ mpre_next:
     lwz 9, 4(9)
     b mpre_walk
 mpre_walked:
-""" + la(0, ALLOC + RESERVE + 0x60) + """    cmplw 26, 0
+""" + la(0, ALLOC + RESERVE + 0x60) + """    add 0, 0, 30
+    cmplw 26, 0
     blt mpre_out
-""" + la(0, ALLOC + 0x60) + """    subf 4, 0, 26
+""" + la(0, ALLOC + 0x60) + """    add 0, 0, 30
+    subf 4, 0, 26
     mr 3, 27
 """ + la(5, FILE_NAME) + f"""    li 6, 0x7211
     @bl {FN(0x45D0)}
     mr. 25, 3
     beq mpre_out
     mr 3, 27
-""" + la(4, ALLOC) + la(5, FILE_NAME) + f"""    li 6, 0x7212
+""" + la(4, ALLOC) + "    add 4, 4, 30\n" + la(5, FILE_NAME) + f"""    li 6, 0x7212
     @bl {FN(0x45D0)}
     mr 24, 3
     mr 3, 27
@@ -137,7 +147,9 @@ mpre_walked:
     addi 24, 24, 0xFFF
     rlwinm 24, 24, 0, 0, 19
     li 0, 0
-""" + la(9, SIZE // 4) + """    mtctr 9
+""" + la(9, SIZE // 4) + """    srwi 10, 30, 2
+    add 9, 9, 10
+    mtctr 9
     addi 9, 24, -4
 mpre_zero:
     stwu 0, 4(9)
@@ -146,6 +158,7 @@ mpre_zero:
     li 0, 1
     stw 0, 0(31)
 mpre_out:
+    lwz 30, 0x24(1)
     lwz 24, 0x10(1)
     lwz 25, 0x14(1)
     lwz 26, 0x18(1)

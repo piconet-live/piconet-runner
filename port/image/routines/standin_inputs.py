@@ -26,8 +26,11 @@ ROLL_AT = memmap.MODE_ROLL_SAVE
 assert memmap.MODE_SEAT == 1 << MODE_SEAT_SHIFT and memmap.lo(memmap.MODES) + 4 < 0x8000
 assert memmap.MODE_ROLL == 8 and ROLL_AT + 4 < 0x8000
 # M's field of each stat, by its bit in the stat record (port/core/src/mode.h STAT_FIELDS; the image's test holds them equal)
-STAT_FIELDS = (0x8, 0x220, 0x22C, 0xC, 0x14, 0x1C, 0x23C, 0x230, 0x234, 0x30)
-assert memmap.MODE_STATS + 4 + 4 * len(STAT_FIELDS) < 0x8000
+STAT_FIELDS = (0x8, 0x220, 0x22C, 0xC, 0x14, 0x1C, 0x23C, 0x230, 0x234, 0x30, 0x24, 0x28, 0x10, 0x20, 0x18, 0x2C, 0x238, 0x477)
+BYTE_FIELD = 0x477        # the grip window (byte), a byte: the record holds its whole number
+FIRST_TWO = memmap.MODE_STATS_FIRST
+assert memmap.MODE_STATS + 4 + 4 * FIRST_TWO < 0x8000
+assert memmap.MODE_STATS_TWO + 4 * (len(STAT_FIELDS) - FIRST_TWO) < 0x8000 and FIRST_TWO <= 16
 
 
 def stat_writes():
@@ -37,14 +40,27 @@ def stat_writes():
     lwz 0, {memmap.MODE_STATS + 4 + 4 * i:#x}(12)
     stw 0, {field:#x}(31)
 co_stat_{i}:
-""" for i, field in enumerate(STAT_FIELDS))
+""" for i, field in enumerate(STAT_FIELDS[:FIRST_TWO]))
+    # the stats page's: their bits are in the same word, their values in the page's record (a stat's bit can pass 16)
+    last = len(STAT_FIELDS) - 1
+    page = "".join(f"""    rlwinm. 0, 10, 0, {31 - i}, {31 - i}
+    beq co_stat_{i}
+    lwz 0, {memmap.MODE_STATS_TWO + 4 * (i - FIRST_TWO):#x}(12)
+    {"stb" if field == BYTE_FIELD else "stw"} 0, {field:#x}(31)
+co_stat_{i}:
+""" for i, field in enumerate(STAT_FIELDS) if i >= FIRST_TWO)
     return f"""    lha 12, 4(31)
     mulli 12, 12, {memmap.MODE_STAT}
     add 12, 12, 11
     lwz 10, {memmap.MODE_STATS:#x}(12)
     cmpwi 10, 0
     beq co_stats_done
-{writes}co_stats_done:
+{writes}    rlwinm. 0, 10, 0, {31 - last}, {31 - FIRST_TWO}
+    beq co_stats_done
+    lha 12, 4(31)
+    slwi 12, 12, {memmap.MODE_STAT_TWO_SHIFT}
+    add 12, 12, 11
+{page}co_stats_done:
 """
 
 

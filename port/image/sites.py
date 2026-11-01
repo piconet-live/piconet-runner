@@ -6,7 +6,7 @@ were calls (frame routine, name tags, chase camera, main.rel linked), the result
 monitors' pictures (sites_monitors.py),
 the cameras' own words (sites_camera.py), the drawn transform's readers (sites_drawn.py), the shadows' place (sites_shadow.py), the effects' draws
 (sites_effects.py), the seats' custom machines (sites_custom.py) and their pilots (sites_pilot.py), the portraits' mark (sites_faces.py), mines that come back
-(sites_mines.py), the leader's gap popup started in the step (sites_leadergap.py), the game mode's block, mode point, speed hold and a seat's own Restore (sites_mode.py), computer drivers at their own pace (sites_cpu.py), the simulation's own generator (sites_generator.py), the dash plate's and the energy boost's length as data (sites_dash.py), the machine setting's curve as data
+(sites_mines.py), the leader's gap popup started in the step (sites_leadergap.py), the game mode's block, mode point, speed hold and a seat's own Restore (sites_mode.py), computer drivers at their own pace (sites_cpu.py), the simulation's own generator (sites_generator.py), the dash plate's and the energy boost's length as data (sites_dash.py), the energy meter under a mode's max energy (sites_energy.py), the machine setting's curve as data
 (sites_curve.py), a
 stat pack a seat (sites_seats.py), the start grid (sites_grid.py), true widescreen's view (sites_view.py), the frames
 drawn between two steps (sites_hfr.py), the countdown movie's request (sites_countdown.py), and the entry table.
@@ -20,6 +20,7 @@ import sites_curve
 import sites_generator
 import sites_custom
 import sites_dash
+import sites_energy
 import sites_drawn
 import sites_effects
 import sites_faces
@@ -462,6 +463,7 @@ rl_disc:
     sites_generator.add(k, r, patch, stock, test, middle)
     sites_leadergap.add(k, r, patch, stock, test, middle)
     sites_dash.add(k, r, patch, stock, test, la, middle)
+    sites_energy.add(k, r, patch, stock, test, middle)
     sites_curve.add(k, r, patch, stock, test, middle)
     sites_present.add(k, r, patch, stock, middle, draw_next="hfr")   # one site with the hfr routine: 0x37C18
     sites_view.add(k, r, patch, stock, test, middle, complete)
