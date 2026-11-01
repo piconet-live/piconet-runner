@@ -44,6 +44,9 @@ constexpr u32 SMOOTH_ENTRY = 48, SMOOTH_OFFSET = 12, SMOOTH_WRITTEN = 36;
 constexpr u32 SHADOWS = B + 0x6D83C + 8, SHADOW_SIZE = 0x4C, SHADOW_PLACE = 0x18;
 constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
 constexpr double MARGIN_MS = 1.5;  // room kept before the next field beside the step and its drawing
+constexpr u32 HIGH_WINDOW = 120;  // frames a cost counts as recent: two seconds
+double s_high_share = 0.5;  // AURORA_TEST_HIGH_SHARE: a test's choice
+constexpr double LATE_NOTICED_MS = 1.0, GRID_LOST_MS = 40.0;
 constexpr double STEP_MS_AT_FIRST = 3.0, PICTURE_MS_AT_FIRST = 3.0, REAL_MS_AT_FIRST = 7.0;
 // The guards' numbers, as the older pictures between (hfr.cpp)
 constexpr double JUMP_MARGIN = 5.0, SPEED_PER_STEP_DISTANCE = 216.0, CAMERA_STEP_SHARE = 3.0, CAMERA_MARGIN = 10.0,
@@ -131,6 +134,39 @@ struct Mean
   }
 };
 
+// A high of the last HIGH_WINDOW frames: what a cost can be, which a mean is not. Not the highest: the three costs' highest
+// never come together, and their sum leaves no pictures at all (measured). What gets past is met by the cover (Room). With
+// nothing recent the cost is `first`, and pictures try again.
+struct High
+{
+  struct Seen
+  {
+    u32 frame;
+    float ms;
+  };
+  std::array<Seen, HIGH_WINDOW> seen{};
+  u32 next = 0, count = 0;
+  void Add(u32 frame, double ms)
+  {
+    seen[next] = {frame, static_cast<float>(ms)};
+    next = (next + 1) % HIGH_WINDOW;
+    count = std::min(count + 1, HIGH_WINDOW);
+  }
+  double Of(u32 frame, double first) const
+  {
+    std::array<float, HIGH_WINDOW> recent;
+    u32 n = 0;
+    for (u32 k = 0; k < count; ++k)
+      if (frame - seen[k].frame < HIGH_WINDOW)
+        recent[n++] = seen[k].ms;
+    if (n == 0)
+      return first;
+    const u32 at = std::min(n - 1, static_cast<u32>(n * s_high_share));
+    std::nth_element(recent.begin(), recent.begin() + at, recent.begin() + n);
+    return recent[at];
+  }
+};
+
 struct Stats
 {
   u64 passes = 0, none_time = 0, none_state = 0, camera_cut = 0, pictures = 0, kept = 0, ahead_inputs_same = 0;
@@ -141,6 +177,9 @@ struct Stats
   u64 tick_real = 0;
   std::array<u32, 40> step_hist{}, draw_hist{};
   u64 input_changed = 0, input_sent_early = 0;
+  u64 stopped_after_ahead = 0, ticks_late = 0, ticks_late_after_pictures = 0;
+  double tick_late_most = 0, cover_most = 0;
+  double bound_step = 0, bound_picture = 0, bound_real = 0, bound_cover = 0, bound_late = 0;
 };
 
 struct Run
@@ -167,6 +206,14 @@ struct Run
   double spent_ms = 0;  // this pass's, of the tick's time to the drawing's end
   Tick::time_point waiting{};
   Mean step_ms, picture_ms, real_ms;
+  High step_high, picture_high, real_high;
+  // The ticks' field grid, from the wall clock, and how late this tick is on it; what the costs above did not cover.
+  u32 frame = 0;
+  Tick::time_point due{};
+  double late_ms = 0, cover_ms = 0;
+  bool pictures_last = false;
+  double late_low = 1e9;
+  u32 late_seen = 0;
   Stats stats;
   u32 rng_before = 0;
   bool ahead_good = false;
@@ -426,15 +473,77 @@ net::Row RowAhead(Guest& g, net::Session& ss, u32 t)
   return row;
 }
 
+// The room left in this field for what is run ahead, with the real step and all it needs after it still on time: from
+// recent highs, not means, and from where this tick actually is on the wall clock.
+double Room(double used_ms)
+{
+  return FIELD_MS - MARGIN_MS - s.cover_ms - s.late_ms - used_ms - s.real_high.Of(s.frame, REAL_MS_AT_FIRST);
+}
+
 // How many pictures fit before the next field beside the step and its drawing: none, or at least one.
 u32 PicturesThatFit()
 {
-  const double room = FIELD_MS - MARGIN_MS - (s.real_ms.any ? s.real_ms.ms : REAL_MS_AT_FIRST) -
-                      (s.step_ms.any ? s.step_ms.ms : STEP_MS_AT_FIRST);
-  const double one = s.picture_ms.any ? s.picture_ms.ms : PICTURE_MS_AT_FIRST;
+  const double room = Room(s.step_high.Of(s.frame, STEP_MS_AT_FIRST));
+  const double one = s.picture_high.Of(s.frame, PICTURE_MS_AT_FIRST);
+  s.stats.bound_step += s.step_high.Of(s.frame, STEP_MS_AT_FIRST);
+  s.stats.bound_picture += one;
+  s.stats.bound_real += s.real_high.Of(s.frame, REAL_MS_AT_FIRST);
+  s.stats.bound_cover += s.cover_ms;
+  s.stats.bound_late += s.late_ms;
   if (room < one)
     return 0;
   return std::min(s.most, static_cast<u32>(room / one));
+}
+
+// One more picture still leaves the real step on time, by what has been spent so far.
+bool PictureStillFits()
+{
+  return Room(Ms(Tick::now() - s.tick)) >= s.picture_high.Of(s.frame, PICTURE_MS_AT_FIRST);
+}
+
+// This tick on the field grid. A tick early, or on time with the grid drifting, moves the grid; a late one that came
+// after pictures says by how much the costs did not cover the frame, which is kept in hand and falls slowly.
+void PlaceTheTick(Tick::time_point now)
+{
+  ++s.frame;
+  s.cover_ms *= 0.99;
+  const double late = s.due == Tick::time_point{} ? 0.0 : Ms(now - s.due);
+  if (s.due == Tick::time_point{} || late < 0.0 || late > GRID_LOST_MS)
+  {
+    s.due = now;
+    s.late_ms = 0;
+  }
+  else
+  {
+    s.late_ms = late;
+    if (late < LATE_NOTICED_MS)
+      s.due += std::chrono::duration_cast<Tick::duration>(std::chrono::duration<double, std::milli>(late * 0.02));
+    else
+    {
+      ++s.stats.ticks_late;
+      s.stats.tick_late_most = std::max(s.stats.tick_late_most, late);
+      if (s.pictures_last)
+      {
+        ++s.stats.ticks_late_after_pictures;
+        s.cover_ms = std::max(s.cover_ms, late);
+        s.stats.cover_most = std::max(s.stats.cover_most, late);
+      }
+    }
+  }
+  // A hitch moves the ticks for good, they do not make it up: the grid follows the least lateness of the last half second.
+  s.late_low = std::min(s.late_low, s.late_ms);
+  if (++s.late_seen == 30)
+  {
+    if (s.late_low > 0.0)
+    {
+      s.due += std::chrono::duration_cast<Tick::duration>(std::chrono::duration<double, std::milli>(s.late_low));
+      s.late_ms -= s.late_low;
+    }
+    s.late_low = 1e9;
+    s.late_seen = 0;
+  }
+  s.pictures_last = false;
+  s.due += std::chrono::duration_cast<Tick::duration>(std::chrono::duration<double, std::milli>(FIELD_MS));
 }
 }  // namespace
 
@@ -444,6 +553,8 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran)
   s.on = false;
   s.between = std::move(between);
   s.input_late = std::getenv("AURORA_TEST_INPUT_LATE") != nullptr;
+  if (const char* share = std::getenv("AURORA_TEST_HIGH_SHARE"))
+    s_high_share = std::atof(share);
   if (const char* path = std::getenv("AURORA_TEST_INPUT_LOG"))
     s.input_log = std::fopen(path, "w");
   const char* asked = std::getenv("AURORA_RUNAHEAD");
@@ -481,6 +592,7 @@ bool Begin()
   Guest g(TheHost(), Data());
   if (ss == nullptr || !g.Ram(net::MODULE_POINTER, 4) || g.Read32(net::MODULE_POINTER) != layout::MAIN_REL)
     return false;
+  PlaceTheTick(Tick::now());
   const u32 step = g.Read32(net::STEP);
   const bool consecutive = step == s.last_step + 1;
   s.last_step = step;
@@ -509,9 +621,6 @@ bool Begin()
   if (fit == 0)
   {
     ++s.stats.none_time;
-    // (a spike must not keep it off for good: with nothing new measured, the means fall until it tries again)
-    s.step_ms.ms *= 0.97;
-    s.picture_ms.ms *= 0.97;
     return false;
   }
   if (s.manager == 0)
@@ -543,6 +652,7 @@ bool Begin()
   s.pictures = fit;
   s.picture = 0;
   s.inside = true;
+  s.pictures_last = true;
   s.began = Tick::now();
   s.rng_before = g.Read32(game::DOL_RNG);
   Take(g, s.now);
@@ -602,6 +712,7 @@ bool Next(u32 returned, Call* call)
       s.stats.step_sum += Ms(ran - s.began);
       s.stats.undo_sum += Ms(undone - ran);
       s.step_ms.Add(Ms(undone - s.began));
+      s.step_high.Add(s.frame, Ms(undone - s.began));
       s.spent_ms += Ms(undone - s.began);
       Note(s.stats.step_hist, Ms(undone - s.began));
       if (!Judge())
@@ -614,9 +725,10 @@ bool Next(u32 returned, Call* call)
       }
       s.picture = 1;
       s.began = Tick::now();
-      if (!ChooseBlend())
+      if (!PictureStillFits() || !ChooseBlend())
       {
         ++s.stats.none_time;
+        ++s.stats.stopped_after_ahead;
         s.log->SaveAgain(s.step);
         s.inside = false;
         s.stage = Stage::OFF;
@@ -686,12 +798,13 @@ bool Next(u32 returned, Call* call)
     s.stats.draw_sum += Ms(drawn - s.began);
     s.stats.restore_sum += Ms(undone - drawn);
     s.picture_ms.Add(Ms(undone - s.began));
+    s.picture_high.Add(s.frame, Ms(undone - s.began));
     s.spent_ms += Ms(undone - s.began);
     s.stats.wait_sum += Ms(drawn - s.waiting);
     Note(s.stats.draw_hist, Ms(undone - s.began));
     ++s.stats.pictures;
     ++s.picture;
-    if (s.picture <= s.pictures && ChooseBlend())
+    if (s.picture <= s.pictures && PictureStillFits() && ChooseBlend())
     {
       s.began = Tick::now();
       WriteBlend(g, s.blend);
@@ -732,6 +845,7 @@ void TimeTheDrawing(u32 value)
   {
     const double ms = Ms(Tick::now() - s.tick);
     s.real_ms.Add(std::max(0.0, ms - s.spent_ms));
+    s.real_high.Add(s.frame, std::max(0.0, ms - s.spent_ms));
     s.stats.tick_real_sum += std::max(0.0, ms - s.spent_ms);
     ++s.stats.tick_real;
     s.tick = {};
@@ -752,7 +866,12 @@ std::string Report()
   const double pics = std::max<double>(1, static_cast<double>(t.pictures));
   if (s.path != nullptr)
     std::fflush(s.path);
-  return std::format("fzgx: run ahead: input sent at the tick {} times; the pad record differed later {} times\n", t.input_sent_early, t.input_changed) +
+  const double asked = std::max<double>(1, static_cast<double>(t.passes));
+  return std::format("fzgx: run ahead: the bounds on average: step {:.2f}, picture {:.2f}, real {:.2f}, kept in hand {:.2f}, tick late {:.2f} ms\n",
+                     t.bound_step / asked, t.bound_picture / asked, t.bound_real / asked, t.bound_cover / asked, t.bound_late / asked) +
+         std::format("fzgx: run ahead: ticks late on the wall clock {} ({} after pictures), by at most {:.2f} ms; most kept in hand {:.2f} ms; stopped after the step ahead {}\n",
+                     t.ticks_late, t.ticks_late_after_pictures, t.tick_late_most, t.cover_most, t.stopped_after_ahead) +
+         std::format("fzgx: run ahead: input sent at the tick {} times; the pad record differed later {} times\n", t.input_sent_early, t.input_changed) +
          std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
          std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
                      "{} camera cuts; {} pictures between; a step ahead {:.2f} ms + its undo {:.2f} ms ({}); a picture {:.2f} ms, of it the draw-done wait {:.2f}, + its undo {:.2f} ms ({}); "
