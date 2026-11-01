@@ -288,11 +288,12 @@ bool Judge()
 
 // How far between the two steps a picture is drawn: by its turn, or later when it cannot be shown before that (what it
 // shows then is where the machine is by the time it is on screen). None past LATEST_BLEND: the true picture is too near.
-constexpr double LATEST_BLEND = 0.85;
+// (SHOWN_AFTER_MS: from the picture's end here to its turn on Aurora's thread, measured: pictures came 2.9 ms past due)
+constexpr double LATEST_BLEND = 0.9, SHOWN_AFTER_MS = 2.9;
 bool ChooseBlend()
 {
   const double turn = double(s.picture) / (s.pictures + 1);
-  const double by = (Ms(Tick::now() - s.tick) + (s.picture_ms.any ? s.picture_ms.ms : PICTURE_MS_AT_FIRST)) / FIELD_MS;
+  const double by = (Ms(Tick::now() - s.tick) + (s.picture_ms.any ? s.picture_ms.ms : PICTURE_MS_AT_FIRST) + SHOWN_AFTER_MS) / FIELD_MS;
   s.blend = std::max(turn, by);
   return s.blend <= LATEST_BLEND;
 }
