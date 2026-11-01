@@ -199,6 +199,7 @@ struct ModernHudShow
   float energy = 0, max_energy = 100;
   bool boost_open = false;  // the game's boost is to be had: the rule its own meter goes rainbow by, and no `boost off` (modern_hud_frame.cpp)
   bool pit = false;         // on a refilling surface
+  u32 boost_left = 0;       // the game's count of an energy boost's steps (M+0x18B): up, a boost was pressed
   float speed = 0;          // km/h
   u32 place = 0, racers = 0;
   u32 lap = 0, laps = 0;

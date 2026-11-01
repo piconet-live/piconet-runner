@@ -35,6 +35,7 @@ namespace mh = mode::hud;
 constexpr u32 COUNTDOWN = 0x28, RACE = 0x29, COURSE_INTRO = 0x27;
 constexpr u32 RACE_LAPS = 16;                     // the race block's laps (observer_frame.cpp)
 constexpr u32 MACHINE_MAX_ENERGY = 0x5DA;         // a machine's most energy, u16
+constexpr u32 MACHINE_BOOST_LEFT = 0x18B;         // the countdown of an energy boost, plates not (machine-state.csv)
 constexpr u32 RULE = BSS + 0x3C30, RULE_LAP_ONE_BOOST = 0x10;  // the rule word: boost on lap 1 (fn_1_331EC 0x33210)
 constexpr u32 R_TIMER = 0x1BDC70 + 0xA4;          // the timed mode's clock, steps (mode.cpp R_BASE; the game's TIMER part fn_1_CF5B0 0xCF600)
 constexpr u32 CLOCK_MOST = 999;                   // that part's most
@@ -156,6 +157,7 @@ void ModernHudFrame(Guest& g)
       const bool lap_allows = (g.Read32(RULE) & RULE_LAP_ONE_BOOST) != 0 || static_cast<s32>(g.Read32(p + game::PROGRESS_LAPS)) >= 1;
       const bool mode_allows = g.Read32(layout::MODES + 4) == 0 || (g.Read32(mode::Record(g, viewed)) & mode::BOOST_OFF) == 0;
       show.boost_open = lap_allows && mode_allows;
+      show.boost_left = g.Read8(m + MACHINE_BOOST_LEFT);
       show.place = g.Read8(p + game::PROGRESS_RANK) + 1u;
       // the face board's entries (.bss 0x7ACD8, 0x64 each, their number at +0xD), which FaceDisp draws into +0x60
       if (const u32 faces = g.Read32(module + BSS + 0x7ACD8); faces != 0)
