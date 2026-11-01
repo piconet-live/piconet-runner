@@ -19,6 +19,7 @@ import sites_cpu
 import sites_curve
 import sites_generator
 import sites_custom
+import sites_trail
 import sites_dash
 import sites_drawn
 import sites_effects
@@ -449,6 +450,7 @@ rl_disc:
     sites_shadow.add(k, r, patch, stock, test, la, middle)
     sites_effects.add(k, r, patch, stock, test, la, middle)
     sites_custom.add(k, r, patch, stock, test, middle, complete)
+    sites_trail.add(k, r, patch, stock, test, middle)
     sites_pilot.add(k, r, patch, stock, test, middle, complete)
     sites_faces.add(k, r, patch, stock, test, middle)
     sites_seats.add(k, r, patch, stock, test, middle)

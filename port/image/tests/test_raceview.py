@@ -93,6 +93,8 @@ class Cpu(Machine):
         elif op == 59 and xo & 31 == 29: f[d] = single(f[a] * f[c] + f[b])                    # fmadds
         elif op == 59 and xo & 31 == 30: f[d] = single(-(f[a] * f[c] - f[b]))                 # fnmsubs
         elif op == 63 and xo & 31 == 21: f[d] = f[a] + f[b]                                   # fadd (double)
+        elif op == 63 and xo & 31 == 20: f[d] = f[a] - f[b]                                   # fsub (double)
+        elif op == 63 and xo == 12: f[d] = single(f[b])                                       # frsp
         elif op == 63 and xo in (0, 32): self.compare(f[a], f[b])                             # fcmpu, fcmpo, field 0
         elif op == 63 and xo == 72: f[d] = f[b]                                               # fmr
         elif op == 63 and xo == 264: f[d] = abs(f[b])                                         # fabs

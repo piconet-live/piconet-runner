@@ -18,6 +18,7 @@ FINISH_LIMIT_MAX = 600  # the longest a host may set between the first finish an
 MINE_REGEN_MAX = 5000  # the longest a host may set between a mine going off and its coming back, in milliseconds (0: a mine stays gone, the game's own way)
 MINE_REGEN_STEP = 50  # the host's mine rule moves in steps of this many milliseconds: 50 ms is 3 steps of the game exactly
 INPUT_DELAY = 2  # steps between a player's input and the step it is used in (decided: 2, never more)
+TRAIL_LEAST_BRIGHTNESS = 96  # a boost trail colour's least brightest part: the flame's textures are grey and added to the picture, so a darker colour draws nothing; the core lifts one under this, keeping its hue
 MAX_UNTRACKED = 32  # memory ranges never rolled back, at most (the list at UNTRACKED)
 
 # ---- window
@@ -235,7 +236,9 @@ RACE_SIM_GENERATOR = 104  # the simulation's own generator: 1, the race's draws 
 RACE_SIM_GENERATOR_AT = 0x81814068
 RACE_CUSTOM = 320  # the seats' custom machines: 30 entries of 32 bytes (a used word, three part entries, the pilot)
 RACE_CUSTOM_AT = 0x81814140
-RACE_SIZE = 1280  # bytes of the race block
+RACE_TRAILS = 1280  # the seats' boost trail colours: 30 entries of TRAIL_ENTRY bytes (sites_trail.py): picture only, no step reads them
+RACE_TRAILS_AT = 0x81814500
+RACE_SIZE = 1640  # bytes of the race block
 
 # ---- rel
 MAIN_REL = 0x801BA660  # where main.rel's header is in every boot (the pin makes it so)
