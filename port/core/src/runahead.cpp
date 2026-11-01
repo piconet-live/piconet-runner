@@ -140,6 +140,7 @@ struct Stats
   double wait_sum = 0, step_sum = 0, undo_sum = 0, draw_sum = 0, restore_sum = 0, tick_real_sum = 0;
   u64 tick_real = 0;
   std::array<u32, 40> step_hist{}, draw_hist{};
+  u64 input_changed = 0, input_sent_early = 0;
 };
 
 struct Run
@@ -171,6 +172,10 @@ struct Run
   bool ahead_good = false;
   u32 ahead_for = 0;
   std::FILE* path = nullptr;  // AURORA_RUNAHEAD_PATH: what each picture holds, for measuring
+  std::FILE* input_log = nullptr;  // AURORA_TEST_INPUT_LOG: each frame's tick and the moments its input was sent
+  bool input_late = false;         // AURORA_TEST_INPUT_LATE: a test's control, the input left to the frame's own step
+  Tick::time_point logged_tick{}, logged_early{};
+  u32 logged_step = 0xFFFFFFFF;
 } s;
 
 float F(const Guest& g, u32 a)
@@ -438,6 +443,9 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran)
   s.ran = std::move(ran);
   s.on = false;
   s.between = std::move(between);
+  s.input_late = std::getenv("AURORA_TEST_INPUT_LATE") != nullptr;
+  if (const char* path = std::getenv("AURORA_TEST_INPUT_LOG"))
+    s.input_log = std::fopen(path, "w");
   const char* asked = std::getenv("AURORA_RUNAHEAD");
   if (asked == nullptr || std::atoi(asked) < 120)
     return;
@@ -462,6 +470,11 @@ bool Inside()
 
 bool Begin()
 {
+  if (s.input_log != nullptr)
+  {
+    s.logged_tick = Tick::now();
+    s.logged_early = {};
+  }
   if (!s.on)
     return false;
   net::Session* ss = net::s_session.get();
@@ -481,6 +494,14 @@ bool Begin()
     return false;
   }
   ++s.stats.passes;
+  // Everything below moves the frame's own step later in the field; the input does not wait for it.
+  if (!s.input_late)
+  {
+    net::SendInputBeforeRunAhead(g, *ss, step);
+    ++s.stats.input_sent_early;
+    if (s.input_log != nullptr)
+      s.logged_early = Tick::now();
+  }
   // the real step and its drawing, as they cost lately: from the step after the tick before to the drawing's end
   const u32 fit = PicturesThatFit();
   s.tick = Tick::now();
@@ -689,6 +710,21 @@ bool Next(u32 returned, Call* call)
   return false;
 }
 
+void NoteInputSent(u32 step, bool changed)
+{
+  if (s.logged_early != Tick::time_point{} && s.input_log != nullptr)
+    s.stats.input_changed += changed;
+  if (s.input_log == nullptr || s.logged_step == step)
+    return;
+  s.logged_step = step;
+  const auto us = [](Tick::time_point t) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(t.time_since_epoch()).count();
+  };
+  std::fprintf(s.input_log, "%u,%lld,%lld,%lld,%d\n", step, static_cast<long long>(us(s.logged_tick)),
+               static_cast<long long>(s.logged_early == Tick::time_point{} ? 0 : us(s.logged_early)),
+               static_cast<long long>(us(Tick::now())), changed ? 1 : 0);
+}
+
 void TimeTheDrawing(u32 value)
 {
   // the image's DRAW_ASK: 2 the drawing has ended. From the tick's end to here, the real step and its drawing.
@@ -704,6 +740,11 @@ void TimeTheDrawing(u32 value)
 
 std::string Report()
 {
+  if (s.input_log != nullptr)
+  {
+    std::fclose(s.input_log);
+    s.input_log = nullptr;
+  }
   if (!s.on)
     return {};
   const Stats& t = s.stats;
@@ -711,7 +752,8 @@ std::string Report()
   const double pics = std::max<double>(1, static_cast<double>(t.pictures));
   if (s.path != nullptr)
     std::fflush(s.path);
-  return std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
+  return std::format("fzgx: run ahead: input sent at the tick {} times; the pad record differed later {} times\n", t.input_sent_early, t.input_changed) +
+         std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
          std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
                      "{} camera cuts; {} pictures between; a step ahead {:.2f} ms + its undo {:.2f} ms ({}); a picture {:.2f} ms, of it the draw-done wait {:.2f}, + its undo {:.2f} ms ({}); "
                      "the real step and its drawing {:.2f} ms; {} machines kept for a jump; pictures that moved the executable's generator (undone): {}",

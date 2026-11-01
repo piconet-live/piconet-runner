@@ -34,6 +34,9 @@ bool Next(u32 returned, Call* call);
 bool Inside();
 // The image's store into DRAW_ASK (2: the frame's drawing has ended): what the real step and its drawing cost.
 void TimeTheDrawing(u32 value);
+// The test log AURORA_TEST_INPUT_LOG: when the frame's own step came to send its input, against the tick. `changed`: the
+// pad record is not what was sent at the tick.
+void NoteInputSent(u32 step, bool changed);
 // The log's lines at the stop.
 std::string Report();
 void Stop();
