@@ -113,7 +113,7 @@ ov::Box MovedMapSquare(const ov::Box& square)
 
 // With Dolphin's video off there is no window strip at full screen: pictures and steps a second at the top of the
 // picture, whenever the launch file's "showFrameRate" asks for the figure (the steps measured here, a second at a time).
-void DrawRates(ImDrawList* list, const ImVec2& display)
+void DrawRates(ImDrawList* list, const ov::Box& picture)
 {
   if (!VideoCommon::AuroraPresent::CountsFrames() || !s_state.options.show_frame_rate)
     return;
@@ -132,9 +132,9 @@ void DrawRates(ImDrawList* list, const ImVec2& display)
   const double pictures = Core::System::GetInstance().GetPerfMetrics().GetFPS();
   char text[64];
   std::snprintf(text, sizeof(text), "%d FPS   %d steps/s", std::isfinite(pictures) ? static_cast<int>(std::lround(pictures)) : 0, steps_a_second);
-  const float size = std::max(16.0f, display.y * 0.018f);
+  const float size = std::max(16.0f, (picture.y1 - picture.y0) * 0.018f);
   const ov::Type type = ov::Figure(size);
-  ov::DrawOutlined(list, type, (display.x - ov::Width(type, text)) / 2, size * 1.2f, ov::Colour(ov::TEXT, 1), ov::Colour(ov::GROUND, 1), std::max(1.0f, size * 0.07f), 0, text);
+  ov::DrawOutlined(list, type, (picture.x0 + picture.x1 - ov::Width(type, text)) / 2, picture.y0 + size * 1.2f, ov::Colour(ov::TEXT, 1), ov::Colour(ov::GROUND, 1), std::max(1.0f, size * 0.07f), 0, text);
 }
 
 void DrawOverlays()
@@ -197,7 +197,7 @@ void DrawOverlays()
     last.role = 0;  // (the knocked-out mark goes at once)
     hud::Draw(list, last, hud::Lay(last, picture, clear, corner.x1 - corner.x0), a, -1, -1);
   }
-  DrawRates(list, display);
+  DrawRates(list, picture);
   std::lock_guard<std::mutex> hold(s_overlay.lock);
   s_overlay.laid = l;
   s_overlay.drawn = show.on;

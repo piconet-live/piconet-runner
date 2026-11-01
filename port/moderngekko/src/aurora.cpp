@@ -38,19 +38,6 @@ std::filesystem::path RunnerFolder()
 #endif
 }
 
-// The main display's height in pixels, whatever its scaling setting; 0 when it cannot be read. The window's own display
-// is not known yet at this point of the start.
-u32 DisplayHeight()
-{
-#ifdef _WIN32
-  DEVMODEW mode{};
-  mode.dmSize = sizeof mode;
-  if (EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode))
-    return mode.dmPelsHeight;
-#endif
-  return 0;
-}
-
 std::string Utf8(const std::filesystem::path& p)
 {
   const std::u8string s = p.u8string();
@@ -70,8 +57,6 @@ void SetSwitch(const char* name, const std::string& value)
 // The player's settings in the launch file. A key left out leaves its switch alone, so a test's own switches stay.
 void SetSwitches(const fzgx::Options& o)
 {
-  if (o.aurora_size == "native")
-    SetSwitch("AURORA_NATIVE", "1");
   if (o.aurora_edges >= 4)  // (1 or 4 are the only counts every graphics card has)
     SetSwitch("AURORA_MSAA", "4");
   if (o.aurora_textures > 1)
@@ -120,15 +105,22 @@ void StartAurora()
   s.shot_prefix = d.aurora_log;
   s.shots.assign(d.aurora_shots.begin(), d.aurora_shots.end());
   s.log_path = d.aurora_log;
+  // Into the window (the player's key) the picture is the window's own pixels and follows it, unless a scale is asked
+  // for. The test key's Aurora, beside the emulator's video, draws at the emulator's internal resolution unless asked.
   const u32 asked_scale = AskedScale(o);
-  s.scale = asked_scale != 0 ? asked_scale : fzgx::AutoAuroraScale(DisplayHeight());
+  s.scale = asked_scale;
+  const bool window_size = asked_scale == 0 && o.picture_renderer == "aurora";
+  if (window_size)
+    SetSwitch("AURORA_NATIVE", "1");
   VideoCommon::AuroraPresent::Configure(s);
   s_core_host.Log(fzgx::LogLevel::Notice,
                   std::string("fzgx: aurora: ") +
                       (VideoCommon::AuroraPresent::On() ? "Aurora draws the pictures shown (presentation only)" :
                                                           "the library is missing: the emulator's own pictures") +
-                      ", data folder " + Utf8(folder) + ", scale " + std::to_string(s.scale) +
-                      (asked_scale != 0 ? " (asked for)" : " (Auto)"));
+                      ", data folder " + Utf8(folder) +
+                      (window_size ? ", picture size: the window's pixels" :
+                       asked_scale != 0 ? ", picture size: " + std::to_string(asked_scale) + " times the game's" :
+                                          ", picture size: the emulator's"));
 }
 
 void StopAurora()
