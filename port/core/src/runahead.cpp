@@ -133,7 +133,7 @@ struct Stats
 {
   u64 passes = 0, none_time = 0, none_state = 0, camera_cut = 0, pictures = 0, kept = 0, ahead_inputs_same = 0;
   u64 rng_moved = 0;
-  double step_sum = 0, undo_sum = 0, draw_sum = 0, restore_sum = 0, tick_real_sum = 0;
+  double wait_sum = 0, step_sum = 0, undo_sum = 0, draw_sum = 0, restore_sum = 0, tick_real_sum = 0;
   u64 tick_real = 0;
   std::array<u32, 40> step_hist{}, draw_hist{};
 };
@@ -157,7 +157,8 @@ struct Run
   Rollback own;  // (never with a race's log at once: Begin)
   Rollback* log = nullptr;
   Tick::time_point tick{}, began{};
-  double restored_ms = 0;
+  double spent_ms = 0;  // this pass's, of the tick's time to the drawing's end
+  Tick::time_point waiting{};
   Mean step_ms, picture_ms, real_ms;
   Stats stats;
   u32 rng_before = 0;
@@ -441,9 +442,13 @@ bool Begin()
   // the real step and its drawing, as they cost lately: from the step after the tick before to the drawing's end
   const u32 fit = PicturesThatFit();
   s.tick = Tick::now();
+  s.spent_ms = 0;
   if (fit == 0)
   {
     ++s.stats.none_time;
+    // (a spike must not keep it off for good: with nothing new measured, the means fall until it tries again)
+    s.step_ms.ms *= 0.97;
+    s.picture_ms.ms *= 0.97;
     return false;
   }
   if (s.manager == 0)
@@ -521,6 +526,7 @@ bool Next(u32 returned, Call* call)
       s.stats.step_sum += Ms(ran - s.began);
       s.stats.undo_sum += Ms(undone - ran);
       s.step_ms.Add(Ms(undone - s.began));
+      s.spent_ms += Ms(undone - s.began);
       Note(s.stats.step_hist, Ms(undone - s.began));
       if (!Judge())
       {
@@ -569,6 +575,7 @@ bool Next(u32 returned, Call* call)
     return true;
   case Stage::BEGIN:
     s.stage = Stage::WAIT;
+    s.waiting = Tick::now();
     *call = {DRAW_DONE_WAIT, 0};
     return true;
   case Stage::WAIT:
@@ -583,6 +590,8 @@ bool Next(u32 returned, Call* call)
     s.stats.draw_sum += Ms(drawn - s.began);
     s.stats.restore_sum += Ms(undone - drawn);
     s.picture_ms.Add(Ms(undone - s.began));
+    s.spent_ms += Ms(undone - s.began);
+    s.stats.wait_sum += Ms(drawn - s.waiting);
     Note(s.stats.draw_hist, Ms(undone - s.began));
     ++s.stats.pictures;
     if (s.picture < s.pictures)
@@ -611,10 +620,8 @@ void TimeTheDrawing(u32 value)
   if (value == 2 && s.on && s.stage == Stage::OFF && s.tick != Tick::time_point{})
   {
     const double ms = Ms(Tick::now() - s.tick);
-    // (what this file took of it, known and left out)
-    const double mine = (s.step_ms.any ? s.step_ms.ms : 0) + s.pictures * (s.picture_ms.any ? s.picture_ms.ms : 0);
-    s.real_ms.Add(std::max(0.0, ms - mine));
-    s.stats.tick_real_sum += std::max(0.0, ms - mine);
+    s.real_ms.Add(std::max(0.0, ms - s.spent_ms));
+    s.stats.tick_real_sum += std::max(0.0, ms - s.spent_ms);
     ++s.stats.tick_real;
     s.tick = {};
   }
@@ -628,10 +635,10 @@ std::string Report()
   const double steps = std::max<double>(1, static_cast<double>(t.passes - t.none_time));
   const double pics = std::max<double>(1, static_cast<double>(t.pictures));
   return std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
-                     "{} camera cuts; {} pictures between; a step ahead {:.2f} ms + its undo {:.2f} ms ({}); a picture {:.2f} ms + its undo {:.2f} ms ({}); "
+                     "{} camera cuts; {} pictures between; a step ahead {:.2f} ms + its undo {:.2f} ms ({}); a picture {:.2f} ms, of it the draw-done wait {:.2f}, + its undo {:.2f} ms ({}); "
                      "the real step and its drawing {:.2f} ms; {} machines kept for a jump; pictures that moved the executable's generator (undone): {}",
                      s.rate, t.passes, t.none_time, t.none_state, t.camera_cut, t.pictures, t.step_sum / steps, t.undo_sum / steps,
-                     Percentiles(t.step_hist), t.draw_sum / pics, t.restore_sum / pics, Percentiles(t.draw_hist),
+                     Percentiles(t.step_hist), t.draw_sum / pics, t.wait_sum / pics, t.restore_sum / pics, Percentiles(t.draw_hist),
                      t.tick_real ? t.tick_real_sum / static_cast<double>(t.tick_real) : 0.0, t.kept, t.rng_moved);
 }
 
