@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <format>
@@ -133,6 +134,8 @@ struct Stats
 {
   u64 passes = 0, none_time = 0, none_state = 0, camera_cut = 0, pictures = 0, kept = 0, ahead_inputs_same = 0;
   u64 rng_moved = 0;
+  u64 ahead_checked = 0, ahead_wrong = 0;  // the step ahead against the true step that came after it
+  double ahead_most = 0;
   double wait_sum = 0, step_sum = 0, undo_sum = 0, draw_sum = 0, restore_sum = 0, tick_real_sum = 0;
   u64 tick_real = 0;
   std::array<u32, 40> step_hist{}, draw_hist{};
@@ -162,6 +165,9 @@ struct Run
   Mean step_ms, picture_ms, real_ms;
   Stats stats;
   u32 rng_before = 0;
+  bool ahead_good = false;
+  u32 ahead_for = 0;
+  std::FILE* path = nullptr;  // AURORA_RUNAHEAD_PATH: what each picture holds, for measuring
 } s;
 
 float F(const Guest& g, u32 a)
@@ -279,6 +285,23 @@ bool Judge()
   return std::sqrt(eye) <= CAMERA_STEP_SHARE * followed + CAMERA_MARGIN && hfr::Arc(c.b, d.b) <= MOST_CAMERA_TURN;
 }
 
+// A line for the measure of the on-screen path: the followed machine and the camera as a picture holds them.
+void TracePath(const Guest& g, u32 step, double t)
+{
+  if (s.path == nullptr)
+    return;
+  const u32 r = g.Read32(CAMERA_RECORDS), follow = g.Read8(r + 2);
+  if (follow >= SEATS)
+    return;
+  const Mtx pose = ReadMtx(g, g.Read32(MACHINES) + follow * BLOCK + POSE), a = ReadMtx(g, r + 0xAC), b = ReadMtx(g, r + 0xDC);
+  std::fprintf(s.path, "%u,%.3f,%.4f,%.4f,%.4f,%u,%.3f", step, t, pose.m[3], pose.m[7], pose.m[11],
+               s.now.machine[follow].flags, F(g, r + 0x10));
+  for (const Mtx* m : {&a, &b})
+    for (const float v : m->m)
+      std::fprintf(s.path, ",%.6f", v);
+  std::fprintf(s.path, "\n");
+}
+
 // The state of a picture t of the way from the true picture to the step ahead: machines' poses, what follows them,
 // the camera. All of it undone with the rest.
 void WriteBlend(Guest& g, double t)
@@ -317,6 +340,7 @@ void WriteBlend(Guest& g, double t)
     WriteF(g, r + 0x10 + 4 * k, c.eye[k] + (d.eye[k] - c.eye[k]) * u);
   WriteMtx(g, r + 0xAC, hfr::BlendView(c.a, d.a, t));
   WriteMtx(g, r + 0xDC, hfr::BlendView(c.b, d.b, t));
+  TracePath(g, s.step, t);
 }
 
 void KeepWindow(const Guest& g)
@@ -405,6 +429,8 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran)
   s.rate = std::min<u32>(static_cast<u32>(std::atoi(asked)), 480);
   s.most = static_cast<u32>(std::lround(s.rate / 60.0)) - 1;
   s.on = true;
+  if (const char* path = std::getenv("AURORA_RUNAHEAD_PATH"))
+    s.path = std::fopen(path, "w");
   Notice("fzgx: run ahead: {} pictures a second asked for, {} between two steps at most", s.rate, s.most);
 }
 
@@ -483,6 +509,17 @@ bool Begin()
   s.began = Tick::now();
   s.rng_before = g.Read32(game::DOL_RNG);
   Take(g, s.now);
+  TracePath(g, step, 0);
+  if (s.ahead_good && s.ahead_for == step)
+  {
+    double most = 0;
+    for (u32 i = 0; i < SEATS; ++i)
+      most = std::max(most, Move(s.ahead.machine[i].pose, s.now.machine[i].pose));
+    ++s.stats.ahead_checked;
+    s.stats.ahead_wrong += most != 0;
+    s.stats.ahead_most = std::max(s.stats.ahead_most, most);
+  }
+  s.ahead_good = false;
   KeepWindow(g);
   s.log->SaveStep(g, step, true);
   if (s.log == &s.own)
@@ -519,6 +556,8 @@ bool Next(u32 returned, Call* call)
       const auto ran = Tick::now();
       s.ran(s.step);
       Take(g, s.ahead);
+      s.ahead_good = true;
+      s.ahead_for = s.step + 1;
       s.log->SaveStep(g, s.step + 1, false);
       s.log->RestoreTo(g, s.step + 1, s.step);
       BackWindow(g);
@@ -634,7 +673,10 @@ std::string Report()
   const Stats& t = s.stats;
   const double steps = std::max<double>(1, static_cast<double>(t.passes - t.none_time));
   const double pics = std::max<double>(1, static_cast<double>(t.pictures));
-  return std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
+  if (s.path != nullptr)
+    std::fflush(s.path);
+  return std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
+         std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
                      "{} camera cuts; {} pictures between; a step ahead {:.2f} ms + its undo {:.2f} ms ({}); a picture {:.2f} ms, of it the draw-done wait {:.2f}, + its undo {:.2f} ms ({}); "
                      "the real step and its drawing {:.2f} ms; {} machines kept for a jump; pictures that moved the executable's generator (undone): {}",
                      s.rate, t.passes, t.none_time, t.none_state, t.camera_cut, t.pictures, t.step_sum / steps, t.undo_sum / steps,
@@ -646,6 +688,9 @@ void Stop()
 {
   if (s.own.Active())
     s.own.Stop();
+  if (s.path != nullptr)
+    std::fclose(s.path);
+  s.path = nullptr;
   s.log = nullptr;
   s.stage = Stage::OFF;
   s.inside = false;
