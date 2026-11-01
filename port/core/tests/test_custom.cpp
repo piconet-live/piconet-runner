@@ -55,17 +55,17 @@ void TheEntryInTheRaceBlock()
   CHECK(boot::RACE_CUSTOM + 30 * boot::CUSTOM_ENTRY == boot::RACE_TRAILS);
 }
 
-// A seat's boost trail: three words of 0x01RRGGBB, the streak following the boost; picture only, so a bad colour is
+// A seat's boost trail: three words of 0x01RRGGBB; picture only, so a bad colour is
 // the game's own, never a refused race.
 void TheTrailInTheRaceBlock()
 {
   const auto entry = [](const std::optional<boot::Match>& m, int seat) { return m->race.data() + boot::RACE_TRAILS + seat * boot::TRAIL_ENTRY; };
   const auto seat = [](const std::string& trail) { return R"({"seat": 0, "machine": 5, "trail": )" + trail + "}"; };
-  auto m = SetUpOf(seat(R"({"normal": {"r": 255, "g": 128, "b": 0}, "boost": {"r": 0, "g": 200, "b": 96}})"));
+  auto m = SetUpOf(seat(R"({"normal": {"r": 255, "g": 128, "b": 0}, "boost": {"r": 0, "g": 200, "b": 96}, "sparks": {"r": 200, "g": 0, "b": 16}})"));
   CHECK(m.has_value());
   if (!m)
     return;
-  CHECK(Word(entry(m, 0)) == 0x01FF8000 && Word(entry(m, 0) + 4) == 0x0100C860 && Word(entry(m, 0) + 8) == 0x0100C860);
+  CHECK(Word(entry(m, 0)) == 0x01FF8000 && Word(entry(m, 0) + 4) == 0x0100C860 && Word(entry(m, 0) + 8) == 0x01C80010);
   // one left out, the game's own; a seat with none, nothing at all
   m = SetUpOf(std::string(R"({"seat": 0, "machine": 5, "trail": {"normal": {"r": 255, "g": 255, "b": 255}}}, )") + PLAIN);
   CHECK(m.has_value() && Word(entry(m, 0)) == 0x01FFFFFF && Word(entry(m, 0) + 4) == 0 && Word(entry(m, 0) + 8) == 0);

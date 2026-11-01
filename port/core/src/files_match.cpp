@@ -189,7 +189,7 @@ bool CustomOfSeat(const picojson::object& seat, u8* entry)
   return true;
 }
 
-// A boost trail colour ("normal" or "boost" of a seat's "trail": r, g, b) as the race block holds it: 0x01RRGGBB; 0,
+// A boost trail colour ("normal", "boost" or "sparks" of a seat's "trail": r, g, b) as the race block holds it: 0x01RRGGBB; 0,
 // the game's own (absent, or not a colour: colours are the picture's, so a bad one never stops a race). One whose
 // brightest part is under the least brightness keeps its hue and is lifted to it (BoostTrail.Lifted, the same sum).
 u32 TrailWord(const picojson::object& trail, const char* key)
@@ -209,16 +209,15 @@ u32 TrailWord(const picojson::object& trail, const char* key)
   return 0x01000000 | r << 16 | g << 8 | b;
 }
 
-// A seat's boost trail ("trail": normal, boost) into its entry of the race block: the streak follows the boost.
+// A seat's boost trail ("trail": normal, boost, sparks) into its entry of the race block.
 void TrailOfSeat(const picojson::object& seat, u8* entry)
 {
   const picojson::object* t = Object(seat, "trail");
   if (!t)
     return;
-  const u32 boost = TrailWord(*t, "boost");
   Put32(entry, TrailWord(*t, "normal"));
-  Put32(entry + 4, boost);
-  Put32(entry + 8, boost);
+  Put32(entry + 4, TrailWord(*t, "boost"));
+  Put32(entry + 8, TrailWord(*t, "sparks"));
 }
 
 u32 OtherSoundsWord(const std::string& sounds)

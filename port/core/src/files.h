@@ -35,8 +35,7 @@ constexpr u32 RACE_SIZE = 1640;
 // entries; +28 the pilot (the stock machine 0-40 whose pilot drives it). A custom seat's machine is CUSTOM_MACHINE.
 constexpr u32 RACE_CUSTOM = 320, CUSTOM_ENTRY = 32;
 constexpr u32 CUSTOM_MACHINE = 0x32;
-// the seats' boost trail colours: 30 entries of three words, seat order (memmap.py RACE_TRAILS): the flame while not
-// boosting, while boosting, the streak; 0x01RRGGBB, 0 the game's own. Picture only: no step reads them.
+// the seats' boost trail colours: 30 entries of three words, seat order (memmap.py RACE_TRAILS): XX 0x01RRGGBB, 0 the game's own. Picture only: no step reads them.
 constexpr u32 RACE_TRAILS = 1280, TRAIL_ENTRY = 12;
 static_assert(RACE_CUSTOM + 30 * CUSTOM_ENTRY == RACE_TRAILS && RACE_TRAILS + 30 * TRAIL_ENTRY == RACE_SIZE);
 // the host's rules the games apply (protocol/rules.toml: their words, ranges and reader, race_rules.g.h): the CPU
