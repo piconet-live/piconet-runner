@@ -50,7 +50,7 @@ An offset that is not a number snaps to 0 like one too large (no compare is true
 caught it, and the rival was then never drawn again in that game), and an up vector that is not a number cuts
 nothing.
 
-Tests' log (memmap.SMOOTH_LOG, 8 bytes at frame & 2047, written at the end of every `smooth_draw` in a game told to
+Tests' log (memmap.SMOOTH_LOG, 8 bytes at frame & 1023, written at the end of every `smooth_draw` in a game told to
 keep the logs, memmap.IMAGE_LOGS; a players' game writes nothing): the step word's
 low half, the seat whose offset had the largest part along its up vector among the machines on the road in this
 frame, the frame's flags (1 it advanced 0 to 30 steps, 2 a rollback, 4 no smoothing, 8 the part is left in, 16 the

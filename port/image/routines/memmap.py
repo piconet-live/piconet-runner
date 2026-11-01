@@ -268,9 +268,9 @@ HFR_DRAWING = _facts.HFR_DRAWING  # reserved, 0: nothing writes or reads it (the
 assert SPEC_STEP + 4 == HFR_DRAWING and HFR_DRAWING + 4 <= CONTROL + 0x400   # the kept results begin at +0x400
 assert RACE + RACE_SIZE <= SPEC_LOG and SPEC_LOG + SPEC_LOG_ENTRIES * 8 == GENERATOR_LOG
 assert GENERATOR_LOG + GENERATOR_LOG_STEPS * 8 == INPUTS
-SMOOTH_LOG = _facts.SMOOTH_LOG                # tests: the rivals' smoothing, an entry a displayed race frame (smooth.py `sd_log`): 2048 x 8
-SMOOTH_LOG_FRAMES = _facts.SMOOTH_LOG_FRAMES  # bytes at frame & 2047, the last quarter of the image's own 64 KiB (the image's
-                          # routines take 48 KiB)
+SMOOTH_LOG = _facts.SMOOTH_LOG                # tests: the rivals' smoothing, an entry a displayed race frame (smooth.py `sd_log`): 1024 x 8
+SMOOTH_LOG_FRAMES = _facts.SMOOTH_LOG_FRAMES  # bytes at frame & 1023, the last eighth of the image's own 64 KiB (the image's
+                          # routines may take 56 KiB)
 assert SMOOTH_LOG + SMOOTH_LOG_FRAMES * 8 == CONTROL
 HOSTCALLS = _facts.HOSTCALLS      # host services: a call to one of these addresses leaves native code for the host program.
 HOST_NET = _facts.HOST_NET        # the network hook (the frame routine: before every step, in every pass of the start gate)
