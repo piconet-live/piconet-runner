@@ -28,6 +28,7 @@
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 #include "VideoCommon/AbstractTexture.h"
+#include "VideoCommon/AuroraPresent.h"
 #include "VideoCommon/TextureCacheBase.h"
 #include "VideoCommon/TextureConfig.h"
 #include "VideoCommon/TextureDecoder.h"
@@ -381,14 +382,20 @@ void DrawSpeed(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& p
   Text(list, m, Bold(32), 1398, 850, ov::TEXT, a, false, "km/h");
 }
 
-// A racer's head as the game's FaceDisp copied it this frame. The one function that knows where the picture is: here the
-// emulator's texture cache, by the copy's address; Aurora's would be g_gxState.copyTextures[address] with add_texture.
-// The reference is kept to the next frame's, since the drawing happens after this returns. None until the first copy.
+// A racer's head as the game's FaceDisp copied it this frame. The one function that knows where the picture is: with
+// Dolphin's video off, Aurora's copy of that address (Aurora draws nothing there until it has one, and takes the copy at
+// its own frame's end); else the emulator's texture cache by the address, the reference kept to the next frame's, since
+// the drawing happens after this returns, and none until the first copy.
 ImTextureRef HeadPicture(std::size_t entry, fzgx::u32 address, bool* has)
 {
   static std::array<RcTcacheEntry, 6> held;
   *has = false;
   held[entry] = {};
+  if (VideoCommon::AuroraPresent::CountsFrames())
+  {
+    *has = address != 0;
+    return *has ? ImTextureRef(static_cast<ImTextureID>(VideoCommon::AuroraPresent::OverlayCopyTexture(address & 0x01FFFFFF))) : ImTextureRef{};
+  }
   if (g_texture_cache == nullptr || address == 0)
     return {};
   auto& memory = Core::System::GetInstance().GetMemory();

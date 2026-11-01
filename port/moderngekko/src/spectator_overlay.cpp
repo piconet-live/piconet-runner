@@ -134,10 +134,7 @@ void DrawRates(ImDrawList* list, const ImVec2& display)
   std::snprintf(text, sizeof(text), "%d FPS   %d steps/s", std::isfinite(pictures) ? static_cast<int>(std::lround(pictures)) : 0, steps_a_second);
   const float size = std::max(16.0f, display.y * 0.018f);
   const ov::Type type = ov::Figure(size);
-  const float x = (display.x - ov::Width(type, text)) / 2, top = size * 0.2f, edge = std::max(1.0f, size * 0.07f);
-  for (const auto& [dx, dy] : {std::pair{-1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, -1.0f}, {0.0f, 1.0f}, {-0.7f, -0.7f}, {0.7f, -0.7f}, {-0.7f, 0.7f}, {0.7f, 0.7f}})
-    ov::Draw(list, type, x + dx * edge, top + dy * edge, ov::Colour(ov::GROUND, 1), text);
-  ov::Draw(list, type, x, top, ov::Colour(ov::TEXT, 1), text);
+  ov::DrawOutlined(list, type, (display.x - ov::Width(type, text)) / 2, size * 1.2f, ov::Colour(ov::TEXT, 1), ov::Colour(ov::GROUND, 1), std::max(1.0f, size * 0.07f), 0, text);
 }
 
 void DrawOverlays()
