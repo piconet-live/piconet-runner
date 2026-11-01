@@ -69,7 +69,9 @@ Layout Default()
   // where the game's own parts stand, in the owner's mockup (1540 by 887; 1000 units the picture's height): every box the
   // adapter's modern_hud.cpp lays its element in
   put(SlotId::Position, Anchor::Top, 0, 65.4f);
-  put(SlotId::Lap, Anchor::TopRight, 417.1f, 33.8f);
+  // (the mockup's 417.1, then left of the Blade at its largest in a boost, 1.24 times about its wide end, its thin end reaching the mockup's x 1128:
+  // 49 mockup pixels, 6 of them a gap)
+  put(SlotId::Lap, Anchor::TopRight, 472.3f, 33.8f);
   put(SlotId::Energy, Anchor::TopRight, 78.9f, 45.1f);
   put(SlotId::RaceTime, Anchor::TopRight, 106, 124);
   put(SlotId::LapTimes, Anchor::TopRight, 106, 198.4f);
