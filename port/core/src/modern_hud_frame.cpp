@@ -13,6 +13,7 @@
 #include "net_modes.h"
 #include "mode.h"
 #include "mode_hud.h"
+#include "mode_gap.h"
 #include "files.h"
 
 #include "fzgx/hud_layout.h"
@@ -24,6 +25,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string_view>
+#include <utility>
 
 namespace fzgx::net
 {
@@ -90,6 +92,109 @@ void ReadNames(Guest& g)
   }
 }
 
+// The modes' slots in hud_layout's order (the mode's `top6` apart).
+static_assert(modes::SLOT_COUNT == 8 && modes::SLOT_UNDER_PLACE == 0 && modes::SLOT_UNDER_TOP6 == 6 && modes::SLOT_TOP6 == 7 &&
+              static_cast<u32>(hl::SlotId::UnderTop6) - static_cast<u32>(hl::SlotId::UnderPlace) == 6 && hl::SLOTS == static_cast<u32>(hl::SlotId::UnderTop6) + 1);
+static_assert(modes::COLOUR_COUNT == 5);
+constexpr std::array<u32, modes::COLOUR_COUNT> PALETTE = {0xFFFFFF, 0x3DFF6A, 0xFF4D4D, 0xFFD500, 0xFF9F1A};  // the HUD's: overlay.h's TEXT, ACCENT, DANGER, GOLD, WARN
+
+// A text of the package with its values written in; the characters 1 and 2 stand for them.
+void WriteText(std::array<char, 80>& to, const std::string& text, s32 first, s32 second)
+{
+  std::size_t at = 0;
+  for (const char c : text)
+  {
+    char number[16];
+    const int wrote = c == 1 || c == 2 ? std::snprintf(number, sizeof(number), "%d", c == 1 ? first : second) : 0;
+    for (int i = 0; i < wrote && at + 1 < to.size(); ++i)
+      to[at++] = number[i];
+    if (wrote == 0 && c != 1 && c != 2 && at + 1 < to.size())
+      to[at++] = c;
+  }
+  to[at] = 0;
+}
+
+ModernHudShow::Gap ShowGap(const mh::TimeGap& gap)
+{
+  return {gap.known, gap.steps, gap.laps, gap.trend};
+}
+
+// What the mode's words have on the racer followed's slots, the gaps worked out from the block as it stands.
+void ReadModeSlots(Guest& g, ModernHudShow& show, u32 viewed, u32 machines, u32 count)
+{
+  const u32 block = g.Read32(layout::MODES + 4);
+  const boot::Match* match = boot::Get();
+  if (block == 0 || !match || !match->game_mode)
+    return;
+  std::array<u32, 30> place_of{};
+  place_of.fill(30);
+  const auto ranks = [&] {
+    for (u32 seat = 0; seat < count; ++seat)
+      if (const u32 p = g.Read32(machines + seat * game::MACHINE_SIZE + game::MACHINE_PROGRESS); p != 0)
+        place_of[g.Read8(p + game::PROGRESS_RANK) % 30] = seat;
+  };
+  bool ranked = false;
+  for (u32 slot = 0; slot < modes::SLOT_COUNT; ++slot)
+  {
+    const u32 r = block + mh::SlotRecord(viewed, slot);
+    const u8 kind = g.Read8(r + mh::SLOT_KIND);
+    if (kind == mh::SLOT_NONE)
+      continue;
+    const u8 what = g.Read8(r + mh::SLOT_WHAT), colour = g.Read8(r + mh::SLOT_COLOUR);
+    if (slot == modes::SLOT_TOP6)
+    {
+      show.row_gaps = kind == mh::SLOT_GAP;
+      if (show.row_gaps)
+        for (std::size_t i = 0; i < show.heads.size(); ++i)
+          if (show.heads[i].address != 0 && show.heads[i].seat < count)
+            show.row_gap[i] = ShowGap(mh::TimeGapOf(g, block, viewed, show.heads[i].seat));
+      continue;
+    }
+    ModernHudShow::ModeSlot& to = show.mode_slot[slot];
+    show.mode_slots = true;
+    to.coloured = colour < PALETTE.size();
+    to.rgb = to.coloured ? PALETTE[colour] : 0xFFFFFF;
+    const u32 a = g.Read32(r + mh::SLOT_A), b = g.Read32(r + mh::SLOT_B);
+    switch (kind)
+    {
+      case mh::SLOT_BAR:
+        to.kind = ModernHudShow::ModeKind::Bar;
+        to.bar = what;
+        to.value = std::bit_cast<float>(a);
+        to.most = std::bit_cast<float>(b);
+        if (!std::isfinite(to.value))
+          to.value = 0;
+        if (!std::isfinite(to.most) || to.most <= 0)
+          to.most = 1;
+        break;
+      case mh::SLOT_FIGURE:
+        to.kind = ModernHudShow::ModeKind::Figure;
+        to.figure = static_cast<s32>(a);
+        break;
+      case mh::SLOT_TEXT:
+        if (what >= 1 && what <= match->game_mode->hud_texts.size())
+        {
+          to.kind = ModernHudShow::ModeKind::Text;
+          WriteText(to.text, match->game_mode->hud_texts[what - 1], static_cast<s32>(a), static_cast<s32>(b));
+        }
+        break;
+      case mh::SLOT_GAP:
+      {
+        to.kind = ModernHudShow::ModeKind::Gap;
+        if (!std::exchange(ranked, true))
+          ranks();
+        const u32 place = g.Read8(g.Read32(machines + viewed * game::MACHINE_SIZE + game::MACHINE_PROGRESS) + game::PROGRESS_RANK);
+        const u32 at = what == modes::TARGET_AHEAD ? (place == 0 ? 30 : place - 1) : what == modes::TARGET_BEHIND ? place + 1 : 0;
+        if (at < 30 && place_of[at] < count && place_of[at] != viewed)
+          to.gap = ShowGap(mh::TimeGapOf(g, block, viewed, place_of[at]));
+        break;
+      }
+      default:
+        break;
+    }
+  }
+}
+
 struct Stats
 {
   u64 frames = 0, shown = 0, stripped = 0;
@@ -99,11 +204,16 @@ Stats s_stats;
 bool s_told = false;
 }  // namespace
 
+bool ModernHudOn(Guest& g)
+{
+  return TheOptions().modern_hud || (g.Read32(layout::MODE_HUD + mh::WINDOW_FLAGS) & mh::HUD_MODERN) != 0;
+}
+
 void ModernHudFrame(Guest& g)
 {
   if (!g.Ram(MODULE_POINTER, 4) || g.Read32(MODULE_POINTER) != layout::MAIN_REL || !s_session)
     return;
-  if (!TheOptions().modern_hud && (g.Read32(layout::MODE_HUD + mh::WINDOW_FLAGS) & mh::HUD_MODERN) == 0)
+  if (!ModernHudOn(g))
     return;
   const u32 module = layout::MAIN_REL, phase = g.Read16(module + game::PHASE);
   if (phase < COURSE_INTRO)
@@ -122,7 +232,12 @@ void ModernHudFrame(Guest& g)
   ModernHudShow show;
   const u32 viewed = ViewedRacer(g), machines = g.Read32(module + MACHINES);
   const u32 count = std::min<u32>(g.Read8(module + MACHINE_COUNT), 30);
-  show.on = (phase == COUNTDOWN || phase == RACE) && minimap::HudOn(mask) && machines != 0 && viewed < count;
+  // A watcher's Game view is this HUD for the racer followed, whatever camera the game's own HUD is off behind (the
+  // image keeps its mask off behind the chase camera, `spechud`), while that racer races: the same racer's parts as the game's HUD.
+  const auto& controls = s_session->spectator.controls;
+  const bool game_view = s_session->spectator.shown && controls && controls->view() == spectator::View::Game && machines != 0 && viewed < count &&
+                         (g.Read32(machines + viewed * game::MACHINE_SIZE) & (game::MACHINE_FLAG_OUT | game::MACHINE_FLAG_FINISHED)) == 0;
+  show.on = (phase == COUNTDOWN || phase == RACE) && (minimap::HudOn(mask) || game_view) && machines != 0 && viewed < count;
   if (show.on)
   {
     const u32 m = machines + viewed * game::MACHINE_SIZE, p = g.Read32(m + game::MACHINE_PROGRESS);
@@ -176,6 +291,7 @@ void ModernHudFrame(Guest& g)
             head.colour = colour[head.seat];
           }
         }
+      ReadModeSlots(g, show, viewed, machines, count);
       for (u32 seat = 0; seat < count; ++seat)
         if ((g.Read32(machines + seat * game::MACHINE_SIZE) & game::MACHINE_FLAG_OUT) == 0)
           ++show.racers;

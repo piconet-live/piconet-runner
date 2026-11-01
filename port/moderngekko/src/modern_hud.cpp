@@ -404,6 +404,28 @@ ImTextureRef HeadPicture(std::size_t entry, fzgx::u32 address, bool* has)
   return ImTextureRef(static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(held[entry]->texture.get())));
 }
 
+// A gap as its row or slot writes it: -6.4 a racer ahead of you, +2.1 behind, in tenths; +1 LAP a lap or more apart.
+void GapText(char* to, std::size_t size, const fzgx::ModernHudShow::Gap& gap)
+{
+  const char sign = gap.steps > 0 ? '-' : '+';
+  if (gap.laps > 0)
+  {
+    std::snprintf(to, size, "%c%u LAP%s", sign, gap.laps, gap.laps == 1 ? "" : "S");
+    return;
+  }
+  const std::uint32_t tenths = static_cast<std::uint32_t>(std::abs(gap.steps)) * 10 / 60;
+  if (tenths >= 600)
+    std::snprintf(to, size, "%c%u:%02u.%u", sign, tenths / 600, tenths / 10 % 60, tenths % 10);
+  else
+    std::snprintf(to, size, "%c%u.%u", sign, tenths / 10, tenths % 10);
+}
+
+// The owner's rule: green gaining, red losing, white holding.
+std::uint32_t TrendColour(const fzgx::ModernHudShow::Gap& gap)
+{
+  return gap.laps > 0 || gap.trend == 0 ? ov::TEXT : gap.trend < 0 ? ov::ACCENT : ov::DANGER;
+}
+
 // The mockup's Portraits rows: a black slanted box, the head cut by the slant, the racer's colour on its left edge, the place
 // overlapping, the name to the right. No gap, no energy.
 void DrawTop6(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a, Clock::time_point now)
@@ -441,7 +463,121 @@ void DrawTop6(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& pi
     std::snprintf(place, sizeof(place), "%u", head.row + 1);
     // large, on the head's corner, with a wider outline than the other figures': it must read over any picture
     Text(list, m, Heavy(PLACE_SIZE), X + 4, y + H + 2, head.row == 0 ? ov::GOLD : ov::TEXT, a, true, place, 1, PLACE_OUTLINE);
-    Text(list, m, ov::Type{ov::TheFonts().semi, 27, false, false}, X + W + SL + 8, y + 46, ov::TEXT, a, false, head.name.data());
+    // the name, and under it this racer's gap to you if the mode shows them (the mockup's Portraits rows)
+    const bool gap = s.row_gaps && s.row_gap[i].known;
+    Text(list, m, ov::Type{ov::TheFonts().semi, 27, false, false}, X + W + SL + 8, y + (gap ? 32 : 46), ov::TEXT, a, false, head.name.data());
+    if (gap)
+    {
+      char text[24];
+      GapText(text, sizeof(text), s.row_gap[i]);
+      Text(list, m, Bold(22), X + W + SL + 8, y + 58, TrendColour(s.row_gap[i]), a, false, text);
+    }
+  }
+}
+
+// The mode's words' slots, drawn where the mockup's "Bars" drew them: where a bar starts and how long, where a text ends or begins.
+struct SlotShape
+{
+  hl::SlotId id;
+  float x0, y0, x1, y1;   // the slot's box
+  float bar_x, bar_y, bar_w;
+  float text_x, text_y, text_size;
+  char text_at;           // 'l' beginning at text_x, 'r' ending there, 'c' about it
+};
+constexpr std::array<SlotShape, 7> SLOT_SHAPES = {{
+    {hl::SlotId::UnderPlace, 640, 190, 900, 240, 692, 226, 156, 770, 230, 40, 'c'},
+    {hl::SlotId::BesidePlace, 850, 186, 960, 234, 866, 226, 88, 866, 226, 40, 'l'},
+    {hl::SlotId::UnderTimes, 1190, 300, 1460, 345, 1196, 334, 250, 1446, 338, 34, 'r'},
+    {hl::SlotId::OverSpeed, 1200, 745, 1460, 772, 1212, 764, 236, 1448, 768, 28, 'r'},
+    {hl::SlotId::UnderSpeed, 1200, 855, 1460, 880, 1212, 874, 236, 1448, 878, 28, 'r'},
+    {hl::SlotId::Message, 854, 385, 1166, 425, 900, 415, 220, 1010, 415, 28, 'c'},
+    {hl::SlotId::UnderTop6, 30, 610, 340, 650, 56, 640, 240, 56, 642, 32, 'l'},
+}};
+
+// The mockup's strip(): a thin slanted bar; wedge(): as the energy meter widens; cells(): one slanted cell a whole unit.
+void DrawModeBar(ImDrawList* list, const Mock& m, const SlotShape& at, const fzgx::ModernHudShow::ModeSlot& slot, float a)
+{
+  const float f = std::clamp(slot.value / slot.most, 0.0f, 1.0f);
+  const float x = at.bar_x, y = at.bar_y, w = at.bar_w;
+  const ImU32 fill = ov::Colour(slot.rgb, a), under = ov::Colour(ov::GROUND, a * 0.62f);
+  if (slot.bar == 0)
+  {
+    list->AddQuadFilled(m.P(x, y), m.P(x + w, y), m.P(x + w + 3, y - 9), m.P(x + 3, y - 9), under);
+    if (f > 0)
+      list->AddQuadFilled(m.P(x, y), m.P(x + w * f, y), m.P(x + w * f + 3, y - 9), m.P(x + 3, y - 9), fill);
+  }
+  else if (slot.bar == 1)
+  {
+    constexpr float HIGH = 26, SLANT = 0.42f;
+    const auto quad = [&](float g, ImU32 c, bool line) {
+      const float k = HIGH * (0.25f + 0.75f * g);
+      const ImVec2 p0 = m.P(x, y), p1 = m.P(x + w * g, y), p2 = m.P(x + w * g + k * SLANT, y - k), p3 = m.P(x + HIGH * 0.25f * SLANT, y - HIGH * 0.25f);
+      if (line)
+        list->AddQuad(p0, p1, p2, p3, c, 1.5f * m.k);
+      else
+        list->AddQuadFilled(p0, p1, p2, p3, c);
+    };
+    quad(1, under, false);
+    quad(1, ov::Colour(ov::TEXT, a * 0.55f), true);
+    if (f > 0)
+      quad(f, fill, false);
+  }
+  else
+  {
+    constexpr int MOST_CELLS = 12;
+    const int cells = std::clamp(static_cast<int>(slot.most), 1, MOST_CELLS);
+    const int lit = std::clamp(static_cast<int>(slot.value), 0, cells);
+    const float wide = std::min(20.0f, (w - 10) / static_cast<float>(cells) - 5), high = 24, slant = high * 0.42f;
+    for (int i = 0; i < cells; ++i)
+    {
+      const float left = x + static_cast<float>(i) * (wide + 5);
+      const ImVec2 p0 = m.P(left, y), p1 = m.P(left + wide, y), p2 = m.P(left + wide + slant, y - high), p3 = m.P(left + slant, y - high);
+      list->AddQuadFilled(p0, p1, p2, p3, i < lit ? fill : ov::Colour(ov::GROUND, a * 0.55f));
+      if (i >= lit)
+        list->AddQuad(p0, p1, p2, p3, ov::Colour(ov::TEXT, a * 0.35f), m.k);
+    }
+  }
+}
+
+void DrawModeSlots(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
+{
+  using Kind = fzgx::ModernHudShow::ModeKind;
+  for (std::size_t i = 0; i < SLOT_SHAPES.size(); ++i)
+  {
+    const fzgx::ModernHudShow::ModeSlot& slot = s.mode_slot[i];
+    const SlotShape& at = SLOT_SHAPES[i];
+    if (slot.kind == Kind::None || !s.layout[at.id].shown)
+      continue;
+    const Mock m = MockOf(s, at.id, picture, at.x0, at.y0, at.x1, at.y1);
+    if (slot.kind == Kind::Bar)
+    {
+      DrawModeBar(list, m, at, slot, a);
+      continue;
+    }
+    char text[32];
+    const char* run = text;
+    std::uint32_t rgb = slot.rgb;
+    float size = at.text_size;
+    if (slot.kind == Kind::Figure)
+    {
+      std::snprintf(text, sizeof(text), "%d", slot.figure);
+      size *= 1.25f;
+    }
+    else if (slot.kind == Kind::Gap)
+    {
+      if (!slot.gap.known)
+        continue;
+      GapText(text, sizeof(text), slot.gap);
+      if (!slot.coloured)
+        rgb = TrendColour(slot.gap);
+    }
+    else
+    {
+      run = slot.text.data();
+    }
+    const ov::Type type = Heavy(size);
+    const float wide = at.text_at == 'c' ? ov::Width(ov::Type{type.font, size * m.k, false, true}, run) / m.k / 2 : 0;
+    Text(list, m, type, at.text_x + wide, at.text_y, rgb, a, at.text_at != 'l', run);
   }
 }
 
@@ -562,6 +698,8 @@ void DrawModernHud(float x0, float y0, float x1, float y1)
     DrawPosition(list, s, picture, a, meter.pop_place);
   if (up(hl::SlotId::Clock))
     DrawClock(list, s, picture, a);
+  if (s.mode_slots)
+    DrawModeSlots(list, s, picture, a);
   if (up(hl::SlotId::Speed))
     DrawSpeed(list, s, picture, a, meter.kick);
   ov::NearestSampling(list);

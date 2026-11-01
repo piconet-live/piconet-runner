@@ -24,11 +24,12 @@
 namespace fzgx::mode
 {
 // The block's layout (port/image/routines/memmap.py names the words the image's sites read: the records, the end
-// word, the engine page's clock, no-contact rows, touching rows, moves and the rolling start's saved steering). Seven
+// word, the engine page's clock, no-contact rows, touching rows, moves and the rolling start's saved steering). Nine
 // pages: the run's words, the globals, the edges, the generator and the waiting rules' bits; two of seat words; the
 // wait records; the team words; the engine page (the race side's state: what the events compare with, the places,
-// the points, the contact table); the displays (mode_hud.h). Every page's first word is its step stamp.
-constexpr u32 BLOCK = 0x7000, PAGE = 0x1000;
+// the points, the contact table); the displays (mode_hud.h); the modern HUD's slots and the time gaps (mode_gap.h). Every
+// page's first word is its step stamp.
+constexpr u32 BLOCK = 0x9000, PAGE = 0x1000;
 constexpr u32 RECORDS = 0, RECORD = 16;   // a seat's: +0 flags, +4 accelerator, +8 brake, +12 the held speed
 constexpr u32 END = RECORDS + 30 * RECORD;  // 0x1E0: 0 the race goes on; 1 a mode error; 2 the mode ended it
 constexpr u32 FAULT = END + 4;            // the fault's reason (Fault), and +8 its step
@@ -99,7 +100,7 @@ constexpr float MOST_SPEED = 9000.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
               WAIT_RECORDS + modes::WAITS * WAIT <= 4 * PAGE && 4 * modes::TEAM_WORDS == 0x80 &&
-              TEAM_PAGE + modes::TEAMS * 0x80 <= ENGINE && 7 * PAGE == BLOCK && NC + 30 * 4 <= TOUCH &&
+              TEAM_PAGE + modes::TEAMS * 0x80 <= ENGINE && 9 * PAGE == BLOCK && NC + 30 * 4 <= TOUCH &&
               TOUCH + 30 * 4 <= TOUCH_PREV && TOUCH_PREV + 30 * 4 <= RESPAWN && TEAM_NC + 30 * 4 <= END_ORDER &&
               END_ORDER + 30 <= PLACES && PLACES + 30 <= POINTS && POINTS + 30 * 4 <= RANKS && RANKS + 30 <= SEAT_STATE &&
               SEAT_STATE + 30 * SEAT_STATE_SIZE <= MOVES && MOVES + 30 * 16 <= DANGER && DANGER + 30 * 16 <= ROLL_SAVE &&
@@ -197,6 +198,8 @@ struct Package
   u32 time_bonus = 0;               // time_bonus's steps, 0 none
   std::array<std::optional<u32>, 4> combat{};  // damage, knockback, wall_damage, wall_bounce: binary32 bits
   bool spin_off = false, side_off = false, spin_immune = false;
+  std::vector<std::string> hud_texts;  // the texts `show_text` names by their place from 1, UTF-8, the characters 1 and 2 where its values go
+  bool time_gaps = false;              // the compiler's: a rule reads or shows a time gap: the block's gap page is kept (mode_gap.h)
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   bool start_together = false;      // start_together: every machine on slot 0, every no-contact row on from before step 0

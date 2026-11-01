@@ -185,6 +185,7 @@ void TestPracticeIsAMode();
 void TestAnUnknownModeFieldPassesThrough();
 void TestAGonePlayerRetires();
 void TestTheModeTagWords();
+void TestTheModeHudSlotsAndGaps();
 void TestTheCutRaceWords();
 void TestTheStatWords();
 void TestAVecIsBuilt();
@@ -551,6 +552,7 @@ int main(int argc, char** argv)
   TestAnUnknownModeFieldPassesThrough();
   TestAGonePlayerRetires();
   TestTheModeTagWords();
+  TestTheModeHudSlotsAndGaps();
   TestTheCutRaceWords();
   TestTheStatWords();
   TestAVecIsBuilt();

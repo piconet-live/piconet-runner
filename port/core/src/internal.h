@@ -88,6 +88,7 @@ void InputsFrame(Guest& g);
 // seat), and the seat whose driver this game's player is: none (-1) for a spectator, a watcher, a replay, or a racer
 // the image spectates for (minimap_frame.cpp; the game mode's displays, mode_hud.cpp).
 u32 ViewedRacer(Guest& g);
+bool ModernHudOn(Guest& g);  // the modern HUD draws: the player's setting or the mode's `hud modern` (modern_hud_frame.cpp)
 u32 OwnSeat(Guest& g);
 void ModernHudFrame(Guest& g);  // the modern HUD: after the mode's display pass, before the drawing (modern_hud_frame.cpp)
 void ModernHudSummary();  // its line in the log, at the end

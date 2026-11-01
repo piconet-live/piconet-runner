@@ -76,6 +76,13 @@ Layout Default()
   put(SlotId::Speed, Anchor::BottomRight, 90.2f, 41.7f);
   put(SlotId::Top6, Anchor::TopLeft, 22.5f, 54.1f);
   put(SlotId::Clock, Anchor::Top, 0, 219.8f);
+  put(SlotId::UnderPlace, Anchor::Top, 0, 214.2f);
+  put(SlotId::BesidePlace, Anchor::Top, 152.2f, 209.7f);
+  put(SlotId::UnderTimes, Anchor::TopRight, 90.2f, 338.2f);
+  put(SlotId::OverSpeed, Anchor::BottomRight, 90.2f, 129.7f);
+  put(SlotId::UnderSpeed, Anchor::BottomRight, 90.2f, 7.9f);
+  put(SlotId::Message, Anchor::Top, 270.6f, 434);
+  put(SlotId::UnderTop6, Anchor::TopLeft, 33.8f, 687.7f);
   return l;
 }
 
