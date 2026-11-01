@@ -55,9 +55,10 @@ constexpr float STEADY = 0.15f;                // the state must stand this long
 constexpr float HIT_DROP = 0.006f;             // a fall in one picture of this much of the meter is a hit; a boost's drain is far less
 constexpr float SHAKE = 0.2f, SHAKE_APART = 0.25f, CHUNK_LINGERS = 0.25f;
 constexpr std::uint32_t LOCKED = 0xE60000;     // the game's meter on lap 1
-// A boost's effects, the mockup's: a burst of lightning as long as the game's sprite (14 of its frames, a new shape every 2), a kick
-// on the speed and the meter. Place and lap pop once a change has stood, so a rollback's correction, there and back, pops nothing.
-constexpr float BURST = 14.0f / 60, BURST_SHAPE = 2.0f / 60, KICK = 0.4f, BURST_APART = 0.15f;
+// A boost's effects, the mockup's boostFx: for as long as the boost lasts a white wave runs through the fill, sparks leave its end, the blade
+// breathes and the speed shakes; a press also gives a kick on the speed and the meter. Place and lap pop once a change has stood, so a
+// rollback's correction, there and back, pops nothing. The boost eases in and out, so a step run again never shows as a blink.
+constexpr float KICK = 0.4f, KICK_APART = 0.15f, BOOST_IN = 0.06f, BOOST_OUT = 0.18f;
 constexpr float POP_PLACE = 0.35f, POP_LAP = 0.4f, POP_STANDS = 0.1f;
 
 // The game's rainbow, fixed along the meter, sampled from a full meter in Classic frames.
@@ -82,7 +83,8 @@ struct Hud
   bool open = false, seen_open = false;
   Clock::time_point open_changed{}, opened{};
   std::uint32_t boost_left = 0;  // the last picture's
-  Clock::time_point burst{};
+  float boost = 0;               // 0 no boost, to 1 boosting, linear in time
+  Clock::time_point press{};
   // a figure that pops: what it says, what was last seen and since when, when it last popped
   struct Pops
   {
@@ -91,7 +93,7 @@ struct Hud
   } place, lap;
   std::array<ov::Eased, 6> rows;
   std::array<fzgx::u32, 6> row_seat{};
-  std::uint64_t draws = 0, bursts = 0;
+  std::uint64_t draws = 0, presses = 0;
   std::chrono::nanoseconds total{}, most{};
 };
 Hud s_hud;
@@ -164,7 +166,7 @@ struct MeterState
   bool refill = false;
   float alpha = 1;
   float kick = 0;     // 1 as a boost is pressed, to 0
-  float burst = -1;   // seconds into the lightning; below 0 none
+  float boost = 0;    // 0 to 1, eased: the boost's effects, as the boost opens and ends
   float pop_place = 0, pop_lap = 0;  // 1 as the figure changes, to 0
   bool Low() const { return level <= LOW_AT && !refill; }
   float Pulse() const { return 0.5f + 0.5f * std::sin(seconds * (level <= VERY_LOW_AT ? 4.0f : 2.0f) * 6.2831853f); }
@@ -197,7 +199,7 @@ void DrawBlade(ImDrawList* list, const Mock& m, const MeterState& d)
   constexpr float X0 = 1190, X1 = 1450, YB = 92, SLANT = 0.42f;
   const auto height = [](float f) { return 8 + 40 * f; };
   // (the kick: larger about the wide end's foot, as the mockup's group)
-  const float grow = 1 + d.kick * 0.12f;
+  const float grow = 1 + d.boost * (0.07f + 0.05f * (0.5f + 0.5f * std::sin(d.seconds * 5 * 6.2831853f))) + d.kick * 0.12f;
   const auto place = [&](float x, float y) { return m.P(X1 + (x - X1) * grow + d.shake, YB + (y - YB) * grow); };
   const auto foot = [&](float f) { return place(X0 + (X1 - X0) * f, YB); };
   const auto head = [&](float f) { return place(X0 + (X1 - X0) * f + height(f) * SLANT, YB - height(f)); };
@@ -234,6 +236,29 @@ void DrawBlade(ImDrawList* list, const Mock& m, const MeterState& d)
     const float at = std::fmod(d.seconds / 0.5f, 1.0f) * d.level;
     quad(at, std::min(d.level, at + 0.05f), ov::Colour(ov::TEXT, d.alpha));
   }
+  if (d.boost > 0)
+  {
+    // the wave: two white bands 7% of the bar long, 170 ms along the fill, half a period apart, a pixel soft at each end
+    const float soft = 1.5f / ((X1 - X0) * m.k);
+    const ImU32 white = ov::Colour(ov::TEXT, d.alpha * d.boost), clear = ov::Colour(ov::TEXT, 0);
+    for (int k = 0; k < 2 && d.level > 0; ++k)
+    {
+      const float a = std::fmod(d.seconds / 0.17f + static_cast<float>(k) * 0.5f, 1.0f) * d.level, b = std::min(d.level, a + 0.07f);
+      Band(list, foot(std::max(0.0f, a - soft)), head(std::max(0.0f, a - soft)), head(a), foot(a), clear, white);
+      quad(a, b, white);
+      if (b < d.level)
+        Band(list, foot(b), head(b), head(std::min(d.level, b + soft)), foot(std::min(d.level, b + soft)), white, clear);
+    }
+    // the sparks: seven thin slanted slivers off the fill's end, 420 ms each, shrinking and fading as they go
+    const float end = X0 + (X1 - X0) * d.level, tall = height(d.level);
+    for (int k = 0; k < 7; ++k)
+    {
+      const float i = static_cast<float>(k), p = std::fmod(d.seconds / 0.42f + i * 0.143f, 1.0f);
+      const float x = end + p * 70 + i * 3, y = YB - tall * (0.15f + 0.11f * i) - p * (i - 3) * 9;
+      list->AddQuadFilled(place(x, y), place(x + 12 * (1 - p) + 3, y), place(x + 15 * (1 - p) + 4, y - 3), place(x + 3, y - 3),
+                          ov::Colour(k % 2 != 0 ? ov::TEXT : Rainbow(d.level), d.alpha * d.boost * (1 - p)));
+    }
+  }
   const ImU32 line = d.Low() ? ov::Colour(ov::DANGER, d.alpha * (0.5f + 0.5f * d.Pulse())) : ov::Colour(ov::TEXT, d.alpha * 0.55f);
   list->AddQuad(foot(0), foot(1), head(1), head(0), line, 2 * m.k);
 }
@@ -253,7 +278,17 @@ void DrawRev(ImDrawList* list, const Mock& m, const MeterState& d)
     std::uint32_t colour = ov::GROUND;
     float opacity = 0.55f;
     if (on)
-      colour = d.kick > 0.4f ? ov::TEXT : d.At(f), opacity = 1;
+    {
+      opacity = 1;
+      // the kick whitens the lit cells, and through a boost a wave of two white cells in every seven runs up them
+      float white = std::clamp((d.kick - 0.3f) / 0.2f, 0.0f, 1.0f);
+      if (d.boost > 0)
+      {
+        const float place = std::fmod(static_cast<float>(i) - d.seconds * 1000 / 26, 7.0f), at = place < 0 ? place + 7 : place;
+        white = std::max(white, d.boost * (at > 6.5f ? (at - 6.5f) * 2 : at < 2 ? 1 : at < 2.5f ? (2.5f - at) * 2 : 0));
+      }
+      colour = Mix(d.At(f), ov::TEXT, white);
+    }
     else if (chunk)
       colour = ov::TEXT, opacity = 1;
     if (d.refill && on)
@@ -272,46 +307,10 @@ void DrawRev(ImDrawList* list, const Mock& m, const MeterState& d)
 using MeterDrawer = void (*)(ImDrawList*, const Mock&, const MeterState&);
 constexpr std::array<MeterDrawer, hl::METERS> METER_DRAWERS = {DrawBlade, DrawRev};
 
-// A number from 0 to 1 that only depends on its seed: the lightning's shape, the same however often it is drawn. (No generator of the game's.)
-float Scatter(std::uint32_t seed)
-{
-  seed = (seed ^ 0x9E3779B9u) * 0x85EBCA6Bu;
-  seed ^= seed >> 13;
-  seed *= 0xC2B2AE35u;
-  return static_cast<float>((seed ^ seed >> 16) & 0xFFFF) / 65535.0f;
-}
-
-// The lightning over the meter, as long as the game's: three jagged bolts along it, a new shape every 2 of the game's frames, thinning as it ends.
-void DrawLightning(ImDrawList* list, const Mock& m, const MeterState& d)
-{
-  if (d.burst < 0 || d.burst >= BURST)
-    return;
-  constexpr int BOLTS = 3, BENDS = 9;
-  constexpr float X0 = 1192, X1 = 1468, YB = 92;
-  const std::uint32_t shape = static_cast<std::uint32_t>(d.burst / BURST_SHAPE);
-  const float left = 1 - d.burst / BURST;
-  for (int b = 0; b < BOLTS; ++b)
-  {
-    std::array<ImVec2, BENDS + 1> line;
-    for (int i = 0; i <= BENDS; ++i)
-    {
-      const float f = static_cast<float>(i) / BENDS;
-      const std::uint32_t seed = shape * 131 + static_cast<std::uint32_t>(b) * 17 + static_cast<std::uint32_t>(i);
-      const float tall = 8 + 40 * f;  // (as high as the blade there, and leaning as it does)
-      const float y = YB - tall * (0.12f + 0.76f * Scatter(seed));
-      const float x = X0 + (X1 - X0) * f + (YB - y) * 0.42f + (i == 0 || i == BENDS ? 0 : (Scatter(seed + 977) - 0.5f) * 16);
-      line[static_cast<std::size_t>(i)] = m.P(x + d.shake, y);
-    }
-    list->AddPolyline(line.data(), BENDS + 1, ov::Colour(ov::GROUND, d.alpha * 0.55f), ImDrawFlags_None, (3.5f + 3 * left) * m.k);
-    list->AddPolyline(line.data(), BENDS + 1, ov::Colour(ov::TEXT, d.alpha * (0.4f + 0.6f * left)), ImDrawFlags_None, (1 + 1.6f * left) * m.k);
-  }
-}
-
 void DrawEnergy(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, const MeterState& d)
 {
   const Mock m = MockOf(s, hl::SlotId::Energy, picture, METER_X0, METER_Y0, METER_X1, METER_Y1);
   METER_DRAWERS[static_cast<std::size_t>(s.meter)](list, m, d);
-  DrawLightning(list, m, d);
 }
 
 void DrawTime(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a)
@@ -373,12 +372,14 @@ void DrawClock(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& p
   Text(list, m, Heavy(74), 770 + wide / 2, 250, s.clock_seconds < 10 ? ov::DANGER : ov::TEXT, a, true, text);
 }
 
-void DrawSpeed(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a, float kick)
+void DrawSpeed(ImDrawList* list, const fzgx::ModernHudShow& s, const hl::Rect& picture, float a, const MeterState& d)
 {
   const Mock m = MockOf(s, hl::SlotId::Speed, picture, 1200, 775, 1460, 850);
   char text[16];
   std::snprintf(text, sizeof(text), "%d", static_cast<int>(std::lround(s.speed)));
-  Text(list, m, Heavy(88), 1390, 850, ov::TEXT, a, true, text, 1 + kick * 0.28f);
+  // the figure shakes a little and stands larger through a boost
+  const float shake_x = d.boost * std::sin(d.seconds * 1000 / 19) * 1.6f, shake_y = d.boost * std::cos(d.seconds * 1000 / 23) * 1.2f;
+  Text(list, m, Heavy(88), 1390 + shake_x, 850 + shake_y, ov::TEXT, a, true, text, 1 + d.kick * 0.28f + d.boost * 0.05f);
   Text(list, m, Bold(32), 1398, 850, ov::TEXT, a, false, "km/h");
 }
 
@@ -604,7 +605,8 @@ MeterState Effects(const fzgx::ModernHudShow& s, Clock::time_point now, float a)
     h.open = h.seen_open = s.boost_open;
     h.opened = {};
     h.boost_left = s.boost_left;
-    h.burst = {};
+    h.boost = 0;
+    h.press = {};
     h.place = {s.place, s.place, now, {}};
     h.lap = {s.lap, s.lap, now, {}};
   }
@@ -634,9 +636,11 @@ MeterState Effects(const fzgx::ModernHudShow& s, Clock::time_point now, float a)
   }
   // A press: the game's count of an energy boost's steps went up. The presented value of the game's own word: a step run
   // again by a rollback sets it to the same, so it goes up once; a press a rollback takes back is seen once at most.
-  if (s.boost_left > h.boost_left && s.boost_open && (h.burst == Clock::time_point{} || since(h.burst) >= BURST_APART))
-    h.burst = now, ++h.bursts;
+  if (s.boost_left > h.boost_left && s.boost_open && (h.press == Clock::time_point{} || since(h.press) >= KICK_APART))
+    h.press = now, ++h.presses;
   h.boost_left = s.boost_left;
+  const bool boosting = s.boost_left > 0 && s.boost_open;
+  h.boost = std::clamp(h.boost + (boosting ? passed / BOOST_IN : -passed / BOOST_OUT), 0.0f, 1.0f);
   const auto pop = [&](Hud::Pops& p, std::uint32_t value, float seconds) {
     if (value != p.seen)
       p.seen = value, p.changed = now;
@@ -647,11 +651,9 @@ MeterState Effects(const fzgx::ModernHudShow& s, Clock::time_point now, float a)
   MeterState d;
   d.pop_place = pop(h.place, s.place, POP_PLACE);
   d.pop_lap = pop(h.lap, s.lap, POP_LAP);
-  if (h.burst != Clock::time_point{})
-  {
-    d.burst = since(h.burst);
-    d.kick = std::max(0.0f, 1 - d.burst / KICK);
-  }
+  if (h.press != Clock::time_point{})
+    d.kick = std::max(0.0f, 1 - since(h.press) / KICK);
+  d.boost = h.boost * h.boost * (3 - 2 * h.boost);
   d.level = h.meter, d.trail = h.trail, d.open = h.open, d.alpha = a;
   d.seconds = since(h.start);
   d.refill = s.pit && h.meter < 1;
@@ -708,7 +710,7 @@ void DrawModernHud(float x0, float y0, float x1, float y1)
   if (s.mode_slots)
     DrawModeSlots(list, s, picture, a);
   if (up(hl::SlotId::Speed))
-    DrawSpeed(list, s, picture, a, meter.kick);
+    DrawSpeed(list, s, picture, a, meter);
   ov::NearestSampling(list);
   const auto took = Clock::now() - began;
   s_hud.total += took;
@@ -717,7 +719,7 @@ void DrawModernHud(float x0, float y0, float x1, float y1)
   if (++s_hud.draws % 3600 == 0)
   {
     char line[140];
-    std::snprintf(line, sizeof(line), "fzgx: modern HUD: drawn %llu times, %llu boost bursts, mean %lld ns, most %lld ns", static_cast<unsigned long long>(s_hud.draws), static_cast<unsigned long long>(s_hud.bursts),
+    std::snprintf(line, sizeof(line), "fzgx: modern HUD: drawn %llu times, %llu boost presses, mean %lld ns, most %lld ns", static_cast<unsigned long long>(s_hud.draws), static_cast<unsigned long long>(s_hud.presses),
                   static_cast<long long>(s_hud.total.count() / static_cast<long long>(s_hud.draws)), static_cast<long long>(s_hud.most.count()));
     s_core_host.Log(fzgx::LogLevel::Notice, line);
   }
