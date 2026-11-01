@@ -114,6 +114,7 @@ enum class Stage : u8
   AHEAD_MANAGER,  // the simulation manager is being chosen
   AHEAD_STEP,     // the step is being run
   PICTURE,        // a picture's list
+  READ,           // the wait for the list before it, as the game's main loop waits before its frame begin
   BEGIN,          // its frame begin
   WAIT,           // the wait for it
 };
@@ -144,6 +145,7 @@ struct Stats
 struct Run
 {
   bool on = false;
+  bool no_read_wait = false;  // AURORA_TEST_NO_READ_WAIT: a test's control, the fault back
   u32 rate = 120, most = 1;  // pictures a second, pictures between a step
   std::function<void(float)> between;
   std::function<void(u32)> ran;
@@ -442,6 +444,7 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran)
   s.rate = std::min<u32>(static_cast<u32>(std::atoi(asked)), 480);
   s.most = static_cast<u32>(std::lround(s.rate / 60.0)) - 1;
   s.on = true;
+  s.no_read_wait = std::getenv("AURORA_TEST_NO_READ_WAIT") != nullptr;
   if (const char* path = std::getenv("AURORA_RUNAHEAD_PATH"))
     s.path = std::fopen(path, "w");
   Notice("fzgx: run ahead: {} pictures a second asked for, {} between two steps at most", s.rate, s.most);
@@ -629,6 +632,18 @@ bool Next(u32 returned, Call* call)
       ++s.index;
       return true;
     }
+    // The frame begin keeps the read pointer of the list being read for the next time it hands it over, so the GP must
+    // be done with it: a pointer kept early has the GP read the end of an old list again as if it were new, and decode
+    // garbage (Unknown Opcode, the draw-done lost, the game's watchdog reboots). The main loop's own wait comes before
+    // its frame begin; here the true picture's list is still being read.
+    if (!s.no_read_wait)
+    {
+      s.stage = Stage::READ;
+      *call = {DRAW_DONE_WAIT, 0};
+      return true;
+    }
+    [[fallthrough]];
+  case Stage::READ:
     s.between(static_cast<float>(s.blend));
     s.stage = Stage::BEGIN;
     *call = {FRAME_BEGIN, 0};
