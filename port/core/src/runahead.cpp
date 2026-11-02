@@ -110,6 +110,7 @@ struct State
 {
   std::array<Machine, SEATS> machine;
   Camera camera;
+  u32 count = 0;  // the race's machines (the seats after them hold no machine)
 };
 
 enum class Stage : u8
@@ -300,6 +301,7 @@ std::string Percentiles(const std::array<u32, 40>& hist)
 void Take(const Guest& g, State& st)
 {
   const u32 machines = g.Read32(MACHINES);
+  st.count = std::min<u32>(g.Read8(game::MACHINE_COUNT_AT), SEATS);
   for (u32 i = 0; i < SEATS; ++i)
   {
     const u32 m = machines + i * BLOCK;
@@ -544,7 +546,8 @@ void SendRedraw()
   for (u32 i = 0; i < SEATS; ++i)
   {
     const Mtx& m = s.now.machine[i].pose;
-    q.machines |= 1u << i;
+    if (i < s.now.count)
+      q.machines |= 1u << i;
     for (int r = 0; r < 3; ++r)
       q.at[i][r] = float(double(view.m[4 * r]) * m.m[3] + double(view.m[4 * r + 1]) * m.m[7] + double(view.m[4 * r + 2]) * m.m[11] +
                          view.m[4 * r + 3]);
