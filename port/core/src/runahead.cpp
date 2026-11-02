@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <format>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -223,6 +224,14 @@ struct Run
   bool input_late = false;         // AURORA_TEST_INPUT_LATE: a test's control, the input left to the frame's own step
   Tick::time_point logged_tick{}, logged_early{};
   u32 logged_step = 0xFFFFFFFF;
+  // AURORA_TEST_LEAK=<file>: every 16th pass, all of RAM and the locked cache before it against after its undo. What
+  // differs is what a pass left behind, for the file: where and how many, per 256 bytes.
+  std::FILE* leak_log = nullptr;
+  bool force = false;  // AURORA_TEST_FORCE_PICTURES, or the comparison: pictures whatever they cost
+  std::vector<u8> leak_ram, leak_scratch;
+  bool leak_armed = false;
+  u64 leak_passes = 0;
+  std::map<u32, u32> leak_words;
 } s;
 
 float F(const Guest& g, u32 a)
@@ -473,6 +482,50 @@ net::Row RowAhead(Guest& g, net::Session& ss, u32 t)
   return row;
 }
 
+constexpr u32 RAM_START = 0x80000000, RAM_BYTES = 24 * 1024 * 1024, SCRATCH_START = 0xE0000000;
+
+void LeakBefore(Guest& g)
+{
+  if (s.leak_log == nullptr || (s.stats.passes & 15) != 0)
+    return;
+  s.leak_ram.resize(RAM_BYTES);
+  g.CopyFrom(s.leak_ram.data(), RAM_START, RAM_BYTES);
+  const u32 size = g.GetHost().ScratchSize();
+  s.leak_scratch.resize(size);
+  if (const u8* scratch = g.GetHost().Scratch(); scratch != nullptr)
+    std::memcpy(s.leak_scratch.data(), scratch, size);
+  s.leak_armed = true;
+}
+
+void LeakAfter(Guest& g)
+{
+  if (!s.leak_armed)
+    return;
+  s.leak_armed = false;
+  ++s.leak_passes;
+  static std::vector<u8> now(RAM_BYTES);
+  g.CopyFrom(now.data(), RAM_START, RAM_BYTES);
+  if (s.leak_passes == 8)  // one pass word by word, past the display buffers: what its words are
+    for (u32 k = 0; k + 4 <= RAM_BYTES && RAM_START + k < 0x81000000; k += 4)
+      if (std::memcmp(&now[k], &s.leak_ram[k], 4) != 0)
+      {
+        u32 was, is;
+        std::memcpy(&was, &s.leak_ram[k], 4);
+        std::memcpy(&is, &now[k], 4);
+        std::fprintf(s.leak_log, "W %08X %08X %08X\n", RAM_START + k, was, is);
+      }
+  if (s.leak_passes == 1)  // the undo log's untracked ranges, for telling those apart
+    for (u32 r = 0, n = std::min<u32>(g.Read32(net::UNTRACKED), 4096); r < n; ++r)
+      std::fprintf(s.leak_log, "U %08X %08X\n", g.Read32(net::UNTRACKED + 4 + 8 * r), g.Read32(net::UNTRACKED + 8 + 8 * r));
+  for (u32 k = 0; k + 4 <= RAM_BYTES; k += 4)
+    if (std::memcmp(&now[k], &s.leak_ram[k], 4) != 0)
+      ++s.leak_words[(RAM_START + k) & ~0xFFu];
+  if (const u8* scratch = g.GetHost().Scratch(); scratch != nullptr)
+    for (u32 k = 0; k + 4 <= s.leak_scratch.size(); k += 4)
+      if (std::memcmp(scratch + k, &s.leak_scratch[k], 4) != 0)
+        ++s.leak_words[(SCRATCH_START + k) & ~0xFFu];
+}
+
 // The room left in this field for what is run ahead, with the real step and all it needs after it still on time: from
 // recent highs, not means, and from where this tick actually is on the wall clock.
 double Room(double used_ms)
@@ -483,6 +536,8 @@ double Room(double used_ms)
 // How many pictures fit before the next field beside the step and its drawing: none, or at least one.
 u32 PicturesThatFit()
 {
+  if (s.force)  // (a test's, and the comparison takes the time: its passes are to have pictures in them)
+    return s.most;
   const double room = Room(s.step_high.Of(s.frame, STEP_MS_AT_FIRST));
   const double one = s.picture_high.Of(s.frame, PICTURE_MS_AT_FIRST);
   s.stats.bound_step += s.step_high.Of(s.frame, STEP_MS_AT_FIRST);
@@ -498,6 +553,8 @@ u32 PicturesThatFit()
 // One more picture still leaves the real step on time, by what has been spent so far.
 bool PictureStillFits()
 {
+  if (s.force)
+    return true;
   return Room(Ms(Tick::now() - s.tick)) >= s.picture_high.Of(s.frame, PICTURE_MS_AT_FIRST);
 }
 
@@ -553,6 +610,9 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran)
   s.on = false;
   s.between = std::move(between);
   s.input_late = std::getenv("AURORA_TEST_INPUT_LATE") != nullptr;
+  if (const char* path = std::getenv("AURORA_TEST_LEAK"))
+    s.leak_log = std::fopen(path, "w");
+  s.force = s.leak_log != nullptr || std::getenv("AURORA_TEST_FORCE_PICTURES") != nullptr;
   if (const char* share = std::getenv("AURORA_TEST_HIGH_SHARE"))
     s_high_share = std::atof(share);
   if (const char* path = std::getenv("AURORA_TEST_INPUT_LOG"))
@@ -667,6 +727,8 @@ bool Begin()
     s.stats.ahead_most = std::max(s.stats.ahead_most, most);
   }
   s.ahead_good = false;
+  LeakBefore(g);
+  s.began = Tick::now();
   KeepWindow(g);
   s.log->SaveStep(g, step, true);
   if (s.log == &s.own)
@@ -718,6 +780,7 @@ bool Next(u32 returned, Call* call)
       if (!Judge())
       {
         ++s.stats.camera_cut;
+        LeakAfter(g);
         s.log->SaveAgain(s.step);
         s.inside = false;
         s.stage = Stage::OFF;
@@ -729,6 +792,7 @@ bool Next(u32 returned, Call* call)
       {
         ++s.stats.none_time;
         ++s.stats.stopped_after_ahead;
+        LeakAfter(g);
         s.log->SaveAgain(s.step);
         s.inside = false;
         s.stage = Stage::OFF;
@@ -814,6 +878,7 @@ bool Next(u32 returned, Call* call)
       s.tags_done = false;
       return Next(0, call);
     }
+    LeakAfter(g);
     s.log->SaveAgain(s.step);
     s.inside = false;
     s.stage = Stage::OFF;
@@ -858,6 +923,14 @@ std::string Report()
   {
     std::fclose(s.input_log);
     s.input_log = nullptr;
+  }
+  if (s.leak_log != nullptr)
+  {
+    std::fprintf(s.leak_log, "# passes compared %llu; address,words differed over them\n", static_cast<unsigned long long>(s.leak_passes));
+    for (const auto& [at, words] : s.leak_words)
+      std::fprintf(s.leak_log, "%08X,%u\n", at, words);
+    std::fclose(s.leak_log);
+    s.leak_log = nullptr;
   }
   if (!s.on)
     return {};
