@@ -226,8 +226,22 @@ void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
     FZGX_TIME(UndoStore);
     Undo& kept = s.undo[t - 1];  // (an entry there already is replaced: its lists go to the spare ones)
     s.undo_bytes -= EntryBytes(kept);
-    DropEntry(s, kept);
-    kept = std::move(entry);
+    if (s.save_again == t)
+    {
+      // a restore goes through an entry's blocks from its last to its first, so the older content, first, wins
+      kept.blocks.insert(kept.blocks.end(), entry.blocks.begin(), entry.blocks.end());
+      kept.scratch.insert(kept.scratch.end(), entry.scratch.begin(), entry.scratch.end());
+      if (!kept.has_rng && entry.has_rng)
+      {
+        kept.has_rng = true;
+        kept.rng = entry.rng;
+      }
+    }
+    else
+    {
+      DropEntry(s, kept);
+      kept = std::move(entry);
+    }
     s.undo_bytes += EntryBytes(kept);
   }
   s.track_us += std::chrono::duration<double, std::micro>(Clock::now() - started).count();

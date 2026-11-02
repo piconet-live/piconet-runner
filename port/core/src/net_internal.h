@@ -468,6 +468,7 @@ void CloseFrameWork(Session& s, bool flush);
 
 // frame.cpp
 void NormalStep(Guest& g, Session& s);
+void SendInputBeforeRunAhead(Guest& g, Session& s, u32 step);
 
 // frame_report.cpp: a race frame's accounts (NormalStep's)
 void TakeLastFramesWork(Guest& g, Session& s, u32 step, Clock::time_point frame_now);

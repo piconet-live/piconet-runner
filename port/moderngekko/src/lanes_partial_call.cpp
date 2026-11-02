@@ -50,6 +50,11 @@ bool PartialHolds(u32 start, u32 end)
   return PartialWants(TASK) && start <= TASK && TASK < end;
 }
 
+void PartialForget(u32 step)
+{
+  s_b.kept[step % KEEP].step = 0xFFFFFFFF;
+}
+
 bool PartialCall(CPUState* cpu)
 {
   Batch& b = s_b;

@@ -7,6 +7,7 @@
 
 #include "board_net.h"
 #include "host_timers.h"
+#include "fzgx/runahead.h"
 
 #include <algorithm>
 #include <array>
@@ -55,10 +56,9 @@ void SetCatchUp(Session& s, bool on)
 
 // The steps of NormalStep, in its order.
 
-// The local seat's input, to the relay; and the race as it stands, to the launcher (the status board).
-void SendLocalInput(Guest& g, Session& s, u32 step, u32 module)
+// The local pad now is the local seat's input for step + delay.
+void ReadThePad(Guest& g, Session& s, u32 module)
 {
-  // the local pad now is the local seat's input for step + delay
   if (s.autopilot)
   {
     s.pad = AI_DRIVES;
@@ -66,6 +66,14 @@ void SendLocalInput(Guest& g, Session& s, u32 step, u32 module)
   }
   else
     g.CopyFrom(s.pad.data(), (module + PAD_RECORD), RECORD);
+}
+
+// The local seat's input, to the relay; and the race as it stands, to the launcher (the status board).
+void SendLocalInput(Guest& g, Session& s, u32 step, u32 module)
+{
+  const std::array<u8, RECORD> sent_early = s.pad;
+  ReadThePad(g, s, module);
+  runahead::NoteInputSent(step, sent_early != s.pad);
   // Kept, when the step already has one: a frame that ran no new step (held, below) is followed by a frame that
   // begins at the same step, and the input sent in the first of the two is the one the relay keeps for it (the
   // first it receives for a frame: Online.Server RaceTimeline). Taking the second, this game ran its own machine
@@ -411,6 +419,17 @@ void RunSteps(Guest& g, Session& s, u32 step, const FrameSteps& steps)
   s.used[run_from] = std::move(row);
 }
 }  // namespace
+
+// At the frame tick, with a step run ahead to come: the input the frame's own step will send later, sent now, as early
+// as a game with no step run ahead sends it. (A watcher's input goes by the schedule: SendWatchersInput.)
+void SendInputBeforeRunAhead(Guest& g, Session& s, u32 step)
+{
+  if (s.watch != Watch::Racing || s.next_input != 0)
+    return;
+  ReadThePad(g, s, g.Read32(MODULE_POINTER));
+  NoteOwnInput(s, step + s.delay, s.my_inputs.try_emplace(step + s.delay, PadFor(s, step + s.delay)).second);
+  SendInputs(s);
+}
 
 // Before a displayed frame's own step s.
 void NormalStep(Guest& g, Session& s)

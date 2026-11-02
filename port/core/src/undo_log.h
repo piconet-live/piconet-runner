@@ -189,6 +189,7 @@ struct Tracking
   std::vector<u8> exact;       // per page: compared with its shadow even when not watched (it holds a kept part)
   std::unique_ptr<ScanPool> scan_pool;
   std::vector<ScanPart> scan_parts;  // a place for each piece of a whole-memory comparison
+  u32 save_again = 0xFFFFFFFF;  // Rollback::SaveAgain's step
   bool after_frame_step = false;  // the previous tracked step was a displayed frame's own
   // How a first write to a page not watched is found (Debug::undo_log; undo_guard.cpp). Scan: every page compared
   // before a frame's own step and the step after it. Guard: every page not watched write-protected once the learning
