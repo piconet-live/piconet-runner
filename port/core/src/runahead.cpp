@@ -207,14 +207,12 @@ struct Run
   double spent_ms = 0;  // this pass's, of the tick's time to the drawing's end
   Tick::time_point waiting{};
   Mean step_ms, picture_ms, real_ms;
-  High step_high, picture_high, real_high;
-  // The ticks' field grid, from the wall clock, and how late this tick is on it; what the costs above did not cover.
+  High step_high, picture_high, real_high, gap_high;
+  // The last tick, and how late this one was; what the costs above did not cover.
   u32 frame = 0;
   Tick::time_point due{};
   double late_ms = 0, cover_ms = 0;
   bool pictures_last = false;
-  double late_low = 1e9;
-  u32 late_seen = 0;
   Stats stats;
   u32 rng_before = 0;
   bool ahead_good = false;
@@ -358,6 +356,8 @@ bool ChooseBlend()
   const double turn = double(s.picture) / (s.pictures + 1);
   const double by = (Ms(Tick::now() - s.tick) + (s.picture_ms.any ? s.picture_ms.ms : PICTURE_MS_AT_FIRST) + SHOWN_AFTER_MS) / FIELD_MS;
   s.blend = std::max(turn, by);
+  if (s.force)
+    s.blend = std::min(s.blend, LATEST_BLEND);
   return s.blend <= LATEST_BLEND;
 }
 
@@ -558,49 +558,30 @@ bool PictureStillFits()
   return Room(Ms(Tick::now() - s.tick)) >= s.picture_high.Of(s.frame, PICTURE_MS_AT_FIRST);
 }
 
-// This tick on the field grid. A tick early, or on time with the grid drifting, moves the grid; a late one that came
-// after pictures says by how much the costs did not cover the frame, which is kept in hand and falls slowly.
+// How late this tick is: its gap from the tick before against the usual gap (a race's frames follow the relay's clock, a
+// field is not always FIELD_MS). A late one that came after pictures says by how much the costs did not cover the frame,
+// which is kept in hand and falls slowly.
 void PlaceTheTick(Tick::time_point now)
 {
   ++s.frame;
   s.cover_ms *= 0.99;
-  const double late = s.due == Tick::time_point{} ? 0.0 : Ms(now - s.due);
-  if (s.due == Tick::time_point{} || late < 0.0 || late > GRID_LOST_MS)
+  const double gap = s.due == Tick::time_point{} ? FIELD_MS : Ms(now - s.due);
+  s.due = now;
+  s.gap_high.Add(s.frame, gap);
+  const double late = std::clamp(gap - s.gap_high.Of(s.frame, FIELD_MS), 0.0, GRID_LOST_MS);
+  s.late_ms = late < LATE_NOTICED_MS ? 0.0 : late;
+  if (s.late_ms > 0)
   {
-    s.due = now;
-    s.late_ms = 0;
-  }
-  else
-  {
-    s.late_ms = late;
-    if (late < LATE_NOTICED_MS)
-      s.due += std::chrono::duration_cast<Tick::duration>(std::chrono::duration<double, std::milli>(late * 0.02));
-    else
+    ++s.stats.ticks_late;
+    s.stats.tick_late_most = std::max(s.stats.tick_late_most, late);
+    if (s.pictures_last)
     {
-      ++s.stats.ticks_late;
-      s.stats.tick_late_most = std::max(s.stats.tick_late_most, late);
-      if (s.pictures_last)
-      {
-        ++s.stats.ticks_late_after_pictures;
-        s.cover_ms = std::max(s.cover_ms, late);
-        s.stats.cover_most = std::max(s.stats.cover_most, late);
-      }
+      ++s.stats.ticks_late_after_pictures;
+      s.cover_ms = std::max(s.cover_ms, late);
+      s.stats.cover_most = std::max(s.stats.cover_most, late);
     }
-  }
-  // A hitch moves the ticks for good, they do not make it up: the grid follows the least lateness of the last half second.
-  s.late_low = std::min(s.late_low, s.late_ms);
-  if (++s.late_seen == 30)
-  {
-    if (s.late_low > 0.0)
-    {
-      s.due += std::chrono::duration_cast<Tick::duration>(std::chrono::duration<double, std::milli>(s.late_low));
-      s.late_ms -= s.late_low;
-    }
-    s.late_low = 1e9;
-    s.late_seen = 0;
   }
   s.pictures_last = false;
-  s.due += std::chrono::duration_cast<Tick::duration>(std::chrono::duration<double, std::milli>(FIELD_MS));
 }
 }  // namespace
 
