@@ -217,6 +217,9 @@ struct Run
   Tick::time_point due{};
   double late_ms = 0, cover_ms = 0;
   bool pictures_last = false;
+  // AURORA_RUNAHEAD_COVER_SPENT=1 (off by default): a late tick after a pass with pictures is kept in hand only up to what
+  // that pass itself spent on this thread (its step ahead), not whole: most late ticks follow slow frames the pass did not make
+  bool cover_spent = false;
   Stats stats;
   u32 rng_before = 0;
   bool ahead_good = false;
@@ -628,8 +631,9 @@ void PlaceTheTick(Tick::time_point now)
     if (s.pictures_last)
     {
       ++s.stats.ticks_late_after_pictures;
-      s.cover_ms = std::max(s.cover_ms, late);
-      s.stats.cover_most = std::max(s.stats.cover_most, late);
+      const double kept = s.cover_spent ? std::min(late, s.spent_ms) : late;
+      s.cover_ms = std::max(s.cover_ms, kept);
+      s.stats.cover_most = std::max(s.stats.cover_most, kept);
     }
   }
   s.pictures_last = false;
@@ -645,6 +649,8 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
   s.on = false;
   s.between = std::move(between);
   s.input_late = std::getenv("AURORA_TEST_INPUT_LATE") != nullptr;
+  const char* cover_spent = std::getenv("AURORA_RUNAHEAD_COVER_SPENT");
+  s.cover_spent = cover_spent != nullptr && cover_spent[0] == '1';
   if (const char* path = std::getenv("AURORA_TEST_LEAK"))
     s.leak_log = std::fopen(path, "w");
   s.force = s.leak_log != nullptr || std::getenv("AURORA_TEST_FORCE_PICTURES") != nullptr;
