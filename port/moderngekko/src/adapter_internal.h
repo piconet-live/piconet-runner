@@ -151,6 +151,9 @@ fzgx::u32 TakePictureIntervals(fzgx::u32* out, fzgx::u32 most);
 // the stop.
 void StartDrawnFrames();
 void StopDrawnFrames();
+// aurora.cpp: Aurora as the presenter (the launch file's "debug.renderer"), its data folder and its line at the stop.
+void StartAurora();
+void StopAurora();
 // freeze_watch.cpp: a thread that says in the log when a race's game stands still, and where (fzgx/freeze.h),
 // and the emulator's lines (below): both start at the game's first picture (StartWatches, from the picture's hook:
 // one flag read a picture after the first), so that a boot that fails has started neither. Every way the game is
@@ -215,6 +218,13 @@ void ShowSpectatorOverlay(const fzgx::SpectatorShow& show);
 void MinimapCourseLoaded(const fzgx::MinimapCourse& course);
 void ShowMinimap(const fzgx::MinimapShow& show);
 void DrawMinimap();
+// inputs_overlay.cpp: "Show inputs", m-overlay's controller over the picture: told the player's pad (the game's thread),
+// drawn before every present in the corner left of the course map (`right`, `bottom`: where it ends, in the picture).
+void ShowInputs(const fzgx::InputsShow& show);
+// modern_hud.cpp: the modern HUD, told once a displayed frame (the game's thread), drawn with the overlays over the picture's box.
+void ShowModernHud(const fzgx::ModernHudShow& show);
+void DrawModernHud(float x0, float y0, float x1, float y1);
+void DrawInputs(float right, float bottom, float picture_height);
 fzgx::SpectatorClick TakeSpectatorClicks();
 void DrawOverlays();
 bool SpectatorMouse(void* window, unsigned message, std::intptr_t lparam);

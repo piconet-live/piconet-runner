@@ -144,6 +144,42 @@ void TheFileAsSomebodyElseLeftIt()
 }
 }  // namespace
 
+// Official rows that come together: a race without them says none; rows that reach the game eight at a time are counted
+// by size, and the other seat, whose rows differ from its prediction, is named with its burst and rollback. The local
+// seat's own rows were never predicted wrong. The race stays the official one. The kept seats are the newest, oldest
+// first.
+void TestTheSummaryCountsBursts()
+{
+  Pace pace;
+  pace.race_frames = 900, pace.race_to = FROM + 600;
+  pace.summary = true;
+  const Raced calm = RunAPacedRace(pace);
+  CHECK(calm.ran && calm.other_checksums == 0);
+  CHECK(calm.summary.find(" bursts=- burstseats=0 burstlast=- | after ") != std::string::npos);
+  pace.rows_together = 8, pace.together_from = 100, pace.together_to = 400;
+  const Raced r = RunAPacedRace(pace);
+  CHECK(r.ran && r.other_checksums == 0);
+  auto parts = PartsOf(r.summary.substr(0, r.summary.size() - (r.summary.empty() ? 0 : 1)));
+  CHECK(parts.size() == 4);
+  if (parts.size() != 4)
+    return;
+  auto& race = parts[2];
+  CHECK(race["bursts"].find("8:") != std::string::npos && std::atoi(race["burstseats"].c_str()) >= 1);
+  CHECK(race["burstlast"].find("/0/") == std::string::npos);
+  const std::string& last = race["burstlast"];
+  unsigned step = 0, rows = 0, depth = 0;
+  int seat = -1;
+  CHECK(std::sscanf(last.c_str(), "%u/%d/%u/%u", &step, &seat, &rows, &depth) == 4);
+  CHECK(seat == 1 && rows >= net::BurstTally::LEAST_ROWS && depth >= 1 && step > FROM);
+  net::BurstTally tally;
+  tally.Burst(4), tally.Burst(4), tally.Burst(15), tally.Burst(16), tally.Burst(90);
+  CHECK(tally.Words() == "bursts=4:2,15:1,16+:2 burstseats=0 burstlast=-");
+  for (u32 i = 0; i < net::BurstTally::SEATS_KEPT + 1; ++i)
+    tally.Corrected({.step = i, .seat = 2, .rows = 5, .depth = 3});
+  const std::string words = tally.Words();
+  CHECK(words.find(" burstseats=65 burstlast=1/2/5/3,2/2/5/3,") != std::string::npos && words.ends_with(",64/2/5/3"));
+}
+
 // How the race ended, as the line says it, and a phase nothing was counted in; the tallies' medians; and the file:
 // a line a race, the last ones kept, a file that cannot be written said and left.
 void TestTheSummarysEndsAndItsFile()
@@ -153,7 +189,7 @@ void TestTheSummarysEndsAndItsFile()
     net::Session& s = *session;
     CHECK(net::SummaryLine(s, "T").find(" end=closed ") != std::string::npos);
     CHECK(net::SummaryLine(s, "T").find("| race s=0.0 frames=0 ping=- fps=- behind=- late=0 frame=- slow=0 shown=- "
-                                        "uneven=0 rollbacks=0 depth=- catchups=0 held=0 | after ") != std::string::npos);
+                                        "uneven=0 rollbacks=0 depth=- catchups=0 held=0 bursts=- burstseats=0 burstlast=- | after ") != std::string::npos);
     CHECK(net::SummaryLine(s, "T").find(" delay=2 present=console end=closed ") != std::string::npos);
     // the pictures the host showed: counted in the phase the game is in, and only once a frame was seen; one that
     // came more than 2 ms off a frame's length after the one before is uneven, and so is a frame that long late

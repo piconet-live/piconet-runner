@@ -1,5 +1,7 @@
 // A practice's session (Options::practice; the design: fzgx/practice.h): one seat, no relay, the race run in
-// the game's own Practice mode with a rewind of the last minute. Each step's row is the local pad's record as the
+// the game's own Practice mode with a rewind of the last minute. Its game mode (protocol/quickplay/practice.fzmode, a
+// `solo` mode) says the rewind's reach, the pause, the save and the countdown (WordsOfTheRace); the mode's block is
+// game memory like the rest, so the one undo log below takes it back and a save, a mark on a step, holds it too. Each step's row is the local pad's record as the
 // step comes to run, so the run needs nobody; Start pauses, the stick scrubs, Start resumes after a 1 s countdown,
 // D-pad right saves and D-pad left loads. Rewind (practice.h) says what each displayed frame does; this file moves
 // the game's memory by it.
@@ -27,8 +29,10 @@
 
 #include "net_internal.h"
 
+#include "files.h"
 #include "fzgx/panel.h"
 #include "fzgx/practice.h"
+#include "mode.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -197,16 +201,26 @@ void ShowTheCountdown(const practice::Rewind& r)
 {
   panel::Board& board = panel::TheBoard();
   if (r.Now() == practice::Mode::Countdown && r.CountdownLeft() > 0)
-    panel::Counting(board, (r.CountdownLeft() * 3 + practice::COUNTDOWN - 1) / practice::COUNTDOWN);
+    panel::Counting(board, (r.CountdownLeft() * 3 + r.Said().countdown - 1) / r.Said().countdown);
   else if (board.Now() == panel::Shows::Countdown)
     panel::Down(board);
+}
+
+// The practice's words: its game mode's; a start with no mode (a launcher's before Practice was a mode), today's.
+practice::Words WordsOfTheRace()
+{
+  const boot::Match* m = boot::Get();
+  if (!m || !m->game_mode)
+    return {};
+  const mode::Package& mode = *m->game_mode;
+  return {mode.rewind, mode.pause, mode.save_state, mode.resume_countdown};
 }
 
 void Begin(Guest& g, Session& s, Practice& p, u32 t)
 {
   p.begun = true;
   p.first = t;
-  p.rewind = std::make_unique<practice::Rewind>(t);
+  p.rewind = std::make_unique<practice::Rewind>(t, WordsOfTheRace());
   if (!s.rollback.Active())
     s.rollback.Start(g);
   Notice("fzgx: practice: the race begins at step {}: Start pauses, the stick scrubs back a minute at most, "

@@ -2,7 +2,8 @@
 `replay` and `replay_filter` set the task filter for every step of a frame but its last, `filters` puts back the
 values the frame began with, `net_step` counts the session's step, and `manager` is the step wrapper around the
 game's simulation manager: it sets the words mute.py reads (+488, +492) and, in a session, calls `rt_cam`
-(frame_tasks.py) and `specstep` (frame_spectate.py) first. `endtest` says whether the race-over test (standin_race.py,
+(frame_tasks.py) and `specstep` (frame_spectate.py) first, then `simgen`, which seeds the simulation's own
+generator for the step (sites_generator.py). `endtest` says whether the race-over test (standin_race.py,
 `over`) would find the race over on the machines as they are: r3 = 1 in a running session's race phase when the
 test's own guards are clear and the race is over as raceend.py's text says, the text the race-over test itself
 assembles: every machine has finished or is out, or, with the host's rule, its end is reached and the results' wait
@@ -14,7 +15,55 @@ import memmap, raceend
 
 
 def asm():
-    return _TEXT.replace("CLAUSE", raceend.clause(30, "et_", "et_yes", "et_no", behind=11))
+    return _TEXT.replace("CLAUSE", raceend.clause(30, "et_", "et_yes", "et_no", behind=11)).replace(
+        "SIMGEN_TEXT", _simgen())
+
+
+# The simulation's own generator (sites_generator.py): before every step of a running race whose race block says so
+# (memmap.RACE_SIM_GENERATOR 1), SIM_GENERATOR = fmix32(CPU seed ^ step * 0x9E3779B9) (MurmurHash3's finaliser, so
+# that neighbouring steps' words look unrelated to the LCG) and SIM_GENERATOR_SHIFT = SIM_GENERATOR - 0x801A63C0;
+# otherwise the shift is 0 and the race's draws take the executable's word as the stock game does. The step (+124)
+# and the CPU seed (race block +28) are the same in every game of the race, in a step run again and in a playback,
+# so a step's draws start from the same word everywhere. Writes r0, r9, r10, r11, r12 and cr0.
+def _simgen():
+    race, word, shift = memmap.RACE, memmap.SIM_GENERATOR, memmap.SIM_GENERATOR_SHIFT
+    assert memmap.lo(race + memmap.RACE_SIM_GENERATOR) < 0x8000 and memmap.lo(race + memmap.RACE_CPUSEED) < 0x8000
+    assert memmap.hi(word) == memmap.hi(memmap.CONTROL) and word - memmap.CONTROL < 0x8000
+    delta = (word - memmap.EXECUTABLE_GENERATOR) & 0xFFFFFFFF
+    return f"""simgen:
+    li 9, 0
+    lwz 0, 120(31)
+    cmpwi 0, 0
+    beq sg_shift
+    lis 12, {memmap.hi(race)}
+    lwz 0, {memmap.lo(race + memmap.RACE_SIM_GENERATOR)}(12)
+    cmpwi 0, 0
+    beq sg_shift
+    lwz 10, {memmap.lo(race + memmap.RACE_CPUSEED)}(12)
+    lwz 11, 124(31)
+    lis 9, 0x9E37
+    ori 9, 9, 0x79B9
+    mullw 11, 11, 9
+    xor 10, 10, 11
+    srwi 11, 10, 16
+    xor 10, 10, 11
+    lis 9, 0x85EB
+    ori 9, 9, 0xCA6B
+    mullw 10, 10, 9
+    srwi 11, 10, 13
+    xor 10, 10, 11
+    lis 9, 0xC2B2
+    ori 9, 9, 0xAE35
+    mullw 10, 10, 9
+    srwi 11, 10, 16
+    xor 10, 10, 11
+    stw 10, {word - memmap.CONTROL}(31)
+    lis 9, {delta >> 16}
+    ori 9, 9, {delta & 0xFFFF}
+sg_shift:
+    stw 9, {shift - memmap.CONTROL}(31)
+    blr
+"""
 
 
 _TEXT = """replay:
@@ -86,6 +135,7 @@ m_flag:
     bl rt_cam
     bl specstep
 m_call:
+    bl simgen
     lis 12, 0x8000
     lwz 12, 0x30C8(12)
     addi 12, 12, 0x4158
@@ -94,7 +144,7 @@ m_call:
     lwz 0, 16(1)
     mtlr 0
     blr
-endtest_extra:
+SIMGEN_TEXTendtest_extra:
     li 11, 1
     b et_enter
 endtest:

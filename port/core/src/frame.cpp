@@ -42,6 +42,8 @@ void SendChecksums(Guest& g, Session& s)
 // Tests: the "AI drives" record (steering 0x80, outside a stick's range): the mod's seat routine keeps the AI's own
 // controls for a seat whose record this is, so an autopilot game's own machine races like a CPU, the same everywhere.
 constexpr std::array<u8, RECORD> AI_DRIVES = {0, 0x80, 0, 0, 0, 0};
+// (with a last byte the seat routine does not read: a test game driving, which a mode without CPUs must tell from the
+// relay's record for a player gone or never ready: mode.cpp GonePlayers)
 
 // Lockstep catching up (NormalStep): the emulation speed and CPU clock while it does, and back.
 void SetCatchUp(Session& s, bool on)
@@ -58,7 +60,10 @@ void SendLocalInput(Guest& g, Session& s, u32 step, u32 module)
 {
   // the local pad now is the local seat's input for step + delay
   if (s.autopilot)
+  {
     s.pad = AI_DRIVES;
+    s.pad[5] = 1;
+  }
   else
     g.CopyFrom(s.pad.data(), (module + PAD_RECORD), RECORD);
   // Kept, when the step already has one: a frame that ran no new step (held, below) is followed by a frame that
@@ -310,6 +315,30 @@ bool BeginRollbackFrame(Guest& g, Session& s, u32 step, bool settle, bool check)
   return true;
 }
 
+// The rows from the last check up to `arrived`, when they are a burst: for the summary line (BurstTally). Host memory
+// only, no allocation; the rows are compared only in a frame that has a burst.
+void NoteBurst(Session& s, u32 step, u32 arrived, u32 depth)
+{
+  BurstTally& bursts = s.summary.bursts;
+  const u32 from = std::max(bursts.checked_to, s.checked);
+  bursts.checked_to = std::max(bursts.checked_to, arrived);
+  if (arrived < from + BurstTally::LEAST_ROWS)
+    return;
+  const u32 rows = arrived - from;
+  bursts.Burst(rows);
+  for (std::size_t j = 0; j < s.seats.size(); ++j)
+    for (u32 t = from; t < arrived; ++t)
+    {
+      const auto it = s.used.find(t);
+      if (it != s.used.end() &&
+          !std::equal(it->second.begin() + j * RECORD, it->second.begin() + (j + 1) * RECORD, s.official[t].begin() + j * RECORD))
+      {
+        bursts.Corrected({.step = step, .seat = s.seats[j], .rows = rows, .depth = depth});
+        break;
+      }
+    }
+}
+
 // The predictions checked against the official frames that are here; the memory back to before the first wrong step
 // (or, tests, a forced rollback's).
 FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const Forcing& forcing)
@@ -355,6 +384,7 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
     s.max_depth = std::max(s.max_depth, step - run_from);
     s.summary.Rollback(step - run_from);
   }
+  NoteBurst(s, step, arrived, step - run_from);
   return {known, run_from};
 }
 

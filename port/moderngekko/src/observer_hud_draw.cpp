@@ -148,12 +148,12 @@ void Cameras(ImDrawList* list, const fzgx::SpectatorShow& show, const Layout& l,
   Run(list, l.groups.data(), GROUPS, l.s, a, [&](int g, const ov::Box& b, ImDrawFlags corners) {
     const Group& group = GROUP[static_cast<size_t>(g)];
     bool any = false;
-    for (int k = group.first; k < group.first + group.count; ++k)
-      any = any || allowed(k);
+    for (int k = 0; k < group.count; ++k)
+      any = any || allowed(group.kinds[static_cast<size_t>(k)]);
     Button(list, b, l.s, group.label, g == l.group && show.kinds != 0, any, b.Has(hx, hy), a, corners);
   });
   Run(list, l.shots.data(), l.shot_count, l.s, a, [&](int i, const ov::Box& b, ImDrawFlags corners) {
-    const int kind = GROUP[static_cast<size_t>(l.group)].first + i;
+    const int kind = GROUP[static_cast<size_t>(l.group)].kinds[static_cast<size_t>(i)];
     char words[4];
     std::snprintf(words, sizeof(words), "%d", i + 1);
     Button(list, b, l.s, words, show.kind_chosen && static_cast<int>(show.kind) == kind, allowed(kind), b.Has(hx, hy), a,

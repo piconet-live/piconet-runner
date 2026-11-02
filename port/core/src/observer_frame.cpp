@@ -158,6 +158,8 @@ void ObserverGameHud(Guest& g, Session& s, u32 module, sp::View view, bool follo
     o.hud_hidden = true;
     return;
   }
+  // (what the view found last frame, for the log: 0 is the game's HUD not drawn)
+  ++o.game_mask[g.Read32(parts) != 0 ? 1 : 0];
   if (!std::exchange(o.hud_hidden, false) || o.kept == 0)
     return;
   g.Write32(HUD_KEPT, o.kept);
@@ -178,6 +180,7 @@ void ObserverSummary(const Session& s)
 {
   const ObserverState& o = s.spectator.observer;
   Notice("fzgx: observer: frames shown in the observer HUD {}, the game's HUD {}, clean {}; the game's HUD put back "
-         "{} times", o.frames[0], o.frames[1], o.frames[2], o.hud_back);
+         "{} times; in that view its mask was off {} frames, on {}", o.frames[0], o.frames[1], o.frames[2], o.hud_back,
+         o.game_mask[0], o.game_mask[1]);
 }
 }  // namespace fzgx::net

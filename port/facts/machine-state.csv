@@ -1,5 +1,5 @@
 region,offset,type,name,category,confidence,changes_in_race,net,mask_7200
-block,0x000,u32 bits,"flags (airborne 0x2, airborne over 10 steps 0x4, spin 0x8, landed this step 0x10, boosting 0x20, boost req 0x40, broken down 0x80, CPU 0x200, driven since start or restore 0x400, out of the course 0x800, strafe latch 0x4000, finished 0x10000, side attack 0x20000, lap event 0x40000, contact this step 0x02000000, AI-driven 0x04000000, retired 0x08000000, time over 0x10000000, destroyed 0x40000000, ...)",STATE,code,yes,SEND,0x03654076
+block,0x000,u32 bits,"flags (Restore regime 0x1, airborne 0x2, airborne over 10 steps 0x4, spin 0x8, landed this step 0x10, boosting 0x20, boost req 0x40, broken down 0x80, CPU 0x200, driven since start or restore 0x400, out of the course 0x800, strafe latch 0x4000, finished 0x10000, side attack 0x20000, lap event 0x40000, contact this step 0x02000000, AI-driven 0x04000000, retired 0x08000000, time over 0x10000000, destroyed 0x40000000, ...)",STATE,code,yes,SEND,0x03654076
 block,0x004,s16 | s16,+4 racer index (bit in +0x514 masks) | +6 machine id (>=0x29 custom),SETUP,code,no,ONCE,0x00000000
 block,0x008,f32,weight W,SETUP,code,no,ONCE,0x00000000
 block,0x00C,f32,stat: grip 1,SETUP,code,no,ONCE,0x00000000

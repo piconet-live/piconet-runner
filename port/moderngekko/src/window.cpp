@@ -1,5 +1,5 @@
 // The mod's data window and the host calls: what the emulator is given so that the image's data lives in this
-// process and the game's calls to the host's four addresses arrive in the core.
+// process and the game's calls to the host's five addresses arrive in the core.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "adapter_internal.h"
@@ -90,6 +90,10 @@ bool HostCall(CPUState* cpu, u32 address, void*)
     else if (address == table::HOST_LINKED)
     {
       fzgx::Linked(cpu->gpr[30]);  // the loader holds the module in r30 (the patched site is `lwz r12, 0x34(r30)`)
+    }
+    else if (address == table::HOST_MODE)
+    {
+      fzgx::ModeCall();  // the game mode's rules, at the mode point (port/image/sites_mode.py)
     }
     cpu->pc = cpu->lr;
     return true;

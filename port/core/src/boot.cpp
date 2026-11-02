@@ -6,6 +6,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "files.h"
+#include "mode_hud.h"
 
 #include <cstring>
 #include <string_view>
@@ -196,9 +197,11 @@ void WriteStartView(Guest& g)
   if (module == 0)
     return;
   const u32 options = g.Read32(module + game::GAME_OPTIONS);
-  if (!g.Ram(options + game::SAVED_VIEW, 1) || g.Read8(options + game::SAVED_VIEW) == view)
+  // (match.camera's 4 is first person, the game's view 0)
+  const u8 saved = view == 4 ? 0 : static_cast<u8>(view);
+  if (!g.Ram(options + game::SAVED_VIEW, 1) || g.Read8(options + game::SAVED_VIEW) == saved)
     return;
-  g.Write8(options + game::SAVED_VIEW, static_cast<u8>(view));
+  g.Write8(options + game::SAVED_VIEW, saved);
 }
 }  // namespace
 
@@ -276,6 +279,37 @@ void Prepare(ModData& data)
     data.CopyTo(NAMES, m->names.data(), m->names.size());
     const std::array<u8, NAME_SIZE> course_name = CourseNameBytes(CourseOf(*m));
     data.CopyTo(COURSE_NAME, course_name.data(), course_name.size());
+    // a game mode: the image takes its block from the heap before the start gate (sites_mode.py, mode.h); 5, with
+    // the stats page (one page more; every other mode's allocation stays what it was)
+    data.Write(layout::MODES, m->game_mode ? (m->game_mode->stats_page ? 5 : 4) : 0, 4);
+    data.Write(layout::MODES + 4, 0, 4);
+    data.Write(layout::MODE_HUD, m->game_mode ? mode::hud::WindowFlags(*m->game_mode) : 0, 4);
+    data.Write(layout::MODE_HUD + 8, 0, 4);  // (the story's pictures not loaded yet: sites_modehud.py mode_story)
+    {
+      std::array<u8, mode::hud::WINDOW_TITLE_SIZE> title{};
+      if (m->game_mode)
+        std::copy_n(m->game_mode->results_title.begin(), m->game_mode->results_title.size(), title.begin());
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TITLE, title.data(), title.size());
+    }
+    {
+      std::array<u8, mode::hud::WINDOW_HEADING_SIZE> heading{};
+      if (m->game_mode)
+      {
+        const std::string_view text = m->game_mode->results_heading.empty() ? std::string_view(mode::hud::DEFAULT_HEADING)
+                                                                            : std::string_view(m->game_mode->results_heading);
+        std::copy_n(text.begin(), text.size(), heading.begin());
+      }
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_HEADING, heading.data(), heading.size());
+    }
+    {
+      // `tag`: no seat tagged yet (the HUD pass writes them from the block), and the package's texts
+      std::array<u8, mode::hud::WINDOW_TAG_TEXTS - mode::hud::WINDOW_TAGS + modes::TAG_TEXTS * mode::hud::WINDOW_TAG_TEXT> tags{};
+      if (m->game_mode)
+        for (size_t i = 0; i < m->game_mode->tag_texts.size(); ++i)
+          std::copy_n(m->game_mode->tag_texts[i].begin(), m->game_mode->tag_texts[i].size(),
+                      tags.begin() + (mode::hud::WINDOW_TAG_TEXTS - mode::hud::WINDOW_TAGS) + i * mode::hud::WINDOW_TAG_TEXT);
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TAGS, tags.data(), tags.size());
+    }
   }
   Notice("fzgx: native form: image {} ({} bytes), {} patched words, mode {}", b->image_sha1.substr(0, 8), image.size(),
          b->patches.size(), m ? m->mode : 0);

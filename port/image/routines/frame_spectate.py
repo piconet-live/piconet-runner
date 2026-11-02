@@ -336,6 +336,7 @@ ss_chase_racer:
     sth 4, 2(9)
     lwz 10, S_HEIGHT(31)
     addi 10, 10, 1
+    clrlwi 10, 10, 30      # height 3: view 0, the first person view
     sth 10, 0xA4(9)
 ss_ret:
     lwz 0, 20(1)

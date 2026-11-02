@@ -20,7 +20,7 @@ constexpr const char* NAMES[] = {
     "hook",         "drain",        "checksum",    "frame-begin", "send-input",   "close-final", "rollback-begin",
     "predictions",  "run-steps",    "frame-end",   "extra-step",  "scrub-frame",  "scrub-extra", "undo-full",
     "undo-pool",    "undo-pool-wait", "undo-gather", "undo-watched", "undo-check", "undo-scratch", "undo-store",
-    "restore",      "final"};
+    "restore",      "final",        "mode"};
 static_assert(std::size(NAMES) == Count, "a name for each part timed");
 std::array<std::vector<u32>, 4> s_pages, s_scratch_pages;
 constexpr std::array<const char*, 4> KINDS = {"learning", "a frame's own", "after a frame's own", "run again"};

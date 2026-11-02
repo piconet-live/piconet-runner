@@ -41,6 +41,7 @@ give; `net_internal.h` and `undo_log.h` are the relay session's and the undo log
 | `net_internal.h` | What those nine share: the mod's words, the session's state, what they call of each other |
 | `practice.cpp` (`fzgx/practice.h`) | Practice with rewind, the decision alone: what each displayed frame does (race on, stand, the countdown, a branch), the minute's reach and its keys, the one save and its expiry, the stick's scrub speed, the run kept for the replay |
 | `practice_session.cpp` | A practice's session (the launch file's `match.practice`): one seat, no relay, each step's row the pad's; each displayed frame moved by `Rewind` with the one undo log (a standing picture by its step before run again, silently), every step run again checked against its first run, the bar told, the kept run to the replay |
+| `mode_board.cpp`, `mode_board.h` | A game mode's `board` lines on the launcher's status board (ModeHead, ModeValues): read from the mode's block once a picture, nothing of the game written |
 | `rollback.cpp`, `rollback.h`, `checksum.cpp` | Rollback as its user sees it: save a step, restore to a step, re-simulate, checksum; the state checksum and the words it leaves out |
 | `undo_log.cpp`, `undo_log.h` | The undo log that puts the simulation's memory back: tracking, the scan pool, restore |
 | `strip.cpp` | The game window's title strip as numbers (`fzgx/strip.h`): its layout and what a point of the window is; no window and no drawing |

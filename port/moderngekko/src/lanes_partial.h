@@ -4,7 +4,7 @@
 // (its locked-cache reads and writes, its registers and cycles). When a step runs again, a machine runs if
 //   - its input row differs from the step's last run, or
 //   - any byte of its records differs (block, progress record, the four track records, segment, driver block, car
-//     object, its countdown word), or
+//     object, its countdown word, its record in a game mode's block: fzgx::ModeRecord), or
 //   - a locked-cache word it read last time holds another value now, or the floating-point status it started from
 //     differs, or
 //   - its call is the task's last (racer 0's: the stand-in routine does the frame's own work there), or
@@ -49,7 +49,7 @@ constexpr u32 CPU_GLOBALS = game::REL_BSS_AT + 0x7AC48;  // the computer drivers
 constexpr u32 CAR_MANAGER_SIZE = 0xA00, CPU_GLOBALS_SIZE = 0x60;
 
 // One part of a machine's records: block, progress, the four track records, segment, driver, car object, countdown.
-enum Kind : u8 { BLOCK, PROGRESS, TRACK0, TRACK1, TRACK2, TRACK3, SEGMENT, DRIVER, CAR, COUNTDOWN, KINDS };
+enum Kind : u8 { BLOCK, PROGRESS, TRACK0, TRACK1, TRACK2, TRACK3, SEGMENT, DRIVER, CAR, COUNTDOWN, MODE, KINDS };
 struct Span
 {
   u32 address = 0, size = 0;
@@ -75,7 +75,7 @@ using Row = std::array<u8, ROW>;
 // The last run of a step: what every machine started from and ended with, each job's locked-cache record, the
 // floating-point status it started from, its registers and cycles.
 // The guard's words (lanes_partial_guard.cpp): their values, and the course objects' first words.
-constexpr u32 GUARD_WORDS = 7;
+constexpr u32 GUARD_WORDS = 8;
 struct Guard
 {
   std::array<u32, GUARD_WORDS> words{};
@@ -87,6 +87,7 @@ struct Kept
   u32 step = NONE, jobs = 0, moment = 0;
   std::array<u32, MOST_JOBS> index{};
   std::array<Row, CARS> rows{};
+  std::array<Row, CARS> prev_rows{};  // the step before's row: the boost edge is this step's row and not that one's
   std::array<std::vector<u8>, CARS> start, end;
   std::array<Record, MOST_JOBS> rec;
   std::array<Regs, MOST_JOBS> regs;
@@ -113,7 +114,7 @@ struct Batch
   std::vector<Kept> kept = std::vector<Kept>(KEEP);
   std::array<u32, KEEP> runs{};
   std::vector<u8> tables;
-  std::array<Row, CARS> rows;
+  std::array<Row, CARS> rows, prev_rows;
   std::array<std::vector<u8>, CARS> starts;
   std::array<Guard, MOST_JOBS> guard_in;
   Guard guard;              // as the last job left it

@@ -11,7 +11,7 @@
 # file that differs from the commit, a tree with uncommitted changes) is a test build: it is said, and never shipped.
 # PORT_WORK names another work folder (port/setup/setup.sh makes one). It refuses a work folder whose source trees are
 # not the ones this checkout pins (forks/check.sh --trees): such a runner is no build of it.
-# OUT=NAME: the runner is also kept as <work>/port/runner-NAME (the exe, its manifest and its link map), copied under
+# OUT=NAME: the runner is also kept as <work>/port/runner-NAME (the exe, its manifest, its link map and the DLLs beside it: Aurora's), copied under
 # the same hold of the lock, so another build's runner cannot stand in ModernGekko/build when it is copied.
 # HOST_TIMERS=1: a profiling build, with the core's scoped timers (port/core/src/host_timers.h); never a player's. The
 # setting is given at every build, so a build without it is a build without them.
@@ -30,5 +30,8 @@ if [ -n "${OUT:-}" ]; then
   K=$W/port/runner-$OUT; mkdir -p "$K"
   cp "$W/ModernGekko/build/moderngekko-run.exe" "$W/ModernGekko/build/build-manifest.json" "$K/"
   [ ! -f "$W/ModernGekko/build/moderngekko-run.map" ] || cp "$W/ModernGekko/build/moderngekko-run.map" "$K/"
+  # Aurora (debug.renderer "aurora"): aurora-present.dll and the libraries it loads, when the aurora target put them
+  # beside the runner (port/build/cmake/AuroraCopy.cmake); the runner loads them from its own folder
+  for f in "$W"/ModernGekko/build/*.dll; do [ ! -f "$f" ] || cp "$f" "$K/"; done
   echo "kept: $K/moderngekko-run.exe"
 fi

@@ -17,6 +17,7 @@ constexpr u32 RETIRED = game::MACHINE_FLAG_RETIRED, OUT = game::MACHINE_FLAG_OUT
 constexpr u32 BROKEN_DOWN = game::MACHINE_FLAG_BROKEN_DOWN, CPU = game::MACHINE_FLAG_CPU;
 constexpr u32 FALLEN = game::MACHINE_FLAGS2_FALLEN;                    // out of contact, a fall
 constexpr u32 RESTORE = 0x8000;                                        // the rule word's bit (.bss 0x3C30)
+constexpr u32 RESPAWNS = game::MACHINE_FLAG_RESTORE;                   // a machine's own Restore (flag 0x1)
 constexpr u32 ONE = 0x3F800000;                                        // 1.0, .rodata 0xBE4
 constexpr u32 FLAGS = game::MACHINE_FLAGS, CONTACT = game::MACHINE_FLAGS2, SPEED = game::MACHINE_SPEED;  // in a machine's block
 constexpr u32 RULES = BSS + 0x3C30, RACE_TYPE = BSS + 0x3C35;          // from the module pointer's value
@@ -29,8 +30,8 @@ constexpr bool Out(u32 flags, u32 contact, u32 speed, u32 rules, u8 race_type)
     return false;   // never asked: it races on
   if (flags & TIME_OVER)
     return true;    // a timed mode's or the time limit's end, in either regime
-  if (rules & RESTORE)
-    return false;   // every wreck, fall and breakdown is put back
+  if ((rules & RESTORE) != 0 || (flags & RESPAWNS) != 0)
+    return false;   // every wreck, fall and breakdown is put back (the rule, or the machine's own: a mode's respawns)
   if ((flags & (RETIRED | OUT)) != 0 || (contact & FALLEN) != 0)
     return true;
   if ((flags & BROKEN_DOWN) == 0)

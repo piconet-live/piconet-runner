@@ -60,7 +60,8 @@ constexpr std::chrono::seconds RESULTS_LEAVE{30};
 constexpr std::chrono::seconds RESULTS_LEAVE_GRACE{3};
 // How long the race's own results page (the first, results state 0) stands before a racer's game passes it by itself
 // with an A, to every racer's page, whose RESULTS_LEAVE then runs (the owner, 28 October: "First page gets a timer of
-// 15s"; session.cpp PassTheFirstResultsPageInTime). Pressed again every RESULTS_LEAVE_GRACE while the page stays.
+// 15s"; session.cpp PassTheFirstResultsPageInTime), and each of a mode's two points pages after it. Pressed again
+// every RESULTS_LEAVE_GRACE while the page stays.
 constexpr std::chrono::seconds RESULTS_FIRST_PAGE{15};
 // The image's count of displayed race frames the local seat has been out (knocked out or retired; not finished),
 // after which, at 180, it watches the leader (frame_spectate.py `spectate`); it stays at 180 from there.
@@ -319,6 +320,7 @@ struct Session
   Clock::time_point leavable_at{};  // when every racer's results page was first seen (LeaveTheResultsInTime)
   bool leave_pressed = false;       // the A of the results' own leave was pressed for the player
   bool first_page_seen = false;     // the race's own results page was seen standing (PassTheFirstResultsPageInTime)
+  u8 first_page_state = 0;          // which page that was: 0 the first; 3 and 4 a mode's VS RESULTS and VS TOTAL RANKING
   Clock::time_point first_page_at{};  // when it was first seen, then when the A of its pass was last pressed
   u32 first_page_presses = 0;       // the As pressed for the player on that page
   u32 stands_done = 0;  // tests ("debug.standStill"): how many of its stands were made (freeze.cpp)

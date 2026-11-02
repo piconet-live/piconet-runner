@@ -219,6 +219,7 @@ void TakeDesync(Session& s, const relay::Desync& d)
 {
   ++s.desyncs;
   Warn("fzgx: this game's state differs from the majority at step {}", d.frame);
+  Notice("fzgx: official rows that came together up to here: {}", s.summary.bursts.Words());
   board::Desync(d.frame);
   // The relay disconnected this game from the race (the AI drives its machine in the other games; a desynced game
   // is never repaired): stop, as leaving the results does, so it never races on alone even
