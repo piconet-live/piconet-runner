@@ -179,7 +179,7 @@ struct Stats
   u64 tick_real = 0;
   std::array<u32, 40> step_hist{}, draw_hist{};
   u64 input_changed = 0, input_sent_early = 0;
-  u64 stopped_after_ahead = 0, ticks_late = 0, ticks_late_after_pictures = 0, redraws = 0;
+  u64 stopped_after_ahead = 0, ticks_late = 0, ticks_late_after_pictures = 0, redraws = 0, cover_cut = 0;
   double tick_late_most = 0, cover_most = 0;
   double bound_step = 0, bound_picture = 0, bound_real = 0, bound_cover = 0, bound_late = 0;
 };
@@ -632,6 +632,7 @@ void PlaceTheTick(Tick::time_point now)
     {
       ++s.stats.ticks_late_after_pictures;
       const double kept = s.cover_spent ? std::min(late, s.spent_ms) : late;
+      s.stats.cover_cut += kept < late ? 1 : 0;
       s.cover_ms = std::max(s.cover_ms, kept);
       s.stats.cover_most = std::max(s.stats.cover_most, kept);
     }
@@ -1006,6 +1007,7 @@ std::string Report()
                      t.bound_step / asked, t.bound_picture / asked, t.bound_real / asked, t.bound_cover / asked, t.bound_late / asked) +
          std::format("fzgx: run ahead: ticks late on the wall clock {} ({} after pictures), by at most {:.2f} ms; most kept in hand {:.2f} ms; stopped after the step ahead {}\n",
                      t.ticks_late, t.ticks_late_after_pictures, t.tick_late_most, t.cover_most, t.stopped_after_ahead) +
+         (s.cover_spent ? std::format("fzgx: run ahead: kept in hand up to the pass's own spent ms (AURORA_RUNAHEAD_COVER_SPENT): {} late ticks kept less than whole\n", t.cover_cut) : std::string()) +
          std::format("fzgx: run ahead: input sent at the tick {} times; the pad record differed later {} times\n", t.input_sent_early, t.input_changed) +
          std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
          std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
