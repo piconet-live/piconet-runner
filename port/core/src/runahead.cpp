@@ -222,6 +222,9 @@ struct Run
   bool ahead_good = false;
   u32 ahead_for = 0;
   std::FILE* path = nullptr;  // AURORA_RUNAHEAD_PATH: what each picture holds, for measuring
+  // AURORA_RUNAHEAD_TIMES=<file> (a measuring tool): each pass's moments on the steady clock in us, and the bounds it was
+  // judged by: P,step,tick,fit,step_high,real_high,cover,late | A,step,begin,end (the step ahead) | D,step,tick_end,drawn (the real step)
+  std::FILE* times = nullptr;
   std::FILE* input_log = nullptr;  // AURORA_TEST_INPUT_LOG: each frame's tick and the moments its input was sent
   bool input_late = false;         // AURORA_TEST_INPUT_LATE: a test's control, the input left to the frame's own step
   Tick::time_point logged_tick{}, logged_early{};
@@ -263,6 +266,11 @@ void WriteMtx(Guest& g, u32 a, const Mtx& m)
 {
   for (int i = 0; i < 12; ++i)
     WriteF(g, a + 4 * i, m.m[i]);
+}
+
+long long Us(Tick::time_point t)
+{
+  return static_cast<long long>(std::chrono::duration_cast<std::chrono::microseconds>(t.time_since_epoch()).count());
 }
 
 double Ms(Tick::duration d)
@@ -653,6 +661,8 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
   s.no_read_wait = std::getenv("AURORA_TEST_NO_READ_WAIT") != nullptr;
   if (const char* path = std::getenv("AURORA_RUNAHEAD_PATH"))
     s.path = std::fopen(path, "w");
+  if (const char* path = std::getenv("AURORA_RUNAHEAD_TIMES"))
+    s.times = std::fopen(path, "w");
   Notice("fzgx: run ahead: {} pictures a second asked for, {} between two steps at most", s.rate, s.most);
 }
 
@@ -706,6 +716,9 @@ bool Begin()
   if (s.redrawing && !s.force)  // a picture costs this thread nothing: only the step ahead has to fit
     fit = Room(s.step_high.Of(s.frame, STEP_MS_AT_FIRST)) >= 0 ? s.most : 0;
   s.tick = Tick::now();
+  if (s.times != nullptr)
+    std::fprintf(s.times, "P,%u,%lld,%u,%.2f,%.2f,%.2f,%.2f\n", step, Us(s.due), fit, s.step_high.Of(s.frame, STEP_MS_AT_FIRST),
+                 s.real_high.Of(s.frame, REAL_MS_AT_FIRST), s.cover_ms, s.late_ms);
   s.spent_ms = 0;
   if (fit == 0)
   {
@@ -801,6 +814,8 @@ bool Next(u32 returned, Call* call)
       BackWindow(g);
       const auto undone = Tick::now();
       s.stats.step_sum += Ms(ran - s.began);
+      if (s.times != nullptr)
+        std::fprintf(s.times, "A,%u,%lld,%lld\n", s.step, Us(s.began), Us(undone));
       s.stats.undo_sum += Ms(undone - ran);
       s.step_ms.Add(Ms(undone - s.began));
       s.step_high.Add(s.frame, Ms(undone - s.began));
@@ -947,6 +962,8 @@ void TimeTheDrawing(u32 value)
   if (value == 2 && s.on && s.stage == Stage::OFF && s.tick != Tick::time_point{})
   {
     const double ms = Ms(Tick::now() - s.tick);
+    if (s.times != nullptr)
+      std::fprintf(s.times, "D,%u,%lld,%lld\n", s.last_step, Us(s.tick), Us(Tick::now()));
     s.real_ms.Add(std::max(0.0, ms - s.spent_ms));
     s.real_high.Add(s.frame, std::max(0.0, ms - s.spent_ms));
     s.stats.tick_real_sum += std::max(0.0, ms - s.spent_ms);
@@ -1000,6 +1017,9 @@ void Stop()
   if (s.path != nullptr)
     std::fclose(s.path);
   s.path = nullptr;
+  if (s.times != nullptr)
+    std::fclose(s.times);
+  s.times = nullptr;
   s.log = nullptr;
   s.stage = Stage::OFF;
   s.inside = false;
