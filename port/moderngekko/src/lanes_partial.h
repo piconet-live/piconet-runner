@@ -96,6 +96,7 @@ struct Kept
   std::array<bool, MOST_JOBS> whole{};  // it runs in every later run of the step (no_put_back)
   std::vector<u8> tables;  // "check": the car manager's and the drivers' globals at the batch's start
   u32 entry_cr = 0;        // the task runner's condition register at the batch's first call
+  u32 entry_sp = 0;        // and its stack pointer: a run from another stack is no last run of this one's
   std::array<Guard, MOST_JOBS> guard_in;  // the guard as each job found it
 };
 

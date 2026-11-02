@@ -451,6 +451,7 @@ void Remember(CPUState* cpu, u32 step)
   k.rows = b.rows;
   k.prev_rows = b.prev_rows;
   k.entry_cr = b.entry.cr;
+  k.entry_sp = b.entry.gpr[1];
   if (Mode("check"))
     k.tables.swap(b.tables);
   for (u32 i = 0; i < CARS; ++i)
