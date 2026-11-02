@@ -25,6 +25,7 @@
 //   +24 GAP's time, packed as the game's lap words (the seat's last lap line, P+0x1E0)
 //   +28 the race clock when +11 was asked: the HUD pass shows the gap popup's part and starts the wrong-way sign from it
 // At +TAGS_AT (after the records), a byte a seat: `tag`'s text, its number in the package's tag_texts from 1 (0: none).
+// The story parts' values (show_distance, show_objects) are in the slots page's tail (STORY, below): the record is full.
 // The danger zone's display reads the race side's state (mode.h DANGER: its count, as story chapter 6's).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -50,6 +51,17 @@ constexpr u32 TAGS_AT = SEATS_AT + 30 * SEAT_DISPLAY;
 constexpr u32 GHOST_SOUNDS = TAGS_AT + 32, STAT_GHOST_TINT = 0x58;
 static_assert(TAGS_AT + 30 <= GHOST_SOUNDS && GHOST_SOUNDS + 4 <= STATS && STATS >= DISPLAY && STATS + 30 * STAT <= DISPLAY + 0x1000 &&
               STAT_DAMAGE + 4 <= STAT_GHOST_TINT && STAT_GHOST_TINT + 4 <= STAT);
+
+// The story parts' values, STORY_RECORD bytes a seat in the slots page's tail (mode_gap.h SLOTS_PAGE; it is the block's
+// like the rest, so the undo log and the checksum have it): +0 show_distance's metres (binary32, 0 to 99999), +4 the
+// flags (STORY_DISTANCE, STORY_OBJECTS: the mode gave that value), +6 show_objects's n, +7 its of (0 to 99 each).
+// A page of zeros: the game's own values.
+constexpr u32 STORY = 7 * PAGE + 0xF10, STORY_RECORD = 8;
+constexpr u32 STORY_METRES = 0, STORY_FLAGS = 4, STORY_SHOWN = 6, STORY_OF = 7;
+constexpr u8 STORY_DISTANCE = 1, STORY_OBJECTS = 2;
+constexpr float DISTANCE_MOST = 99999.0f;  // the drawer's five digits (fn_1_CDC8C 0xCEACC)
+constexpr u32 OBJECTS_MOST = 99;           // two digits each side of the slash
+static_assert(STORY + 30 * STORY_RECORD <= 8 * PAGE);
 
 // The window words the pass writes for the image (memmap.MODE_HUD; port/image/sites_modehud.py): +0 the image's
 // flags (POINTS_PAGE, award or a results title: the results go from their first page to the points page, the site at main.rel 0x14A37C;
@@ -90,9 +102,16 @@ static_assert(modes::RESULTS_TITLE + 1 <= WINDOW_HEADING_SIZE);
 constexpr u32 WINDOW_TAGS = 0x100, WINDOW_TAG_TEXTS = 0x120, WINDOW_TAG_TEXT = 12;
 // +0x180: eight bytes a seat, the image's own (mode_look to the ghost task), between the texts and the window's end.
 constexpr u32 WINDOW_GHOSTS = 0x180;
+// +0x270: the DISTANCE drawer's stand-ins while the viewed racer's metres are the mode's: +0 0.0 and +4 the metres, read
+// as a P's distance (+0xF8) and lap length (+0xFC); +8 the byte 1, read as an R's laps (+0x4). The drawer computes
+// lap length x laps - distance, the metres again. +0x27C: OBJECTS's of + 1 (0: the course's own count) and +0x280 of - n,
+// what the image's sites give the drawer's two count calls (sites_modehud.py mode_objects).
+constexpr u32 WINDOW_DISTANCE = 0x270, WINDOW_OBJECTS = 0x27C;
+constexpr u32 STANDIN_P = WINDOW_DISTANCE - 0xF8, STANDIN_R = WINDOW_DISTANCE + 8 - 4;
 static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WINDOW_TAG_TEXTS &&
               WINDOW_TAG_TEXTS + modes::TAG_TEXTS * WINDOW_TAG_TEXT <= WINDOW_GHOSTS &&
-              WINDOW_GHOSTS + 30 * 8 <= 0x700);  // (0x700: RACE, the next in the window)
+              WINDOW_GHOSTS + 30 * 8 <= WINDOW_DISTANCE && WINDOW_DISTANCE + 12 <= WINDOW_OBJECTS &&
+              WINDOW_OBJECTS + 8 <= 0x700);  // (0x700: RACE, the next in the window)
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
 // modes::PART_*: LEADER_GAP the gap popup's own bit (fn_1_15EFEC's test, GAP_PART below), which needs no story picture; the drawers fn_1_CF5B0 (TIMER), fn_1_CDC8C (DISTANCE, SPEED_GAUGE, OBJECTS) and fn_1_CEB38 (the
@@ -127,7 +146,8 @@ bool IsDisplay(u8 id);
 // The seat's parts word (modes::PART_*, bit p), or 0 with no mode: `hide` of a standard part sets its bit.
 u32 SeatParts(const Guest& g, u32 seat);
 // A display word into the seat's record: true when `id` is one.
-bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value);
+// `second`: a two-number word's second (show_objects's of).
+bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second = 0);
 // The start of every run: the banners asked at the last one are gone.
 void BeginRun(Guest& g, u32 block);
 // The window's flags for a race of package `p` (the core writes them with the block's request, boot.cpp; nothing
@@ -187,6 +207,10 @@ struct Frame
   std::array<u32, 30> ghost_tints{}; // each seat's seat.ghost_tint (0: Time Attack's yellow)
   u32 silent = 0;                    // the seats given no machine voice: drawn as ghosts, unheard, not the viewed racer
   bool ghost_gap = false;            // the viewed racer sees GHOST_GAP
+  bool distance_fed = false;         // the viewed racer's DISTANCE shows the mode's metres...
+  float metres = 0;                  // ...these
+  bool objects_fed = false;          // the viewed racer's OBJECTS shows the mode's n/of...
+  u32 objects_shown = 0, objects_of = 0;  // ...these
 };
 Frame Read(const Guest& g, u32 block, u32 viewed, u32 own);
 

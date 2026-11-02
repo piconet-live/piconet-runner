@@ -30,6 +30,12 @@ u32 Seat(u32 block, u32 seat)
 {
   return block + SEATS_AT + seat * SEAT_DISPLAY;
 }
+
+u32 Story(u32 block, u32 seat)
+{
+  return block + STORY + seat * STORY_RECORD;
+}
+static_assert(SlotRecord(SEATS - 1, SLOT_COUNT - 1) + SLOT_RECORD <= STORY);
 }  // namespace
 
 u32 SeatParts(const Guest& g, u32 seat)
@@ -56,6 +62,10 @@ bool IsDisplay(u8 id)
     case ACTION_MAPMARK:
     case ACTION_TAG:
     case ACTION_TAGOFF:
+    case ACTION_SHOWDISTANCE:
+    case ACTION_SHOWDISTANCEOFF:
+    case ACTION_SHOWOBJECTS:
+    case ACTION_SHOWOBJECTSOFF:
       return true;
     default:
       return false;
@@ -131,7 +141,7 @@ void NoteGaps(Guest& g, u32 block, u32 module, u32 run)
   }
 }
 
-bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value)
+bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second)
 {
   const u32 r = Seat(block, seat);
   switch (id)
@@ -197,6 +207,39 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value)
     case ACTION_TAGOFF:
       g.Write8(block + TAGS_AT + seat, 0);
       return true;
+    case ACTION_SHOWDISTANCE:
+    {
+      // whole metres the drawer's five digits can show: below 0 (and NaN) 0, above 99999 99999
+      const float metres = std::bit_cast<float>(value);
+      const u32 st = Story(block, seat);
+      g.Write32(st + STORY_METRES, std::bit_cast<u32>(metres > 0 ? std::min(metres, DISTANCE_MOST) : 0.0f));
+      g.Write8(st + STORY_FLAGS, g.Read8(st + STORY_FLAGS) | STORY_DISTANCE);
+      return true;
+    }
+    case ACTION_SHOWDISTANCEOFF:
+    {
+      const u32 st = Story(block, seat);
+      g.Write32(st + STORY_METRES, 0);
+      g.Write8(st + STORY_FLAGS, g.Read8(st + STORY_FLAGS) & ~STORY_DISTANCE);
+      return true;
+    }
+    case ACTION_SHOWOBJECTS:
+    {
+      // two digits each side; n above of reads as of (the drawer shows n from of minus what it subtracts)
+      const auto two = [](u32 v) { return static_cast<s32>(v) < 0 ? 0u : std::min(v, OBJECTS_MOST); };
+      const u32 st = Story(block, seat), of = two(second);
+      g.Write8(st + STORY_SHOWN, static_cast<u8>(std::min(two(value), of)));
+      g.Write8(st + STORY_OF, static_cast<u8>(of));
+      g.Write8(st + STORY_FLAGS, g.Read8(st + STORY_FLAGS) | STORY_OBJECTS);
+      return true;
+    }
+    case ACTION_SHOWOBJECTSOFF:
+    {
+      const u32 st = Story(block, seat);
+      g.Write16(st + STORY_SHOWN, 0);
+      g.Write8(st + STORY_FLAGS, g.Read8(st + STORY_FLAGS) & ~STORY_OBJECTS);
+      return true;
+    }
     default:
       return false;
   }
@@ -311,6 +354,13 @@ Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
       (p < PART_RANK ? f.parts : f.hidden) |= PART_BITS[p];
   f.faces_hidden = (parts >> PART_FACES & 1) != 0;
   f.ghost_gap = (parts >> PART_GHOST_GAP & 1) != 0;
+  const u32 st = Story(block, viewed);
+  const u8 fed = g.Read8(st + STORY_FLAGS);
+  f.distance_fed = (fed & STORY_DISTANCE) != 0;
+  f.metres = f.distance_fed ? std::bit_cast<float>(g.Read32(st + STORY_METRES)) : 0.0f;
+  f.objects_fed = (fed & STORY_OBJECTS) != 0;
+  f.objects_shown = f.objects_fed ? g.Read8(st + STORY_SHOWN) : 0;
+  f.objects_of = f.objects_fed ? g.Read8(st + STORY_OF) : 0;
   // the danger zone's display (vocabulary 4.4): while its count runs (the race side's, mode.h DANGER: from 60 x
   // seconds + 60 down, the machine exploding at 60) the big digit and the warning, as story chapter 6's, whose digit
   // is the count / 60; the sheet's digits go to 3
@@ -473,8 +523,15 @@ void Hud(Guest& g)
   }
   g.Write32(module + SRC, f.parts & PART_BITS[PART_DIGIT] ? window + WINDOW_DIGIT : 0);
   g.Write32(module + SRC + 4, speed);
-  g.Write32(module + SRC + 8, progress);
-  g.Write32(module + SRC + 0xC, progress ? module + R : 0);
+  // DISTANCE (only its drawer reads +8 and +0xC): the mode's metres through the window's stand-ins, else the racer's own
+  g.Write32(window + WINDOW_DISTANCE, 0);
+  g.Write32(window + WINDOW_DISTANCE + 4, f.distance_fed ? std::bit_cast<u32>(f.metres) : 0);
+  g.Write32(window + WINDOW_DISTANCE + 8, f.distance_fed ? 0x01000000 : 0);
+  g.Write32(module + SRC + 8, f.distance_fed ? window + STANDIN_P : progress);
+  g.Write32(module + SRC + 0xC, f.distance_fed ? window + STANDIN_R : progress ? module + R : 0);
+  // OBJECTS: what the image's two sites give the drawer's count calls (0: the course's own)
+  g.Write32(window + WINDOW_OBJECTS, f.objects_fed ? f.objects_of + 1 : 0);
+  g.Write32(window + WINDOW_OBJECTS + 4, f.objects_fed ? f.objects_of - f.objects_shown : 0);
   g.Write32(module + SRC + 0x10, 0);
   // a seat's colour tints its machine drawn normally; a ghost has seat.ghost_tint (0: Time Attack's yellow)
   for (u32 seat = 0; seat < SEATS; ++seat)

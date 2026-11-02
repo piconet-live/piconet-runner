@@ -112,5 +112,35 @@ class TheLapShown(Build):
             self.assertEqual(self.shown(at, 3, 3, mode=0), 4)
 
 
+class TheObjectsCounts(Build):
+    def counts(self, of_plus_one, gone, mode=1, block=BLOCK):
+        """Both sites' answers (r3 at the drawer's next word) and the game addresses each reached."""
+        out = []
+        for name, at in (("mode_objects_of", hud.OBJECTS_OF), ("mode_objects_gone", hud.OBJECTS_GONE)):
+            memory = {}
+            put(memory, memmap.MODE, mode)
+            put(memory, memmap.MODES + 4, block)
+            put(memory, memmap.MODE_HUD_OBJECTS, of_plus_one)
+            put(memory, memmap.MODE_HUD_OBJECTS + 4, gone)
+            reached = []
+            m = HudCpu(self.image, memory, lambda address, cpu: reached.append((address, cpu.r[3])))
+            m.r[3] = 1
+            m.run(self.symbols[name])
+            out.append([(address - TEXT, r3) for address, r3 in reached])
+        return out
+
+    def test_the_modes_count_reads_n_of(self):
+        # show_objects 3, 5: the drawer is given 5 and 2, and draws 5 - 2 = 3 / 5
+        self.assertEqual(self.counts(6, 2), [[(hud.OBJECTS_OF + 4, 5)], [(hud.OBJECTS_GONE + 4, 2)]])
+        self.assertEqual(self.counts(1, 0), [[(hud.OBJECTS_OF + 4, 0)], [(hud.OBJECTS_GONE + 4, 0)]])
+
+    def test_without_the_modes_count_the_games_calls(self):
+        for args in ((0, 0), (6, 2, 0), (6, 2, 1, 0)):
+            of, gone = self.counts(*args)
+            self.assertEqual([a for a, _ in of], [hud.OBJECTS_OF_GET, hud.OBJECTS_OF + 4])
+            self.assertEqual([a for a, _ in gone], [hud.OBJECTS_GONE_GET, hud.OBJECTS_GONE + 4])
+            self.assertEqual(of[0][1], 1)  # the game's argument, as it was
+
+
 if __name__ == "__main__":
     unittest.main()

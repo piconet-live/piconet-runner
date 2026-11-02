@@ -11,6 +11,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_story` | the frame routine, after mode_preload (sites.py's `frame`) | — | the story's picture group 0xBA (bmp_sto: the big digit, DANGER, the distance's digits, MISSION CLEAR!/FAILED, Time is up...) loaded once, with fn_1_47F74, on the frame the block is taken, when the core says the mode shows one of them (MODE_STORY_PICTURES): every game and playback of the race at the same point, before step 0 |
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
 
+| `mode_objects_of`, `mode_objects_gone` | fn_1_CDC8C 0xCDD7C and 0xCDD88, the OBJECTS part's two counts (`bl fn_1_E5430`, `bl fn_1_E5568`, argument 1: the course objects' table .bss 0x7AE88) | the course's count and what it subtracts (00/00 on every course of the pool) | while the viewed racer's OBJECTS is the mode's (show_objects; the window's MODE_HUD_OBJECTS: of + 1, then of - n, the core's HUD pass) those two numbers, so the part reads n/of; else the stock calls |
 | `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
 | `mode_points_free` | fn_1_14A328 0x14A5A4, the race type switch's `b` to leaving, reached only with the rule read as clear | leave | race type 3 (`laps unlimited`) goes to VS RESULTS as type 6 does; a stock path has the rule set and never gets here with type 3 |
 | `mode_only` | fn_1_14A328 0x14A368, the first results page's A (`extrwi. r0, r0, 1, 23`; its gate 0x14A358 stays) | the page waits for A | under `results points` as pressed |
@@ -30,6 +31,9 @@ banners.py as the game's own)."""
 import memmap
 
 SPARE, SPARE_KNOWN = 0xCA920, 0x4BF748B5    # fn_1_CA8FC: bl fn_1_3F1D4
+OBJECTS_OF, OBJECTS_OF_KNOWN = 0xCDD7C, 0x480176B5      # fn_1_CDC8C: bl fn_1_E5430 (the count shown after the slash)
+OBJECTS_GONE, OBJECTS_GONE_KNOWN = 0xCDD88, 0x480177E1  # fn_1_CDC8C: bl fn_1_E5568 (what the drawer subtracts from it)
+OBJECTS_OF_GET, OBJECTS_GONE_GET = 0xE5430, 0xE5568
 LOOK, LOOK_KNOWN = 0x84F9C, 0x48002121       # fn_1_84860: bl fn_1_870BC
 POINTS, POINTS_KNOWN = 0x14A37C, 0x5400014B  # fn_1_14A328: rlwinm. r0, r0, 0, 5, 5
 POINTS_TYPE, POINTS_TYPE_KNOWN = 0x14A5A4, 0x48000400  # fn_1_14A328: b 0x14A9A4, its race type switch's "leave"
@@ -108,6 +112,28 @@ msp_stock:
 """)
     patch(site, word, 0, "mode_spare")
     middle.append((site, ["r11", "r12", "cr0", "lr"], "mode_spare"))
+
+    # OBJECTS's two counts: the mode's n/of for the followed racer (show_objects), from the window's two words
+    for name, at, known, get, word_at in (("mode_objects_of", OBJECTS_OF, OBJECTS_OF_KNOWN, OBJECTS_OF_GET, 0),
+                                          ("mode_objects_gone", OBJECTS_GONE, OBJECTS_GONE_KNOWN, OBJECTS_GONE_GET, 4)):
+        site = TEXT + at
+        word = stock(site, known)
+        short = name[-2:]
+        r.add(name, test + f"""    beq mob{short}_stock
+""" + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq mob{short}_stock
+""" + la(12, memmap.MODE_HUD_OBJECTS) + f"""    lwz 11, 0(12)
+    cmplwi 11, 0
+    beq mob{short}_stock
+    lwz 3, {word_at}(12)
+""" + ("    addi 3, 3, -1\n" if word_at == 0 else "") + f"""    @b {site + 4:#x}
+mob{short}_stock:
+    @bl {FN(get)}
+    @b {site + 4:#x}
+""")
+        patch(site, word, 0, name)
+        middle.append((site, ["r11", "r12", "cr0", "lr"], name))
 
     # a machine's draw by the look this game draws its seat with (r29 the machine; f1 the alpha; r3 to r7 the call's)
     site = TEXT + LOOK

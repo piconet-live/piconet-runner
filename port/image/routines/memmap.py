@@ -312,6 +312,8 @@ MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HU
 # +0 its colour (0: not drawn), +4 its sign's character, +8 minutes, +0xC seconds, +0x10 thousandths; +0x180 eight bytes a
 # seat the machine's draw sets aside for this frame's ghost task: +0 its car (the task clears it), +4 its level of detail
 MODE_HUD_SILENT, MODE_HUD_GAP, MODE_HUD_GHOSTS = MODE_HUD + 0xCC, MODE_HUD + 0xD0, MODE_HUD + 0x180
+MODE_HUD_OBJECTS = MODE_HUD + 0x27C  # OBJECTS's of + 1 (0: the course's own) and of - n (mode_hud.h WINDOW_OBJECTS)
+assert MODE_HUD_GHOSTS + 30 * 8 <= MODE_HUD + 0x270 and MODE_HUD_OBJECTS + 8 <= RACE  # (0x270: the DISTANCE stand-ins)
 assert MODE_HUD_GAP + 0x14 <= MODE_HUD_TAGS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= MODE_HUD_GHOSTS and MODE_HUD_GHOSTS + 30 * 8 <= RACE
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE
 assert MODE_HUD_TAGS + 30 <= MODE_HUD_TAG_TEXTS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= RACE

@@ -327,6 +327,50 @@ void TestTheDisplayWordsRun()
   CHECK(g.Read32(MODULE + net::BSS + 0x84) == 0);  // no DIGIT shown: no digit source
   CHECK(g.Read32(MODULE + net::BSS + 0x84 + 8) == PROGRESS + game::PROGRESS_SIZE);
   CHECK(g.Read32(MODULE + net::BSS + 0x84 + 4) == MACHINES + game::MACHINE_SIZE + game::MACHINE_SPEED);
+  // the story parts' values (X3, X7): with none given, DISTANCE's source is the racer's own P and R and OBJECTS the course's
+  CHECK(g.Read32(MODULE + net::BSS + 0x84 + 0xC) == MODULE + net::BSS + 0x3C30);
+  CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_OBJECTS) == 0);
+  {
+    // show_distance: the drawer's P and R are the window's stand-ins, and lap length x laps - distance is the metres
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(4321.5f)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 2, std::bit_cast<u32>(777.0f)));
+    hud::Hud(g);
+    const u32 p = g.Read32(MODULE + net::BSS + 0x84 + 8), r = g.Read32(MODULE + net::BSS + 0x84 + 0xC);
+    CHECK(p == layout::MODE_HUD + hud::STANDIN_P && r == layout::MODE_HUD + hud::STANDIN_R);
+    const float shown = std::bit_cast<float>(g.Read32(p + 0xFC)) * static_cast<float>(g.Read8(r + 4)) - std::bit_cast<float>(g.Read32(p + 0xF8));
+    CHECK(shown == 4321.5f);  // seat 1's, the viewed racer's; seat 2's stays in its record
+    CHECK(std::bit_cast<float>(g.Read32(BLOCK + hud::STORY + 2 * hud::STORY_RECORD + hud::STORY_METRES)) == 777.0f);
+    // held to the five digits, and nothing below 0
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(250000.0f)));
+    CHECK(hud::Read(g, BLOCK, 1, 1).metres == hud::DISTANCE_MOST);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(-5.0f)));
+    CHECK(hud::Read(g, BLOCK, 1, 1).distance_fed && hud::Read(g, BLOCK, 1, 1).metres == 0.0f);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, 0x7FC00000));
+    CHECK(hud::Read(g, BLOCK, 1, 1).metres == 0.0f);
+    // off: the racer's own again
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCEOFF, 1, 0));
+    hud::Hud(g);
+    CHECK(g.Read32(MODULE + net::BSS + 0x84 + 8) == PROGRESS + game::PROGRESS_SIZE);
+    CHECK(g.Read32(MODULE + net::BSS + 0x84 + 0xC) == MODULE + net::BSS + 0x3C30);
+    CHECK(!hud::Read(g, BLOCK, 1, 1).distance_fed);
+    // show_objects: of + 1 and of - n in the window for the image's two count sites, two digits each, n at most of
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWOBJECTS, 1, 3, 5));
+    hud::Hud(g);
+    CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_OBJECTS) == 6 && g.Read32(layout::MODE_HUD + hud::WINDOW_OBJECTS + 4) == 2);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWOBJECTS, 1, 150, 120));
+    hud::Hud(g);
+    CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_OBJECTS) == 100 && g.Read32(layout::MODE_HUD + hud::WINDOW_OBJECTS + 4) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWOBJECTS, 1, 7, 0xFFFFFFFF));
+    hud::Hud(g);
+    CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_OBJECTS) == 1 && g.Read32(layout::MODE_HUD + hud::WINDOW_OBJECTS + 4) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWOBJECTSOFF, 1, 0));
+    hud::Hud(g);
+    CHECK(g.Read32(layout::MODE_HUD + hud::WINDOW_OBJECTS) == 0);
+    // a page of zeros again (seat 2's distance off too), as the rest of this test expects
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCEOFF, 2, 0));
+    for (u32 k = 0; k < 30 * hud::STORY_RECORD; ++k)
+      CHECK(g.Read8(BLOCK + hud::STORY + k) == 0);
+  }
   CHECK(g.Read8(layout::MODE_HUD + hud::WINDOW_LOOKS + 1) == modes::LOOK_NORMAL);
   CHECK(g.Read8(layout::MODE_HUD + hud::WINDOW_LOOKS + 4) == modes::LOOK_GHOST);
   // the out seat's colour (0xFF2020FF) only tints a machine drawn normally: as a ghost it is not drawn so

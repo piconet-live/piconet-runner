@@ -1264,7 +1264,7 @@ private:
     if (hud::IsDisplay(a.id))
     {
       if (a.seat < m_count)
-        hud::Apply(m_g.Plain(), m_block, a.id, a.seat, a.value[0]);
+        hud::Apply(m_g.Plain(), m_block, a.id, a.seat, a.value[0], a.value[1]);
       return;
     }
     if (m_queued >= static_cast<u32>(QUEUE))
