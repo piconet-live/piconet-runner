@@ -317,10 +317,14 @@ mtt_stock:
     patch(site, word, 0, "mode_title")
     middle.append((site, ["r12", "cr0"], "mode_title"))
 
-    # `results_heading "TEXT"`, or RESULTS: the times list's string, with a mode always the window's
+    # `results_heading "TEXT"`, or RESULTS: the times list's string, with a mode always the window's. `test` is true in every
+    # race of ours, the mode or none, so an empty window (no mode) is what keeps the game's
     site = TEXT + HEADING
     word = stock(site, HEADING_KNOWN)
     r.add("mode_heading", test + """    beq mhd_stock
+""" + la(12, memmap.MODE_HUD_HEADING) + f"""    lbz 12, 0(12)
+    cmpwi 12, 0
+    beq mhd_stock
 """ + la(3, memmap.MODE_HUD_HEADING) + f"""    @b {site + 4:#x}
 mhd_stock:
     .long {word:#010x}
