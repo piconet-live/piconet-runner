@@ -6,6 +6,7 @@
 #include "adapter_internal.h"
 #include "lanes.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "Core/PowerPC/StaticRecomp/StaticRecompCore.h"
@@ -77,7 +78,21 @@ void StartRunAhead()
 {
   fzgx::runahead::Start([](float fraction) {
     VideoCommon::AuroraPresent::NoteBetween(VideoCommon::FrameRedraw::WrittenPosition(), fraction);
-  }, [](fzgx::u32 step) { lanes::PartialForget(step); });
+  }, [](fzgx::u32 step) { lanes::PartialForget(step); },
+  [](const fzgx::runahead::RedrawRequest& r) {
+    static VideoCommon::AuroraPresent::RedrawRequest out;  // (the game's thread alone)
+    out.position = VideoCommon::FrameRedraw::WrittenPosition();
+    out.machines = r.machines;
+    std::memcpy(out.at, r.at.data(), sizeof out.at);
+    out.pictures = std::min<fzgx::u32>(r.pictures, VideoCommon::AuroraPresent::REDRAW_MOST);
+    for (fzgx::u32 k = 0; k < out.pictures; ++k)
+    {
+      out.picture[k].fraction = r.picture[k].fraction;
+      std::memcpy(out.picture[k].camera, r.picture[k].camera.data(), sizeof out.picture[k].camera);
+      std::memcpy(out.picture[k].machine, r.picture[k].machine.data(), sizeof out.picture[k].machine);
+    }
+    VideoCommon::AuroraPresent::Redraw(&out);
+  });
 }
 
 void StopRunAhead()

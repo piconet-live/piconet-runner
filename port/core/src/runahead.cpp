@@ -178,7 +178,7 @@ struct Stats
   u64 tick_real = 0;
   std::array<u32, 40> step_hist{}, draw_hist{};
   u64 input_changed = 0, input_sent_early = 0;
-  u64 stopped_after_ahead = 0, ticks_late = 0, ticks_late_after_pictures = 0;
+  u64 stopped_after_ahead = 0, ticks_late = 0, ticks_late_after_pictures = 0, redraws = 0;
   double tick_late_most = 0, cover_most = 0;
   double bound_step = 0, bound_picture = 0, bound_real = 0, bound_cover = 0, bound_late = 0;
 };
@@ -190,6 +190,9 @@ struct Run
   u32 rate = 120, most = 1;  // pictures a second, pictures between a step
   std::function<void(float)> between;
   std::function<void(u32)> ran;
+  std::function<void(const RedrawRequest&)> redraw;
+  bool redrawing = false;  // AURORA_REDRAW: the host draws the pictures from the true frame's own draws
+  RedrawRequest request;
   u32 manager = 0, name_tags = 0;
   bool tags_done = false;
   Stage stage = Stage::OFF;
@@ -526,6 +529,43 @@ void LeakAfter(Guest& g)
         ++s.leak_words[(SCRATCH_START + k) & ~0xFFu];
 }
 
+Matrix Four(const Mtx& m)
+{
+  return {m.m[0], m.m[1], m.m[2], m.m[3], m.m[4], m.m[5], m.m[6], m.m[7], m.m[8], m.m[9], m.m[10], m.m[11], 0, 0, 0, 1};
+}
+
+// The pictures between the true picture and the step ahead, for the host: each machine's and the camera's correction at its fraction.
+// Only read from the two states kept; nothing of the game's is touched.
+void SendRedraw()
+{
+  RedrawRequest& q = s.request;
+  const Mtx& view = s.now.camera.b;
+  q.machines = 0;
+  for (u32 i = 0; i < SEATS; ++i)
+  {
+    const Mtx& m = s.now.machine[i].pose;
+    q.machines |= 1u << i;
+    for (int r = 0; r < 3; ++r)
+      q.at[i][r] = float(double(view.m[4 * r]) * m.m[3] + double(view.m[4 * r + 1]) * m.m[7] + double(view.m[4 * r + 2]) * m.m[11] +
+                         view.m[4 * r + 3]);
+  }
+  q.pictures = std::min(s.most, PICTURES_MOST);
+  for (u32 k = 0; k < q.pictures; ++k)
+  {
+    RedrawPicture& p = q.picture[k];
+    const double t = double(k + 1) / (q.pictures + 1);
+    p.fraction = float(t);
+    const Mtx picture_view = hfr::BlendView(s.now.camera.b, s.ahead.camera.b, t);
+    p.camera = Four(hfr::CameraCorrection(view, picture_view));
+    for (u32 i = 0; i < SEATS; ++i)
+      p.machine[i] = s.moves[i] ? Four(hfr::BodyCorrection(view, picture_view, s.now.machine[i].pose,
+                                                           hfr::BlendPose(s.now.machine[i].pose, s.ahead.machine[i].pose, t))) :
+                                  p.camera;
+  }
+  s.redraw(q);
+  ++s.stats.redraws;
+}
+
 // The room left in this field for what is run ahead, with the real step and all it needs after it still on time: from
 // recent highs, not means, and from where this tick actually is on the wall clock.
 double Room(double used_ms)
@@ -585,9 +625,12 @@ void PlaceTheTick(Tick::time_point now)
 }
 }  // namespace
 
-void Start(std::function<void(float)> between, std::function<void(u32)> ran)
+void Start(std::function<void(float)> between, std::function<void(u32)> ran, std::function<void(const RedrawRequest&)> redraw)
 {
   s.ran = std::move(ran);
+  s.redraw = std::move(redraw);
+  const char* redrawing = std::getenv("AURORA_REDRAW");
+  s.redrawing = redrawing != nullptr && redrawing[0] == '1' && s.redraw != nullptr;
   s.on = false;
   s.between = std::move(between);
   s.input_late = std::getenv("AURORA_TEST_INPUT_LATE") != nullptr;
@@ -656,7 +699,9 @@ bool Begin()
       s.logged_early = Tick::now();
   }
   // the real step and its drawing, as they cost lately: from the step after the tick before to the drawing's end
-  const u32 fit = PicturesThatFit();
+  u32 fit = PicturesThatFit();
+  if (s.redrawing && !s.force)  // a picture costs this thread nothing: only the step ahead has to fit
+    fit = Room(s.step_high.Of(s.frame, STEP_MS_AT_FIRST)) >= 0 ? s.most : 0;
   s.tick = Tick::now();
   s.spent_ms = 0;
   if (fit == 0)
@@ -761,6 +806,15 @@ bool Next(u32 returned, Call* call)
       if (!Judge())
       {
         ++s.stats.camera_cut;
+        LeakAfter(g);
+        s.log->SaveAgain(s.step);
+        s.inside = false;
+        s.stage = Stage::OFF;
+        return false;
+      }
+      if (s.redrawing)
+      {
+        SendRedraw();
         LeakAfter(g);
         s.log->SaveAgain(s.step);
         s.inside = false;
@@ -921,7 +975,8 @@ std::string Report()
   if (s.path != nullptr)
     std::fflush(s.path);
   const double asked = std::max<double>(1, static_cast<double>(t.passes));
-  return std::format("fzgx: run ahead: the bounds on average: step {:.2f}, picture {:.2f}, real {:.2f}, kept in hand {:.2f}, tick late {:.2f} ms\n",
+  return std::format("fzgx: run ahead: {} requests of pictures to the renderer (AURORA_REDRAW {})\n", t.redraws, s.redrawing ? "on" : "off") +
+         std::format("fzgx: run ahead: the bounds on average: step {:.2f}, picture {:.2f}, real {:.2f}, kept in hand {:.2f}, tick late {:.2f} ms\n",
                      t.bound_step / asked, t.bound_picture / asked, t.bound_real / asked, t.bound_cover / asked, t.bound_late / asked) +
          std::format("fzgx: run ahead: ticks late on the wall clock {} ({} after pictures), by at most {:.2f} ms; most kept in hand {:.2f} ms; stopped after the step ahead {}\n",
                      t.ticks_late, t.ticks_late_after_pictures, t.tick_late_most, t.cover_most, t.stopped_after_ahead) +
