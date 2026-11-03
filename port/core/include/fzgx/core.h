@@ -191,6 +191,13 @@ struct TaskbarGroup
   std::string name;     // what a pinned button is called
 };
 
+// One file of a mod pack the launch file names ("overlay"), read in place of the disc's (fzgx/mod_files.h).
+struct OverlayFile
+{
+  std::string disc;  // the path under the game folder's files/, with '/' ("stage/st05.tpl.lz"), as the file gave it
+  std::string from;  // the replacement's whole path on this computer
+};
+
 // The settings of one start of the game: a launch file (--config FILE; protocol/formats.md section 2), read by
 // ReadLaunchFile and by nothing else.
 
@@ -272,6 +279,9 @@ struct Options
   bool controller_setup = false;  // "controllerSetup": a plain start that opens the game's own controller options
                                   // (Options, Controller) once the title stands, and stops the game when the
                                   // player leaves them; no test setting: a player's start may ask for it
+  // "overlay": a mod pack's files over the disc's, in the file's order, as the file gave them; which the runner takes
+  // is fzgx/mod_files.h's (mod_files::Choose). Empty: the disc as it is
+  std::vector<OverlayFile> overlay;
   // "lanes": 0 or no key (launchers write 0): the multicore physics is parked on branch parked/lanes; any other
   // count is refused
   Debug debug;               // "debug"; a file without one leaves every test setting off

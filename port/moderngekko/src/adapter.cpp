@@ -188,10 +188,10 @@ public:
     return std::string(folder.begin(), folder.end());
   }
 
-  // The game's files are an extracted tree (<game>/files), not a disc image.
+  // The game's files are an extracted tree (<game>/files), not a disc image; a file a mod pack overlays is the pack's.
   bool ReadGameFile(const std::string& path, std::vector<fzgx::u8>* out) override
   {
-    std::ifstream file(s_state.game_root / "files" / std::filesystem::path(path), std::ios::binary | std::ios::ate);
+    std::ifstream file(GameFilePath(path), std::ios::binary | std::ios::ate);
     if (!file)
       return false;
     out->resize(static_cast<std::size_t>(file.tellg()));
@@ -333,6 +333,7 @@ std::optional<std::string> Prepare(const RunnerOptions& asked)
   const bool race = !o.match.empty() || !o.play_file.empty();
   fzgx::Init(s_core_host, o);
   ReportSettings();
+  ChooseModFiles();
   if (race && !fzgx::Active())
     return "the race could not be set up from " + (o.match.empty() ? o.play_file : o.launch_file);
   // A saved state brings its own code (tests: "debug.forcePatches" writes the list over it); a boot runs the file's.

@@ -68,6 +68,8 @@ struct State
   void* next_user = nullptr;
   std::string engine;                     // "native" or "jit": what runs the game's code (BeforeBoot)
   std::future<std::string> module_sha1;   // the native module's, when this start records a replay
+  std::vector<fzgx::OverlayFile> mod_files;  // the mod pack's files this start reads in place of the disc's
+                                             // (ChooseModFiles: the launch file's "overlay" as the guard left it)
 };
 
 extern State s_state;
@@ -108,6 +110,10 @@ void TakeHostCalls(StaticRecompModuleSource& source);
 // switches.cpp: a launch file was named (--config), so the adapter is in use; its settings read into s_state.options
 // (what is wrong with the file, or nothing); a line for the log that says which test settings are on
 bool InUse();
+// mod_files.cpp: the launch file's "overlay", chosen once in Prepare (each refusal and a summary in the log); and
+// where a file of the disc is read from, the pack's file when this start overlays it (Host::ReadGameFile)
+void ChooseModFiles();
+std::filesystem::path GameFilePath(const std::string& path);
 std::optional<std::string> ReadSettings();
 void ReportSettings();
 // the launch file's settings of the emulator's side, handed to it (Common/RunSettings.h)

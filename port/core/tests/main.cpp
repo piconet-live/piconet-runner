@@ -162,6 +162,7 @@ void TestTheNamedLaunchFiles();
 // test_present.cpp
 void TestALateFramesDrawingIsSkipped();
 void TestALaunchFileOfTheLaunchers();  // test_launch_vectors.cpp
+void TestTheModPackOverlay();  // test_mod_files.cpp
 void TestTheLaunchFilesPlayersKeys();  // test_launch_latency.cpp: presentation, delay, lanes, true widescreen
 void TestTheWindowsKeptPlace();
 void TestThePicturesWaitForAConsolesMoment();
@@ -534,6 +535,7 @@ int main(int argc, char** argv)
   TestARunnerOptionALaunchFileMustAllow();
   TestTheNamedLaunchFiles();
   TestALaunchFileOfTheLaunchers();
+  TestTheModPackOverlay();
   TestTheLaunchFilesPlayersKeys();
   TestTheWindowsKeptPlace();
   TestThePictures();
