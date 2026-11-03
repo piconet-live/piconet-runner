@@ -41,6 +41,22 @@ constexpr u32 SIM_MANAGER = B + 0x3C00 + 0x21F88, DRAW_MANAGER = B + 0x3C00 + 0x
 constexpr u32 PAUSE_WORD = B + 0x26B50, HUD_OFF = B + 0x3C10;
 constexpr u32 COUNTERS[] = {0x801A66A0, 0x801A66A4, 0x801A66A8, 0x801A66C0, 0x801A66C8};
 constexpr u32 RUN_BEFORE_AT = CONTROL + 492, LAST_STEP = CONTROL + 460, MUTE = CONTROL + 488, RUNNING = CONTROL + 120;
+// AURORA_RUNAHEAD_SKIP (on by default wherever run-ahead is): the step ahead leaves out the simulation manager's task
+// lists whose work it undoes unseen. Bit n = list n of the manager's list mask (+0x10, read by fn_1_407C; the test switch +312 masks the
+// same way). Everything the step ahead writes is undone but what Take reads (the machines' pose, flags, speed and the
+// camera), so a list after the car task that neither the camera nor the machines' pose reads is work thrown away:
+// 11 the effect update, 23 BackGroundCalc (its writes come after the car task and are undone); and the
+// flag-0 lists a frame's last step runs: 5 the machine sound update (already returns at once in a muted step: mute.py),
+// 12 Check and Face (the face board's memory is not undone: it advanced twice a frame), 22 the machines'
+// shadows (fn_1_56D4C), 25 GameResultCtrl, 31 RumbleMain. Kept: 0 to 9 (the race; 8 PhysObjCalc pushes machines on courses
+// 37, 38, 41), 10 (the burner: smooth.py's hook runs smooth_draw at the top of list 10, and fn_1_407C reaches a
+// list's top only when it is not masked; masked, the rivals' drawn offsets were missing from every pose read: m283,
+// all 3,326 passes), 13 (the Starter beside the HUD timers), 20 and 21 (the cameras, CameraExec, StageCalc; 20 also
+// smooth.py's specwatch).
+// Unset, empty or AURORA_RUNAHEAD_SKIP=1: that set; 0: none (every list runs, as before 2026-11-03: for tests and
+// comparison); another number (0x...): that mask, for tests.
+constexpr u32 SKIP_LISTS = 1u << 5 | 1u << 11 | 1u << 12 | 1u << 22 | 1u << 23 | 1u << 25 | 1u << 31;
+constexpr u32 LIST_MASK = 0x10;  // the simulation manager's own: list n is left out with bit n
 constexpr u32 SMOOTH_ENTRY = 48, SMOOTH_OFFSET = 12, SMOOTH_WRITTEN = 36;
 constexpr u32 SHADOWS = B + 0x6D83C + 8, SHADOW_SIZE = 0x4C, SHADOW_PLACE = 0x18;
 constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
@@ -173,6 +189,9 @@ struct Stats
 {
   u64 passes = 0, none_time = 0, none_state = 0, camera_cut = 0, pictures = 0, kept = 0, ahead_inputs_same = 0;
   u64 rng_moved = 0;
+  // AURORA_TEST_SKIP_COMPARE: each step ahead run whole, then again with the lists left out; what Take read compared
+  u64 compared = 0, compared_machines = 0, compared_camera = 0;
+  double compared_whole_ms = 0, compared_part_ms = 0;  // the two runs' times, each from its first call to its end
   u64 ahead_checked = 0, ahead_wrong = 0;  // the step ahead against the true step that came after it
   double ahead_most = 0;
   double wait_sum = 0, step_sum = 0, undo_sum = 0, draw_sum = 0, restore_sum = 0, tick_real_sum = 0;
@@ -222,6 +241,13 @@ struct Run
   bool cover_spent = false;
   Stats stats;
   u32 rng_before = 0;
+  u32 skip = 0;            // the lists the step ahead leaves out (AURORA_RUNAHEAD_SKIP; SKIP_LISTS unless it says 0), 0: none
+  u32 mask_before = 0;     // the manager's list mask as the frame left it
+  bool compare = false;    // AURORA_TEST_SKIP_COMPARE
+  bool second = false;     // the comparison's second run is the one running
+  bool part_first = false; // the comparison runs the step with the lists left out first this pass
+  State whole;             // the comparison's first run
+  Tick::time_point second_began{};  // the comparison's run in turn began
   bool ahead_good = false;
   u32 ahead_for = 0;
   std::FILE* path = nullptr;  // AURORA_RUNAHEAD_PATH: what each picture holds, for measuring
@@ -498,6 +524,52 @@ net::Row RowAhead(Guest& g, net::Session& ss, u32 t)
   return row;
 }
 
+// The words the step ahead runs with, written after the frame's own step and before the step ahead's first call. All of
+// them are put back: the row and the manager's mask by the undo log (RestoreTo) and Unmask, the window's by BackWindow.
+void PrepareAhead(Guest& g, net::Session& ss, u32 step, u32 skip)
+{
+  net::WriteRow(g, ss, step, RowAhead(g, ss, step));
+  g.Write32(RUN_BEFORE_AT, step + 1);  // the step counts as run before: its sounds and rumble are dropped
+  g.Write32(LAST_STEP, 1);             // with the rivals' drawn offsets, as a frame's last step (smooth.py)
+  for (const u32 a : COUNTERS)
+    g.Write32(a, 0x100000 + step);
+  const u32 manager = g.Read32(SIM_MANAGER);
+  s.mask_before = g.Read32(manager + LIST_MASK);
+  if (skip != 0)
+    g.Write32(manager + LIST_MASK, s.mask_before | skip);
+}
+
+void Unmask(Guest& g)
+{
+  g.Write32(g.Read32(SIM_MANAGER) + LIST_MASK, s.mask_before);
+}
+
+bool SameBits(const void* a, const void* b, size_t n)
+{
+  return std::memcmp(a, b, n) == 0;
+}
+
+// The comparison: what Take read from the whole step ahead against the one with the lists left out, bit for bit.
+void Compare(const State& whole, const State& part, u32 step)
+{
+  ++s.stats.compared;
+  bool machines = whole.count != part.count;
+  for (u32 i = 0; i < SEATS; ++i)
+  {
+    const Machine &a = whole.machine[i], &b = part.machine[i];
+    machines |= !SameBits(&a.pose, &b.pose, sizeof a.pose) || a.flags != b.flags || a.since != b.since ||
+                a.flags2 != b.flags2 || !SameBits(&a.speed, &b.speed, sizeof a.speed);
+  }
+  const Camera &c = whole.camera, &d = part.camera;
+  const bool camera = c.mode != d.mode || c.follow != d.follow || c.state != d.state || !SameBits(c.fov, d.fov, sizeof c.fov) ||
+                      !SameBits(c.eye, d.eye, sizeof c.eye) || !SameBits(&c.a, &d.a, sizeof c.a) || !SameBits(&c.b, &d.b, sizeof c.b);
+  s.stats.compared_machines += machines;
+  s.stats.compared_camera += camera;
+  if ((machines || camera) && s.stats.compared_machines + s.stats.compared_camera <= 20)
+    Notice("fzgx: run ahead: step {} ahead with lists 0x{:08X} left out: {}{}differ from the whole step's", step, s.skip,
+           machines ? "machines " : "", camera ? "camera " : "");
+}
+
 constexpr u32 RAM_START = 0x80000000, RAM_BYTES = 24 * 1024 * 1024, SCRATCH_START = 0xE0000000;
 
 void LeakBefore(Guest& g)
@@ -666,6 +738,16 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
   s.most = static_cast<u32>(std::lround(s.rate / 60.0)) - 1;
   s.on = true;
   s.no_read_wait = std::getenv("AURORA_TEST_NO_READ_WAIT") != nullptr;
+  s.skip = SKIP_LISTS;
+  if (const char* skip = std::getenv("AURORA_RUNAHEAD_SKIP"); skip != nullptr && skip[0] != '\0')
+  {
+    const unsigned long v = std::strtoul(skip, nullptr, 0);
+    s.skip = v == 1 ? SKIP_LISTS : static_cast<u32>(v);
+  }
+  s.compare = s.skip != 0 && std::getenv("AURORA_TEST_SKIP_COMPARE") != nullptr;
+  if (s.skip != 0)
+    Notice("fzgx: run ahead: the step ahead leaves out the task lists 0x{:08X}{}", s.skip,
+           s.compare ? "; each also run whole and compared (AURORA_TEST_SKIP_COMPARE)" : "");
   if (const char* path = std::getenv("AURORA_RUNAHEAD_PATH"))
     s.path = std::fopen(path, "w");
   if (const char* path = std::getenv("AURORA_RUNAHEAD_TIMES"))
@@ -782,11 +864,12 @@ bool Begin()
   s.log->SaveStep(g, step, true);
   if (s.log == &s.own)
     s.own.Final(step);
-  net::WriteRow(g, *ss, step, RowAhead(g, *ss, step));
-  g.Write32(RUN_BEFORE_AT, step + 1);  // the step counts as run before: its sounds and rumble are dropped
-  g.Write32(LAST_STEP, 1);             // with all its presentation tasks, as a frame's last step
-  for (const u32 a : COUNTERS)
-    g.Write32(a, 0x100000 + step);
+  s.second = false;
+  // the comparison runs the whole step first in even passes, the one with the lists left out first in odd ones (the
+  // second run of a pass finds the caches warm); the second run is the one kept
+  s.part_first = s.compare && (s.stats.passes & 1) != 0;
+  PrepareAhead(g, *ss, step, s.compare && !s.part_first ? 0 : s.skip);
+  s.second_began = Tick::now();
   s.stage = Stage::AHEAD_MANAGER;
   return true;
 }
@@ -812,12 +895,33 @@ bool Next(u32 returned, Call* call)
     {
       s.index = 0;
       const auto ran = Tick::now();
+      if (s.compare && !s.second)
+      {
+        // the first run taken and undone; the same step again the other way
+        (s.part_first ? s.stats.compared_part_ms : s.stats.compared_whole_ms) += Ms(ran - s.second_began);
+        Take(g, s.whole);
+        s.log->SaveStep(g, s.step + 1, false);
+        s.log->RestoreTo(g, s.step + 1, s.step);
+        Unmask(g);
+        BackWindow(g);
+        s.second = true;
+        PrepareAhead(g, *net::s_session, s.step, s.part_first ? 0 : s.skip);
+        s.second_began = Tick::now();
+        *call = {T + 0x435C, g.Read32(SIM_MANAGER)};
+        return true;
+      }
       s.ran(s.step);
       Take(g, s.ahead);
+      if (s.compare)
+      {
+        (s.part_first ? s.stats.compared_whole_ms : s.stats.compared_part_ms) += Ms(ran - s.second_began);
+        Compare(s.whole, s.ahead, s.step);  // (which of the two is which does not matter to it)
+      }
       s.ahead_good = true;
       s.ahead_for = s.step + 1;
       s.log->SaveStep(g, s.step + 1, false);
       s.log->RestoreTo(g, s.step + 1, s.step);
+      Unmask(g);
       BackWindow(g);
       const auto undone = Tick::now();
       s.stats.step_sum += Ms(ran - s.began);
@@ -1010,6 +1114,12 @@ std::string Report()
          (s.cover_spent ? std::format("fzgx: run ahead: kept in hand up to the pass's own spent ms (AURORA_RUNAHEAD_COVER_SPENT): {} late ticks kept less than whole\n", t.cover_cut) : std::string()) +
          std::format("fzgx: run ahead: input sent at the tick {} times; the pad record differed later {} times\n", t.input_sent_early, t.input_changed) +
          std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
+         std::format("fzgx: run ahead: task lists left out of the step ahead 0x{:08X}\n", s.skip) +
+         (s.compare ? std::format("fzgx: run ahead: the step ahead whole against with the lists left out: {} compared, machines differed {}, camera differed {}; "
+                                  "a step ahead whole {:.3f} ms, with the lists left out {:.3f} ms (the same pass, one after the other, in turn first)\n",
+                                  t.compared, t.compared_machines, t.compared_camera, t.compared_whole_ms / std::max<double>(1, t.compared),
+                                  t.compared_part_ms / std::max<double>(1, t.compared))
+                    : std::string()) +
          std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
                      "{} camera cuts; {} pictures between; a step ahead {:.2f} ms + its undo {:.2f} ms ({}); a picture {:.2f} ms, of it the draw-done wait {:.2f}, + its undo {:.2f} ms ({}); "
                      "the real step and its drawing {:.2f} ms; {} machines kept for a jump; pictures that moved the executable's generator (undone): {}",

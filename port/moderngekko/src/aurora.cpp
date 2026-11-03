@@ -67,6 +67,7 @@ void SetSwitches(const fzgx::Options& o)
   }
   if (!o.aurora_colourblind.empty() && o.aurora_colourblind != "off")
     SetSwitch("AURORA_COLOURBLIND", o.aurora_colourblind);
+  // (the step ahead's skip, AURORA_RUNAHEAD_SKIP, is on by default with it: runahead.cpp; a test's 0 stays)
   if (o.aurora_high_refresh != 0)
     SetSwitch("AURORA_RUNAHEAD", std::to_string(o.aurora_high_refresh));
 }
