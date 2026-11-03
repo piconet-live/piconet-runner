@@ -13,9 +13,10 @@
 //   pivot    [x, y] in the game's 640x480 units before Wide Screen's squeeze; left out: the centre of the part's box
 //            (PIVOTS below, measured; a part not measured: the box of everything it has drawn in this start)
 //   "log"    true: the parts' boxes in the log every 600 drawn queues (to measure PIVOTS)
-// FACES (the top-6 faces board) can only be hidden: {"FACES": {"hide": true}} takes the whole board off (rings, numbers
-// and the 3D heads, whose task is skipped by the image's mode_faces site); a move, turn or mirror of it is ignored, said
-// once in the log (its 3D heads do not follow a moved board). No other part takes "hide".
+// FACES (the top-6 faces board) moves like the others (its 3D heads are copied pictures queued with the rings; their
+// circle mask is an undrawn packet that stays put, see Flush). It alone can also be hidden: {"FACES": {"hide": true}}
+// takes the whole board off (rings, numbers and the 3D heads, whose task is skipped by the image's mode_faces site).
+// No other part takes "hide".
 // A part's name is one of PARTS. BOOST (the energy meter's lightning, a sprite of its own) takes ENERGY's move and
 // pivot unless the layout names it.
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -54,7 +55,6 @@ struct Layout
   bool any = false;
   bool log = false;
   bool faces_hidden = false;
-  bool faces_moved_ignored = false;  // a move, turn or mirror was given for FACES (said in the log)
 };
 
 // A layout from its text; `why` says what is wrong (and nothing is moved) when it is refused.

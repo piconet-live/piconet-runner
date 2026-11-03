@@ -56,9 +56,9 @@ void TestTheClassicHudMoves()
   CHECK(!why.empty() && !l.any);
   l = FromText(R"({"RANK": {"scale": 2}})", &why);
   CHECK(!why.empty() && !l.any);
-  // FACES can only be hidden: a move of it is ignored (the board stays), hide takes the whole board off; no other part hides
+  // FACES moves like any part, and it alone can also be hidden (the whole board; a move given with hide is moot)
   l = FromText(R"({"FACES": {"dx": 40, "angle": 15}})", &why);
-  CHECK(why.empty() && !l.any && !l.faces_hidden && l.faces_moved_ignored && !l.parts[FACES].given);
+  CHECK(why.empty() && l.any && !l.faces_hidden && l.parts[FACES].given);
   l = FromText(R"({"FACES": {"hide": true, "dx": 40}})", &why);
   CHECK(why.empty() && l.any && l.faces_hidden && !l.parts[FACES].given);
   l = FromText(R"({"RANK": {"hide": true}})", &why);

@@ -211,7 +211,6 @@ struct State
   std::array<Box, PARTS.size()> seen{};    // every box a part has drawn in this start
   u32 flushes = 0;
   bool said = false;
-  bool faces_said = false;
 };
 State s_state;
 
@@ -247,28 +246,18 @@ void Flush(Guest& g)
     for (u32 i = from; i < to; ++i)
       part[i] = static_cast<u8>(marks[m].second);
   }
+  // A packet the game queues undrawn (0x02000000) is only a reference: the faces board's circle mask (0x9437) is one,
+  // read through +0x4C by each head (flag 0x01000000, fn_1_4E220) as a texture matrix in the head quad's own frame.
+  // Moving it would move the mask off the head, so such packets keep their place and count in no box.
+  for (u32 i = 0; i < count; ++i)
+    if (g.Read32(queue + i * PACKET + FLAGS) & NOT_DRAWN)
+      part[i] = NONE;
   std::array<Box, PARTS.size()> now{};
   for (u32 i = 0; i < count; ++i)
     if (part[i] != NONE)
       now[part[i]].Add(Corners(g, queue + i * PACKET));
   for (std::size_t p = 0; p < PARTS.size(); ++p)
     s_state.seen[p].Add(now[p]);
-  if (l.log && !s_state.faces_said && now[FACES].x1 > now[FACES].x0)
-  {
-    // (the faces board's packets once, to see which shows the copied heads)
-    s_state.faces_said = true;
-    std::string line;
-    for (u32 i = 0; i < count; ++i)
-      if (part[i] == FACES)
-      {
-        const u32 a = queue + i * PACKET;
-        line += std::format(" [{} id {:#x} flags {:#x} at {:.1f},{:.1f} scale {:.3f},{:.3f} rot {} anchor {:.1f} px {:#x} {}x{}]", i,
-                            g.Read32(a + IMAGE), g.Read32(a + FLAGS), F(g, a + X), F(g, a + Y), F(g, a + SCALE_X),
-                            F(g, a + SCALE_Y), static_cast<s16>(g.Read16(a + ROT_Z)), F(g, a + 0x34), g.Read32(a + 0x48),
-                            g.Read16(a + PIXELS_W), g.Read16(a + PIXELS_H));
-      }
-    Notice("fzgx: classic HUD faces packets:{}", line);
-  }
   if (l.faces_hidden)
     for (u32 i = 0; i < count; ++i)
       if (part[i] == FACES)
@@ -323,6 +312,7 @@ void Flush(Guest& g)
 
 Layout FromText(const std::string& text, std::string* why)
 {
+  why->clear();
   picojson::value v;
   const std::string error = picojson::parse(v, text);
   if (!error.empty() || !v.is<picojson::object>())
@@ -351,13 +341,11 @@ Layout FromText(const std::string& text, std::string* why)
       return {};
     }
     const std::size_t part = at - PARTS.begin();
-    if (part == FACES)
+    if (part == FACES && m.hide)
     {
-      // the board can only be hidden: its 3D heads do not follow a moved board
-      if (m.dx != 0 || m.dy != 0 || m.angle != 0 || m.flip_x || m.flip_y || m.has_pivot)
-        l.faces_moved_ignored = true;
-      l.faces_hidden = m.hide;
-      l.any = l.any || m.hide;
+      // the whole board off: rings, numbers and the 3D heads (their render and copy too)
+      l.faces_hidden = true;
+      l.any = true;
       continue;
     }
     if (m.hide)
@@ -393,8 +381,6 @@ const Layout& TheLayout()
       for (const Move& m : l.parts)
         n += m.given;
       Notice("fzgx: classic HUD layout: {} parts moved{}, from {}", n, l.faces_hidden ? ", the faces board hidden" : "", path);
-      if (l.faces_moved_ignored)
-        Warn("fzgx: classic HUD layout: FACES can only be hidden ({{\"hide\": true}}): its move, turn or mirror is ignored");
     }
     return l;
   }();
