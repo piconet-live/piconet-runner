@@ -86,6 +86,11 @@ void Rollback::SaveStep(Guest& g, u32 t, bool frame_step)
   PreStep(g, *m, t, frame_step);
 }
 
+void Rollback::SaveAgain(u32 t)
+{
+  m->save_again = t;
+}
+
 void Rollback::Final(u32 step)
 {
   FZGX_TIME(Final);

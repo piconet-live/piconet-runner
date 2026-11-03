@@ -20,7 +20,7 @@ namespace
 bool IsOurs(u32 address)
 {
   if (s_state.native)
-    return address >= HOST_CALLS && address < HOST_CALLS_END && (address & 3) == 0;
+    return address >= HOST_CALLS && address < HOST_CALLS_END + 4 && (address & 3) == 0;  // (+4: run_ahead.cpp's)
   return address == NET_HOOK;
 }
 }  // namespace
@@ -69,6 +69,11 @@ bool HostCall(CPUState* cpu, u32 address, void*)
 {
   if (lanes::IsTask(address))  // the machines' task, with the per-machine rollback on (lanes.h)
     return lanes::TaskCall(cpu);
+  if (address == HOST_CALLS_END && s_state.native)  // a call of the step run ahead has returned (run_ahead.cpp)
+  {
+    RunAheadReturned(cpu);
+    return true;
+  }
   if (IsOurs(address))
   {
     if (!s_state.native || address == table::HOST_NET)
@@ -81,6 +86,8 @@ bool HostCall(CPUState* cpu, u32 address, void*)
       threads::KnowThisThread(threads::Which::Game);  // (for the freeze report: one flag read from the second call on)
       CountFrame();
       fzgx::FrameTick();
+      if (RunAheadAtTick(cpu))  // (it goes on from guest code, and comes back to the tick's caller when done)
+        return true;
     }
     else if (address == table::HOST_HFR)
     {
@@ -108,7 +115,7 @@ bool HostCallContains(u32 address, void*)
 
 bool HostCallRangeContains(u32 start, u32 end, void*)
 {
-  const bool ours = s_state.native ? (start < HOST_CALLS_END && HOST_CALLS < end) : (start <= NET_HOOK && NET_HOOK < end);
+  const bool ours = s_state.native ? (start < HOST_CALLS_END + 4 && HOST_CALLS < end) : (start <= NET_HOOK && NET_HOOK < end);
   return ours || lanes::Holds(start, end) || (s_state.next_range_contains && s_state.next_range_contains(start, end, s_state.next_user));
 }
 

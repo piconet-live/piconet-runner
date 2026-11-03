@@ -37,6 +37,7 @@
 
 #include "fzgx/freeze.h"
 #include "threads.h"
+#include "VideoCommon/PixelEngine.h"
 
 namespace fzgx_port
 {
@@ -199,6 +200,35 @@ constexpr const char* UNASKED = "the emulator stops with no stop asked for by th
 // A stop was asked for and the emulator has not shut down this long after: said once, with where its threads are.
 constexpr auto SHUTDOWN_SECONDS = std::chrono::seconds(5);
 
+// The game gives its wait for a frame's draw-done one second, twice, then resets itself (its own "GP WAIT Timeout",
+// OSReboot), and a reset takes the player out of the race. With the command list read to its end there is nothing left
+// that could still answer: the draw-done was lost (a garbled list swallows it), so it is given here, and said. Pictures
+// only: nothing of the race waits on it but the frame's start. A graphics chip still reading is left to finish.
+constexpr auto DRAW_DONE_LOST_AFTER = std::chrono::milliseconds(750);
+void GiveALostDrawDone(const fzgx::freeze::Pulse& pulse, Clock::time_point now)
+{
+  static fzgx::u32 frames = 0;
+  static Clock::time_point since{};
+  const fzgx::u32 seen = pulse.frames.load(std::memory_order_relaxed);
+  if (seen != frames)
+  {
+    frames = seen;
+    since = now;
+    return;
+  }
+  if (pulse.step.load(std::memory_order_relaxed) == 0 || pulse.waits_for_relay.load(std::memory_order_relaxed) ||
+      now - since < DRAW_DONE_LOST_AFTER)
+    return;
+  Core::System& system = Core::System::GetInstance();
+  const CommandProcessor::SCPFifoStruct& fifo = system.GetCommandProcessor().GetFifo();
+  if (Core::GetState(system) != Core::State::Running || fifo.CPReadWriteDistance.load() != 0 ||
+      fifo.CPReadPointer.load() != fifo.CPWritePointer.load())
+    return;
+  since = now;
+  system.GetPixelEngine().SetFinish(0);
+  Say("fzgx: a draw-done was lost: the command list is read to its end and the game still waits; given to it");
+}
+
 void WatchLoop(std::stop_token stop)
 {
   fzgx::freeze::Watch watch;
@@ -218,6 +248,7 @@ void WatchLoop(std::stop_token stop)
     if (!pulse.stopping && Core::GetState(Core::System::GetInstance()) == Core::State::Stopping)
       NoteStop(UNASKED, fzgx::board::StopReason::Unasked);
     fzgx::board::Look();  // (the launcher's status board: this thread lives, whatever the game's does)
+    GiveALostDrawDone(pulse, now);
     const Said said = watch.Look(pulse, now);
     if (said.what == Said::What::Stands)
     {

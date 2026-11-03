@@ -219,6 +219,7 @@ struct Options
   u32 aurora_edges = 0;
   u32 aurora_textures = 0;
   std::string aurora_colourblind;
+  u32 aurora_high_refresh = 0;  // "auroraHighRefresh": pictures a second asked for; a step run ahead for those between
   bool rumble = true;        // "rumble": the player's controller may rumble (a player's setting); false: no rumble
                              // command reaches a pad in this start (the game still asks for it: RumbleAllowed)
   TaskbarGroup taskbar;      // "taskbar": the launcher's taskbar button, which the game window joins (a player's

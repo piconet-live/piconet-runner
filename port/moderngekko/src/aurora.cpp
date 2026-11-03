@@ -67,6 +67,8 @@ void SetSwitches(const fzgx::Options& o)
   }
   if (!o.aurora_colourblind.empty() && o.aurora_colourblind != "off")
     SetSwitch("AURORA_COLOURBLIND", o.aurora_colourblind);
+  if (o.aurora_high_refresh != 0)
+    SetSwitch("AURORA_RUNAHEAD", std::to_string(o.aurora_high_refresh));
 }
 
 u32 AskedScale(const fzgx::Options& o)

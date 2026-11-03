@@ -149,6 +149,11 @@ fzgx::u32 TakePictureIntervals(fzgx::u32* out, fzgx::u32 most);
 // drawn_frames.cpp: the pictures between two steps (fzgx/hfr.h): the core's high refresh rate started with the
 // emulator's side (the GPU thread's re-draw, keyed by the command stream, and the display's rate), and its lines at
 // the stop.
+// run_ahead.cpp: the step run ahead's guest calls (fzgx/runahead.h)
+void StartRunAhead();
+void StopRunAhead();
+bool RunAheadAtTick(CPUState* cpu);
+void RunAheadReturned(CPUState* cpu);
 void StartDrawnFrames();
 void StopDrawnFrames();
 // aurora.cpp: Aurora as the presenter (the launch file's "debug.renderer"), its data folder and its line at the stop.
