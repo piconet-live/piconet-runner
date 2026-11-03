@@ -73,7 +73,10 @@ bool PartialCall(CPUState* cpu)
   Save(*cpu, &b.entry);
   LayOut(cpu, std::min<u32>(cpu->ram[game::MACHINE_COUNT_AT - table::RAM], CARS), &b.layout);
   // a step's last run counts while the memory is the same moment: a race's start or end, a scrubber's jump or a
-  // practice's key forget them all
+  // practice's key forget them all; and only from the same stack: a job put back returns its last run's registers,
+  // its stack pointer among them (Return), so a last run from another stack is none. The step run ahead at the frame
+  // tick runs below the frame's own stack; after a practice's resume from an earlier moment the step it runs has run
+  // before, as the frame's (the run ahead forgets its own run after it: PartialForget)
   const u32 moment = fzgx::RollbackMoments();
   if (moment != b.moment)
   {
@@ -81,7 +84,10 @@ bool PartialCall(CPUState* cpu)
     b.max_step = 0;
   }
   const Kept& last = b.kept[step % KEEP];
-  const Kept* old = step != 0 && step <= b.max_step && last.step == step && last.moment == moment ? &last : nullptr;
+  const Kept* old = step != 0 && step <= b.max_step && last.step == step && last.moment == moment &&
+                            last.entry_sp == b.entry.gpr[1]
+                        ? &last
+                        : nullptr;
   b.max_step = std::max(b.max_step, step);
   b.runs[step % KEEP] = old != nullptr ? b.runs[step % KEEP] + 1 : 1;
   ++b.batches;
