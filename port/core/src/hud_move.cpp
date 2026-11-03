@@ -26,6 +26,7 @@ namespace
 constexpr u32 PACKET = 0x58;
 constexpr u32 IMAGE = 0, X = 4, Y = 8, SCALE_X = 0x10, SCALE_Y = 0x14, U0 = 0x18, V0 = 0x1C, U1 = 0x20, V1 = 0x24,
               ROT_Z = 0x28, FLAGS = 0x30, PIXELS_W = 0x44, PIXELS_H = 0x46;
+constexpr u32 NOT_DRAWN = 0x02000000;  // +0x30: fn_1_4FD64 skips the packet
 constexpr u32 SQUEEZED = 0x08000000, GLYPH = 0x400000, PIXELS = 0x800000;  // +0x30: Wide Screen's anchor; the two other paths
 constexpr u32 QUEUE = game::REL_DATA_AT + 0x1C504, QUEUED = game::REL_BSS_AT + 0x646D2;
 constexpr u32 WIDE = game::REL_BSS_AT + 0x6F5F0;            // fn_1_A6F1C: 1 or 2, the game's Wide Screen
@@ -34,7 +35,8 @@ constexpr u32 IMAGES = game::REL_DATA_AT + 0xFCD4, IMAGE_GROUP = 0x28;  // fn_1_
 constexpr u32 FONTS = game::REL_DATA_AT + 0x1A3B8 + 0xAF0, FONT = 0x38;  // fn_1_48D80: a font's cell, +4 width, +5 height
 constexpr u32 SPRITE_STEP = 0x78, LIGHTNING_STEP = game::REL_TEXT_AT + 0xCA218, WRONG_WAY_STEP = game::REL_TEXT_AT + 0xCD6C0;
 constexpr u32 WRONG_WAY_IMAGE = 0x9435;
-constexpr u32 WINDOW_MOVE = layout::MODE_HUD + 0x300;          // memmap.MODE_HUD_MOVE
+constexpr u32 WINDOW_MOVE = layout::MODE_HUD + 0x300;          // memmap.MODE_HUD_MOVE: 1 on, | FACES_HIDDEN
+constexpr u32 FACES_HIDDEN = 2;                                // sites_hudmove.py FACES_HIDDEN
 constexpr float MOST_OFFSET = 2000;
 
 // The centre of each part's box, measured with "log" (game units before Wide Screen's squeeze; NaN: not measured)
@@ -82,7 +84,7 @@ bool Number(const picojson::object& o, const char* key, float* to, std::string* 
 bool ReadMove(const picojson::object& o, Move* m, std::string* why)
 {
   for (const auto& [key, value] : o)
-    if (key != "dx" && key != "dy" && key != "angle" && key != "flip" && key != "pivot")
+    if (key != "dx" && key != "dy" && key != "angle" && key != "flip" && key != "pivot" && key != "hide")
     {
       *why = "no such member " + key;
       return false;
@@ -111,6 +113,15 @@ bool ReadMove(const picojson::object& o, Move* m, std::string* why)
     m->has_pivot = true;
     m->px = static_cast<float>((*a)[0].get<double>());
     m->py = static_cast<float>((*a)[1].get<double>());
+  }
+  if (const auto it = o.find("hide"); it != o.end())
+  {
+    if (!it->second.is<bool>())
+    {
+      *why = "hide is true or false";
+      return false;
+    }
+    m->hide = it->second.get<bool>();
   }
   m->given = true;
   return true;
@@ -200,6 +211,7 @@ struct State
   std::array<Box, PARTS.size()> seen{};    // every box a part has drawn in this start
   u32 flushes = 0;
   bool said = false;
+  bool faces_said = false;
 };
 State s_state;
 
@@ -241,6 +253,26 @@ void Flush(Guest& g)
       now[part[i]].Add(Corners(g, queue + i * PACKET));
   for (std::size_t p = 0; p < PARTS.size(); ++p)
     s_state.seen[p].Add(now[p]);
+  if (l.log && !s_state.faces_said && now[FACES].x1 > now[FACES].x0)
+  {
+    // (the faces board's packets once, to see which shows the copied heads)
+    s_state.faces_said = true;
+    std::string line;
+    for (u32 i = 0; i < count; ++i)
+      if (part[i] == FACES)
+      {
+        const u32 a = queue + i * PACKET;
+        line += std::format(" [{} id {:#x} flags {:#x} at {:.1f},{:.1f} scale {:.3f},{:.3f} rot {} anchor {:.1f} px {:#x} {}x{}]", i,
+                            g.Read32(a + IMAGE), g.Read32(a + FLAGS), F(g, a + X), F(g, a + Y), F(g, a + SCALE_X),
+                            F(g, a + SCALE_Y), static_cast<s16>(g.Read16(a + ROT_Z)), F(g, a + 0x34), g.Read32(a + 0x48),
+                            g.Read16(a + PIXELS_W), g.Read16(a + PIXELS_H));
+      }
+    Notice("fzgx: classic HUD faces packets:{}", line);
+  }
+  if (l.faces_hidden)
+    for (u32 i = 0; i < count; ++i)
+      if (part[i] == FACES)
+        g.Write32(queue + i * PACKET + FLAGS, g.Read32(queue + i * PACKET + FLAGS) | NOT_DRAWN);
   const u32 wide = g.Read32(WIDE);
   const bool widescreen = wide == 1 || wide == 2;
   for (std::size_t p = 1; p < PARTS.size(); ++p)
@@ -318,7 +350,22 @@ Layout FromText(const std::string& text, std::string* why)
       *why = key + ": " + *why;
       return {};
     }
-    l.parts[at - PARTS.begin()] = m;
+    const std::size_t part = at - PARTS.begin();
+    if (part == FACES)
+    {
+      // the board can only be hidden: its 3D heads do not follow a moved board
+      if (m.dx != 0 || m.dy != 0 || m.angle != 0 || m.flip_x || m.flip_y || m.has_pivot)
+        l.faces_moved_ignored = true;
+      l.faces_hidden = m.hide;
+      l.any = l.any || m.hide;
+      continue;
+    }
+    if (m.hide)
+    {
+      *why = key + ": only FACES can be hidden";
+      return {};
+    }
+    l.parts[part] = m;
     l.any = true;
   }
   l.any = l.any || l.log;
@@ -345,7 +392,9 @@ const Layout& TheLayout()
       u32 n = 0;
       for (const Move& m : l.parts)
         n += m.given;
-      Notice("fzgx: classic HUD layout: {} parts moved, from {}", n, path);
+      Notice("fzgx: classic HUD layout: {} parts moved{}, from {}", n, l.faces_hidden ? ", the faces board hidden" : "", path);
+      if (l.faces_moved_ignored)
+        Warn("fzgx: classic HUD layout: FACES can only be hidden ({{\"hide\": true}}): its move, turn or mirror is ignored");
     }
     return l;
   }();
@@ -382,14 +431,22 @@ Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p)
   return k;
 }
 
+namespace
+{
+u32 Word(const Layout& l)
+{
+  return l.any ? 1 | (l.faces_hidden ? FACES_HIDDEN : 0) : 0;
+}
+}  // namespace
+
 void Prepare(ModData& data)
 {
-  data.Write(WINDOW_MOVE, TheLayout().any ? 1 : 0, 4);
+  data.Write(WINDOW_MOVE, Word(TheLayout()), 4);
 }
 
 void Frame(Guest& g)
 {
-  g.Write32(WINDOW_MOVE, TheLayout().any ? 1 : 0);
+  g.Write32(WINDOW_MOVE, Word(TheLayout()));
 }
 
 void Call(Guest& g, u32 op, u32 arg)

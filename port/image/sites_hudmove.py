@@ -21,6 +21,7 @@ them, so the part's call and the game's code after a site see what they would.""
 import memmap
 
 PUSH, POP, SET, SPRITE, FLUSH = 1, 2, 3, 4, 5
+FACES_HIDDEN = 2   # MODE_HUD_MOVE's bit: the layout hides the faces board (its 3D heads: sites_modehud.py mode_faces)
 # The parts, by number (hud_move.cpp PARTS): the protocol's `part` choices first, in its order, then the rest of the HUD
 PARTS = ["NONE", "TIMER", "DISTANCE", "DIGIT", "WARNING", "SUCCESS", "FAILED", "TIME_OVER", "SPEED_GAUGE", "OBJECTS",
          "LEADER_GAP", "GHOST_GAP", "RANK", "LAPS", "SPEED", "ENERGY", "LAP_TIMES", "RACE_TIME", "FACES",
