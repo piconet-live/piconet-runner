@@ -13,6 +13,7 @@
 #include <string>
 
 struct StaticRecompModuleSource;
+struct BootParameters;
 
 namespace fzgx_port
 {
@@ -60,6 +61,10 @@ bool SearchesMods();
 // emulator settings the game and the race need, the per-frame tick, and the network hook as a host call chained in
 // front of whatever `source` already holds (the mod loader's).
 void BeforeBoot(StaticRecompModuleSource& source);
+
+// In Runtime::Run, once the boot's disc is made from the game folder and before it boots: a mod pack's files put over
+// the disc's (the launch file's "overlay", as Prepare chose them; mod_files.cpp). Without them the boot is untouched.
+void BeforeDisc(BootParameters& boot);
 
 // After the emulated system has shut down: closes the session and finishes a recording.
 void AfterStop();
