@@ -199,6 +199,8 @@ struct OverlayFile
 {
   std::string disc;  // the path under the game folder's files/, with '/' ("stage/st05.tpl.lz"), as the file gave it
   std::string from;  // the replacement's whole path on this computer
+  bool race_same = false;  // "raceSame": the launcher found the file's race fields equal to the disc's (a race file
+                           // is then taken online too)
 };
 
 // The settings of one start of the game: a launch file (--config FILE; protocol/formats.md section 2), read by
