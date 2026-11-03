@@ -38,7 +38,13 @@ void TestTheModPackOverlay()
   for (const char* race : {"game/cardata.lz", "stage/COLI_COURSE05.lz", "stage/coli_course21.lz"})
   {
     CHECK(mod_files::Refusal(race, true).empty() && !mod_files::Refusal(race, false).empty());
+    // online with the launcher's word that the race fields are the disc's; the offline game either way
+    CHECK(mod_files::Refusal(race, false, true).empty() && mod_files::Refusal(race, true, true).empty());
   }
+  // raceSame never lets the code's files in
+  CHECK(!mod_files::Refusal("fze.title.rel", false, true).empty() && !mod_files::Refusal("main.dol", true, true).empty());
+  CHECK(!ParseLaunchFile(R"({"about": "x", "overlay": [{"disc": "stage/COLI_COURSE05.lz", "from": "f", "raceSame": true}]})", &o));
+  CHECK(o.overlay.size() == 1 && o.overlay[0].race_same);
   for (const char* look : {"stage/st05.tpl.lz", "bg/bg_tow.tpl.lz", "vehicle/gfox/gfox.tpl", "stage/st05.gma.lz"})
   {
     CHECK(mod_files::Refusal(look, true).empty() && mod_files::Refusal(look, false).empty());
@@ -66,4 +72,7 @@ void TestTheModPackOverlay()
   CHECK(offline.files.size() == 3 && offline.files[1].disc == "game/cardata.lz" && offline.refused.size() == 1);
   CHECK(mod_files::Summary(offline, true).find("3 files") != std::string::npos);
   CHECK(mod_files::Choose({}, false, on_disc, is_file).files.empty());
+  const mod_files::Plan same = mod_files::Choose({{"game/cardata.lz", "c", true}, {"stage/st05.tpl.lz", "a"}}, false,
+                                                 on_disc, is_file);
+  CHECK(same.files.size() == 2 && same.refused.empty() && same.race_files == 1);
 }
