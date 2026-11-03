@@ -90,7 +90,8 @@ HOST_TICK	window	=HOSTCALLS + 4		u32		memmap.py:40	host call: every game frame o
 HOST_LINKED	window	=HOSTCALLS + 8		u32		memmap.py:41	host call: main.rel is linked and none of its code has run
 HOST_HFR	window	=HOSTCALLS + 12		u32		memmap.py:42	host call: the drawn frames between two steps (high refresh rate), from fn_1_37AA8's draw half
 HOST_MODE	window	=HOSTCALLS + 16		u32		memmap.py:43	host call: the mode point, once a step after the race pass's callbacks (sites_mode.py): the game mode's rules run
-HOSTCALLS_END	window	=HOST_MODE + 4		u32		port/moderngekko/src/adapter_internal.h:50	the first address after the five host calls
+HOST_HUD	window	=HOSTCALLS + 20		u32		memmap.py:281	host call: the classic HUD's moves (sites_hudmove.py): r3 the operation, r4 its part; the drawing only
+HOSTCALLS_END	window	=HOST_HUD + 4		u32		port/moderngekko/src/adapter_internal.h:50	the first address after the six host calls
 # ---- control
 EXTRA_STEPS	control	8	CONTROL	u32		port/core/src/rollback.cpp:18	steps the frame routine runs in this displayed frame after the first; counts down
 RESIMULATING	control	12	CONTROL	u32		port/core/src/rollback.cpp:19	1 while the extra steps run

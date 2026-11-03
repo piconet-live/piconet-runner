@@ -13,6 +13,7 @@
 // test_hfr.cpp
 void TestTheRefreshesBetweenTwoSteps();
 void TestTheModernHudLayout();
+void TestTheClassicHudMoves();
 void TestTheBlendOfAPoseAndAView();
 void TestTheCorrections();
 void TestAPassOfPicturesBetween();
@@ -440,6 +441,7 @@ void TestTheHighRefreshRate()
 {
   TestTheRefreshesBetweenTwoSteps();
   TestTheModernHudLayout();
+  TestTheClassicHudMoves();
   TestTheBlendOfAPoseAndAView();
   TestTheCorrections();
   TestAPassOfPicturesBetween();

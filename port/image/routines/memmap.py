@@ -278,6 +278,7 @@ HOST_TICK = _facts.HOST_TICK      # every game frame of a race or replay start, 
 HOST_LINKED = _facts.HOST_LINKED  # main.rel is linked and none of its code has run: the host writes its patched words
 HOST_HFR = _facts.HOST_HFR        # the drawn frames between two steps (sites_hfr.py): r3 the operation, r4 its frame
 HOST_MODE = _facts.HOST_MODE      # the mode point (sites_mode.py): the game mode's rules, once a step
+HOST_HUD = _facts.HOST_HUD        # the classic HUD's moves (sites_hudmove.py): r3 the operation, r4 its part
 REL = _facts.MAIN_REL       # main.rel's module header in every boot (the pin: main.dol 0x80005940, fze.sample.rel)
 REL_TEXT = _facts.REL_TEXT_AT
 REL_BSS = _facts.REL_BSS_AT
@@ -313,6 +314,8 @@ MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HU
 # seat the machine's draw sets aside for this frame's ghost task: +0 its car (the task clears it), +4 its level of detail
 MODE_HUD_SILENT, MODE_HUD_GAP, MODE_HUD_GHOSTS = MODE_HUD + 0xCC, MODE_HUD + 0xD0, MODE_HUD + 0x180
 MODE_HUD_OBJECTS = MODE_HUD + 0x27C  # OBJECTS's of + 1 (0: the course's own) and of - n (mode_hud.h WINDOW_OBJECTS)
+MODE_HUD_MOVE = MODE_HUD + 0x300     # not 0: the classic HUD's moves are on, the sites of sites_hudmove.py call the host (mode_hud.h WINDOW_MOVE)
+assert MODE_HUD_OBJECTS + 8 <= MODE_HUD_MOVE and MODE_HUD_MOVE + 4 <= RACE
 assert MODE_HUD_GHOSTS + 30 * 8 <= MODE_HUD + 0x270 and MODE_HUD_OBJECTS + 8 <= RACE  # (0x270: the DISTANCE stand-ins)
 assert MODE_HUD_GAP + 0x14 <= MODE_HUD_TAGS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= MODE_HUD_GHOSTS and MODE_HUD_GHOSTS + 30 * 8 <= RACE
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE

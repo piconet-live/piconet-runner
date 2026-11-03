@@ -109,6 +109,7 @@ std::vector<std::string> DebugSettingsOn(const Debug& d)
   add(!d.aurora_shots.empty(), "auroraShots");
   add(d.aurora_scale != 0, "auroraScale");
   add(!d.aurora_log.empty(), "auroraLog");
+  add(!d.classic_hud_layout.empty(), "classicHudLayout");
   add(d.cheats, "cheats");
   add(d.mods, "mods");
   add(d.automation, "automation");

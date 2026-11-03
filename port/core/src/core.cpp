@@ -4,6 +4,7 @@
 #include "fzgx/runahead.h"
 #include "mode.h"
 #include "mode_hud.h"
+#include "hud_move.h"
 
 #include "fzgx/freeze.h"
 #include "fzgx/panel.h"
@@ -58,6 +59,7 @@ void Init(Host& host, const Options& options)
   Data().Clear();
   boot::Reset();
   boot::Prepare(Data());
+  hud_move::Prepare(Data());  // the classic HUD's moves: on from the first frame, in every start (offline play too)
   // a start that goes straight into a race or a replay: LOADING over the start-up pictures, from the first one
   panel::TheBoard().Reset();
   s_load = {};
@@ -278,6 +280,7 @@ void WindowWritten(u32 address, u64 value)
     if (value == 1)
     {
       mode::hud::Hud(g);  // the game mode's displays: after the frame routine's HUD passes, before the drawing
+      hud_move::Frame(g);  // the classic HUD's moves: the window's word the image's sites test
       mode::hud::Board(g);  // and its values, for the launcher
       net::ModernHudFrame(g);  // the modern HUD: last, over the mask as the mode's pass left it
     }
@@ -313,6 +316,14 @@ void NetSync()
     return;
   Guest g(*s_host, Data());
   net::Run(g);
+}
+
+void HudMoveCall(u32 op, u32 arg)
+{
+  if (!s_host)
+    return;
+  Guest g(*s_host, Data());
+  hud_move::Call(g, op, arg);
 }
 
 void ModeCall()
