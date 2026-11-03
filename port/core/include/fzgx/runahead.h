@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <array>
 #include <functional>
 #include <string>
 
@@ -22,9 +23,30 @@ struct Call
   u32 pc = 0, r3 = 0;
 };
 
+// AURORA_REDRAW=1 beside AURORA_RUNAHEAD (off by default): no pictures by the game's draw code. The step ahead gives where the machines and
+// the camera will be; the host's renderer draws the true frame's own draws again with these corrections. Matrices: row-major, column
+// vectors, last row 0 0 0 1. The game's thread, inside the tick; nothing here is game state.
+constexpr u32 PICTURES_MOST = 7;
+using Matrix = std::array<float, 16>;
+struct RedrawPicture
+{
+  float fraction = 0;  // of a field after the true picture
+  Matrix camera{};
+  std::array<Matrix, 30> machine{};
+};
+struct RedrawRequest
+{
+  u32 machines = 0;
+  std::array<std::array<float, 3>, 30> at{};  // each machine's place in the true picture's view
+  u32 pictures = 0;
+  std::array<RedrawPicture, PICTURES_MOST> picture{};
+};
+
 // Reads the switch. `between`: told the fraction of the next XFB copy the game is about to make, a picture between.
 // `ran`: told that step was run ahead (the per-machine rollback must not take it for the step's last run).
-void Start(std::function<void(float fraction)> between, std::function<void(u32 step)> ran);
+// `redraw`: told the pictures between, when AURORA_REDRAW is on.
+void Start(std::function<void(float fraction)> between, std::function<void(u32 step)> ran,
+           std::function<void(const RedrawRequest&)> redraw);
 bool On();
 // The frame tick, after the core's own: true when pictures between will be made this pass (Next gives the calls).
 bool Begin();

@@ -110,6 +110,7 @@ struct State
 {
   std::array<Machine, SEATS> machine;
   Camera camera;
+  u32 count = 0;  // the race's machines (the seats after them hold no machine)
 };
 
 enum class Stage : u8
@@ -178,7 +179,7 @@ struct Stats
   u64 tick_real = 0;
   std::array<u32, 40> step_hist{}, draw_hist{};
   u64 input_changed = 0, input_sent_early = 0;
-  u64 stopped_after_ahead = 0, ticks_late = 0, ticks_late_after_pictures = 0;
+  u64 stopped_after_ahead = 0, ticks_late = 0, ticks_late_after_pictures = 0, redraws = 0, cover_cut = 0;
   double tick_late_most = 0, cover_most = 0;
   double bound_step = 0, bound_picture = 0, bound_real = 0, bound_cover = 0, bound_late = 0;
 };
@@ -190,6 +191,9 @@ struct Run
   u32 rate = 120, most = 1;  // pictures a second, pictures between a step
   std::function<void(float)> between;
   std::function<void(u32)> ran;
+  std::function<void(const RedrawRequest&)> redraw;
+  bool redrawing = false;  // AURORA_REDRAW: the host draws the pictures from the true frame's own draws
+  RedrawRequest request;
   u32 manager = 0, name_tags = 0;
   bool tags_done = false;
   Stage stage = Stage::OFF;
@@ -213,11 +217,17 @@ struct Run
   Tick::time_point due{};
   double late_ms = 0, cover_ms = 0;
   bool pictures_last = false;
+  // AURORA_RUNAHEAD_COVER_SPENT=1 (off by default): a late tick after a pass with pictures is kept in hand only up to what
+  // that pass itself spent on this thread (its step ahead), not whole: most late ticks follow slow frames the pass did not make
+  bool cover_spent = false;
   Stats stats;
   u32 rng_before = 0;
   bool ahead_good = false;
   u32 ahead_for = 0;
   std::FILE* path = nullptr;  // AURORA_RUNAHEAD_PATH: what each picture holds, for measuring
+  // AURORA_RUNAHEAD_TIMES=<file> (a measuring tool): each pass's moments on the steady clock in us, and the bounds it was
+  // judged by: P,step,tick,fit,step_high,real_high,cover,late | A,step,begin,end (the step ahead) | D,step,tick_end,drawn (the real step)
+  std::FILE* times = nullptr;
   std::FILE* input_log = nullptr;  // AURORA_TEST_INPUT_LOG: each frame's tick and the moments its input was sent
   bool input_late = false;         // AURORA_TEST_INPUT_LATE: a test's control, the input left to the frame's own step
   Tick::time_point logged_tick{}, logged_early{};
@@ -261,6 +271,11 @@ void WriteMtx(Guest& g, u32 a, const Mtx& m)
     WriteF(g, a + 4 * i, m.m[i]);
 }
 
+long long Us(Tick::time_point t)
+{
+  return static_cast<long long>(std::chrono::duration_cast<std::chrono::microseconds>(t.time_since_epoch()).count());
+}
+
 double Ms(Tick::duration d)
 {
   return std::chrono::duration<double, std::milli>(d).count();
@@ -297,6 +312,7 @@ std::string Percentiles(const std::array<u32, 40>& hist)
 void Take(const Guest& g, State& st)
 {
   const u32 machines = g.Read32(MACHINES);
+  st.count = std::min<u32>(g.Read8(game::MACHINE_COUNT_AT), SEATS);
   for (u32 i = 0; i < SEATS; ++i)
   {
     const u32 m = machines + i * BLOCK;
@@ -526,6 +542,44 @@ void LeakAfter(Guest& g)
         ++s.leak_words[(SCRATCH_START + k) & ~0xFFu];
 }
 
+Matrix Four(const Mtx& m)
+{
+  return {m.m[0], m.m[1], m.m[2], m.m[3], m.m[4], m.m[5], m.m[6], m.m[7], m.m[8], m.m[9], m.m[10], m.m[11], 0, 0, 0, 1};
+}
+
+// The pictures between the true picture and the step ahead, for the host: each machine's and the camera's correction at its fraction.
+// Only read from the two states kept; nothing of the game's is touched.
+void SendRedraw()
+{
+  RedrawRequest& q = s.request;
+  const Mtx& view = s.now.camera.b;
+  q.machines = 0;
+  for (u32 i = 0; i < SEATS; ++i)
+  {
+    const Mtx& m = s.now.machine[i].pose;
+    if (i < s.now.count)
+      q.machines |= 1u << i;
+    for (int r = 0; r < 3; ++r)
+      q.at[i][r] = float(double(view.m[4 * r]) * m.m[3] + double(view.m[4 * r + 1]) * m.m[7] + double(view.m[4 * r + 2]) * m.m[11] +
+                         view.m[4 * r + 3]);
+  }
+  q.pictures = std::min(s.most, PICTURES_MOST);
+  for (u32 k = 0; k < q.pictures; ++k)
+  {
+    RedrawPicture& p = q.picture[k];
+    const double t = double(k + 1) / (q.pictures + 1);
+    p.fraction = float(t);
+    const Mtx picture_view = hfr::BlendView(s.now.camera.b, s.ahead.camera.b, t);
+    p.camera = Four(hfr::CameraCorrection(view, picture_view));
+    for (u32 i = 0; i < SEATS; ++i)
+      p.machine[i] = s.moves[i] ? Four(hfr::BodyCorrection(view, picture_view, s.now.machine[i].pose,
+                                                           hfr::BlendPose(s.now.machine[i].pose, s.ahead.machine[i].pose, t))) :
+                                  p.camera;
+  }
+  s.redraw(q);
+  ++s.stats.redraws;
+}
+
 // The room left in this field for what is run ahead, with the real step and all it needs after it still on time: from
 // recent highs, not means, and from where this tick actually is on the wall clock.
 double Room(double used_ms)
@@ -577,20 +631,27 @@ void PlaceTheTick(Tick::time_point now)
     if (s.pictures_last)
     {
       ++s.stats.ticks_late_after_pictures;
-      s.cover_ms = std::max(s.cover_ms, late);
-      s.stats.cover_most = std::max(s.stats.cover_most, late);
+      const double kept = s.cover_spent ? std::min(late, s.spent_ms) : late;
+      s.stats.cover_cut += kept < late ? 1 : 0;
+      s.cover_ms = std::max(s.cover_ms, kept);
+      s.stats.cover_most = std::max(s.stats.cover_most, kept);
     }
   }
   s.pictures_last = false;
 }
 }  // namespace
 
-void Start(std::function<void(float)> between, std::function<void(u32)> ran)
+void Start(std::function<void(float)> between, std::function<void(u32)> ran, std::function<void(const RedrawRequest&)> redraw)
 {
   s.ran = std::move(ran);
+  s.redraw = std::move(redraw);
+  const char* redrawing = std::getenv("AURORA_REDRAW");
+  s.redrawing = redrawing != nullptr && redrawing[0] == '1' && s.redraw != nullptr;
   s.on = false;
   s.between = std::move(between);
   s.input_late = std::getenv("AURORA_TEST_INPUT_LATE") != nullptr;
+  const char* cover_spent = std::getenv("AURORA_RUNAHEAD_COVER_SPENT");
+  s.cover_spent = cover_spent != nullptr && cover_spent[0] == '1';
   if (const char* path = std::getenv("AURORA_TEST_LEAK"))
     s.leak_log = std::fopen(path, "w");
   s.force = s.leak_log != nullptr || std::getenv("AURORA_TEST_FORCE_PICTURES") != nullptr;
@@ -607,6 +668,8 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran)
   s.no_read_wait = std::getenv("AURORA_TEST_NO_READ_WAIT") != nullptr;
   if (const char* path = std::getenv("AURORA_RUNAHEAD_PATH"))
     s.path = std::fopen(path, "w");
+  if (const char* path = std::getenv("AURORA_RUNAHEAD_TIMES"))
+    s.times = std::fopen(path, "w");
   Notice("fzgx: run ahead: {} pictures a second asked for, {} between two steps at most", s.rate, s.most);
 }
 
@@ -656,8 +719,13 @@ bool Begin()
       s.logged_early = Tick::now();
   }
   // the real step and its drawing, as they cost lately: from the step after the tick before to the drawing's end
-  const u32 fit = PicturesThatFit();
+  u32 fit = PicturesThatFit();
+  if (s.redrawing && !s.force)  // a picture costs this thread nothing: only the step ahead has to fit
+    fit = Room(s.step_high.Of(s.frame, STEP_MS_AT_FIRST)) >= 0 ? s.most : 0;
   s.tick = Tick::now();
+  if (s.times != nullptr)
+    std::fprintf(s.times, "P,%u,%lld,%u,%.2f,%.2f,%.2f,%.2f\n", step, Us(s.due), fit, s.step_high.Of(s.frame, STEP_MS_AT_FIRST),
+                 s.real_high.Of(s.frame, REAL_MS_AT_FIRST), s.cover_ms, s.late_ms);
   s.spent_ms = 0;
   if (fit == 0)
   {
@@ -753,6 +821,8 @@ bool Next(u32 returned, Call* call)
       BackWindow(g);
       const auto undone = Tick::now();
       s.stats.step_sum += Ms(ran - s.began);
+      if (s.times != nullptr)
+        std::fprintf(s.times, "A,%u,%lld,%lld\n", s.step, Us(s.began), Us(undone));
       s.stats.undo_sum += Ms(undone - ran);
       s.step_ms.Add(Ms(undone - s.began));
       s.step_high.Add(s.frame, Ms(undone - s.began));
@@ -761,6 +831,15 @@ bool Next(u32 returned, Call* call)
       if (!Judge())
       {
         ++s.stats.camera_cut;
+        LeakAfter(g);
+        s.log->SaveAgain(s.step);
+        s.inside = false;
+        s.stage = Stage::OFF;
+        return false;
+      }
+      if (s.redrawing)
+      {
+        SendRedraw();
         LeakAfter(g);
         s.log->SaveAgain(s.step);
         s.inside = false;
@@ -890,6 +969,8 @@ void TimeTheDrawing(u32 value)
   if (value == 2 && s.on && s.stage == Stage::OFF && s.tick != Tick::time_point{})
   {
     const double ms = Ms(Tick::now() - s.tick);
+    if (s.times != nullptr)
+      std::fprintf(s.times, "D,%u,%lld,%lld\n", s.last_step, Us(s.tick), Us(Tick::now()));
     s.real_ms.Add(std::max(0.0, ms - s.spent_ms));
     s.real_high.Add(s.frame, std::max(0.0, ms - s.spent_ms));
     s.stats.tick_real_sum += std::max(0.0, ms - s.spent_ms);
@@ -921,10 +1002,12 @@ std::string Report()
   if (s.path != nullptr)
     std::fflush(s.path);
   const double asked = std::max<double>(1, static_cast<double>(t.passes));
-  return std::format("fzgx: run ahead: the bounds on average: step {:.2f}, picture {:.2f}, real {:.2f}, kept in hand {:.2f}, tick late {:.2f} ms\n",
+  return std::format("fzgx: run ahead: {} requests of pictures to the renderer (AURORA_REDRAW {})\n", t.redraws, s.redrawing ? "on" : "off") +
+         std::format("fzgx: run ahead: the bounds on average: step {:.2f}, picture {:.2f}, real {:.2f}, kept in hand {:.2f}, tick late {:.2f} ms\n",
                      t.bound_step / asked, t.bound_picture / asked, t.bound_real / asked, t.bound_cover / asked, t.bound_late / asked) +
          std::format("fzgx: run ahead: ticks late on the wall clock {} ({} after pictures), by at most {:.2f} ms; most kept in hand {:.2f} ms; stopped after the step ahead {}\n",
                      t.ticks_late, t.ticks_late_after_pictures, t.tick_late_most, t.cover_most, t.stopped_after_ahead) +
+         (s.cover_spent ? std::format("fzgx: run ahead: kept in hand up to the pass's own spent ms (AURORA_RUNAHEAD_COVER_SPENT): {} late ticks kept less than whole\n", t.cover_cut) : std::string()) +
          std::format("fzgx: run ahead: input sent at the tick {} times; the pad record differed later {} times\n", t.input_sent_early, t.input_changed) +
          std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
          std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
@@ -942,6 +1025,9 @@ void Stop()
   if (s.path != nullptr)
     std::fclose(s.path);
   s.path = nullptr;
+  if (s.times != nullptr)
+    std::fclose(s.times);
+  s.times = nullptr;
   s.log = nullptr;
   s.stage = Stage::OFF;
   s.inside = false;
