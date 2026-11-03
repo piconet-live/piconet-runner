@@ -190,6 +190,7 @@ struct Stats
   u64 rng_moved = 0;
   // AURORA_TEST_SKIP_COMPARE: each step ahead run whole, then again with the lists left out; what Take read compared
   u64 compared = 0, compared_machines = 0, compared_camera = 0;
+  double compared_whole_ms = 0, compared_part_ms = 0;  // the two runs' times, each from its first call to its end
   u64 ahead_checked = 0, ahead_wrong = 0;  // the step ahead against the true step that came after it
   double ahead_most = 0;
   double wait_sum = 0, step_sum = 0, undo_sum = 0, draw_sum = 0, restore_sum = 0, tick_real_sum = 0;
@@ -244,6 +245,7 @@ struct Run
   bool compare = false;    // AURORA_TEST_SKIP_COMPARE
   bool second = false;     // the comparison's second run (with the lists left out) is the one running
   State whole;             // the comparison's first run: the step ahead with every list
+  Tick::time_point second_began{};  // the comparison's run in turn began
   bool ahead_good = false;
   u32 ahead_for = 0;
   std::FILE* path = nullptr;  // AURORA_RUNAHEAD_PATH: what each picture holds, for measuring
@@ -862,6 +864,7 @@ bool Begin()
     s.own.Final(step);
   s.second = false;
   PrepareAhead(g, *ss, step, s.compare ? 0 : s.skip);  // the comparison runs the whole step first
+  s.second_began = Tick::now();  // (the comparison's: its whole run's start)
   s.stage = Stage::AHEAD_MANAGER;
   return true;
 }
@@ -890,6 +893,7 @@ bool Next(u32 returned, Call* call)
       if (s.compare && !s.second)
       {
         // the whole step ahead taken and undone; the same step again with the lists left out
+        s.stats.compared_whole_ms += Ms(ran - s.second_began);
         Take(g, s.whole);
         s.log->SaveStep(g, s.step + 1, false);
         s.log->RestoreTo(g, s.step + 1, s.step);
@@ -897,13 +901,17 @@ bool Next(u32 returned, Call* call)
         BackWindow(g);
         s.second = true;
         PrepareAhead(g, *net::s_session, s.step, s.skip);
+        s.second_began = Tick::now();
         *call = {T + 0x435C, g.Read32(SIM_MANAGER)};
         return true;
       }
       s.ran(s.step);
       Take(g, s.ahead);
       if (s.compare)
+      {
+        s.stats.compared_part_ms += Ms(ran - s.second_began);
         Compare(s.whole, s.ahead, s.step);
+      }
       s.ahead_good = true;
       s.ahead_for = s.step + 1;
       s.log->SaveStep(g, s.step + 1, false);
@@ -1102,8 +1110,10 @@ std::string Report()
          std::format("fzgx: run ahead: input sent at the tick {} times; the pad record differed later {} times\n", t.input_sent_early, t.input_changed) +
          std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
          std::format("fzgx: run ahead: task lists left out of the step ahead 0x{:08X}\n", s.skip) +
-         (s.compare ? std::format("fzgx: run ahead: the step ahead whole against with the lists left out: {} compared, machines differed {}, camera differed {}\n",
-                                  t.compared, t.compared_machines, t.compared_camera)
+         (s.compare ? std::format("fzgx: run ahead: the step ahead whole against with the lists left out: {} compared, machines differed {}, camera differed {}; "
+                                  "a step ahead whole {:.3f} ms, with the lists left out {:.3f} ms (the same pass, one after the other)\n",
+                                  t.compared, t.compared_machines, t.compared_camera, t.compared_whole_ms / std::max<double>(1, t.compared),
+                                  t.compared_part_ms / std::max<double>(1, t.compared))
                     : std::string()) +
          std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
                      "{} camera cuts; {} pictures between; a step ahead {:.2f} ms + its undo {:.2f} ms ({}); a picture {:.2f} ms, of it the draw-done wait {:.2f}, + its undo {:.2f} ms ({}); "
