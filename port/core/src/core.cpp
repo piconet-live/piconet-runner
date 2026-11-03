@@ -58,6 +58,7 @@ void Init(Host& host, const Options& options)
   Data().Clear();
   boot::Reset();
   boot::Prepare(Data());
+  hud_move::Prepare(Data());  // the classic HUD's moves: on from the first frame, in every start (offline play too)
   // a start that goes straight into a race or a replay: LOADING over the start-up pictures, from the first one
   panel::TheBoard().Reset();
   s_load = {};

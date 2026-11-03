@@ -67,6 +67,8 @@ struct Packet
 };
 Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p);
 
+// At the start (Init): the window's word the image's sites test, from the layout.
+void Prepare(ModData& data);
 // Once a drawn frame (the drawing's ask): the window's word the image's sites test.
 void Frame(Guest& g);
 // The image's host call (memmap.HOST_HUD): `op` one of PUSH, POP, SET, SPRITE, FLUSH, `arg` the part (SPRITE: the

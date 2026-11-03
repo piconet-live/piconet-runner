@@ -367,6 +367,11 @@ Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p)
   return k;
 }
 
+void Prepare(ModData& data)
+{
+  data.Write(WINDOW_MOVE, TheLayout().any ? 1 : 0, 4);
+}
+
 void Frame(Guest& g)
 {
   g.Write32(WINDOW_MOVE, TheLayout().any ? 1 : 0);
