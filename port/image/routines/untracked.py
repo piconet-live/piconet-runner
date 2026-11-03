@@ -44,9 +44,11 @@ LIST = 0x700
 # over, fn_1_6AF70, fn_1_EBE4, fn_1_1049E0); kept whole to 0x6F600, the race desynced (812 / 900). From 0x6F5C0:
 # relocation.c's. 0x6F32C-0x6F334: the lean sound's on/off state per machine (fn_1_A3654 starts loop 0xA9091B00 when
 # it is 0 and stops it only when it is not; rolled back to 0, the start was sent again and the stop never: it looped).
-# 0x6F240-0x6F242: the counts of local machines boosting and (+1) of the other condition that fn_1_A31E4 compares
-# each frame with the last: up, it starts the boost loop 0xA9090C00; down to 0, it stops it (0x0D00). Rolled back,
-# the loop was started again and again and never stopped (a live race: 59 starts, 0 stops; the official race: 3, 3).
+# 0x6F240-0x6F242: the counts that fn_1_A31E4 compares each frame with the last: of local machines on a pit strip
+# (the pit bit, M+0x218 bit 27): up, it starts the pit (recharge) loop 0xA9090C00; down to 0, it stops it (0x0D00);
+# and (+1) of .bss 0xA88's flagged slots: down to 0, it sends 0xA9091600. Rolled back, the loop was started again
+# and again and never stopped (a live race: 59 starts, 0 stops; the official race: 3, 3). These hold what the sound
+# chip was told: a muted run does not run their functions at all (mute.py).
 MANAGER = [(0x6EA98, 0x6F239), (0x6F240, 0x6F242), (0x6F244, 0x6F316), (0x6F32C, 0x6F334), (0x6F41C, 0x6F5C0)]
 # Presentation-only words of the race HUD's per-port entries (.bss 0x8FDA8, 0x34 each): +0x30, the lap-time list's
 # slide (written by the HUD drawing, fn_1_15EFEC, after the steps; read by the drawing and the skull counter, fn_1_CAB38,

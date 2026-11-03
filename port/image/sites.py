@@ -104,7 +104,11 @@ mm_seats:
     # --- inserts at a function's first instruction: in a plain start the instruction itself, then on
     entries = [("seats", "seats", TEXT + 0x3181C, 0x9421FFB0, "fn_1_3181C: the race block's machines over the game's list"),
                ("sound_queue", "mute", DOL_SOUND[0], DOL_SOUND[1], "fn_80067898 (the executable): no sound from a step simulated before"),
-               ("rumble", "mute", TEXT + 0xF7338, 0x9421FFE0, "fn_1_F7338: no rumble from a step simulated before")]
+               ("rumble", "mute", TEXT + 0xF7338, 0x9421FFE0, "fn_1_F7338: no rumble from a step simulated before"),
+               ("sound_update", "mute", TEXT + 0xA0978, 0x9421FFE0,
+                "fn_1_A0978: the machine sound update neither sends nor remembers in a step simulated before"),
+               ("lean_sound", "mute", TEXT + 0xA3654, 0x9421FFC0,
+                "fn_1_A3654: the lean sound neither sends nor remembers in a muted draw")]
     mute_inserts = {a: w for kind, a, w in mute if kind == "insert"}
     for name, source, site, known, what in entries:
         words = (mute_inserts if source == "mute" else inserts[source])[site]

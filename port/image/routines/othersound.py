@@ -7,7 +7,7 @@ voice each (table .bss 0x6EA98 + 0x74C, 0x14 bytes a voice: +1 the machine, +2 i
 voice's volume (fn_80067344(1, 0x10, 0xB0270000, volume); a start takes the volume last sent). Some of a machine's
 sounds are a player's only: the game skips them for CPU machines (flag 0x200, or 0x280): in fn_1_A3654 everything
 after its CPU check (0xA37E4: the lean sounds 0x1B/0x1C/0x16 and the destroyed alarm 0x2E/0x12), in fn_1_A31E4 the
-boost's start 0x15 (and the boost loop's count), in fn_1_A3C78 the sound 0x0F. Online every seat races under the
+boost's start 0x15 (and the pit loop's count, .bss 0x6F240), in fn_1_A3C78 the sound 0x0F. Online every seat races under the
 human rules (standin.py clears 0x200), so every machine near the camera made them at the volume of a player's own
 machine (much louder than the CPUs' in a normal race, where they make none).
 Here, for every machine but the one the camera follows (fn_1_6A80: the local seat, or the racer watched), the volume

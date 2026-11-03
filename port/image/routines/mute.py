@@ -6,6 +6,14 @@ time, so:
 - rumble requests (main.rel fn_1_F7338) return at once.
 Sound commands dropped are counted at control block +32, all sound commands at +36; tests: +516 = 1 logs every
 command (LOG).
+- the machine sound update (fn_1_A0978, a frame's last step) and the lean sound (fn_1_A3654, the draw half's viewport
+  loop fn_1_739C) return at once. They start and stop loops on edges, comparing what they find with what they told
+  the sound chip last (.bss 0x6F240/0x6F241: the pit loop 0xA9090C00/0D00 and 0xA9091500/1600; 0x6F32C: the lean
+  loop 0xA9091B00/1C00; 0x6F2C8: the flags of the one-shots), memory the undo log does not hold (untracked.py
+  MANAGER). A muted run neither sends nor remembers: run with its command dropped, it would remember a stop it never
+  sent (a Practice scrub off a pit strip left the pit loop playing; run-ahead's step ahead took the edges from the
+  real step). So the first unmuted run finds the edges against what the chip was told. fn_1_A0978 also runs the
+  final-lap music switch (fn_1_A24CC: ADXT, sound only) and the 120-frame cue (fn_1_A54FC); both wait for it.
 (The game's own mute byte, .bss 0x6F1D8, is checked only by fn_1_A2D84.) Tests: control block +296 = 1 drops them all
 the time."""
 import os, sys
@@ -57,6 +65,10 @@ go:
 snd = body(f"lis 11, {C}\n    lwz 3, 32(11)\n    addi 3, 3, 1\n    stw 3, 32(11)\n    li 3, -1",
            "stwu 1, -0x10(1)", True, True)  # fn_80067898's first instruction; counts dropped and all commands
 rmb = body("nop", "stwu 1, -0x20(1)")           # fn_1_F7338's first instruction
+upd = body("nop", "stwu 1, -0x20(1)")           # fn_1_A0978's first instruction
+lean = body("nop", "stwu 1, -0x40(1)")          # fn_1_A3654's first instruction
 print("\n".join([f"C2067898 {len(snd):08X}"] + snd +
                 ["48000000 800030C8", "DE000000 80008180", f"D2{0xDC + 0xF7338:06X} {len(rmb):08X}"] + rmb +
+                [f"D2{0xDC + 0xA0978:06X} {len(upd):08X}"] + upd +
+                [f"D2{0xDC + 0xA3654:06X} {len(lean):08X}"] + lean +
                 ["E0000000 80008000"]))
