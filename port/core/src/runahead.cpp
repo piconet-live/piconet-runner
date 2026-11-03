@@ -41,8 +41,8 @@ constexpr u32 SIM_MANAGER = B + 0x3C00 + 0x21F88, DRAW_MANAGER = B + 0x3C00 + 0x
 constexpr u32 PAUSE_WORD = B + 0x26B50, HUD_OFF = B + 0x3C10;
 constexpr u32 COUNTERS[] = {0x801A66A0, 0x801A66A4, 0x801A66A8, 0x801A66C0, 0x801A66C8};
 constexpr u32 RUN_BEFORE_AT = CONTROL + 492, LAST_STEP = CONTROL + 460, MUTE = CONTROL + 488, RUNNING = CONTROL + 120;
-// AURORA_RUNAHEAD_SKIP (off by default): the step ahead leaves out the simulation manager's task lists whose work it
-// undoes unseen. Bit n = list n of the manager's list mask (+0x10, read by fn_1_407C; the test switch +312 masks the
+// AURORA_RUNAHEAD_SKIP (on by default wherever run-ahead is): the step ahead leaves out the simulation manager's task
+// lists whose work it undoes unseen. Bit n = list n of the manager's list mask (+0x10, read by fn_1_407C; the test switch +312 masks the
 // same way). Everything the step ahead writes is undone but what Take reads (the machines' pose, flags, speed and the
 // camera), so a list after the car task that neither the camera nor the machines' pose reads is work thrown away:
 // 11 the effect update, 23 BackGroundCalc (its writes come after the car task and are undone); and the
@@ -53,7 +53,8 @@ constexpr u32 RUN_BEFORE_AT = CONTROL + 492, LAST_STEP = CONTROL + 460, MUTE = C
 // list's top only when it is not masked; masked, the rivals' drawn offsets were missing from every pose read: m283,
 // all 3,326 passes), 13 (the Starter beside the HUD timers), 20 and 21 (the cameras, CameraExec, StageCalc; 20 also
 // smooth.py's specwatch).
-// AURORA_RUNAHEAD_SKIP=1 that set; a number (0x...) another mask, for tests.
+// Unset, empty or AURORA_RUNAHEAD_SKIP=1: that set; 0: none (every list runs, as before 2026-11-03: for tests and
+// comparison); another number (0x...): that mask, for tests.
 constexpr u32 SKIP_LISTS = 1u << 5 | 1u << 11 | 1u << 12 | 1u << 22 | 1u << 23 | 1u << 25 | 1u << 31;
 constexpr u32 LIST_MASK = 0x10;  // the simulation manager's own: list n is left out with bit n
 constexpr u32 SMOOTH_ENTRY = 48, SMOOTH_OFFSET = 12, SMOOTH_WRITTEN = 36;
@@ -240,7 +241,7 @@ struct Run
   bool cover_spent = false;
   Stats stats;
   u32 rng_before = 0;
-  u32 skip = 0;            // the lists the step ahead leaves out (AURORA_RUNAHEAD_SKIP), 0: none
+  u32 skip = 0;            // the lists the step ahead leaves out (AURORA_RUNAHEAD_SKIP; SKIP_LISTS unless it says 0), 0: none
   u32 mask_before = 0;     // the manager's list mask as the frame left it
   bool compare = false;    // AURORA_TEST_SKIP_COMPARE
   bool second = false;     // the comparison's second run is the one running
@@ -737,7 +738,7 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
   s.most = static_cast<u32>(std::lround(s.rate / 60.0)) - 1;
   s.on = true;
   s.no_read_wait = std::getenv("AURORA_TEST_NO_READ_WAIT") != nullptr;
-  s.skip = 0;
+  s.skip = SKIP_LISTS;
   if (const char* skip = std::getenv("AURORA_RUNAHEAD_SKIP"); skip != nullptr && skip[0] != '\0')
   {
     const unsigned long v = std::strtoul(skip, nullptr, 0);
