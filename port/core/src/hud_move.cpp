@@ -43,10 +43,25 @@ struct Pivot
 {
   float x, y;
 };
+// (hmgp2, Mute City Grand Prix, 2026-11-03). Parts that grow keep the pivot of where they start, so a turned part does
+// not jump as it grows: LAP_TIMES its first row, SKULLS its first skull (right-anchored at x 616; the row's y slides
+// with the lap list), SPEED and RANK their full width.
 constexpr std::array<Pivot, PARTS.size()> PIVOTS = [] {
   std::array<Pivot, PARTS.size()> p{};
   for (auto& q : p)
     q = {N, N};
+  p[12] = {320.5f, 62};   // RANK 275,24-366,100
+  p[13] = {439, 43};      // LAPS 410,24-468,62
+  p[14] = {550, 440};     // SPEED 484,424-616,456
+  p[15] = {548.5f, 43};   // ENERGY 480,24-617,62
+  p[16] = {556.8f, 126.6f};  // LAP_TIMES 495,110-618,143 (the first row and its labels)
+  p[17] = {532, 86};      // RACE_TIME 444,67-620,105
+  p[18] = {51, 214};      // FACES 0,0-102,428 (the rings)
+  p[19] = {56, 444};      // SPARE 24,432-88,456
+  p[20] = {608, 120};     // SKULLS: the first skull, 616 - its width, at y 108
+  p[23] = {320, 150};     // BANNERS: the game's (320, 150)
+  p[24] = {320, 240};     // FINISH 120,202-520,278
+  p[22] = {320, 240};     // WRONG_WAY: the game's (320, 240)
   return p;
 }();
 
