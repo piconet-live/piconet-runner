@@ -170,6 +170,9 @@ struct Debug
   std::vector<u32> aurora_shots;
   u32 aurora_scale = 0;  // "auroraScale": its render scale, 1 to 8; 0 (or none): the window's pixels (aurora.cpp in the adapter)
   std::string aurora_log;
+  // "classicHudLayout": a layout file that moves, turns and mirrors the parts of the game's own race HUD (hud_move.h:
+  // drawing only); empty: the game's HUD as it is
+  std::string classic_hud_layout;
   std::vector<EmulatorSetting> emulator;  // every other key of the emulator's side that was given (files_launch.cpp
                                           // holds the table: "pad", "poke", "probe", "paceLog", ...)
 };
@@ -399,6 +402,8 @@ void NetSync();
 // The race's game mode, once a step (the image's mode point, HOST_MODE: port/image/sites_mode.py): its rules run
 // (port/core/src/mode.h). Nothing to do without one.
 void ModeCall();
+// The classic HUD's moves (port/image/sites_hudmove.py, memmap.HOST_HUD): r3 the operation, r4 its part. Drawing only.
+void HudMoveCall(u32 op, u32 arg);
 // Seat `seat`'s record in the game mode's block (16 bytes, read by the machine's step: the per-machine rollback
 // compares it with the machine's records); 0 without a mode or before the block is taken.
 u32 ModeRecord(u32 seat);

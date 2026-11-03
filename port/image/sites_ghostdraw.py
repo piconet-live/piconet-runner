@@ -27,6 +27,7 @@ The tint: the window's word for the seat (MODE_HUD_TINTS, `seat.ghost_tint`), 0 
 Not done: Time Attack's level of detail by the ghosts' count, the "G" and number cells of its map (our map's dots, map_hide and
 map_mark, are a separate choice) and the 120-frame lap form of the gap from 0xEE158. The look is for rounds by eye."""
 import memmap
+import sites_hudmove
 
 MAKE, MAKE_KNOWN = 0x36A30, 0x480B2D41         # fn_1_36330: bl fn_1_E9770
 GHOSTS_FN, TASK_SET, TASK_NEW = 0xE9770, 0x435C, 0x3F8C  # fn_1_435C(set) gives the set before; fn_1_3F8C(name, fn, 0, priority)
@@ -303,7 +304,7 @@ gd_next:
 """ + la(31, colour_at) + f"""    lwz 0, 0(31)
     cmplwi 0, 0
     beq gd_out
-    @bl {FN(TEXT_BEGIN)}
+""" + sites_hudmove.ghost_gap(la, 1) + f"""    @bl {FN(TEXT_BEGIN)}
     @bl {FN(TEXT_FONT)}
     li 3, 2
     @bl {FN(TEXT_MODE)}
@@ -328,7 +329,7 @@ gd_next:
     lwz 7, 0x10(31)
     crxor 6, 6, 6
     @bl {FN(TEXT_PRINT)}
-gd_out:
+""" + sites_hudmove.ghost_gap(la, 2) + f"""gd_out:
     lwz 26, 0xCC(1)
     lwz 27, 0xD0(1)
     lwz 28, 0xD4(1)

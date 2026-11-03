@@ -95,6 +95,10 @@ bool HostCall(CPUState* cpu, u32 address, void*)
     {
       fzgx::ModeCall();  // the game mode's rules, at the mode point (port/image/sites_mode.py)
     }
+    else if (address == table::HOST_HUD)
+    {
+      fzgx::HudMoveCall(cpu->gpr[3], cpu->gpr[4]);  // the classic HUD's moves (port/image/sites_hudmove.py): drawing only
+    }
     cpu->pc = cpu->lr;
     return true;
   }
