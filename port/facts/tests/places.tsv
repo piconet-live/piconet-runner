@@ -92,6 +92,7 @@ HOST_TICK	memmap.py	py	HOST_TICK
 HOST_LINKED	memmap.py	py	HOST_LINKED	
 HOST_HFR	memmap.py	py	HOST_HFR	
 HOST_MODE	memmap.py	py	HOST_MODE	
+HOST_HUD	memmap.py	py	HOST_HUD	
 EXTRA_STEPS_AT	port/core/src/rollback.cpp	cxx	EXTRA_STEPS	
 EXTRA_STEPS	port/core/src/session.cpp	re	g\.Read32\(CONTROL \+ (8)\)	1
 RESIMULATING_AT	port/core/src/rollback.cpp	cxx	RESIMULATING	
@@ -423,7 +424,7 @@ MACHINE_SPEED	port/core/src/hfr.cpp	use	game::MACHINE_SPEED	1
 MACHINE_UP_X	port/core/src/hfr.cpp	use	game::MACHINE_UP_X	1
 MACHINE_WALL_HITS	port/core/src/hfr.cpp	use	game::MACHINE_WALL_HITS	1
 MACHINE_PROGRESS	port/core/src/checksum.cpp	use	game::MACHINE_PROGRESS	1
-MACHINE_SIZE	port/core/src/checksum.cpp	use	game::MACHINE_SIZE	4
+MACHINE_SIZE	port/core/src/checksum.cpp	use	game::MACHINE_SIZE	5
 PROGRESS_SIZE	port/core/src/checksum.cpp	use	game::PROGRESS_SIZE	3
 MACHINE_PROGRESS	port/core/src/playback.cpp	use	game::MACHINE_PROGRESS	1
 MACHINE_SIZE	port/core/src/playback.cpp	use	game::MACHINE_SIZE	2
