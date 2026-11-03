@@ -54,6 +54,22 @@ void SetSwitch(const char* name, const std::string& value)
 #endif
 }
 
+// A switch a player's setting brings with it, unless the start already has it set (a test's own value stays, 0 = off)
+void SetSwitchUnlessSet(const char* name, const char* value)
+{
+  if (std::getenv(name) == nullptr)
+    SetSwitch(name, value);
+}
+
+// High refresh's tested set (owner-slots240-unleashed.cmd, gxr/240-slots): the pictures between drawn again from the
+// true frame's draws as render bundles, paced to the refreshes, asked on time while the next true frame decodes, its
+// offscreen passes not drawn again, each picture its own refresh (Fifo)
+constexpr const char* HIGH_REFRESH_SET[][2] = {
+    {"AURORA_REDRAW", "1"},          {"AURORA_REDRAW_BUNDLES", "1"},  {"AURORA_PACE", "1"},
+    {"AURORA_PRESENT_OVERLAP", "1"}, {"AURORA_PRESENT_SLOTS", "1"},   {"AURORA_REDRAW_SKIP_OFFSCREEN", "1"},
+    {"AURORA_PRESENT_FIFO", "1"},
+};
+
 // The player's settings in the launch file. A key left out leaves its switch alone, so a test's own switches stay.
 void SetSwitches(const fzgx::Options& o)
 {
@@ -69,7 +85,15 @@ void SetSwitches(const fzgx::Options& o)
     SetSwitch("AURORA_COLOURBLIND", o.aurora_colourblind);
   // (the step ahead's skip, AURORA_RUNAHEAD_SKIP, is on by default with it: runahead.cpp; a test's 0 stays)
   if (o.aurora_high_refresh != 0)
+  {
     SetSwitch("AURORA_RUNAHEAD", std::to_string(o.aurora_high_refresh));
+    for (const auto& s : HIGH_REFRESH_SET)
+      SetSwitchUnlessSet(s[0], s[1]);
+  }
+  // With the rays on (AURORA_RT=1, the live pass): the stream thread hands the draws' state keys to the translate
+  // threads (gxr/240-capture)
+  if (const char* rays = std::getenv("AURORA_RT"); rays != nullptr && rays[0] == '1')
+    SetSwitchUnlessSet("AURORA_RT_CAPTURE_ASYNC", "1");
 }
 
 u32 AskedScale(const fzgx::Options& o)
