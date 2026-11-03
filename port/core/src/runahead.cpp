@@ -243,8 +243,9 @@ struct Run
   u32 skip = 0;            // the lists the step ahead leaves out (AURORA_RUNAHEAD_SKIP), 0: none
   u32 mask_before = 0;     // the manager's list mask as the frame left it
   bool compare = false;    // AURORA_TEST_SKIP_COMPARE
-  bool second = false;     // the comparison's second run (with the lists left out) is the one running
-  State whole;             // the comparison's first run: the step ahead with every list
+  bool second = false;     // the comparison's second run is the one running
+  bool part_first = false; // the comparison runs the step with the lists left out first this pass
+  State whole;             // the comparison's first run
   Tick::time_point second_began{};  // the comparison's run in turn began
   bool ahead_good = false;
   u32 ahead_for = 0;
@@ -863,8 +864,11 @@ bool Begin()
   if (s.log == &s.own)
     s.own.Final(step);
   s.second = false;
-  PrepareAhead(g, *ss, step, s.compare ? 0 : s.skip);  // the comparison runs the whole step first
-  s.second_began = Tick::now();  // (the comparison's: its whole run's start)
+  // the comparison runs the whole step first in even passes, the one with the lists left out first in odd ones (the
+  // second run of a pass finds the caches warm); the second run is the one kept
+  s.part_first = s.compare && (s.stats.passes & 1) != 0;
+  PrepareAhead(g, *ss, step, s.compare && !s.part_first ? 0 : s.skip);
+  s.second_began = Tick::now();
   s.stage = Stage::AHEAD_MANAGER;
   return true;
 }
@@ -892,15 +896,15 @@ bool Next(u32 returned, Call* call)
       const auto ran = Tick::now();
       if (s.compare && !s.second)
       {
-        // the whole step ahead taken and undone; the same step again with the lists left out
-        s.stats.compared_whole_ms += Ms(ran - s.second_began);
+        // the first run taken and undone; the same step again the other way
+        (s.part_first ? s.stats.compared_part_ms : s.stats.compared_whole_ms) += Ms(ran - s.second_began);
         Take(g, s.whole);
         s.log->SaveStep(g, s.step + 1, false);
         s.log->RestoreTo(g, s.step + 1, s.step);
         Unmask(g);
         BackWindow(g);
         s.second = true;
-        PrepareAhead(g, *net::s_session, s.step, s.skip);
+        PrepareAhead(g, *net::s_session, s.step, s.part_first ? 0 : s.skip);
         s.second_began = Tick::now();
         *call = {T + 0x435C, g.Read32(SIM_MANAGER)};
         return true;
@@ -909,8 +913,8 @@ bool Next(u32 returned, Call* call)
       Take(g, s.ahead);
       if (s.compare)
       {
-        s.stats.compared_part_ms += Ms(ran - s.second_began);
-        Compare(s.whole, s.ahead, s.step);
+        (s.part_first ? s.stats.compared_whole_ms : s.stats.compared_part_ms) += Ms(ran - s.second_began);
+        Compare(s.whole, s.ahead, s.step);  // (which of the two is which does not matter to it)
       }
       s.ahead_good = true;
       s.ahead_for = s.step + 1;
@@ -1111,7 +1115,7 @@ std::string Report()
          std::format("fzgx: run ahead: step ahead against the true step: {} compared, {} differed, by at most {:.4f}\n", t.ahead_checked, t.ahead_wrong, t.ahead_most) +
          std::format("fzgx: run ahead: task lists left out of the step ahead 0x{:08X}\n", s.skip) +
          (s.compare ? std::format("fzgx: run ahead: the step ahead whole against with the lists left out: {} compared, machines differed {}, camera differed {}; "
-                                  "a step ahead whole {:.3f} ms, with the lists left out {:.3f} ms (the same pass, one after the other)\n",
+                                  "a step ahead whole {:.3f} ms, with the lists left out {:.3f} ms (the same pass, one after the other, in turn first)\n",
                                   t.compared, t.compared_machines, t.compared_camera, t.compared_whole_ms / std::max<double>(1, t.compared),
                                   t.compared_part_ms / std::max<double>(1, t.compared))
                     : std::string()) +
