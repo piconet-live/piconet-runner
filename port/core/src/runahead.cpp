@@ -45,13 +45,16 @@ constexpr u32 RUN_BEFORE_AT = CONTROL + 492, LAST_STEP = CONTROL + 460, MUTE = C
 // undoes unseen. Bit n = list n of the manager's list mask (+0x10, read by fn_1_407C; the test switch +312 masks the
 // same way). Everything the step ahead writes is undone but what Take reads (the machines' pose, flags, speed and the
 // camera), so a list after the car task that neither the camera nor the machines' pose reads is work thrown away:
-// 10 the burner, 11 the effect update, 23 BackGroundCalc (its writes come after the car task and are undone); and the
+// 11 the effect update, 23 BackGroundCalc (its writes come after the car task and are undone); and the
 // flag-0 lists a frame's last step runs: 5 the machine sound update (already returns at once in a muted step: mute.py),
-// 12 Check and Face (the face board's memory is not undone: it advanced twice a frame), 22 the per-player
-// presentation, 25 GameResultCtrl, 31 RumbleMain. Kept: 0 to 9 (the race; 8 PhysObjCalc pushes machines on courses
-// 37, 38, 41), 13 (the Starter beside the HUD timers), 20 and 21 (the cameras, CameraExec, StageCalc).
+// 12 Check and Face (the face board's memory is not undone: it advanced twice a frame), 22 the machines'
+// shadows (fn_1_56D4C), 25 GameResultCtrl, 31 RumbleMain. Kept: 0 to 9 (the race; 8 PhysObjCalc pushes machines on courses
+// 37, 38, 41), 10 (the burner: smooth.py's hook runs smooth_draw at the top of list 10, and fn_1_407C reaches a
+// list's top only when it is not masked; masked, the rivals' drawn offsets were missing from every pose read: m283,
+// all 3,326 passes), 13 (the Starter beside the HUD timers), 20 and 21 (the cameras, CameraExec, StageCalc; 20 also
+// smooth.py's specwatch).
 // AURORA_RUNAHEAD_SKIP=1 that set; a number (0x...) another mask, for tests.
-constexpr u32 SKIP_LISTS = 1u << 5 | 1u << 10 | 1u << 11 | 1u << 12 | 1u << 22 | 1u << 23 | 1u << 25 | 1u << 31;
+constexpr u32 SKIP_LISTS = 1u << 5 | 1u << 11 | 1u << 12 | 1u << 22 | 1u << 23 | 1u << 25 | 1u << 31;
 constexpr u32 LIST_MASK = 0x10;  // the simulation manager's own: list n is left out with bit n
 constexpr u32 SMOOTH_ENTRY = 48, SMOOTH_OFFSET = 12, SMOOTH_WRITTEN = 36;
 constexpr u32 SHADOWS = B + 0x6D83C + 8, SHADOW_SIZE = 0x4C, SHADOW_PLACE = 0x18;

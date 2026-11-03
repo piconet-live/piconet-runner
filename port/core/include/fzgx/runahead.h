@@ -4,7 +4,7 @@
 // on blended state, each drawing undone. The real step N+1 then runs as if none of it had been: the undo log puts back
 // what it covers and the data window is kept whole around each part.
 // AURORA_RUNAHEAD_SKIP=1 (off by default): the step ahead leaves out the task lists whose work is undone unseen (the
-// effects, the burner, BackGroundCalc, the face board, ...: runahead.cpp, SKIP_LISTS); AURORA_TEST_SKIP_COMPARE runs each
+// effects, BackGroundCalc, the face board, ...: runahead.cpp, SKIP_LISTS); AURORA_TEST_SKIP_COMPARE runs each
 // step ahead both ways and compares what is read from it.
 //
 // The core says what runs (Next); the adapter (run_ahead.cpp) runs it on the game's thread as guest calls that end in a
