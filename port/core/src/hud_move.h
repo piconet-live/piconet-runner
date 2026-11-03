@@ -13,6 +13,9 @@
 //   pivot    [x, y] in the game's 640x480 units before Wide Screen's squeeze; left out: the centre of the part's box
 //            (PIVOTS below, measured; a part not measured: the box of everything it has drawn in this start)
 //   "log"    true: the parts' boxes in the log every 600 drawn queues (to measure PIVOTS)
+// FACES (the top-6 faces board) can only be hidden: {"FACES": {"hide": true}} takes the whole board off (rings, numbers
+// and the 3D heads, whose task is skipped by the image's mode_faces site); a move, turn or mirror of it is ignored, said
+// once in the log (its 3D heads do not follow a moved board). No other part takes "hide".
 // A part's name is one of PARTS. BOOST (the energy meter's lightning, a sprite of its own) takes ENERGY's move and
 // pivot unless the layout names it.
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -32,7 +35,7 @@ inline constexpr std::array<std::string_view, 26> PARTS = {
     "NONE",      "TIMER",     "DISTANCE", "DIGIT",   "WARNING", "SUCCESS",   "FAILED", "TIME_OVER",  "SPEED_GAUGE",
     "OBJECTS",   "LEADER_GAP", "GHOST_GAP", "RANK",  "LAPS",    "SPEED",     "ENERGY", "LAP_TIMES",  "RACE_TIME",
     "FACES",     "SPARE",     "SKULLS",   "BOOST",   "WRONG_WAY", "BANNERS", "FINISH", "STORY_OTHER"};
-constexpr u32 NONE = 0, ENERGY = 15, BOOST = 21, WRONG_WAY = 22;
+constexpr u32 NONE = 0, FACES = 18, ENERGY = 15, BOOST = 21, WRONG_WAY = 22;
 constexpr u32 PUSH = 1, POP = 2, SET = 3, SPRITE = 4, FLUSH = 5;  // the host call's operations (r3)
 
 struct Move
@@ -41,6 +44,7 @@ struct Move
   float dx = 0, dy = 0, angle = 0;
   bool flip_x = false, flip_y = false;
   bool has_pivot = false;
+  bool hide = false;  // FACES only
   float px = 0, py = 0;
 };
 
@@ -49,6 +53,8 @@ struct Layout
   std::array<Move, PARTS.size()> parts{};
   bool any = false;
   bool log = false;
+  bool faces_hidden = false;
+  bool faces_moved_ignored = false;  // a move, turn or mirror was given for FACES (said in the log)
 };
 
 // A layout from its text; `why` says what is wrong (and nothing is moved) when it is refused.

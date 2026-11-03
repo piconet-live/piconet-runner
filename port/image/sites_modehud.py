@@ -29,6 +29,7 @@ test (`mode_points`), after which only r0 and cr0 (both set again as the origina
 routine resets as Time Attack does; the results' page choice; the HUD entry's banner (presentation, flagged by
 banners.py as the game's own)."""
 import memmap
+import sites_hudmove
 
 SPARE, SPARE_KNOWN = 0xCA920, 0x4BF748B5    # fn_1_CA8FC: bl fn_1_3F1D4
 OBJECTS_OF, OBJECTS_OF_KNOWN = 0xCDD7C, 0x480176B5      # fn_1_CDC8C: bl fn_1_E5430 (the count shown after the slash)
@@ -316,7 +317,14 @@ mon_stock:
     # `hide FACES`: the faces board's task does nothing this frame; only drawing is in it
     site = TEXT + FACES
     word = stock(site, FACES_KNOWN)
-    r.add("mode_faces", test + """    beq mfc_stock
+    # (the classic HUD's layout can hide the board too: MODE_HUD_MOVE's FACES_HIDDEN bit, sites_hudmove.py; tested
+    # first, in every start)
+    r.add("mode_faces", la(12, memmap.MODE_HUD_MOVE) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {sites_hudmove.FACES_HIDDEN}
+    beq mfc_mode
+    blr
+mfc_mode:
+""" + test + """    beq mfc_stock
 """ + la(12, memmap.MODE_HUD_FACES) + f"""    lwz 12, 0(12)
     cmpwi 12, 0
     beq mfc_stock
