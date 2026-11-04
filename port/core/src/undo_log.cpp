@@ -44,6 +44,7 @@ constexpr u32 LEARN_STEPS = 120;
 // The pages of a piece of a whole-memory comparison (ScanPool): about 20 us of hashing, 73 pieces of 18.6 MiB.
 constexpr u32 SCAN_PIECE = 64;
 constexpr u32 BLOCK = 32;
+constexpr u32 LET_GO_EACH = 128;  // entries a jump dropped (Tracking::letting_go) let go before each step, at most
 // the undo log keeps whole blocks: the locked cache's kept part must be whole blocks to stay out of every entry
 static_assert(SCRATCH_KEPT % BLOCK == 0 && SCRATCH_KEPT_END % BLOCK == 0 && SCRATCH_KEPT < SCRATCH_KEPT_END);
 
@@ -156,6 +157,13 @@ void CompareEveryPage(Guest& g, Tracking& s, u32 t, bool learning, Undo& entry)
 void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
 {
   const auto started = Clock::now();
+  for (u32 n = 0; n < LET_GO_EACH && !s.letting_go.empty(); ++n)
+  {
+    Undo& gone = s.letting_go.back();
+    s.letting_go_bytes -= EntryBytes(gone);
+    DropEntry(s, gone);
+    s.letting_go.pop_back();
+  }
   u8* live = g.Ram(s.region, s.shadow.size());
   u8* rng = g.Ram(DOL_RNG, 4);
   u8* shadow = s.shadow.data();

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mode.h"
+#include "fzgx/practice.h"
 
 #include <algorithm>
 #include <bit>
@@ -360,7 +361,7 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         else if (id == modes::SETUP_REWIND || id == modes::SETUP_RESUMECOUNTDOWN)
         {
           const s32 v = arg(0);
-          if (setup_args.size() != 1 || (id == modes::SETUP_REWIND ? v < 60 || v > 3600 : v < 0 || v > 300))
+          if (setup_args.size() != 1 || (id == modes::SETUP_REWIND ? v < 60 || v > static_cast<s32>(practice::MOST_REACH) : v < 0 || v > 300))
             return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
           (id == modes::SETUP_REWIND ? p.rewind : p.resume_countdown) = static_cast<u32>(v);
         }
