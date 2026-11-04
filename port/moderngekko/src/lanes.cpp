@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "lanes_internal.h"
+#include "fzgx/rollback_worker.h"
 
 #include <cstring>
 #include <filesystem>
@@ -100,6 +101,8 @@ bool Holds(u32 start, u32 end)
 
 bool TaskCall(CPUState* cpu)
 {
+  if (fzgx::rollback_worker::OnW())  // (study section 17: W runs the machines' task whole as native code, never this)
+    fzgx::rollback_worker::OffLimits("the machines' task call (lanes::TaskCall)");
   return PartialWants(cpu->pc) && PartialCall(cpu);
 }
 

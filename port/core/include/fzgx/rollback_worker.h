@@ -97,6 +97,21 @@ void GiveUp(const std::string& why);
 // longer bars a job. Without it (an older module) a store there on the worker's thread would land in the game's pipe:
 // no job starts before the countdown's end or once a machine has finished, as in S2.
 void SetPipePerThread(bool per_thread);
+// The thread audit (research/study-rollback-second-core.md section 17): W reaches the host only through an allowlist.
+// The calling thread is the worker's (ThreadStarts ran on it).
+bool OnW();
+// A host entry outside W's allowlist was reached on W's thread (the adapter's host calls, the window's side effects,
+// the machines' task call, the CPU core's hardware hooks, the core's host): with the launch file naming the worker's
+// mode (a test, a gate) the game stops loudly, with the entry's name; in a player's build the job gives up.
+void OffLimits(const char* entry);
+// U1: the CPU core's code tables' generation (StaticRecompCore::CodeGeneration), taken at a job's start; a job whose
+// generation moved by its adoption gives up (a chunk verified, retired or cleared while W ran).
+void SetCodeGeneration(u64 (*generation)());
+// U6: the native module is instrumented (a profile-training build, call counters, the access trace): `what` names
+// it, and no job starts (W's counts would race the game's). nullptr: not.
+void SetInstrumented(const char* what);
+// U7: the mod loader's interception is active (W would run an intercepted function natively): no job starts.
+void SetInterception(bool (*active)());
 // A count for the log's last line (the adapter's: system calls replicated, block copies, dispatches).
 void Count(const char* what, u64 n);
 // The game stops: the last line.

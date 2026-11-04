@@ -13,6 +13,8 @@
 #include "fzgx/hfr.h"
 #include "threads.h"
 #include "Core/PowerPC/StaticRecomp/StaticRecompModuleSource.h"
+#include "fzgx/rollback_worker.h"
+#include "moderngekko/mod_loader.hpp"
 
 namespace fzgx_port
 {
@@ -68,6 +70,8 @@ void CountFrame()
 // that calls it (port/image/sites_hfr.py) reads it.
 bool HostCall(CPUState* cpu, u32 address, void*)
 {
+  if (fzgx::rollback_worker::OnW())  // (study section 17: W's host calls are its own hook table's, never these)
+    fzgx::rollback_worker::OffLimits("the adapter's host call");
   if (s_state.native && (IsOurs(address) || lanes::IsTask(address)))
     lanes::CensusHostCall(cpu, address);  // (the deep-rollback probe, off unless its key asks: lanes_census.h)
   if (lanes::IsTask(address))  // the machines' task, with the per-machine rollback on (lanes.h)
@@ -149,6 +153,14 @@ void RegisterWindow(HostHooks::Hooks& hooks)
     fzgx::Data().Write(address, value, size);
     fzgx::WindowWritten(address, value);  // (the replay scrubber: one of the image's stores is a call to the core)
   };
+}
+
+// The mod loader's interception is active (study section 17, U7): a native mod hooks guest functions, which W would
+// run natively without the mod's hook. The host calls after ours are the mod loader's (TakeHostCalls).
+bool InterceptionActive()
+{
+  return s_state.next_call == &moderngekko::ModManager::HostCall &&
+         moderngekko::ModManager::HostCallActive(s_state.next_user);
 }
 
 // The host calls go in front of the ones `source` holds (the mod loader's).

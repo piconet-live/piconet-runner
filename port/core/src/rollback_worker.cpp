@@ -26,6 +26,8 @@
 #include "internal.h"
 #include "mode.h"
 #include "net_internal.h"
+#include "rollback_worker_guard.h"
+#include "rollback_worker_kept.h"
 
 namespace fzgx::rollback_worker
 {
@@ -75,12 +77,8 @@ constexpr double FIRST_STEP_MS = 2.0;  // a step run again before one is measure
 constexpr u32 DOL_TEXT_FROM = 0x80004000, DOL_TEXT_TO = 0x8008F000;  // (DOL text 0x80003100 to 0x8008FF00)
 constexpr u32 REL_CODE_FROM = (game::REL_TEXT_AT + 0xFFF) & ~0xFFFu, REL_CODE_TO = game::REL_DATA_AT & ~0xFFFu;
 constexpr u32 CODE_CHECK = 64;
-// The VI retrace callbacks' words (S1, difference 1): written by interrupts the worker never takes, and read by no
-// step: the counter (.bss 0x6F640), the pads' ready word (.data 0x2B64), and the callback fn_1_3920's own counter
-// (.bss 0xD6C, lbl_1_bss_D58 + 0x14; fn_1_A8D84 registers it), which differed in async-check with perturb on c03
-constexpr u32 VI_COUNT = game::REL_BSS_AT + 0x6F640, PAD_READY = game::REL_DATA_AT + 0x2B64,
-              VI_CALLBACK_COUNT = game::REL_BSS_AT + 0xD6C;
-constexpr std::array<u32, 3> VI_WORDS = {VI_COUNT, PAD_READY, VI_CALLBACK_COUNT};
+// The words an adoption keeps (the VI callbacks', the loads' callbacks', the time words, the frame routine's): one
+// table, rollback_worker_kept.cpp (study section 18).
 // The frame routine's own words (S3, async-check): what its `filters` (frame_replay.py) writes back from the copies the
 // frame's entry saved, right after the first step's network hook and again before the frame's last step: the
 // simulation manager's ([.bss 0xDAC]) list mask (+0x10) and task filter (+0x14), and .data 0x3599C. Extra steps run
@@ -88,7 +86,7 @@ constexpr std::array<u32, 3> VI_WORDS = {VI_COUNT, PAD_READY, VI_CALLBACK_COUNT}
 // the frame's last, so W holds those values where the game holds the restored ones (the fingerprint: 0x3599C 1 here,
 // 0 on W; the filter 0 here, 1 on W). They are a frame's state, not a step's: the adoption runs at the first step's
 // hook, and `call1` runs `filters` before any step, so the game's value at a hook is the sync rollback's.
-constexpr u32 FRAME_MANAGER = game::REL_BSS_AT + 0xDAC, FRAME_MASK = 0x10, FRAME_FILTER = 0x14;
+constexpr u32 FRAME_MANAGER = game::REL_BSS_AT + 0xDAC;  // (its +0x10 and +0x14: rollback_worker_kept.cpp)
 constexpr u32 FRAME_PRESENT = game::REL_DATA_AT + 0x3599C;
 
 // W: main memory and a locked cache of its own.
@@ -107,9 +105,9 @@ public:
   float EmulationSpeed() override { return 1; }
   float CpuClock() override { return 1; }
   void SetPace(float, float) override {}
-  void Log(LogLevel level, const std::string& text) override { TheHost().Log(level, text); }
+  void Log(LogLevel level, const std::string& text) override { TheHostAnyThread().Log(level, text); }
   bool ReadGameFile(const std::string&, std::vector<u8>*) override { return false; }
-  u64 PageHash(const u8* data, std::size_t size) override { return TheHost().PageHash(data, size); }
+  u64 PageHash(const u8* data, std::size_t size) override { return TheHostAnyThread().PageHash(data, size); }
   std::vector<u8> ram, cache;
   u32 scratch;
 };
@@ -309,35 +307,7 @@ std::string StackOf(const Guest& g, u32 a)
   return "";
 }
 
-// The task manager's time words (main.rel fn_1_3BDC and fn_1_407C, read in the decomp's _prolog.c): the ticks at
-// each timing's start (.bss 0xD7C, ten words) and every task node's sum of its run's ticks (+28), of the simulation's
-// and the drawing's managers. The worker's time base stands still, so these differ by kind; no checksum reads them.
-std::vector<u32> TimeWords(const Guest& a, const Guest& b)
-{
-  constexpr u32 BSS = game::REL_BSS_AT;
-  constexpr u32 MANAGERS[] = {BSS + 0x3C00 + 0x21F88, BSS + 0x3C00 + 0x220A4};
-  std::vector<u32> words;
-  for (u32 k = 0; k < 10; ++k)
-    words.push_back(BSS + 0xD7C + k * 4);
-  const auto in_ram = [](u32 address) { return address >= RAM && address < net::STATE_END && (address & 3) == 0; };
-  for (const Guest* g : {&a, &b})
-  {
-    for (const u32 at : MANAGERS)
-    {
-      const u32 manager = g->Read32(at);
-      for (u32 list = 0; in_ram(manager) && list < 32; ++list)
-      {
-        const u32 head = g->Read32(manager + 24 + list * 4);
-        u32 node = in_ram(head) ? g->Read32(head + 8) : 0;
-        for (u32 n = 0; in_ram(node) && n < 4096; ++n, node = g->Read32(node + 8))
-          words.push_back(node + 28);
-      }
-    }
-  }
-  std::sort(words.begin(), words.end());
-  words.erase(std::unique(words.begin(), words.end()), words.end());
-  return words;
-}
+// (TimeWords: rollback_worker_kept.cpp, the table's time rows)
 
 // The memory outside the log: below it (the executable, the OS, the threads' stacks) and above it (the display
 // buffers), less the generator word, which the log puts back.
@@ -570,6 +540,11 @@ void Left()
 void ThreadStarts()
 {
   t_worker = true;
+}
+
+bool OnW()
+{
+  return t_worker;
 }
 
 bool Hook()
@@ -1157,6 +1132,16 @@ void WaitIdle()
   s_r.idle_us += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
 }
 
+// Jobs by the race's time (S5, for tests around an event: a seat handed to the AI, a rejoin): by 300 steps (5 s),
+// the jobs adopted and those ended otherwise by reason (a give-up's, or why it was stopped)
+struct Span
+{
+  u64 adopted = 0;
+  std::map<std::string, u64> ended;
+};
+std::map<u32, Span> s_spans;
+constexpr u32 SPAN_STEPS = 300;
+
 // The job ends without an adoption: stopped (`why` for the log) or given up.
 void CloseJob(const char* why)
 {
@@ -1166,6 +1151,7 @@ void CloseJob(const char* why)
   {
     ++s_r.gave_up;
     ++w.why[a.why];
+    ++s_spans[a.at / SPAN_STEPS].ended[a.why];
     if (Say("gave up"))
       Notice("fzgx: rollback worker: the job from {} (started at {}) gave up at step {}: {}", a.from, a.started_at,
              a.at, a.why);
@@ -1176,8 +1162,10 @@ void CloseJob(const char* why)
   {
     ++s_r.cancelled;
     ++w.why[why];
+    ++s_spans[a.at / SPAN_STEPS].ended[why];
   }
   a.open = a.begun = false;
+  mode::TraceJob(false);  // (U4: a job not adopted leaves no line in the mode trace)
 }
 
 // S3, S4: a job stopped for a correction below its R and started again from it, while it has been restarted fewer
@@ -1288,16 +1276,8 @@ void FellBack(u32 step, u32 from)
 // reaches (the frame routine's own words, FRAME_MANAGER: a frame's last step restores them).
 std::vector<u32> KeptWords(const Guest& g, const Guest& gw)
 {
-  std::vector<u32> words = TimeWords(g, gw);
+  std::vector<u32> words = KeptTableWords(g, gw);  // (section 18's table: rollback_worker_kept.cpp)
   words.insert(words.end(), s_a.time_words.begin(), s_a.time_words.end());
-  words.insert(words.end(), VI_WORDS.begin(), VI_WORDS.end());
-  words.push_back(FRAME_PRESENT);
-  for (const Guest* m : {&g, &gw})
-    if (const u32 manager = m->Read32(FRAME_MANAGER); manager >= RAM && manager < net::STATE_END && (manager & 3) == 0)
-    {
-      words.push_back(manager + FRAME_MASK);
-      words.push_back(manager + FRAME_FILTER);
-    }
   std::sort(words.begin(), words.end());
   words.erase(std::unique(words.begin(), words.end()), words.end());
   return words;
@@ -1381,6 +1361,13 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     for (std::size_t k = 0; clean && k < rows.size(); ++k)
       clean = rows[k] == a.ran[k];
     clean = clean && !a.below;
+    if (adopt && guard::Moved())
+    {
+      // U1 (study section 17): a chunk was verified, retired or cleared while W ran (the code tables W read)
+      a.ended = true;
+      a.why = "the CPU core's code tables changed during the job";
+      adopt = clean = false;
+    }
   }
   if (adopt && clean && AsyncCheck())
   {
@@ -1412,6 +1399,7 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     {
       const std::lock_guard lock(a.m);  // (the worker waits at A's hook)
       s.rollback.TakeOver(g, w.log, gw, from, step, &keep);
+      mode::TraceJob(true);  // (U4: W's mode trace lines are the adopted runs: written now, in order)
       for (u32 t = from; t < step; ++t)
       {
         s.used[t] = a.ran[t - from];
@@ -1423,6 +1411,7 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     }
     a.open = a.begun = false;
     ++s_r.adopted;
+    ++s_spans[step / SPAN_STEPS].adopted;
     s_r.j_sum += a.frames;
     s_r.j_pred_sum += a.j_pred;
     s_r.j_high = std::max<u64>(s_r.j_high, a.frames);
@@ -1585,6 +1574,14 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
     ++s_r.barred_other;
     return false;
   }
+  // study section 17: no threaded job on a module whose pipe is one for every thread (U2), an instrumented module
+  // (U6), or while the mod loader intercepts (U7)
+  if (const char* bar = guard::StartBar(s_pipe_per_thread))
+  {
+    ++guard::Barred()[bar];
+    ++s_r.barred_other;
+    return false;
+  }
   if (s_r.switched)
   {
     ++s_r.barred_slow;  // S4 (b): this race's worker is too slow for the chain (WatchRate)
@@ -1639,6 +1636,8 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   WaitIdle();
   const auto start = std::chrono::steady_clock::now();  // (after the wait, which idle_us counts)
   PrepareMemory(g, s, step, wrong);
+  guard::TakeGeneration();  // (U1: the CPU core's code tables as the job starts)
+  mode::TraceJob(false);    // (U4: W's mode trace lines are this job's from here)
   Async& a = s_a;
   {
     const std::lock_guard lock(a.m);
@@ -1764,6 +1763,24 @@ void WorkerStop()
          r.switches,
          TheOptions().debug.worker_slow_us, RATE_STRIKES, RATE_WINDOW, RATE_WINDOW_S, RATE_CATCH_UPS, r.rate_high,
          r.retries, r.barred_slow, r.owed_n, r.forced_ahead);
+  {
+    std::string bars;
+    for (const auto& [text, n] : guard::Barred())
+      bars += std::format(" [{}: {}]", text, n);
+    Notice("fzgx: rollback worker S5: the thread audit's guards: starts barred{}; the kept words' table {} rows "
+           "(study sections 17 and 18)", bars.empty() ? std::string(" none") : bars, KeptTable().size());
+    std::string spans;
+    for (const auto& [span, n] : s_spans)
+    {
+      spans += std::format(" [{}: adopted {}", span * SPAN_STEPS, n.adopted);
+      for (const auto& [text, k] : n.ended)
+        spans += std::format("; {} {}", text, k);
+      spans += "]";
+    }
+    Notice("fzgx: rollback worker S5: jobs by {} steps (from the step a job stood at):{}", SPAN_STEPS,
+           spans.empty() ? std::string(" none") : spans);
+    s_spans.clear();
+  }
   if (AsyncCheck())
     Notice("fzgx: rollback worker S3: async-check: {} adoptions compared with their sync rollback: memory differs in {} "
            "({} words), moments in {}, checksums or rows in {}; the kept words (time, VI, the frame's) differing: {}; "

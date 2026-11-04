@@ -38,6 +38,8 @@ void TestTheWorkersTakeOver();
 void TestRollbackMomentsPerLog();
 void TestTheWorkersDefault();
 void TestTheWorkersLogStartsWithTheRace();
+void TestTheKeptWordsTable();
+void TestTheWorkersGuards();
 void TestARollbackLeavesTheWindow();
 // test_rollback_state.cpp
 void TestRollbacksStateList();
@@ -494,6 +496,8 @@ int main(int argc, char** argv)
   TestRollbackMomentsPerLog();
   TestTheWorkersDefault();
   TestTheWorkersLogStartsWithTheRace();
+  TestTheKeptWordsTable();
+  TestTheWorkersGuards();
   TestRaceFromAMatchFile();
   TestAReplaysLineup();
   TestAReplayThatIsNotPlayed();

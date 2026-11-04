@@ -4,6 +4,8 @@
 
 #include "fzgx/rollback_worker.h"
 #include "harness.h"
+#include "rollback_worker_guard.h"
+#include "rollback_worker_kept.h"
 #include "undo_log.h"
 
 namespace
@@ -311,4 +313,129 @@ void TestTheWorkersDefault()
   CHECK(ModeFor("off", "on", 16) == "off");
   CHECK(ModeFor("on", "off", 2) == "on");
   CHECK(ModeFor("async-check", nullptr, 16) == "async-check");
+}
+
+// The words an adoption keeps come from one table (rollback_worker_kept.cpp), held here to the list of the study's
+// section 18 (research/study-rollback-second-core.md, 18.2 and 18.4): every row it says to keep, by its guest address
+// as the section gives it (main.rel at its pinned place), with its writer and its class; none of the words it says
+// must not be kept (a race step writes them); each inside the log's region; the class (a) row behind the jobs' bar.
+void TestTheKeptWordsTable()
+{
+  BEGIN_TEST();
+  namespace rw = fzgx::rollback_worker;
+  using rw::Where;
+  using rw::Writer;
+  struct Want
+  {
+    fzgx::u32 at, size;
+    Writer writer;
+    char sweep;
+  };
+  // section 18.2's rows kept (VI_WORDS before it), and 18.4's "to add"
+  const Want want[] = {
+      {0x803E3CE0, 4, Writer::INTERRUPT, 'b'},     // .bss 0x6F640 VI count
+      {0x8032A7C4, 4, Writer::INTERRUPT, 'c'},     // .data 0x2B64 PAD_READY
+      {0x8037540C, 4, Writer::INTERRUPT, 'c'},     // .bss 0xD6C the VI callback's retrace count
+      {0x80375020, 0x18, Writer::INTERRUPT, 'b'},  // .bss 0x980 to 0x997 (VI post, stall)
+      {0x803EF3E8, 0xC, Writer::INTERRUPT, 'c'},   // .bss 0x7AD48 to 0x7AD53 (reset check)
+      {0x803ACB68, 8, Writer::CALLBACK, 'c'},      // .bss 0x384C8, 0x384CC (ARQ load flags)
+      {0x803B2384, 0x40, Writer::CALLBACK, 'c'},   // .bss 0x3DCE4 to 0x3DD23 (the ring's busy words)
+      {0x803C00F8, 8, Writer::CALLBACK, 'c'},      // .bss 0x4BA58, 0x4BA5C
+      {0x803F339C, 4, Writer::CALLBACK, 'c'},      // .bss 0x7ECFC
+      {0x803F9B68, 4, Writer::CALLBACK, 'a'},      // .bss 0x854C8 the countdown movie's state (a bar keeps it off W)
+      {0x8037541C, 40, Writer::TIME_BASE, 't'},    // .bss 0xD7C, ten timings' starts (18.3)
+      {0x8035D5FC, 4, Writer::FRAME, 'f'},         // .data 0x3599C (`filters`)
+  };
+  const auto table = rw::KeptTable();
+  for (const Want& x : want)
+  {
+    const auto row = std::find_if(table.begin(), table.end(), [&](const rw::KeptRow& r) {
+      return r.where == Where::FIXED && r.at == x.at;
+    });
+    CHECK(row != table.end());
+    if (row == table.end())
+      continue;
+    CHECK(row->size == x.size && row->writer == x.writer && row->sweep == x.sweep);
+  }
+  std::size_t fixed = 0, pointer = 0, list = 0;
+  for (const rw::KeptRow& r : table)
+  {
+    fixed += r.where == Where::FIXED;
+    pointer += r.where == Where::POINTER;
+    list += r.where == Where::LIST;
+    CHECK(r.size % 4 == 0 && r.by != nullptr && *r.by != 0);
+    if (r.where == Where::FIXED)
+      CHECK(r.at % 4 == 0 && r.at >= 0x80327000 && r.at + r.size <= fzgx::net::STATE_END);
+    // a class (a) row is kept only behind the bar (18.4 item 4): no job starts while its reader runs (steps to 421)
+    if (r.sweep == 'a')
+      CHECK(rw::KEPT_BAR >= 422 && fzgx::TheOptions().debug.worker_from >= rw::KEPT_BAR);
+  }
+  CHECK(fixed == std::size(want) && pointer == 2 && list == 1);
+  // the frame routine's two words of the simulation manager, [.bss 0xDAC] + 0x10 and + 0x14 (18.4 item 1 (ii)), and
+  // the task nodes' + 0x1C (item 1 (iii))
+  CHECK(std::count_if(table.begin(), table.end(), [](const rw::KeptRow& r) {
+          return r.where == Where::POINTER && r.at == 0x8037544C && (r.size == 0x10 || r.size == 0x14);
+        }) == 2);
+  CHECK(std::any_of(table.begin(), table.end(), [](const rw::KeptRow& r) {
+    return r.where == Where::LIST && r.size == 0x1C && r.writer == Writer::TIME_BASE;
+  }));
+  // 18.4 item 2: words a race step writes are never kept (.bss 0xDA8, 0xDAC, .data 0x2CDC to 0x2CE8, .data 0x2C70,
+  // .bss 0x772C8)
+  for (const fzgx::u32 never : {0x80375448u, 0x8037544Cu, 0x8032A93Cu, 0x8032A940u, 0x8032A944u, 0x8032A948u,
+                                0x8032A8D0u, 0x803EB968u})
+    for (const rw::KeptRow& r : table)
+      CHECK(r.where != Where::FIXED || never < r.at || never >= r.at + r.size);
+  // resolved over a memory with no managers: the fixed rows' words only, each once, sorted
+  TestHost host;
+  fzgx::ModData data;
+  Guest g(host, data);
+  const std::vector<fzgx::u32> words = rw::KeptTableWords(g, g);
+  std::size_t fixed_words = 0;
+  for (const rw::KeptRow& r : table)
+    fixed_words += r.where == Where::FIXED ? r.size / 4 : 0;
+  CHECK(words.size() == fixed_words && std::is_sorted(words.begin(), words.end()));
+  CHECK(std::binary_search(words.begin(), words.end(), 0x803B2384u + 0x3C) &&
+        std::binary_search(words.begin(), words.end(), 0x803EF3E8u + 8));
+  // a simulation manager in memory: its +0x10 and +0x14 join; the time words alone are the time rows'
+  g.Write32(0x8037544C, 0x80400000);
+  const std::vector<fzgx::u32> more = rw::KeptTableWords(g, g);
+  CHECK(more.size() == fixed_words + 2 && std::binary_search(more.begin(), more.end(), 0x80400014u));
+  CHECK(rw::TimeWords(g, g).size() == 10);
+}
+
+// The thread audit's guards (study section 17): "on W" is the worker's thread's alone; a job's start is barred by a
+// module whose pipe is one for every thread (U2), an instrumented module (U6) and an active interception (U7).
+void TestTheWorkersGuards()
+{
+  BEGIN_TEST();
+  namespace rw = fzgx::rollback_worker;
+  CHECK(!rw::OnW());
+  rw::OffLimits("a test's entry");  // (not on W: nothing)
+  bool on_w = false;
+  std::thread([&] {
+    rw::ThreadStarts();
+    on_w = rw::OnW();
+  }).join();
+  CHECK(on_w && !rw::OnW());
+  namespace guard = rw::guard;
+  CHECK(guard::StartBar(true) == nullptr);
+  CHECK(guard::StartBar(false) != nullptr);
+  rw::SetInstrumented("a profile-training module");
+  CHECK(guard::StartBar(true) != nullptr);
+  rw::SetInstrumented(nullptr);
+  static bool active = true;
+  rw::SetInterception([] { return active; });
+  CHECK(guard::StartBar(true) != nullptr);
+  active = false;
+  CHECK(guard::StartBar(true) == nullptr);
+  rw::SetInterception(nullptr);
+  // U1: the generation taken at a job's start; a move by its adoption is seen
+  static fzgx::u64 generation = 7;
+  rw::SetCodeGeneration([] { return generation; });
+  guard::TakeGeneration();
+  CHECK(!guard::Moved());
+  ++generation;
+  CHECK(guard::Moved());
+  rw::SetCodeGeneration(nullptr);
+  CHECK(!guard::Moved());
 }

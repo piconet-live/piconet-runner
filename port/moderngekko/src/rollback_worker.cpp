@@ -19,6 +19,7 @@
 #include <chrono>
 #include <format>
 #include <string>
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -106,9 +107,17 @@ void Look()
     using PerThread = int (*)();
     const auto per_thread = reinterpret_cast<PerThread>(GetProcAddress(module, "staticrecomp_gather_pipe_per_thread"));
     s_w.pipe_per_thread = s_w.set_pipe != nullptr && per_thread != nullptr && per_thread() != 0;
+    // U6 (study section 17): a module that counts what it runs or trains a profile says so; no job on it
+    using Instrumented = const char* (*)();
+    if (const auto instrumented = reinterpret_cast<Instrumented>(GetProcAddress(module, "staticrecomp_instrumented")))
+      rw::SetInstrumented(instrumented());
   }
 #endif
   rw::SetPipePerThread(s_w.pipe_per_thread);
+  // U1: the CPU core's code tables' generation, which a job's adoption checks
+  rw::SetCodeGeneration([]() -> fzgx::u64 { return g_static_recomp_core ? g_static_recomp_core->CodeGeneration() : 0; });
+  // U7: no job while the mod loader intercepts (W would run an intercepted function natively)
+  rw::SetInterception([] { return InterceptionActive(); });
 }
 
 // Main memory through the game's address translation (the statistics table at 0x23800000, 0x01554000 physical):
@@ -264,12 +273,18 @@ struct WriteWatch
   bool looked = false;
   u32 word = 0, first = 0, last = 0xFFFFFFFF;
   u32 step_game = 0, sim_to = 0;  // the game's step about to run and its +492 at its last network hook
-  bool pending = false, pending_w = false;
   uintptr_t base = 0;
-  u32 lines = 0;
-  std::string text;
+  std::atomic<u32> lines = 0;
 };
 WriteWatch s_watch;
+// The store a thread reported last, told at its next access (study section 17, U3: each thread's own, the game's and
+// W's, never one for both)
+struct WatchPending
+{
+  bool pending = false, on_w = false;
+  std::string text;
+};
+thread_local WatchPending t_watch;
 
 u32 Big(const u8* p)
 {
@@ -279,22 +294,20 @@ u32 Big(const u8* p)
 void WatchAccess(unsigned address, unsigned width_and_write)
 {
   WriteWatch& x = s_watch;
-  if (x.pending)
+  WatchPending& p = t_watch;
+  if (p.pending)
   {
-    const u8* ram = x.pending_w ? s_w.memory.ram : s_w.game_ram;
-    if (ram != nullptr && x.lines < 200)
-    {
-      ++x.lines;
-      s_core_host.Log(fzgx::LogLevel::Notice, std::format("fzgx: write watch: {}; the word is now {:08x}", x.text, Big(ram + (x.word & 0x01FFFFFFu))));
-    }
-    x.pending = false;
+    const u8* ram = p.on_w ? s_w.memory.ram : s_w.game_ram;
+    if (ram != nullptr && x.lines.fetch_add(1) < 200)
+      s_core_host.Log(fzgx::LogLevel::Notice, std::format("fzgx: write watch: {}; the word is now {:08x}", p.text, Big(ram + (x.word & 0x01FFFFFFu))));
+    p.pending = false;
   }
   if ((width_and_write & 0x100u) == 0)
     return;
   const u32 width = width_and_write & 0xFFu;
   if (address + width <= x.word || address >= x.word + 4)
     return;
-  const bool on_w = s_w.running;
+  const bool on_w = s_w.running || rw::OnW();  // (S1's job on the game's thread, or W's thread: U3)
   const u32 step = on_w ? static_cast<u32>(rw::Window().Read(table::CONTROL + 124, 4)) : x.step_game;
   if (step < x.first || step > x.last)
     return;
@@ -305,11 +318,11 @@ void WatchAccess(unsigned address, unsigned width_and_write)
 #ifdef _MSC_VER
   back = reinterpret_cast<uintptr_t>(_ReturnAddress());
 #endif
-  x.text = std::format("{} at step {} ({}), a {}-byte store to {:08x}, thread {:08x}, from the module's +{:x}",
+  p.text = std::format("{} at step {} ({}), a {}-byte store to {:08x}, thread {:08x}, from the module's +{:x}",
                        on_w ? "W" : "the game", step, on_w ? "W's run" : (step < x.sim_to ? "run again" : "first run"),
                        width, address, Big(ram + 0xE4), back - x.base);
-  x.pending = true;
-  x.pending_w = on_w;
+  p.pending = true;
+  p.on_w = on_w;
 }
 
 void LookWatch(CPUState* cpu)
@@ -488,6 +501,8 @@ constexpr u32 STATISTICS_PAGES = 16;
 void ThreadMain()
 {
   rw::ThreadStarts();
+  // study section 17's general guard: the CPU core's own hooks (the game's hardware) are never W's
+  StaticRecompCore::SetForeignThread([](const char* hook) { rw::OffLimits(hook); });
   std::unique_lock lock(s_t.m);
   for (;;)
   {
