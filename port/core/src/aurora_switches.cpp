@@ -63,6 +63,9 @@ constexpr Switch RAY_TRACING_SET[] = {
     // build d (recompcore gxr/240-sheets, its look checks passed): the camera's rays pass a translucent sheet with a
     // soft alpha (cloud layers, waterfalls)
     {"AURORA_RT_SHEETS", "1"},
+    // recompcore gxr/rt-cards (its look checks passed): an effect card hands the blender its colour and alpha in the game's own 0..1, so
+    // the raw picture and the glow no longer turn its body into a flat white square (lava haze, fire, sparks)
+    {"AURORA_RT_CARDS", "1"},
 };
 
 class List
