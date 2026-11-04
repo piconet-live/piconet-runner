@@ -103,7 +103,7 @@ assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_
 # verdict, outtest.py, and the race waits for the player seats alone, raceend.py; 0, every recording made before
 # them: the masks of before); +308 the steps after which a mine that went off comes back (a word, 0 to 300;
 # 0: the game's own way, a mine stays gone, and every recording made before the rule;
-# sites_mines.py); +320 the seats' custom machines (RACE_CUSTOM, below); to +1280.
+# sites_mines.py); +320 the seats' custom machines (RACE_CUSTOM, below); +1280 the seats' boost trail colours (RACE_TRAILS, below); to +1640.
 RACE = _facts.RACE
 RACE_COURSE, RACE_MACHINE0, RACE_OPPONENTS, RACE_LAPS, RACE_TYPE, RACE_SHUFFLE, RACE_CPUSEED, RACE_MACHINES = (
     _facts.RACE_COURSE, _facts.RACE_MACHINE0, _facts.RACE_OPPONENTS, _facts.RACE_LAPS, _facts.RACE_TYPE,
@@ -132,7 +132,12 @@ RACE_CUSTOM = _facts.RACE_CUSTOM
 CUSTOM_ENTRY = 32
 CUSTOM_ID = 0x32          # the machine id a custom seat races with (the game's own for garage record 0)
 CUSTOM_RECORD = 0x81A4 - 4
+# The seats' boost trail colours (sites_trail.py): 30 entries of three words, seat order: the flame while not boosting,
+# while boosting, what a boost throws off (streak, bolts, sparkles): 0x01RRGGBB, 0 the game's own. Written by the core before the race, never in it; no step reads it.
+RACE_TRAILS = _facts.RACE_TRAILS
+TRAIL_ENTRY = 12
 RACE_SIZE = _facts.RACE_SIZE
+assert RACE_CUSTOM + 30 * CUSTOM_ENTRY == RACE_TRAILS and RACE_TRAILS + 30 * TRAIL_ENTRY == RACE_SIZE
 assert RACE_SETTINGS + 30 <= RACE_FINISH_LIMIT and RACE_FINISH_LIMIT + 4 <= RACE_FLOW and RACE_FLOW + 4 <= RACE_MINE_REGEN
 assert RACE_MINE_REGEN + 4 <= RACE_CUSTOM
 assert RACE_MACHINES + 30 <= RACE_GRID_ON and RACE_GRID_ON + 4 <= RACE_GRID and RACE_GRID + 30 <= RACE_CPULEVEL

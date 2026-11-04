@@ -15,6 +15,7 @@ FINISH_LIMIT_MAX	limit	=rule_most_finish_limit		int		protocol/rules.toml:141	the
 MINE_REGEN_MAX	limit	=rule_most_mine_regen		int		protocol/rules.toml:156	the longest a host may set between a mine going off and its coming back, in milliseconds (0: a mine stays gone, the game's own way)
 MINE_REGEN_STEP	limit	=rule_step_mine_regen		int		protocol/rules.toml:157	the host's mine rule moves in steps of this many milliseconds: 50 ms is 3 steps of the game exactly
 INPUT_DELAY	limit	2		u32		port/core/src/net_internal.h:141	steps between a player's input and the step it is used in (decided: 2, never more)
+TRAIL_LEAST_BRIGHTNESS	limit	96		int		port/core/src/files_match.cpp:204	a boost trail colour's least brightest part: the flame's textures are grey and added to the picture, so a darker colour draws nothing; the core lifts one under this, keeping its hue
 MAX_UNTRACKED	limit	32		u32		port/core/src/rollback.h:29	memory ranges never rolled back, at most (the list at UNTRACKED)
 # ---- window
 IMAGE	window	0x81800000		u32		memmap.py:3	the mod image's bytes: its routines run as native code, the bytes serve the words they read
@@ -159,7 +160,8 @@ RACE_MINE_REGEN	race	=rule_at_mine_regen	RACE	u32		protocol/rules.toml:163	the h
 RACE_RUBBER_BAND_ON	race	100	RACE	u32		memmap.py:54	the rubber band: 1, the CPU drivers pace against the player seats (the game's own way, every recording made before 0.4.0); 0, every driver at its own pace (every race and practice from 0.4.0; the core writes it, a future lobby rule could set it from the server)
 RACE_SIM_GENERATOR	race	104	RACE	u32		memmap.py:78	the simulation's own generator: 1, the race's draws take SIM_GENERATOR (every race and practice from this build); 0, the executable's 0x801A63C0, shared with the effects and cameras (every recording made before)
 RACE_CUSTOM	race	320	RACE	u32		memmap.py:48	the seats' custom machines: 30 entries of 32 bytes (a used word, three part entries, the pilot)
-RACE_SIZE	race	1280		u32		memmap.py:52	bytes of the race block
+RACE_TRAILS	race	1280	RACE	u32		memmap.py:52	the seats' boost trail colours: 30 entries of TRAIL_ENTRY bytes (sites_trail.py): picture only, no step reads them
+RACE_SIZE	race	1640		u32		memmap.py:52	bytes of the race block
 # ---- rel
 MAIN_REL	rel	0x801BA660		u32	module[name=main.rel].load_address ; memory.region[name=DOL (after .bss)].end	memmap.py:42	where main.rel's header is in every boot (the pin makes it so)
 MAIN_REL_ID	rel	1		u32		port/core/src/core.cpp:97	main.rel's module number, the first word of its header

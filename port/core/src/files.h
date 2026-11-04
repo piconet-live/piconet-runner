@@ -28,13 +28,16 @@ constexpr u32 NAMES = table::NAMES;    // 30 x 32 bytes, NUL-terminated, seat or
 constexpr u32 NAME_SIZE = 32;
 constexpr u32 RACE = table::RACE;      // 'FZRC', then words: +4 course, +8 port 0's machine, +12 CPU opponents,
                                        // +16 laps, +20 race type, +24 shuffle, +28 CPU seed; +32 30 machine bytes
-constexpr u32 RACE_SIZE = 1280;
+constexpr u32 RACE_SIZE = 1640;
 // the seats' custom machines (garage-built): 30 entries of 32 bytes, seat order (memmap.py RACE_CUSTOM). +0 a word,
 // 0xC0000000 when the seat races its own parts; +4, +12, +20 the body's, cockpit's and booster's part id (a byte)
 // and +8, +16, +24 each part's colour word (red, green, blue, the material byte): a garage record's three part
 // entries; +28 the pilot (the stock machine 0-40 whose pilot drives it). A custom seat's machine is CUSTOM_MACHINE.
 constexpr u32 RACE_CUSTOM = 320, CUSTOM_ENTRY = 32;
 constexpr u32 CUSTOM_MACHINE = 0x32;
+// the seats' boost trail colours: 30 entries of three words, seat order (memmap.py RACE_TRAILS): XX 0x01RRGGBB, 0 the game's own. Picture only: no step reads them.
+constexpr u32 RACE_TRAILS = 1280, TRAIL_ENTRY = 12;
+static_assert(RACE_CUSTOM + 30 * CUSTOM_ENTRY == RACE_TRAILS && RACE_TRAILS + 30 * TRAIL_ENTRY == RACE_SIZE);
 // the host's rules the games apply (protocol/rules.toml: their words, ranges and reader, race_rules.g.h): the CPU
 // level, boost from the start, restore, the race's end for everyone so long after the first finish (in steps; the
 // image's raceend.py; 0: no such end), a mine's coming back so long after it went off (in steps; the image's

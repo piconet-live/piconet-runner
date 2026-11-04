@@ -189,6 +189,37 @@ bool CustomOfSeat(const picojson::object& seat, u8* entry)
   return true;
 }
 
+// A boost trail colour ("normal", "boost" or "sparks" of a seat's "trail": r, g, b) as the race block holds it: 0x01RRGGBB; 0,
+// the game's own (absent, or not a colour: colours are the picture's, so a bad one never stops a race). One whose
+// brightest part is under the least brightness keeps its hue and is lifted to it (BoostTrail.Lifted, the same sum).
+u32 TrailWord(const picojson::object& trail, const char* key)
+{
+  const picojson::object* c = Object(trail, key);
+  if (!c)
+    return 0;
+  const std::optional<u32> red = Whole(*c, "r", 256, 0, 255), green = Whole(*c, "g", 256, 0, 255), blue = Whole(*c, "b", 256, 0, 255);
+  if (!red || !green || !blue || *red == 256 || *green == 256 || *blue == 256)
+    return 0;
+  u32 r = *red, g = *green, b = *blue;
+  const u32 most = std::max({r, g, b}), least = limits::TRAIL_LEAST_BRIGHTNESS;
+  if (most == 0)
+    r = g = b = least;
+  else if (most < least)
+    r = r * least / most, g = g * least / most, b = b * least / most;
+  return 0x01000000 | r << 16 | g << 8 | b;
+}
+
+// A seat's boost trail ("trail": normal, boost, sparks) into its entry of the race block.
+void TrailOfSeat(const picojson::object& seat, u8* entry)
+{
+  const picojson::object* t = Object(seat, "trail");
+  if (!t)
+    return;
+  Put32(entry, TrailWord(*t, "normal"));
+  Put32(entry + 4, TrailWord(*t, "boost"));
+  Put32(entry + 8, TrailWord(*t, "sparks"));
+}
+
 u32 OtherSoundsWord(const std::string& sounds)
 {
   // the launcher's "other racers' sounds": full, quieter (the game's split-screen factor taken to 30, 0.51), off
@@ -362,6 +393,7 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
       return false;
     }
     machines[seat] = static_cast<u8>(*machine);
+    TrailOfSeat(s, m.race.data() + RACE_TRAILS + seat * TRAIL_ENTRY);
     if (s.find("custom") != s.end() && !CustomSeat(m, s, seat, path, machines[seat]))
       return false;
     // a pack of the seat's own: 0 the disc's, k the race's k-th of setup.packs; none, the race's pack

@@ -35,7 +35,7 @@ inline constexpr std::uint32_t RACE_CPULEVEL = 256;  // the host's rules: words
 inline constexpr std::uint32_t RACE_BOOST = 260;
 inline constexpr std::uint32_t RACE_RESTORE = 264;
 inline constexpr std::uint32_t RACE_SETTINGS = 268;  // 30 bytes
-inline constexpr std::uint32_t RACE_SIZE = 1280;
+inline constexpr std::uint32_t RACE_SIZE = 1640;
 inline constexpr std::uint32_t MODE = 0x81810F00;  // what the game was started for, tested by every routine at a patched site: 0 a plain start (the stock game's behaviour), 1 a race (a match file, or a replay played as the race)
 inline constexpr std::uint32_t PRELOAD = 0x81810F10;  // the results screen's pictures read before the race (port/image/build.py): +0 state (2 read, 3 not read), three pairs (bitmap group, the packed file's address), +28 loads served from memory, +32 the main heap's largest free block when it was tried
 inline constexpr std::uint32_t END_OFFICIAL = 0x81810F40;  // the race's end, held until it is official: the host's word, every step below this one ran, or runs in this frame, with the official inputs (0: never said)
@@ -224,6 +224,8 @@ inline constexpr std::uint32_t RACE_SIM_GENERATOR = 104;  // the simulation's ow
 inline constexpr std::uint32_t RACE_SIM_GENERATOR_AT = 0x81814068;  // RACE + RACE_SIM_GENERATOR
 inline constexpr std::uint32_t RACE_CUSTOM = 320;  // the seats' custom machines: 30 entries of 32 bytes (a used word, three part entries, the pilot)
 inline constexpr std::uint32_t RACE_CUSTOM_AT = 0x81814140;  // RACE + RACE_CUSTOM
+inline constexpr std::uint32_t RACE_TRAILS = 1280;  // the seats' boost trail colours: 30 entries of TRAIL_ENTRY bytes (sites_trail.py): picture only, no step reads them
+inline constexpr std::uint32_t RACE_TRAILS_AT = 0x81814500;  // RACE + RACE_TRAILS
 }  // namespace fzgx::layout
 
 namespace fzgx::game
@@ -459,6 +461,7 @@ inline constexpr int FINISH_LIMIT_MAX = 600;  // the longest a host may set betw
 inline constexpr int MINE_REGEN_MAX = 5000;  // the longest a host may set between a mine going off and its coming back, in milliseconds (0: a mine stays gone, the game's own way)
 inline constexpr int MINE_REGEN_STEP = 50;  // the host's mine rule moves in steps of this many milliseconds: 50 ms is 3 steps of the game exactly
 inline constexpr std::uint32_t INPUT_DELAY = 2;  // steps between a player's input and the step it is used in (decided: 2, never more)
+inline constexpr int TRAIL_LEAST_BRIGHTNESS = 96;  // a boost trail colour's least brightest part: the flame's textures are grey and added to the picture, so a darker colour draws nothing; the core lifts one under this, keeping its hue
 inline constexpr std::uint32_t MAX_UNTRACKED = 32;  // memory ranges never rolled back, at most (the list at UNTRACKED)
 }  // namespace fzgx::limits
 

@@ -51,7 +51,7 @@ class TheSeatsCustomMachines(Build):
         return TABLE + seat * memmap.CUSTOM_ENTRY
 
     def test_the_table_is_the_race_blocks_tail(self):
-        self.assertEqual((memmap.RACE_CUSTOM, memmap.RACE_SIZE, sites_custom.RECORD), (320, 1280, 0x81A0))
+        self.assertEqual((memmap.RACE_CUSTOM, memmap.RACE_TRAILS, sites_custom.RECORD), (320, 1280, 0x81A0))
         # a made-up record's part entries are the entry's: +0x81A4 the body's id, +0x81A8 its colour
         self.assertEqual(self.entry() - sites_custom.RECORD + 0x81A4, self.entry() + 4)
 

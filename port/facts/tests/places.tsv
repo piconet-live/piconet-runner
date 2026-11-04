@@ -179,6 +179,9 @@ RACE_SETTINGS	memmap.py	py	RACE_SETTINGS
 RACE_SETTINGS	port/core/src/files.h	cxx	RACE_SETTINGS	
 RACE_CUSTOM	memmap.py	py	RACE_CUSTOM	
 RACE_CUSTOM	port/core/src/files.h	cxx	RACE_CUSTOM	
+RACE_TRAILS	memmap.py	py	RACE_TRAILS	
+RACE_TRAILS	port/core/src/files.h	cxx	RACE_TRAILS	
+TRAIL_LEAST_BRIGHTNESS	port/core/src/files_match.cpp	use	limits::TRAIL_LEAST_BRIGHTNESS	1
 RACE_SIZE	memmap.py	py	RACE_SIZE	
 RACE_SIZE	port/core/src/files.h	cxx	RACE_SIZE	
 MAIN_REL	memmap.py	py	REL	
