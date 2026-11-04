@@ -225,13 +225,14 @@ struct Options
   std::string hud_layout;    // "hudLayout": the modern HUD's layout file (fzgx/hud_layout.h); empty or unreadable: the default
   std::string hud_meter;     // "hudMeter": the modern HUD's energy meter by name (hud_layout::MeterOf)
   // "renderer", "auroraSize", "auroraEdges", "auroraTextures", "auroraColourblind": the player's picture engine
-  // (aurora.cpp in the adapter). Empty or 0: left out
+  // (aurora.cpp in the adapter; the switches they bring: fzgx/aurora_switches.h). Empty or 0: left out
   std::string picture_renderer;
   std::string aurora_size;
   u32 aurora_edges = 0;
   u32 aurora_textures = 0;
   std::string aurora_colourblind;
   u32 aurora_high_refresh = 0;  // "auroraHighRefresh": pictures a second asked for; a step run ahead for those between
+  bool aurora_ray_tracing = false;  // "auroraRayTracing": ray tracing, its tested set of switches (fzgx/aurora_switches.h)
   bool rumble = true;        // "rumble": the player's controller may rumble (a player's setting); false: no rumble
                              // command reaches a pad in this start (the game still asks for it: RumbleAllowed)
   TaskbarGroup taskbar;      // "taskbar": the launcher's taskbar button, which the game window joins (a player's
