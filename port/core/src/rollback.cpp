@@ -10,6 +10,7 @@
 #include <map>
 #include <cstddef>
 #include <cstring>
+#include <format>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -405,7 +406,7 @@ u32 Rollback::Compare(const Guest& g, const Guest& other, std::vector<u32>* word
 }
 
 u32 Rollback::CompareMoments(const Guest& g, const Rollback& other, const Guest& other_memory, u32 from, u32 to,
-                             const std::vector<u32>* ignore) const
+                             const std::vector<u32>* ignore, std::vector<std::string>* where) const
 {
   const Tracking &x = *m, &y = *other.m;
   const u8* mx = g.Ram(x.region, x.shadow.size());
@@ -445,7 +446,15 @@ u32 Rollback::CompareMoments(const Guest& g, const Rollback& other, const Guest&
   for (auto it = blocks.begin(); it != blocks.end();)
     it = x.untracked[it->first / PAGE] ? blocks.erase(it) : std::next(it);
   u32 rx = g.Read32(DOL_RNG), ry = other_memory.Read32(DOL_RNG);
+  // (with `where`, every difference is named, up to 8 words)
   const auto same = [&]() {
+    bool all = true;
+    const auto differ = [&](std::string text) {
+      all = false;
+      if (where != nullptr && where->size() < 10)
+        where->push_back(std::move(text));
+      return where == nullptr;
+    };
     for (const auto& [off, pair] : blocks)
     {
       if (pair.first == pair.second)
@@ -453,16 +462,22 @@ u32 Rollback::CompareMoments(const Guest& g, const Rollback& other, const Guest&
       for (u32 w = 0; w < 32; w += 4)
       {
         if (std::memcmp(pair.first.data() + w, pair.second.data() + w, 4) != 0 && !InKept(x.kept, off + w) &&
-            !(ignore != nullptr && std::binary_search(ignore->begin(), ignore->end(), x.region + off + w)))
+            !(ignore != nullptr && std::binary_search(ignore->begin(), ignore->end(), x.region + off + w)) &&
+            differ(std::format("{:08x} ({:02x}{:02x}{:02x}{:02x} here, {:02x}{:02x}{:02x}{:02x} there)", x.region + off + w,
+                               pair.first[w], pair.first[w + 1], pair.first[w + 2], pair.first[w + 3], pair.second[w],
+                               pair.second[w + 1], pair.second[w + 2], pair.second[w + 3])))
           return false;
       }
     }
     for (const auto& [off, pair] : cache)
     {
-      if ((off < SCRATCH_KEPT || off >= SCRATCH_KEPT_END) && pair.first != pair.second)
+      if ((off < SCRATCH_KEPT || off >= SCRATCH_KEPT_END) && pair.first != pair.second &&
+          differ(std::format("the locked cache +{:x}", off)))
         return false;
     }
-    return rx == ry;
+    if (rx != ry && differ(std::format("the generator word ({:08x} here, {:08x} there)", rx, ry)))
+      return false;
+    return all;
   };
   // a step's entry onto the copies, as a restore goes through it: from its last block to its first
   const auto back = [&](const Tracking& t, u32 k, bool first) {
@@ -491,14 +506,34 @@ u32 Rollback::CompareMoments(const Guest& g, const Rollback& other, const Guest&
   };
   if (!same())
     return to;
+  u32 highest = 0xFFFFFFFF, lowest = 0xFFFFFFFF, moments = 0;
   for (u32 k = to; k-- > from;)
   {
     back(x, k, true);
     back(y, k, false);
-    if (!same())
-      return k;
+    std::vector<std::string>* named = where;
+    if (where != nullptr && highest != 0xFFFFFFFF)
+      where = nullptr;  // (only the highest's words are named)
+    const bool equal = same();
+    where = named;
+    if (!equal)
+    {
+      if (where == nullptr)
+        return k;
+      if (highest == 0xFFFFFFFF)
+        highest = k;
+      lowest = k;
+      ++moments;
+    }
   }
-  return 0xFFFFFFFF;
+  if (where != nullptr && highest != 0xFFFFFFFF)
+    where->push_back(std::format("(moments differing: {}, the lowest before step {})", moments, lowest));
+  return highest;
+}
+
+u32 Rollback::LatePages() const
+{
+  return m->late_pages;
 }
 
 Work Rollback::TakeWork()

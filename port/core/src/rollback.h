@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "fzgx/guest.h"
@@ -133,6 +134,8 @@ public:
   static bool InChecksum(bool progress, u32 offset);
 
   Work TakeWork();
+  // Pages first seen changing after the learning steps (late pages), in all since Start.
+  u32 LatePages() const;
 
   // The lowest step RestoreTo may name now (the log holds every step from it on), and the memory the log's entries
   // take now.
@@ -186,8 +189,10 @@ public:
   // the moments before steps `to` - 1 down to `from` as a restore would make them, over every block either log's
   // entries of those steps name, the locked cache and the generator word, but for the words `ignore` names. The
   // highest step whose moment before it differs (`to` when the presents differ there already); 0xFFFFFFFF: none.
+  // `where`: what differs there (up to 8 words, the locked cache, the generator word).
   u32 CompareMoments(const Guest& g, const Rollback& other, const Guest& other_memory, u32 from, u32 to,
-                     const std::vector<u32>* ignore = nullptr) const;
+                     const std::vector<u32>* ignore = nullptr,
+                     std::vector<std::string>* where = nullptr) const;
   // The first guest address of the tracked memory (0 when not active).
   u32 Region() const;
 

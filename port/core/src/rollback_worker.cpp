@@ -66,6 +66,15 @@ constexpr u32 REL_CODE_FROM = (game::REL_TEXT_AT + 0xFFF) & ~0xFFFu, REL_CODE_TO
 constexpr u32 CODE_CHECK = 64;
 // The VI retrace callbacks' words (S1, difference 1): written by interrupts the worker never takes
 constexpr u32 VI_COUNT = game::REL_BSS_AT + 0x6F640, PAD_READY = game::REL_DATA_AT + 0x2B64;
+// The frame routine's own words (S3, async-check): what its `filters` (frame_replay.py) writes back from the copies the
+// frame's entry saved, right after the first step's network hook and again before the frame's last step: the
+// simulation manager's ([.bss 0xDAC]) list mask (+0x10) and task filter (+0x14), and .data 0x3599C. Extra steps run
+// with the filter at 1 and 0x3599C at 0 (`replay_filter`), and W runs every step as an extra step and never reaches
+// the frame's last, so W holds those values where the game holds the restored ones (the fingerprint: 0x3599C 1 here,
+// 0 on W; the filter 0 here, 1 on W). They are a frame's state, not a step's: the adoption runs at the first step's
+// hook, and `call1` runs `filters` before any step, so the game's value at a hook is the sync rollback's.
+constexpr u32 FRAME_MANAGER = game::REL_BSS_AT + 0xDAC, FRAME_MASK = 0x10, FRAME_FILTER = 0x14;
+constexpr u32 FRAME_PRESENT = game::REL_DATA_AT + 0x3599C;
 
 // W: main memory and a locked cache of its own.
 class WorkerMemory final : public Host
@@ -190,8 +199,10 @@ struct Rule
   u64 capped = 0;
   std::map<u32, u64> moves_adopted, moves_fell, fell_depth;
   u64 fell = 0, fell_depth_sum = 0;
+  u64 unwatched = 0;  // jobs given up at their park for a page neither log watched
   // "async-check"
   u64 checked = 0, check_memory = 0, check_words = 0, check_moments = 0, check_rings = 0, check_kept = 0;
+  u32 frame_manager = 0;  // [.bss 0xDAC] at the last comparison (the frame's words' manager)
 };
 Rule s_r;
 enum Kind
@@ -380,9 +391,24 @@ bool HookThreaded()
     a.cv.notify_all();
     return false;
   }
+  // W's log has no guard and compares only its watched pages, so a page neither log watched (a fresh heap page first
+  // written inside the job) would have no entries: a later restore inside the job's steps would leave it as it is
+  // now, and TakeOver would not name it. Before W waits at its target, every page is compared once (the scan a
+  // frame's own step gets); a page found there gives the job up (the sync rollback runs), and is watched from then on.
+  const bool park = t >= a.target;
   lock.unlock();
-  w.log.SaveStep(gw, t, false);
+  const u32 late = w.log.LatePages();
+  w.log.SaveStep(gw, t, park);
+  const bool unwatched = w.log.LatePages() != late;
   lock.lock();
+  if (unwatched)
+  {
+    ++s_r.unwatched;
+    a.why = "a page neither log watched";
+    a.ended = true;
+    a.cv.notify_all();
+    return false;
+  }
   if (t > a.from + 1 || a.steps != 0)
     a.r_ms = a.r_ms == 0 ? ran_ms : a.r_ms + (ran_ms - a.r_ms) / 8;
   a.at = t;
@@ -798,6 +824,7 @@ void WorkerCompare(Guest& g, Session& s, u32 t)
   {
     ++s_r.checked;
     s_r.check_kept += time_differ;
+    s_r.frame_manager = g.Read32(FRAME_MANAGER);
   }
   if (const u32 n = s.rollback.Compare(g, gw, &words, 8, &time); n != 0)
   {
@@ -824,8 +851,15 @@ void WorkerCompare(Guest& g, Session& s, u32 t)
     ++w.entries_differ;
     s_r.check_moments += threaded;
     if (Say("moments"))
-      Notice("fzgx: rollback worker: the job from {} to {}: the logs' moments differ before step {} (the latest)", w.from,
-             w.to, k);
+    {
+      std::vector<std::string> where;
+      s.rollback.CompareMoments(g, w.log, gw, w.from, w.to, &time, &where);
+      std::string list;
+      for (const std::string& text : where)
+        list += " " + text;
+      Notice("fzgx: rollback worker: the job from {} to {}: the logs' moments differ before step {} (the latest):{}",
+             w.from, w.to, k, list);
+    }
   }
   for (u32 k = w.from; k < w.to; ++k)
   {
@@ -986,13 +1020,21 @@ void FellBack(u32 step, u32 from)
 
 // The words an adoption keeps as the game has them: what W cannot have (the VI callbacks' words, which interrupts
 // write; the task manager's time words, which the time base writes: the nodes in the lists of either memory now and
-// those of W at R, which may have left them since, as the countdown's Starter does at step 421).
+// those of W at R, which may have left them since, as the countdown's Starter does at step 421) and what W never
+// reaches (the frame routine's own words, FRAME_MANAGER: a frame's last step restores them).
 std::vector<u32> KeptWords(const Guest& g, const Guest& gw)
 {
   std::vector<u32> words = TimeWords(g, gw);
   words.insert(words.end(), s_a.time_words.begin(), s_a.time_words.end());
   words.push_back(VI_COUNT);
   words.push_back(PAD_READY);
+  words.push_back(FRAME_PRESENT);
+  for (const Guest* m : {&g, &gw})
+    if (const u32 manager = m->Read32(FRAME_MANAGER); manager >= RAM && manager < net::STATE_END && (manager & 3) == 0)
+    {
+      words.push_back(manager + FRAME_MASK);
+      words.push_back(manager + FRAME_FILTER);
+    }
   std::sort(words.begin(), words.end());
   words.erase(std::unique(words.begin(), words.end()), words.end());
   return words;
@@ -1346,14 +1388,17 @@ void WorkerStop()
     return text.empty() ? std::string(" none") : text;
   };
   Notice("fzgx: rollback worker S3: the pipe {}; restarts cap {} ({} capped); sent back, adopted jobs:{}; sent back, "
-         "jobs run sync:{}; sync from a job's R: {} (depth {:.1f} on average; by depth:{})",
+         "jobs run sync:{}; sync from a job's R: {} (depth {:.1f} on average; by depth:{}); given up for a page neither "
+         "log watched: {}",
          s_pipe_per_thread ? "per thread (W's bytes dropped)" : "one for every thread (countdown and finish barred)",
          TheOptions().debug.worker_restarts, r.capped, list(r.moves_adopted), list(r.moves_fell), r.fell,
-         r.fell ? double(r.fell_depth_sum) / r.fell : 0.0, list(r.fell_depth));
+         r.fell ? double(r.fell_depth_sum) / r.fell : 0.0, list(r.fell_depth), r.unwatched);
   if (AsyncCheck())
     Notice("fzgx: rollback worker S3: async-check: {} adoptions compared with their sync rollback: memory differs in {} "
-           "({} words), moments in {}, checksums or rows in {}; the kept words (time, VI) differing: {}",
-           r.checked, r.check_memory, r.check_words, r.check_moments, r.check_rings, r.check_kept);
+           "({} words), moments in {}, checksums or rows in {}; the kept words (time, VI, the frame's) differing: {}; "
+           "the frame's words: the manager {:08x} (+0x10, +0x14), {:08x}",
+           r.checked, r.check_memory, r.check_words, r.check_moments, r.check_rings, r.check_kept,
+           r.frame_manager, FRAME_PRESENT);
   std::string counts;
   for (const auto& [text, n] : w.counts)
     counts += std::format(" {} {}", text, n);
