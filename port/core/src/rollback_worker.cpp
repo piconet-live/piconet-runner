@@ -250,6 +250,7 @@ struct Rule
   u64 owed_n = 0, forced_ahead = 0;
   // S4, the bounds: catch-ups (a job past "catchUp" stopped, its rollback sync) and the slow worker's switch
   u64 catch_ups = 0, catch_up_depth_high = 0, switches = 0, barred_slow = 0, barred_deep = 0;
+  u64 barred_late = 0;  // starts barred only by their foreseen frames (d within the bound): catch-ups foreseen
   bool switched = false;     // the race's rollbacks run sync (W too slow) until the retry
   u32 switched_starts = 0;   // the game's log's Starts at the switch (a new count: a new race, the worker again)
   std::chrono::steady_clock::time_point window_at{}, switched_at{};  // the window's start; the switch's
@@ -1196,9 +1197,10 @@ u32 SyncFrom(u32 from)
 
 // S4 (b): W's step time, by the median of each window of at least RATE_WINDOW steps and RATE_WINDOW_S (its run,
 // checksum and SaveStep: HookThreaded), at every frame. RATE_STRIKES windows in a row at "slowStepUs" or slower, with
-// at least RATE_CATCH_UPS catch-ups in their span (the chain falls behind: catch-up after catch-up), and the race's
-// rollbacks run sync; RETRY_S later, or at a new race (the game's log started again), the worker is tried again.
-// A median: a few slow steps (a page fault, the PC busy for a moment) are not a slow worker.
+// at least RATE_CATCH_UPS catch-ups in their span (the chain falls behind: catch-up after catch-up; a start barred
+// because its foreseen frames would pass "catchUp" counts as one, since it runs sync in the catch-up's place), and
+// the race's rollbacks run sync; RETRY_S later, or at a new race (the game's log started again), the worker is tried
+// again. A median: a few slow steps (a page fault, the PC busy for a moment) are not a slow worker.
 void WatchRate(Session& s)
 {
   Rule& r = s_r;
@@ -1210,7 +1212,7 @@ void WatchRate(Session& s)
     r.switched = false;
     r.strikes = 0;
     r.window_at = now;
-    r.window_catch_ups = r.catch_ups;
+    r.window_catch_ups = r.catch_ups + r.barred_late;
     const std::lock_guard lock(s_a.m);
     s_a.window.clear();
   };
@@ -1242,7 +1244,8 @@ void WatchRate(Session& s)
   const auto mid = times.begin() + static_cast<std::ptrdiff_t>(times.size() / 2);
   std::nth_element(times.begin(), mid, times.end());
   const double step_ms = *mid;
-  const u64 at_start = std::exchange(r.window_catch_ups, r.catch_ups);
+  const u64 behind = r.catch_ups + r.barred_late;  // catch-ups, and the starts barred as they would be caught up
+  const u64 at_start = std::exchange(r.window_catch_ups, behind);
   r.window_at = now;
   r.rate_high = std::max(r.rate_high, step_ms);
   if (step_ms * 1000.0 < limit_us)
@@ -1254,7 +1257,7 @@ void WatchRate(Session& s)
   std::rotate(r.strike_catch_ups.begin(), r.strike_catch_ups.begin() + 1, r.strike_catch_ups.end());
   r.strike_catch_ups.back() = at_start;
   r.strikes = std::min(r.strikes + 1, RATE_STRIKES);
-  const u64 catch_ups = r.catch_ups - r.strike_catch_ups.front();
+  const u64 catch_ups = behind - r.strike_catch_ups.front();
   if (r.strikes < RATE_STRIKES || catch_ups < RATE_CATCH_UPS)
     return;
   r.switched = true;
@@ -1263,7 +1266,7 @@ void WatchRate(Session& s)
   r.strikes = 0;
   ++r.switches;
   Notice("fzgx: rollback worker: switch to sync: the worker's step {:.2f} ms by the median of its last {} steps, "
-         "{} windows in a row at {} us or slower, {} catch-ups in them: the rollbacks run sync for {:.0f} s (frame {}; "
+         "{} windows in a row at {} us or slower, {} catch-ups (or starts barred as foreseen ones) in them: the rollbacks run sync for {:.0f} s (frame {}; "
          "jobs so far {}, adopted {})",
          step_ms, times.size(), RATE_STRIKES, limit_us, catch_ups, RETRY_S, r.frame_no, r.jobs, r.adopted);
 }
@@ -1623,6 +1626,7 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   if (d + j_pred > TheOptions().debug.worker_catch_up)
   {
     ++s_r.barred_deep;
+    s_r.barred_late += d <= TheOptions().debug.worker_catch_up;  // (the worker's pace bars it: a catch-up foreseen)
     return false;
   }
   if (fit_rule && !chained && s_r.c_high + d * s_r.r_sync + MARGIN_MS <= FIELD_MS)
@@ -1752,11 +1756,12 @@ void WorkerStop()
          r.clean, r.provisional, r.chained_jobs, r.deferred, r.chains, r.chain_frames, r.chain_high,
          lags.empty() ? std::string(" none") : lags, r.behind_high, r.slow);
   Notice("fzgx: rollback worker S4: bounds: catch-ups {} (bound {} steps or frames; the deepest {} steps); starts "
-         "barred deeper than the bound (its depth and foreseen frames) {}; slow-worker switches to sync {} (at {} us a "
+         "barred deeper than the bound (its depth and foreseen frames) {} ({} by the foreseen frames alone); slow-worker switches to sync {} (at {} us a "
          "step, {} windows of {} steps and {:.0f} s in a row, {} catch-ups; the slowest window's median {:.2f} ms), "
          "retries {}, rollbacks barred while switched {}; forced rollbacks on steps W had run, run again by the next "
          "job or the sync {}, ahead of W {}",
-         r.catch_ups, TheOptions().debug.worker_catch_up, r.catch_up_depth_high, r.barred_deep, r.switches,
+         r.catch_ups, TheOptions().debug.worker_catch_up, r.catch_up_depth_high, r.barred_deep, r.barred_late,
+         r.switches,
          TheOptions().debug.worker_slow_us, RATE_STRIKES, RATE_WINDOW, RATE_WINDOW_S, RATE_CATCH_UPS, r.rate_high,
          r.retries, r.barred_slow, r.owed_n, r.forced_ahead);
   if (AsyncCheck())
