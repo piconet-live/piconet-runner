@@ -157,13 +157,17 @@ tb_stock:
     middle.append((site, ["r11", "r12", "cr0", "lr", "f1", "f3", "f4", "f6", "f7"], "trail_bolts"))
 
     # a boost's sparkles (r30 the machine's block; the new effect on the stack at 0x44, r3 points to it, its colour
-    # about to be finished)
+    # about to be finished). A call follows (0x98B1C), so r0 is kept as at the bolts.
     site = TEXT + 0x98B18
     word = stock(site, 0xD0010068)
     r.add("trail_sparkles", f"""    .long {word:#010x}
 """ + test + """    beq tl_stock
+    stwu 1, -0x10(1)
+    stw 0, 8(1)
     lha 11, 4(30)
     @bl trail_sparks
+    lwz 0, 8(1)
+    addi 1, 1, 0x10
     beq tl_stock
     stfs 1, 0x60(1)
     stfs 3, 0x64(1)
@@ -172,4 +176,4 @@ tl_stock:
 """ + f"""    @b {site + 4:#x}
 """)
     patch(site, word, 0, "trail_sparkles")
-    middle.append((site, ["r0", "r11", "r12", "cr0", "lr", "f1", "f3", "f4", "f6", "f7"], "trail_sparkles"))
+    middle.append((site, ["r11", "r12", "cr0", "lr", "f1", "f3", "f4", "f6", "f7"], "trail_sparkles"))

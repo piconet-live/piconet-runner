@@ -95,8 +95,7 @@ class TheSeatsTrails(Build):
         left, m = self.run_site(routine, memory, floats_in=(0.75, 0, 0, 0, 0, 0.5), r0=0x5A5A, r1=stack, r3=0x1234, **{seat_register: BLOCK if routine == "trail_sparkles" else EFFECT})
         self.assertEqual(left, [TEXT + {"trail_bolts": 0x6AAA4, "trail_sparkles": 0x98B1C}[routine]])
         self.assertEqual((m.r[1], m.r[3]), (stack, 0x1234))
-        if routine == "trail_bolts":
-            self.assertEqual(m.r[0], 0x5A5A)                  # read by the generator's call after the site
+        self.assertEqual(m.r[0], 0x5A5A)                      # a direct call follows either site, which reads r0
         return floats(m, stack + top)
 
     def test_the_bolts_take_the_sparks_word_at_their_own_brightness(self):
