@@ -60,8 +60,9 @@ constexpr Switch RAY_TRACING_SET[] = {
     {"AURORA_RT_GLOW_WIDE", "1"},
     {"AURORA_RT_SHADER_CACHE", "1"},
     {"AURORA_RT_BEFORE_LATEST", "1"},
-    // PENDING (build d, recompcore gxr/240-sheets): translucent sheets (cloud layers, waterfalls). Into the set only
-    // once its own test has passed: {"AURORA_RT_SHEETS", "1"},
+    // build d (recompcore gxr/240-sheets, its look checks passed): the camera's rays pass a translucent sheet with a
+    // soft alpha (cloud layers, waterfalls)
+    {"AURORA_RT_SHEETS", "1"},
 };
 
 class List
