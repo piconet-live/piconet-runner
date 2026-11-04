@@ -148,6 +148,8 @@ struct Async
   u32 from = 0, target = 0, rewind = NONE;
   bool stop = false;
   std::vector<net::Row> rows;  // the rows of steps from `from` on, as the session has them now
+  std::vector<net::Row> ran;   // the rows W's steps from `from` on took (written into W's ring): what an adoption
+                               // hands the session and the replay, so W's steps are checked by the rows they ran on
   std::vector<int> seats;
   // the worker, read by the game's thread under the mutex
   bool running = false;  // the worker's thread is in the job (from Begin until it has left it)
@@ -342,8 +344,15 @@ bool Begin(Memory* memory)
     Guest& gw = *w.g;
     w.window.Restore(Data().Snapshot());
     gw.Write32(net::STEP, s_a.from);
-    if (!s_a.rows.empty())
-      Rollback::UseInputs(gw, s_a.from, s_a.seats, s_a.rows[0].data());
+    {
+      const std::lock_guard lock(s_a.m);
+      s_a.ran.clear();
+      if (!s_a.rows.empty())
+      {
+        s_a.ran.push_back(s_a.rows[0]);
+        Rollback::UseInputs(gw, s_a.from, s_a.seats, s_a.ran[0].data());
+      }
+    }
     gw.Write32(EXTRA_STEPS, W_EXTRA);
     {
       const std::lock_guard lock(s_a.m);
@@ -422,6 +431,7 @@ bool HookThreaded()
       if (c < t && c >= a.from)
       {
         ++a.rewinds;
+        a.ran.resize(std::min<std::size_t>(a.ran.size(), c - a.from));
         lock.unlock();
         w.log.RestoreTo(gw, t, c);
         lock.lock();
@@ -433,6 +443,8 @@ bool HookThreaded()
     if (t < a.target && t - a.from < a.rows.size())
     {
       const net::Row row = a.rows[t - a.from];
+      a.ran.resize(t - a.from);  // (the rows of the steps below t stand: a send-back to below t was taken above)
+      a.ran.push_back(row);
       ++a.steps;
       lock.unlock();
       Rollback::UseInputs(gw, t, a.seats, row.data());
@@ -941,18 +953,21 @@ void PublishRows(Session& s, u32 upto)
   for (u32 t = a.from; t < upto; ++t)
     rows.push_back(net::RowFor(s, t));
   const std::lock_guard lock(a.m);
+  // against the rows W's steps took, not the rows last published: a row that changes while W runs its step (taken,
+  // the step not yet at its end, so `at` is still that step) is one W ran on too
   u32 changed = NONE;
-  for (u32 k = 0; k < rows.size() && k < a.rows.size(); ++k)
+  for (u32 k = 0; k < rows.size() && k < a.ran.size(); ++k)
   {
-    if (rows[k] != a.rows[k])
+    if (rows[k] != a.ran[k])
     {
       changed = a.from + k;
       break;
     }
   }
-  if (a.at > upto)
+  const u32 taken = a.from + static_cast<u32>(a.ran.size());  // W's steps below this have taken their rows
+  if (taken > upto)
     changed = std::min(changed, upto);
-  if (changed != NONE && changed < a.at)
+  if (changed != NONE && changed < taken)
   {
     a.moves += a.rewind == NONE;  // (a send-back not yet taken: the same one, lower)
     a.rewind = std::min(a.rewind, changed);
@@ -1102,9 +1117,11 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     for (u32 t = a.from; t < step; ++t)
       rows.push_back(net::RowFor(s, t));
     std::unique_lock lock(a.m);
-    bool same = rows.size() <= a.rows.size();
+    // the rows W's steps ran on, each the session's row now (a row W took before it changed fails here even if the
+    // send-back has not been taken)
+    bool same = rows.size() == a.ran.size();
     for (std::size_t k = 0; same && k < rows.size(); ++k)
-      same = rows[k] == a.rows[k];
+      same = rows[k] == a.ran[k];
     adopt = !a.ended && a.parked && a.at == step && a.rewind == NONE && same;
   }
   if (adopt && AsyncCheck())
@@ -1135,7 +1152,7 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
       s.rollback.TakeOver(g, w.log, gw, from, step, &keep);
       for (u32 t = from; t < step; ++t)
       {
-        s.used[t] = a.rows[t - from];
+        s.used[t] = a.ran[t - from];
         if (s_forget)
           s_forget(t);
       }
@@ -1204,7 +1221,7 @@ bool WorkerTakes(Session& s, u32 step, u32& wrong)
     bool capped = false;
     {
       const std::lock_guard lock(a.m);
-      if (wrong < a.at)
+      if (wrong < a.from + a.ran.size())  // (a step W has taken its row for, its run maybe not ended)
       {
         a.moves += a.rewind == NONE;
         capped = Capped(a.moves);
@@ -1312,6 +1329,7 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
     a.stop = a.ended = a.mid_step = a.parked = false;
     a.why.clear();
     a.rows.clear();
+    a.ran.clear();
     a.seats = s.seats;
     a.at = wrong;
   }
