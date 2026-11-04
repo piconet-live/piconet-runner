@@ -96,9 +96,21 @@ struct Debug
   u32 worker_depth = 7;
   std::string worker_rule = "fit";  // "rule": "fit" (S2: sync when the frame fits) or "always" (tests: every job async)
   std::string worker_watch;  // "watch": a write watch on one word, "address[:first-last]" (tests, the trace module)
-  // "restarts": how many times a job may be sent back (a correction inside its steps, or a new job from below its
-  // step after one below it) before the rollback runs sync instead; 0: no cap
-  u32 worker_restarts = 2;
+  // "restarts": how many times a job may be stopped for a correction below its R and started again from there; past
+  // it the correction is the chain's: the job runs on, is adopted as it ran, and the next job starts from the
+  // correction (S4: 0, never restart mid-job; S3's key of the same name capped send-backs, after which the rollback
+  // ran sync)
+  u32 worker_restarts = 0;
+  u32 worker_perturb = 0;   // "perturb": tests, every n-th job W runs one wrong row (S4, the chain's own gate)
+  // "catchUp": S4's bound in steps (60, a second): when the open job's span (A - R) or its correction's delay (frames)
+  // passes it, the job stops and one sync rollback from its R catches up (a hitch, then the chain again). No job starts
+  // deeper than it, and none is adopted past 512 steps (the input and checksum rings hold 1024)
+  u32 worker_catch_up = 60;
+  // "slowStepUs": a worker whose step (its run and its undo entry) takes this long or longer by the median of a window
+  // of 240 steps and 1 s (6000 us), three windows in a row with 2 catch-ups in them, is too slow for the chain: the
+  // race's rollbacks run sync, and the worker is tried again 10 s later (or at a new race); 0: never
+  u32 worker_slow_us = 6000;
+  u32 worker_delay_us = 0;  // "delayUs": tests, W sleeps this long at every step (a slow PC's worker)
   u32 worker_from = 422;  // "from": the first step a job may go back to (the countdown's end; tests: earlier)
   std::string worker_start = "changed";  // "start": "changed" (only pages that differ copied into W) or "whole" (S2's)
   std::string partial_log;
