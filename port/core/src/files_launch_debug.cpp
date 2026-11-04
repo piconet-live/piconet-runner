@@ -115,6 +115,7 @@ void ReadWorkerKeys(Part& p, Debug* d, std::string* problem)
   f.OneOf("rule", &d->worker_rule, {"fit", "always"});
   f.Whole("depth", &d->worker_depth, 1, 24);
   f.Whole("restarts", &d->worker_restarts, 0, 30);
+  f.Whole("perturb", &d->worker_perturb, 0, 1000);
   f.Whole("from", &d->worker_from, 0, 100000);
   f.OneOf("start", &d->worker_start, {"changed", "whole"});
   f.Words("watch", &d->worker_watch);
