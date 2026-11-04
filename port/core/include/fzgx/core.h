@@ -106,8 +106,9 @@ struct Debug
   // passes it, the job stops and one sync rollback from its R catches up (a hitch, then the chain again). No job starts
   // deeper than it, and none is adopted past 512 steps (the input and checksum rings hold 1024)
   u32 worker_catch_up = 60;
-  // "slowStepUs": a worker whose step takes this long or longer on average (6000 us, over 60 steps, twice in a row) is
-  // too slow for the chain: the race's rollbacks run sync from then on (a new race tries the worker again); 0: never
+  // "slowStepUs": a worker whose step (its run and its undo entry) takes this long or longer by the median of a window
+  // of 240 steps and 1 s (6000 us), three windows in a row with 2 catch-ups in them, is too slow for the chain: the
+  // race's rollbacks run sync, and the worker is tried again 10 s later (or at a new race); 0: never
   u32 worker_slow_us = 6000;
   u32 worker_delay_us = 0;  // "delayUs": tests, W sleeps this long at every step (a slow PC's worker)
   u32 worker_from = 422;  // "from": the first step a job may go back to (the countdown's end; tests: earlier)

@@ -30,9 +30,10 @@
 //     starts from it at once, however shallow; no deadline and no restart. A forced rollback (tests) on a step W has run is
 //     owed to the chain the same way: the next job starts there. The bounds: a job whose span or correction delay
 //     passes "catchUp" (60 steps or frames) stops and one sync rollback from its R catches up; a worker whose step
-//     takes "slowStepUs" (6 ms) or more over 60 steps, twice in a row, switches the race to sync rollbacks (a new race
-//     tries it again); no job starts deeper than "catchUp" or is adopted past 512 steps. The race's end checked or a
-//     job given up: the job stops and the game's sync rollback runs from its step.
+//     takes "slowStepUs" (6 ms) or more by the median of three windows in a row (240 steps and 1 s each) with two
+//     catch-ups in them switches the race to sync rollbacks, and the worker is tried again 10 s later (or at a new
+//     race); no job starts whose depth and foreseen frames pass "catchUp", and none is adopted past 512 steps. The
+//     race's end checked or a job given up: the job stops and the game's sync rollback runs from its step.
 //   - "sync": the same frame counts and measurements with no worker, the baseline for "on".
 // SPDX-License-Identifier: GPL-3.0-or-later
 
