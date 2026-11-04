@@ -81,6 +81,8 @@ constexpr u32 TOGETHER = 32;
 constexpr u32 GHOST_TASK = 64;
 // HUD_MODERN: `hud modern`: the core's own (modern_hud_frame.cpp); no site reads it.
 constexpr u32 HUD_MODERN = 128;
+// HUD_CLEAN: `hud clean`: the core's own (clean_picture.cpp: no CHECK sign, no name tags); no site reads it.
+constexpr u32 HUD_CLEAN = 256;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
