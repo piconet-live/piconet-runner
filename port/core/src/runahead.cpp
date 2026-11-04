@@ -201,6 +201,24 @@ struct Stats
   u64 stopped_after_ahead = 0, ticks_late = 0, ticks_late_after_pictures = 0, redraws = 0, cover_cut = 0;
   double tick_late_most = 0, cover_most = 0;
   double bound_step = 0, bound_picture = 0, bound_real = 0, bound_cover = 0, bound_late = 0;
+  // AURORA_RUNAHEAD_AFTER: the requests made at DRAW_ASK = 1, and the passes that made none there (no step since the tick:
+  // a pause, a held frame; the race's guards no longer holding)
+  u64 after_requests = 0, after_no_step = 0, after_off = 0;
+  // the steps the frame ran between the tick and DRAW_ASK = 1 (0, 1, 2, 3, more)
+  std::array<u64, 5> after_steps{};
+  double after_ask_sum = 0;  // the tick to DRAW_ASK = 1
+  u64 after_ask = 0;
+  std::array<u32, 40> after_ask_hist{};
+  // AURORA_TEST_AFTER_COMPARE: the step ahead's Take against DRAW_ASK = 1's (the same step), bit for bit
+  u64 after_compared = 0, after_machines = 0, after_camera = 0;
+  double after_most = 0;  // the largest move of a machine between the two
+  // DRAW_ASK = 1's Take against the next tick's (the drawing must not move what is taken), bit for bit
+  u64 next_compared = 0, next_machines = 0, next_camera = 0;
+  // the command stream's position at the tick against at DRAW_ASK = 1
+  u64 positions_same = 0, positions_moved = 0, positions_most = 0;
+  // the tick to today's request (SendRedraw in the tick), for the time against DRAW_ASK = 1's
+  double request_sum = 0;
+  u64 request_count = 0;
 };
 
 struct Run
@@ -266,6 +284,19 @@ struct Run
   bool leak_armed = false;
   u64 leak_passes = 0;
   std::map<u32, u32> leak_words;
+  std::function<u64()> written;  // the command stream's written position now
+  bool after = false;            // AURORA_RUNAHEAD_AFTER: no step ahead; the poses after the true step (with REDRAW only)
+  bool after_compare = false;    // AURORA_TEST_AFTER_COMPARE: the step ahead on, and DRAW_ASK = 1's Take compared with it
+  bool after_armed = false;      // a tick's pass waits for DRAW_ASK = 1
+  u32 after_tick_step = 0;       // STEP at that tick
+  u64 tick_position = 0;         // the command stream's written position at that tick
+  Tick::time_point pass_at{};    // that tick, once its guards held
+  Tick::time_point request_at{}; // this pass's request in the tick (today's), for the comparison
+  u64 ahead_pass = 0;            // the pass whose step ahead s.ahead is
+  State after_state;             // DRAW_ASK = 1's Take
+  bool after_good = false;
+  u32 after_for = 0;             // the step the next tick's Take is to equal it at
+  u32 differences_said = 0, next_said = 0;
 } s;
 
 float F(const Guest& g, u32 a)
@@ -504,6 +535,16 @@ u32 FindNameTags(const Guest& g)
   return 0;
 }
 
+// The race frame the pictures between are for: running, in the race's phase, not over, not paused, no scrub, not settled,
+// drawn, and the chase camera of the one viewport.
+bool InTheRace(Guest& g, net::Session& ss)
+{
+  const u32 object = g.Read32(CAMERA_OBJECT);
+  return !(g.Read32(RUNNING) == 0 || g.Read16(game::PHASE_AT) != 0x29 || g.Read32(layout::END_OVER) != 0 ||
+           g.Read32(CONTROL + 8) != 0 || net::ScrubOn(ss) || ss.settled || g.Read32(PAUSE_WORD) != 0 ||
+           g.Read32(layout::DRAW_SKIP) != 0 || !g.Ram(object, 0x50) || (g.Read32(object) >> 31) != 0 || g.Read8(object + 0x49) > 1);
+}
+
 // The rows step t runs with, as NormalStep will write them: a live game's own record is its pad now, unless its input
 // delay has it waiting already.
 net::Row RowAhead(Guest& g, net::Session& ss, u32 t)
@@ -549,20 +590,68 @@ bool SameBits(const void* a, const void* b, size_t n)
   return std::memcmp(a, b, n) == 0;
 }
 
+bool SameMachine(const Machine& a, const Machine& b)
+{
+  return SameBits(&a.pose, &b.pose, sizeof a.pose) && a.flags == b.flags && a.since == b.since && a.flags2 == b.flags2 &&
+         SameBits(&a.speed, &b.speed, sizeof a.speed);
+}
+
+bool SameCamera(const Camera& c, const Camera& d)
+{
+  return c.mode == d.mode && c.follow == d.follow && c.state == d.state && SameBits(c.fov, d.fov, sizeof c.fov) &&
+         SameBits(c.eye, d.eye, sizeof c.eye) && SameBits(&c.a, &d.a, sizeof c.a) && SameBits(&c.b, &d.b, sizeof c.b);
+}
+
+// Two Takes, every field bit for bit: whether the machines and whether the camera differ.
+std::pair<bool, bool> Differ(const State& a, const State& b)
+{
+  bool machines = a.count != b.count;
+  for (u32 i = 0; i < SEATS; ++i)
+    machines |= !SameMachine(a.machine[i], b.machine[i]);
+  return {machines, !SameCamera(a.camera, b.camera)};
+}
+
+// What differs between two Takes, for the log: each machine that does and in what, the camera's fields.
+std::string Differences(const State& a, const State& b, const net::Session* ss)
+{
+  std::string out;
+  for (u32 i = 0; i < SEATS; ++i)
+  {
+    const Machine &x = a.machine[i], &y = b.machine[i];
+    if (SameMachine(x, y))
+      continue;
+    bool rotation = false;
+    for (int k = 0; k < 12; ++k)
+      rotation |= k % 4 != 3 && !SameBits(&x.pose.m[k], &y.pose.m[k], 4);
+    const bool player = ss != nullptr && std::find(ss->seats.begin(), ss->seats.end(), static_cast<int>(i)) != ss->seats.end();
+    const u32 entry = layout::SMOOTH + i * SMOOTH_ENTRY;
+    const Guest g(TheHost(), Data());
+    out += std::format(" [seat {}{}: moved {:.4f}{}{}{}{}{}; drawn offset {} {:.3f} {:.3f} {:.3f}]", i, player ? " player" : "",
+                       Move(x.pose, y.pose), rotation ? ", turned" : "",
+                       x.flags != y.flags ? std::format(", flags {:08X}/{:08X}", x.flags, y.flags) : std::string(),
+                       x.since != y.since ? std::format(", since {}/{}", x.since, y.since) : std::string(),
+                       x.flags2 != y.flags2 ? std::format(", flags2 {:08X}/{:08X}", x.flags2, y.flags2) : std::string(),
+                       !SameBits(&x.speed, &y.speed, 4) ? std::format(", speed {:.4f}/{:.4f}", x.speed, y.speed) : std::string(),
+                       g.Read8(entry + SMOOTH_WRITTEN), F(g, entry + SMOOTH_OFFSET), F(g, entry + SMOOTH_OFFSET + 4),
+                       F(g, entry + SMOOTH_OFFSET + 8));
+  }
+  if (!SameCamera(a.camera, b.camera))
+  {
+    const Camera &c = a.camera, &d = b.camera;
+    double eye = 0;
+    for (int k = 0; k < 3; ++k)
+      eye += (double(d.eye[k]) - c.eye[k]) * (double(d.eye[k]) - c.eye[k]);
+    out += std::format(" [camera: mode {}/{}, follow {}/{}, state {:08X}/{:08X}, eye moved {:.4f}, view turned {:.6f}]", c.mode, d.mode,
+                       c.follow, d.follow, c.state, d.state, std::sqrt(eye), hfr::Arc(c.b, d.b));
+  }
+  return out;
+}
+
 // The comparison: what Take read from the whole step ahead against the one with the lists left out, bit for bit.
 void Compare(const State& whole, const State& part, u32 step)
 {
   ++s.stats.compared;
-  bool machines = whole.count != part.count;
-  for (u32 i = 0; i < SEATS; ++i)
-  {
-    const Machine &a = whole.machine[i], &b = part.machine[i];
-    machines |= !SameBits(&a.pose, &b.pose, sizeof a.pose) || a.flags != b.flags || a.since != b.since ||
-                a.flags2 != b.flags2 || !SameBits(&a.speed, &b.speed, sizeof a.speed);
-  }
-  const Camera &c = whole.camera, &d = part.camera;
-  const bool camera = c.mode != d.mode || c.follow != d.follow || c.state != d.state || !SameBits(c.fov, d.fov, sizeof c.fov) ||
-                      !SameBits(c.eye, d.eye, sizeof c.eye) || !SameBits(&c.a, &d.a, sizeof c.a) || !SameBits(&c.b, &d.b, sizeof c.b);
+  const auto [machines, camera] = Differ(whole, part);
   s.stats.compared_machines += machines;
   s.stats.compared_camera += camera;
   if ((machines || camera) && s.stats.compared_machines + s.stats.compared_camera <= 20)
@@ -620,10 +709,11 @@ Matrix Four(const Mtx& m)
 }
 
 // The pictures between the true picture and the step ahead, for the host: each machine's and the camera's correction at its fraction.
-// Only read from the two states kept; nothing of the game's is touched.
-void SendRedraw()
+// Only read from the two states kept; nothing of the game's is touched. `position`: the command stream's at the tick.
+void SendRedraw(u64 position)
 {
   RedrawRequest& q = s.request;
+  q.position = position;
   const Mtx& view = s.now.camera.b;
   q.machines = 0;
   for (u32 i = 0; i < SEATS; ++i)
@@ -713,13 +803,18 @@ void PlaceTheTick(Tick::time_point now)
 }
 }  // namespace
 
-void Start(std::function<void(float)> between, std::function<void(u32)> ran, std::function<void(const RedrawRequest&)> redraw)
+void Start(std::function<void(float)> between, std::function<void(u32)> ran, std::function<void(const RedrawRequest&)> redraw,
+           std::function<u64()> written)
 {
   s.ran = std::move(ran);
   s.redraw = std::move(redraw);
+  s.written = std::move(written);
   const char* redrawing = std::getenv("AURORA_REDRAW");
   s.redrawing = redrawing != nullptr && redrawing[0] == '1' && s.redraw != nullptr;
   s.on = false;
+  s.after = s.after_compare = s.after_armed = s.after_good = s.ahead_good = false;
+  s.stats = {};
+  s.differences_said = s.next_said = 0;
   s.between = std::move(between);
   s.input_late = std::getenv("AURORA_TEST_INPUT_LATE") != nullptr;
   const char* cover_spent = std::getenv("AURORA_RUNAHEAD_COVER_SPENT");
@@ -745,6 +840,13 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
     s.skip = v == 1 ? SKIP_LISTS : static_cast<u32>(v);
   }
   s.compare = s.skip != 0 && std::getenv("AURORA_TEST_SKIP_COMPARE") != nullptr;
+  const char* after = std::getenv("AURORA_RUNAHEAD_AFTER");
+  s.after = s.redrawing && after != nullptr && after[0] == '1';
+  s.after_compare = !s.after && std::getenv("AURORA_TEST_AFTER_COMPARE") != nullptr;
+  if (s.after)
+    Notice("fzgx: run ahead: no step ahead; the machines and the camera after the true step, at its drawing (AURORA_RUNAHEAD_AFTER)");
+  else if (s.after_compare)
+    Notice("fzgx: run ahead: the step ahead compared with the true step's state at its drawing (AURORA_TEST_AFTER_COMPARE)");
   if (s.skip != 0)
     Notice("fzgx: run ahead: the step ahead leaves out the task lists 0x{:08X}{}", s.skip,
            s.compare ? "; each also run whole and compared (AURORA_TEST_SKIP_COMPARE)" : "");
@@ -782,16 +884,49 @@ bool Begin()
   const u32 step = g.Read32(net::STEP);
   const bool consecutive = step == s.last_step + 1;
   s.last_step = step;
-  const u32 object = g.Read32(CAMERA_OBJECT);
-  if (g.Read32(RUNNING) == 0 || g.Read16(game::PHASE_AT) != 0x29 || g.Read32(layout::END_OVER) != 0 ||
-      g.Read32(CONTROL + 8) != 0 || net::ScrubOn(*ss) || ss->settled || !consecutive ||
-      g.Read32(PAUSE_WORD) != 0 || g.Read32(layout::DRAW_SKIP) != 0 || !g.Ram(object, 0x50) ||
-      (g.Read32(object) >> 31) != 0 || g.Read8(object + 0x49) > 1)
+  s.after_armed = false;
+  if (!consecutive || !InTheRace(g, *ss))
   {
     ++s.stats.none_state;
+    s.after_good = false;
     return false;
   }
   ++s.stats.passes;
+  s.pass_at = Tick::now();
+  s.request_at = {};
+  if (s.after || s.after_compare)
+  {
+    // what DRAW_ASK = 1 took in the frame before against this tick's: the drawing and the main loop's tail between them
+    State tick;
+    Take(g, tick);
+    if (s.after_good && s.after_for == step)
+    {
+      const auto [machines, camera] = Differ(s.after_state, tick);
+      ++s.stats.next_compared;
+      s.stats.next_machines += machines;
+      s.stats.next_camera += camera;
+      if ((machines || camera) && s.next_said++ < 10)
+        Notice("fzgx: run ahead: step {} taken at its drawing differs from the next tick's:{}", step, Differences(s.after_state, tick, ss));
+    }
+    s.after_good = false;
+    s.after_armed = true;
+    s.after_tick_step = step;
+    s.tick_position = s.written ? s.written() : 0;
+  }
+  if (s.after)
+  {
+    // No step ahead: picture N's machines and camera now, the true step's at its drawing (TimeTheDrawing). The input goes at the
+    // frame's own step, as at 60 pictures a second; nothing of the game's is written or undone here.
+    s.tick = Tick::now();
+    s.spent_ms = 0;
+    if (s.times != nullptr)
+      std::fprintf(s.times, "P,%u,%lld,%u,%.2f,%.2f,%.2f,%.2f\n", step, Us(s.due), s.most, 0.0, s.real_high.Of(s.frame, REAL_MS_AT_FIRST),
+                   s.cover_ms, s.late_ms);
+    Take(g, s.now);
+    TracePath(g, step, 0);
+    s.ahead_good = false;
+    return false;
+  }
   // Everything below moves the frame's own step later in the field; the input does not wait for it.
   if (!s.input_late)
   {
@@ -912,6 +1047,7 @@ bool Next(u32 returned, Call* call)
       }
       s.ran(s.step);
       Take(g, s.ahead);
+      s.ahead_pass = s.stats.passes;
       if (s.compare)
       {
         (s.part_first ? s.stats.compared_whole_ms : s.stats.compared_part_ms) += Ms(ran - s.second_began);
@@ -943,7 +1079,8 @@ bool Next(u32 returned, Call* call)
       }
       if (s.redrawing)
       {
-        SendRedraw();
+        s.request_at = Tick::now();
+        SendRedraw(s.written ? s.written() : 0);
         LeakAfter(g);
         s.log->SaveAgain(s.step);
         s.inside = false;
@@ -1067,8 +1204,85 @@ void NoteInputSent(u32 step, bool changed)
                static_cast<long long>(us(Tick::now())), changed ? 1 : 0);
 }
 
+namespace
+{
+// DRAW_ASK = 1: every step of the frame has run (and the race clock, the `done` passes, the mode's HUD passes), none of the
+// next picture's drawing yet. Whether the tick's pass is still for a race frame that moved on; the Take; the comparison.
+void AtTheDrawing()
+{
+  if (!s.after_armed || s.inside)
+    return;
+  s.after_armed = false;
+  net::Session* ss = net::s_session.get();
+  Guest g(TheHost(), Data());
+  if (ss == nullptr)
+    return;
+  const auto now = Tick::now();
+  const u32 step = g.Read32(net::STEP);
+  const u32 steps = step - s.after_tick_step;
+  ++s.stats.after_steps[std::min<u32>(steps, 4)];
+  const double ask_ms = Ms(now - s.pass_at);
+  s.stats.after_ask_sum += ask_ms;
+  ++s.stats.after_ask;
+  Note(s.stats.after_ask_hist, ask_ms);
+  if (s.after_compare)
+  {
+    const u64 position = s.written ? s.written() : 0;
+    if (position == s.tick_position)
+      ++s.stats.positions_same;
+    else
+    {
+      ++s.stats.positions_moved;
+      s.stats.positions_most = std::max<u64>(s.stats.positions_most, position - s.tick_position);
+    }
+    if (s.request_at != Tick::time_point{})
+    {
+      s.stats.request_sum += Ms(s.request_at - s.pass_at);
+      ++s.stats.request_count;
+    }
+  }
+  if (steps == 0 || steps > 30 || !InTheRace(g, *ss))
+  {
+    (steps == 0 ? s.stats.after_no_step : s.stats.after_off) += 1;
+    return;
+  }
+  Take(g, s.after_state);
+  s.after_good = true;
+  s.after_for = step;
+  if (s.times != nullptr)
+    std::fprintf(s.times, "R,%u,%lld,%lld,%u\n", s.after_tick_step, Us(s.pass_at), Us(now), steps);
+  if (s.after_compare)
+  {
+    // the step ahead of this pass ran the same step as the frame's own: its Take against this one
+    if (s.ahead_good && s.ahead_pass == s.stats.passes && s.ahead_for == step)
+    {
+      const auto [machines, camera] = Differ(s.ahead, s.after_state);
+      ++s.stats.after_compared;
+      s.stats.after_machines += machines;
+      s.stats.after_camera += camera;
+      for (u32 i = 0; i < SEATS; ++i)
+        s.stats.after_most = std::max(s.stats.after_most, Move(s.ahead.machine[i].pose, s.after_state.machine[i].pose));
+      if ((machines || camera) && s.differences_said++ < 20)
+        Notice("fzgx: run ahead: step {} ahead differs from the true step at its drawing:{}", s.after_tick_step,
+               Differences(s.ahead, s.after_state, ss));
+    }
+    return;
+  }
+  s.ahead = s.after_state;
+  if (!Judge())
+  {
+    ++s.stats.camera_cut;
+    return;
+  }
+  SendRedraw(s.tick_position);
+  ++s.stats.after_requests;
+}
+}  // namespace
+
 void TimeTheDrawing(u32 value)
 {
+  if (value == 1 && s.on)
+    AtTheDrawing();
   // the image's DRAW_ASK: 2 the drawing has ended. From the tick's end to here, the real step and its drawing.
   if (value == 2 && s.on && s.stage == Stage::OFF && s.tick != Tick::time_point{})
   {
@@ -1106,7 +1320,25 @@ std::string Report()
   if (s.path != nullptr)
     std::fflush(s.path);
   const double asked = std::max<double>(1, static_cast<double>(t.passes));
-  return std::format("fzgx: run ahead: {} requests of pictures to the renderer (AURORA_REDRAW {})\n", t.redraws, s.redrawing ? "on" : "off") +
+  const auto share = [](u64 a, u64 n) { return n == 0 ? 0.0 : 100.0 * static_cast<double>(a) / static_cast<double>(n); };
+  const std::string after =
+      !s.after && !s.after_compare ? std::string() :
+      std::format("fzgx: run ahead: {}: {} requests at the drawing, {} passes with no step since the tick, {} out of the race by then; steps "
+                  "between the tick and the drawing 0/1/2/3/more {}/{}/{}/{}/{}; the tick to the drawing {:.2f} ms ({}){}\n",
+                  s.after ? "after the true step (AURORA_RUNAHEAD_AFTER)" : "compared (AURORA_TEST_AFTER_COMPARE)", t.after_requests,
+                  t.after_no_step, t.after_off, t.after_steps[0], t.after_steps[1], t.after_steps[2], t.after_steps[3], t.after_steps[4],
+                  t.after_ask_sum / std::max<double>(1, static_cast<double>(t.after_ask)), Percentiles(t.after_ask_hist),
+                  t.request_count ? std::format(", to the request in the tick {:.2f} ms", t.request_sum / static_cast<double>(t.request_count))
+                                  : std::string()) +
+          std::format("fzgx: run ahead: taken at the drawing against the next tick: {} compared, machines differed {}, camera differed {}\n",
+                      t.next_compared, t.next_machines, t.next_camera) +
+          (s.after_compare ? std::format("fzgx: run ahead: the step ahead against the true step at its drawing, bit for bit: {} compared, machines "
+                                         "differed {} ({:.1f}%), camera differed {}, a machine by at most {:.4f}; the command stream's position "
+                                         "at the tick and at the drawing: {} the same, {} moved (by at most {})\n",
+                                         t.after_compared, t.after_machines, share(t.after_machines, t.after_compared), t.after_camera,
+                                         t.after_most, t.positions_same, t.positions_moved, t.positions_most)
+                           : std::string());
+  return after + std::format("fzgx: run ahead: {} requests of pictures to the renderer (AURORA_REDRAW {})\n", t.redraws, s.redrawing ? "on" : "off") +
          std::format("fzgx: run ahead: the bounds on average: step {:.2f}, picture {:.2f}, real {:.2f}, kept in hand {:.2f}, tick late {:.2f} ms\n",
                      t.bound_step / asked, t.bound_picture / asked, t.bound_real / asked, t.bound_cover / asked, t.bound_late / asked) +
          std::format("fzgx: run ahead: ticks late on the wall clock {} ({} after pictures), by at most {:.2f} ms; most kept in hand {:.2f} ms; stopped after the step ahead {}\n",
@@ -1142,5 +1374,6 @@ void Stop()
   s.stage = Stage::OFF;
   s.inside = false;
   s.last_step = 0xFFFFFFFF;
+  s.after_armed = s.after_good = s.ahead_good = false;
 }
 }  // namespace fzgx::runahead

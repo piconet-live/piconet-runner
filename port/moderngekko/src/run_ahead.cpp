@@ -81,7 +81,7 @@ void StartRunAhead()
   }, [](fzgx::u32 step) { lanes::PartialForget(step); },
   [](const fzgx::runahead::RedrawRequest& r) {
     static VideoCommon::AuroraPresent::RedrawRequest out;  // (the game's thread alone)
-    out.position = VideoCommon::FrameRedraw::WrittenPosition();
+    out.position = r.position;  // (the tick's: a request made at the drawing, AURORA_RUNAHEAD_AFTER, still belongs to the copy before it)
     out.machines = r.machines;
     std::memcpy(out.at, r.at.data(), sizeof out.at);
     out.pictures = std::min<fzgx::u32>(r.pictures, VideoCommon::AuroraPresent::REDRAW_MOST);
@@ -92,7 +92,7 @@ void StartRunAhead()
       std::memcpy(out.picture[k].machine, r.picture[k].machine.data(), sizeof out.picture[k].machine);
     }
     VideoCommon::AuroraPresent::Redraw(&out);
-  });
+  }, [] { return VideoCommon::FrameRedraw::WrittenPosition(); });
 }
 
 void StopRunAhead()

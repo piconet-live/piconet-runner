@@ -6,6 +6,11 @@
 // AURORA_RUNAHEAD_SKIP (on by default with run-ahead; 0 turns it off, for tests and comparison): the step ahead leaves out
 // the task lists whose work is undone unseen (the effects, BackGroundCalc, the face board, ...: runahead.cpp, SKIP_LISTS);
 // AURORA_TEST_SKIP_COMPARE runs each step ahead both ways and compares what is read from it.
+// AURORA_RUNAHEAD_AFTER (with AURORA_REDRAW only): no step ahead at all. The machines and the camera are taken after the
+// frame's own true step, at the image's store DRAW_ASK = 1 (the frame's drawing is about to begin), and the request leaves
+// there with the command stream's position the tick saw. Nothing new runs in the game: no undo, no muted run, the mode's
+// rules and the per-machine rollback untouched. AURORA_TEST_AFTER_COMPARE (today's step ahead on): the same Take at
+// DRAW_ASK = 1, compared bit for bit with the step ahead's and with the next tick's, the positions and times beside.
 //
 // The core says what runs (Next); the adapter (run_ahead.cpp) runs it on the game's thread as guest calls that end in a
 // host call. Nothing nests: between two calls the run loop goes on as ever, interrupts included.
@@ -28,7 +33,8 @@ struct Call
 
 // AURORA_REDRAW=1 beside AURORA_RUNAHEAD (off by default): no pictures by the game's draw code. The step ahead gives where the machines and
 // the camera will be; the host's renderer draws the true frame's own draws again with these corrections. Matrices: row-major, column
-// vectors, last row 0 0 0 1. The game's thread, inside the tick; nothing here is game state.
+// vectors, last row 0 0 0 1. The game's thread, inside the tick (or, with AURORA_RUNAHEAD_AFTER, at DRAW_ASK = 1); nothing here is
+// game state.
 constexpr u32 PICTURES_MOST = 7;
 using Matrix = std::array<float, 16>;
 struct RedrawPicture
@@ -39,6 +45,7 @@ struct RedrawPicture
 };
 struct RedrawRequest
 {
+  u64 position = 0;  // the command stream's written position at the frame tick (`written`): the true picture's copy is just before it
   u32 machines = 0;
   std::array<std::array<float, 3>, 30> at{};  // each machine's place in the true picture's view
   u32 pictures = 0;
@@ -47,9 +54,9 @@ struct RedrawRequest
 
 // Reads the switch. `between`: told the fraction of the next XFB copy the game is about to make, a picture between.
 // `ran`: told that step was run ahead (the per-machine rollback must not take it for the step's last run).
-// `redraw`: told the pictures between, when AURORA_REDRAW is on.
+// `redraw`: told the pictures between, when AURORA_REDRAW is on. `written`: the command stream's written position now.
 void Start(std::function<void(float fraction)> between, std::function<void(u32 step)> ran,
-           std::function<void(const RedrawRequest&)> redraw);
+           std::function<void(const RedrawRequest&)> redraw, std::function<u64()> written);
 bool On();
 // The frame tick, after the core's own: true when pictures between will be made this pass (Next gives the calls).
 bool Begin();
@@ -57,7 +64,8 @@ bool Begin();
 bool Next(u32 returned, Call* call);
 // A step or a picture of this file is running: the host's per-step services leave it alone.
 bool Inside();
-// The image's store into DRAW_ASK (2: the frame's drawing has ended): what the real step and its drawing cost.
+// The image's store into DRAW_ASK: 1 the frame's drawing is about to begin (AURORA_RUNAHEAD_AFTER's request leaves here; the
+// comparison's Take), 2 it has ended (what the real step and its drawing cost).
 void TimeTheDrawing(u32 value);
 // The test log AURORA_TEST_INPUT_LOG: when the frame's own step came to send its input, against the tick. `changed`: the
 // pad record is not what was sent at the tick.
