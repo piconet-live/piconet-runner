@@ -23,6 +23,7 @@ void TestGuestMemory();
 void TestHelpers();
 // test_rollback.cpp
 void TestUndoLog();
+void TestOneLogsJumpByAKey();
 void TestThePageGuard();
 void TestThePageGuardBesideTheEmulatorsHandler();
 void TestThePageGuardWhenItsMemoryIsGone();
@@ -323,6 +324,7 @@ static int SaveOptionsOf(const char* folder)
 void TestTheUndoLogAndItsGuard()
 {
   TestUndoLog();
+  TestOneLogsJumpByAKey();
   TestThePageGuard();
   TestThePageGuardBesideTheEmulatorsHandler();
   TestThePageGuardWhenItsMemoryIsGone();

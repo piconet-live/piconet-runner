@@ -244,6 +244,9 @@ struct Tracking
   u32 first_step = 0;        // the first step saved since StartTracking: the log holds nothing from before it
   u32 final_below = 0;       // entries below this step were dropped as final
   u64 undo_bytes = 0;        // the memory the entries' blocks take now (what their lists hold room for)
+  // entries dropped at once by a jump (Rollback::Rebase), let go a few at each later step (PreStep), and their room
+  std::vector<Undo> letting_go;
+  u64 letting_go_bytes = 0;
   std::map<u32, Key> keys;   // keys, by the step each is the moment before
   u64 key_bytes = 0;
   // packing: the units that are packed or dropped, by their first step (a unit not here: its entries are
@@ -324,6 +327,7 @@ void TraceFaithful(Tracking& s, const u8* live, u32 from, u32 t);
 void ApplyEntries(Guest& g, const Tracking& s, u32 from, u32 t);
 void ExchangeMoment(Guest& g, const Tracking& a, const Tracking& b, Rollback::Moment& m, bool copy);
 void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step);
+void RebaseMemory(Guest& g, Tracking& s, u32 step, bool keep_below);
 void DiscardChanges(Guest& g, Tracking& s);
 // undo_pack.cpp
 void PackStep(Host& host, Tracking& s, u32 step);
@@ -332,4 +336,5 @@ std::size_t DropFarthestUnit(Tracking& s, u32 step, u32 near);
 std::size_t DropFarthestKey(Tracking& s, u32 step, u32 near, u32 first, u32 keep_every);
 void KeepAKey(const Guest& g, Tracking& s, u32 step, const Rollback::Moment& base);
 void TakeAKey(Guest& g, const Tracking& s, const Tracking& with, const Key& key, const Rollback::Moment& base);
+void DropAKey(Tracking& s, u32 step);
 }  // namespace fzgx::net

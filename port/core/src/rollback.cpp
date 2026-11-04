@@ -63,6 +63,8 @@ void Rollback::Stop()
   TakeOffGuard(*m);
   m->tracking = false;
   m->undo.clear();
+  m->letting_go.clear();
+  m->letting_go_bytes = 0;
   m->spare.clear();
   m->spare_bytes = 0;
   ForgetPutBack(m.get());
@@ -106,7 +108,7 @@ u32 Rollback::Oldest() const
 
 std::size_t Rollback::LogBytes() const
 {
-  return static_cast<std::size_t>(m->undo_bytes) + m->spare_bytes;
+  return static_cast<std::size_t>(m->undo_bytes + m->letting_go_bytes) + m->spare_bytes;
 }
 
 void Rollback::Keep(const Guest& g, Moment* moment) const
@@ -222,6 +224,17 @@ void Rollback::TakeKey(Guest& g, const Rollback& other, u32 key, const Moment& b
   ++s_moments;
   if (const auto it = m->keys.find(key); it != m->keys.end())
     TakeAKey(g, *m, *other.m, it->second, base);
+}
+
+void Rollback::Rebase(Guest& g, u32 step, bool keep_below)
+{
+  ++s_moments;
+  RebaseMemory(g, *m, step, keep_below);
+}
+
+void Rollback::DropKey(u32 step)
+{
+  DropAKey(*m, step);
 }
 
 std::size_t Rollback::KeyBytes() const

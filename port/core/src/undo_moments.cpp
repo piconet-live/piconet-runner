@@ -93,7 +93,11 @@ void ExchangeMoment(Guest& g, const Tracking& a, const Tracking& b, Rollback::Mo
   take(g.Ram(DOL_RNG, 4), m.rng, 4);
 }
 
-void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step)
+namespace
+{
+// The memory as it is now, on the pages either log watches, the locked cache and the generator word, is the log's
+// shadow (its present).
+void ShadowTheMemory(Guest& g, Tracking& s, const Tracking& with)
 {
   const u8* live = g.Ram(s.region, s.shadow.size());
   for (std::size_t page = 0; page < s.watched.size(); ++page)
@@ -111,10 +115,45 @@ void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step)
   if (const u8* scratch = s.scratch_shadow.empty() ? nullptr : g.GetHost().Scratch(); scratch != nullptr)
     std::memcpy(s.scratch_shadow.data(), scratch, s.scratch_shadow.size());
   g.CopyFrom(s.shadow_rng.data(), DOL_RNG, 4);
+}
+}  // namespace
+
+void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step)
+{
+  ShadowTheMemory(g, s, with);
   for (auto it = s.undo.begin(); it != s.undo.end();)
     it = EraseEntry(s, it);
   s.first_step = step;
   s.final_below = 0;
+}
+
+void RebaseMemory(Guest& g, Tracking& s, u32 step, bool keep_below)
+{
+  ShadowTheMemory(g, s, s);
+  // (let go a few at a time by the next steps' PreStep: a jump drops up to some 18,000 entries, 2 us each)
+  const auto from = keep_below ? s.undo.lower_bound(step) : s.undo.begin();
+  for (auto it = from; it != s.undo.end(); ++it)
+  {
+    const u64 bytes = EntryBytes(it->second);
+    s.undo_bytes -= bytes;
+    s.letting_go_bytes += bytes;
+    s.letting_go.push_back(std::move(it->second));
+  }
+  s.undo.erase(from, s.undo.end());
+  if (!keep_below)
+  {
+    s.first_step = step;
+    s.final_below = 0;
+  }
+}
+
+void DropAKey(Tracking& s, u32 step)
+{
+  if (const auto it = s.keys.find(step); it != s.keys.end())
+  {
+    s.key_bytes -= KeyBytes(it->second);
+    s.keys.erase(it);
+  }
 }
 
 void DiscardChanges(Guest& g, Tracking& s)

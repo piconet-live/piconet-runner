@@ -151,6 +151,13 @@ public:
   // The memory as it is now is this log's moment before step `step`: every entry is dropped, and the log holds
   // nothing from before that step.
   void Adopt(Guest& g, const Rollback& other, u32 step);
+  // The memory as it is now is this log's moment before `step`, a moment of the log's own race (a key of it taken,
+  // TakeKey): the entries from `step` on are dropped, and with `keep_below` those below it stay, so a RestoreTo from
+  // `step` goes back through them (a jump back); without, the log holds nothing from before `step` (a jump forwards,
+  // past what the log holds), as Adopt. One log's own jump (the practice's rewind): its present moved by a key, with
+  // no second moment. The entries dropped are let go a few at each later SaveStep, so a jump costs the same however
+  // many it drops; LogBytes counts them until then. For a log that packs no units.
+  void Rebase(Guest& g, u32 step, bool keep_below);
   // Whatever changed in the memory since the last SaveStep is put back (a displayed frame that ran no step of
   // this moment).
   void Discard(Guest& g);
@@ -171,6 +178,8 @@ public:
   u32 KeyBelow(u32 step) const;
   void TakeKey(Guest& g, const Rollback& other, u32 key, const Moment& base) const;
   std::size_t KeyBytes() const;
+  // The key of `step` goes (none: nothing happens).
+  void DropKey(u32 step);
 
   // Packing (undo_pack.cpp): a step's entry packed into its unit of UNIT steps (Host::Pack) as it is logged; steps
   // `to` to `from` - 1 made ready for RestoreTo or Apply, unpacking what is packed (false: some were dropped); the

@@ -80,9 +80,9 @@ void TestTheRollingBuffer()
   CHECK(r.Front() == 5000 && r.Oldest() == 5000 - 3600 && r.FinalBelow() == 1400);
   // keys before the one the oldest moment is reached from are let go, each once, in order
   const std::vector<u32> dropped = r.TakeDropped();
-  CHECK(r.KeyFor(1400) == 1280 && dropped.size() == 10 && dropped.front() == 0 && dropped.back() == 1152);
+  CHECK(r.KeyFor(1400) == 1344 && dropped.size() == 21 && dropped.front() == 0 && dropped.back() == 1280);
   CHECK(r.TakeDropped().empty());
-  CHECK(r.WantsKey(1280) && !r.WantsKey(1281) && r.KeyFor(1281) == 1280 && r.KeyFor(1279) == 1152);
+  CHECK(r.WantsKey(1344) && !r.WantsKey(1345) && r.KeyFor(1345) == 1344 && r.KeyFor(1343) == 1280);
   // paused, full tilt back for longer than a minute takes: the picture stops at the oldest moment, and forward at
   // the front
   CHECK(Press(r, BUTTON_START).step == 5000 && r.Now() == Mode::Paused && r.Count().pauses == 1);
@@ -162,9 +162,9 @@ void TestABranchOnResume()
   f = r.Next({});
   CHECK(f.run && f.branch && f.step == 1700 && r.Front() == 1700 && r.Now() == Mode::Racing);
   CHECK(r.Count().branches == 1 && !r.Save() && r.Count().saves_dropped == 1);
-  // keys after the branch point are let go (1792, 1920, 2048); 1664 still holds 1700's moment
+  // keys after the branch point are let go (1728 to 2048); 1664 still holds 1700's moment
   const std::vector<u32> dropped = r.TakeDropped();
-  CHECK(dropped == (std::vector<u32>{1792, 1920, 2048}));
+  CHECK(dropped == (std::vector<u32>{1728, 1792, 1856, 1920, 1984, 2048}));
   CHECK(r.KeyFor(1700) == 1664);
   r.Ran(f.step);
   Race(r, 99);

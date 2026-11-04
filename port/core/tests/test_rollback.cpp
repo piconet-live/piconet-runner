@@ -93,6 +93,75 @@ void TestUndoLog()
   CHECK(host.log.empty());
 }
 
+// One log's jump by its own key (the practice's rewind): the memory taken from a key of the log, the log rebased
+// there, and the entries below the key take it on back, exactly; a key let go is gone.
+void TestOneLogsJumpByAKey()
+{
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  std::mt19937 rng(20261103);
+  FakeGame(host, g, rng);
+  const u32 first = (MODULE + net::DATA) & ~(net::PAGE - 1);
+  const u32 size = net::STATE_END - first;
+  net::Rollback t;
+  t.Start(g);
+  t.KeepWatching();
+  net::Rollback::Moment base;
+  t.Keep(g, &base);
+  std::vector<std::vector<u8>> before;
+  std::vector<u32> rng_before;
+  for (u32 step = 0; step < 300; ++step)
+  {
+    t.SaveStep(g, step, step % 2 == 0);
+    if (step % 64 == 0)
+      t.KeepKey(g, step, base);
+    before.emplace_back(g.Ram(first, size), g.Ram(first, size) + size);
+    rng_before.push_back(g.Read32(net::DOL_RNG));
+    for (int k = 0; k < 40; ++k)
+    {
+      const u32 page = k < 30 ? (rng() % 64) : (rng() % (size / net::PAGE));
+      g.Write32(first + page * net::PAGE + (rng() % (net::PAGE / 4)) * 4, rng());
+    }
+    g.Write32(net::DOL_RNG, 0x2000 + step);
+  }
+  t.SaveStep(g, 300, true);
+  const std::size_t full = t.LogBytes();
+  // from before step 300 to before step 70: the key above (128) and the entries 127 down to 70
+  CHECK(t.KeyBelow(70) == 64 && t.KeyAbove(70) == 128);
+  t.TakeKey(g, t, 128, base);
+  CHECK(std::memcmp(g.Ram(first, size), before[128].data(), size) == 0 && g.Read32(net::DOL_RNG) == rng_before[128]);
+  t.Rebase(g, 128, true);
+  // the entries from 128 on are gone from the log at once and let go over the next steps (counted until then)
+  CHECK(t.Holds().steps == 128 && t.LogBytes() == full && t.Oldest() == 0);
+  t.RestoreTo(g, 128, 70);
+  CHECK(std::memcmp(g.Ram(first, size), before[70].data(), size) == 0 && g.Read32(net::DOL_RNG) == rng_before[70]);
+  // the log goes on from there as from any restore: step 70 run, then back again, exactly
+  g.Write32(first + 8, 0x12345678);
+  t.SaveStep(g, 71, true);
+  t.RestoreTo(g, 71, 70);
+  CHECK(std::memcmp(g.Ram(first, size), before[70].data(), size) == 0);
+  CHECK(t.LogBytes() < full);  // (a step saved: 128 of the 172 entries dropped let go)
+  // a forward jump: the key below, the log rebased there with nothing kept below it
+  t.TakeKey(g, t, 192, base);
+  t.Rebase(g, 192, false);
+  CHECK(std::memcmp(g.Ram(first, size), before[192].data(), size) == 0);
+  CHECK(t.Oldest() == 192 && t.Holds().steps == 0);
+  for (u32 step = 192; step < 196; ++step)
+  {
+    g.Write32(first + 16, step);
+    t.SaveStep(g, step + 1, true);
+  }
+  CHECK(t.Holds().steps == 4 && t.LogBytes() < full / 2);  // (every entry dropped let go by now)
+  t.RestoreTo(g, 196, 192);
+  CHECK(std::memcmp(g.Ram(first, size), before[192].data(), size) == 0);
+  const std::size_t keys = t.KeyBytes();
+  t.DropKey(256);
+  t.DropKey(255);  // (no key there)
+  CHECK(t.KeyAbove(193) == 0xFFFFFFFF && t.KeyBytes() < keys && t.KeyBelow(300) == 192);
+  t.Stop();
+}
+
 // A write into the game's memory by another thread than the game's. The emulator's picture thread clears
 // the destination of a frame-buffer copy when it comes to the copy, milliseconds after the game asked for it. The
 // game asked while its memory stood at the present, where the destination is a buffer; the clear arrives after a

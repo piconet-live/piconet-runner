@@ -28,7 +28,10 @@ using u8 = std::uint8_t;
 
 constexpr u32 WINDOW = 18000;    // the rewind's reach in steps: five minutes at 60 steps a second
 constexpr u32 MOST_REACH = 18000;  // the most a game mode's `rewind` may say (protocol modes.toml, setup word 27)
-constexpr u32 KEY_EVERY = 128;   // a whole copy of the race's memory every so many steps (the scrubber's)
+// a whole copy of the race's memory every so many steps (as the scrubber keeps its front's): a long move runs at most
+// KEY_EVERY - 1 steps again, some 14 ms at 64 (a step run again: about 0.24 ms, Green Plant Spiral, alone; at 128 a
+// frame took 30 to 34 ms), and the keys take about 0.8 MiB each (some 220 MiB over five minutes)
+constexpr u32 KEY_EVERY = 64;
 constexpr u32 COUNTDOWN = 60;    // displayed frames between the resume and the race running on (1 s)
 
 // The pad as the game reads it (PADStatus, main.rel .bss 0x998: the buttons, then the stick): the player's own
@@ -111,8 +114,9 @@ public:
   const Counts& Count() const { return m_counts; }
   u32 Misses() const { return m_misses; }
 
-  // Keys. A key is taken before a step that WantsKey; a move to the moment before `step` starts from KeyFor(step)
-  // and runs the steps from there (their inputs: the session's log). Keys that went out of the buffer, or past a
+  // Keys. A key is taken before a step that WantsKey; a long move to the moment before `step` starts from a key: back,
+  // from the one above it, through the undo log's entries; forwards, from KeyFor(step), running the steps from there
+  // (their inputs: the session's log; practice_session.cpp, Reach). Keys that went out of the buffer, or past a
   // branch, are handed out once by TakeDropped. Steps below FinalBelow can no longer change: the replay may write them.
   bool WantsKey(u32 step) const { return step >= m_first && (step - m_first) % KEY_EVERY == 0; }
   u32 KeyFor(u32 step) const { return step < m_first ? m_first : step - (step - m_first) % KEY_EVERY; }
