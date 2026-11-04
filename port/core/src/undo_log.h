@@ -172,7 +172,14 @@ struct PackedUnit
 struct Tracking
 {
   bool tracking = false;
+  bool tells = true;  // Rollback(tells): this log tells the host's other threads what it puts back
   u32 region = 0;  // physical start of the tracked memory
+  // Rollback::Moments: this log's own count, and the memory it was started on
+  u32 moments = 0;
+  const Host* home = nullptr;
+  // Rollback::TakeDirty: per page, its content may have changed since the last take; every page (after a Start)
+  std::vector<u8> dirty;
+  bool all_dirty = true;
   std::vector<u8> shadow;
   std::vector<u8> scratch_shadow;  // the locked cache (Host::Scratch) as it was before the previous step; empty: none
   std::array<u8, 4> shadow_rng{};
@@ -325,6 +332,14 @@ void ApplyEntries(Guest& g, const Tracking& s, u32 from, u32 t);
 void ExchangeMoment(Guest& g, const Tracking& a, const Tracking& b, Rollback::Moment& m, bool copy);
 void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step);
 void DiscardChanges(Guest& g, Tracking& s);
+// Rollback::TakeOver's memory and history (undo_moments.cpp).
+void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 from, u32 to);
+// A page's content may have changed (Rollback::TakeDirty).
+inline void Dirty(Tracking& s, u32 off)
+{
+  if (off / PAGE < s.dirty.size())
+    s.dirty[off / PAGE] = 1;
+}
 // undo_pack.cpp
 void PackStep(Host& host, Tracking& s, u32 step);
 bool EnsureEntries(Host& host, Tracking& s, u32 from, u32 to);

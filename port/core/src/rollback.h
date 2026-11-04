@@ -69,7 +69,10 @@ struct Work
 class Rollback
 {
 public:
-  Rollback();
+  // `tells`: this log's put-back ranges are the ones the host's other threads ask about (fzgx::UnderRollback) once
+  // it starts. False for a log over a private memory (the deep-rollback worker's, rollback_worker.cpp): the game's
+  // memory is not what it puts back.
+  explicit Rollback(bool tells = true);
   ~Rollback();
   Rollback(const Rollback&) = delete;
   Rollback& operator=(const Rollback&) = delete;
@@ -111,9 +114,13 @@ public:
   // The step about to run, counted from "go".
   static u32 Step(const Guest& g);
   // A count that grows whenever the memory becomes another moment than a rollback's RestoreTo makes it: a race's
-  // undo log started or stopped, the scrubber's exchanges, applied entries, adoptions, keys and discards. The
-  // per-machine rollback keeps a step's last run only while it holds (the adapter's lanes_partial.h).
-  static u32 Moments();
+  // undo log started or stopped, the scrubber's exchanges, applied entries, adoptions, keys and discards. Per log:
+  // the times this log made its own memory (the one it was started on) another moment; an operation on another
+  // memory (Apply onto the deep-rollback worker's) leaves it. Per memory: every log's operations on that memory, the
+  // count the per-machine rollback keeps a step's last run by (the adapter's lanes_partial.h; core.h,
+  // RollbackMoments). TakeOver moves neither: the moments below its first step stay true.
+  u32 Moments() const;
+  static u32 Moments(const Host& memory);
 
   // Checksum. Of the simulation's state as it is now (the machines' blocks and progress records).
   static u32 Checksum(Guest& g);
@@ -154,6 +161,34 @@ public:
   // Whatever changed in the memory since the last SaveStep is put back (a displayed frame that ran no step of
   // this moment).
   void Discard(Guest& g);
+
+  // The deep-rollback worker (rollback_worker.cpp): a second memory `gw` that ran steps `from` to `to` - 1 again
+  // under `worker`'s log, both logs having saved step `to`, and holding the same moment before `from`. The memory
+  // before step `to` becomes the worker's: every block either log's entries of those steps name (the predicted
+  // timeline's here, the corrected one's there) is copied from `gw` into the memory and this log's shadow, with the
+  // locked cache less its kept part and the generator word; the kept parts and untracked pages stay as they are, as
+  // a restore leaves them. The worker's entries of those steps move into this log in place of its own (no copy), the
+  // pages it watches are watched here too, and the checksum ring and the input rows of those steps are copied from
+  // `gw`'s window. A later RestoreTo to any step from `from` on gives the moment the worker had there. Memory outside
+  // the log is not touched.
+  void TakeOver(Guest& g, Rollback& worker, const Guest& gw, u32 from, u32 to);
+  // The pages (offsets in the tracked memory) whose content may have changed since the last call: those this log
+  // logged, put back or wrote, every untracked page and every page holding a kept part (they change unlogged); all
+  // of them after a Start. What a copy of the memory must take again to be the memory once more.
+  std::vector<u32> TakeDirty();
+  // The words (guest addresses) where `other`'s memory differs from `g`'s over what a restore of this log puts back:
+  // the tracked memory less untracked pages and kept parts, the locked cache less its kept part (as 0xE0000000 on),
+  // the generator word. The count; the first `most` into `words`. `ignore` (sorted guest addresses): words left out.
+  u32 Compare(const Guest& g, const Guest& other, std::vector<u32>* words, std::size_t most,
+              const std::vector<u32>* ignore = nullptr) const;
+  // The moments of two logs compared: from the present of each (`g` for this log, `other_memory` for `other`'s),
+  // the moments before steps `to` - 1 down to `from` as a restore would make them, over every block either log's
+  // entries of those steps name, the locked cache and the generator word, but for the words `ignore` names. The
+  // highest step whose moment before it differs (`to` when the presents differ there already); 0xFFFFFFFF: none.
+  u32 CompareMoments(const Guest& g, const Rollback& other, const Guest& other_memory, u32 from, u32 to,
+                     const std::vector<u32>* ignore = nullptr) const;
+  // The first guest address of the tracked memory (0 when not active).
+  u32 Region() const;
 
   // From now on every page this log has seen change stays watched (with the guard, none rests): called on both
   // logs of two moments, whose exchanges, keys and adoptions take the pages either log watches as every page where

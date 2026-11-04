@@ -31,6 +31,8 @@ void TestTheLockedCacheInTheUndoLog();
 void TestTheRollbackInterface();
 void TestChecksum();
 void TestTheSpareListsAreBounded();
+void TestTheWorkersTakeOver();
+void TestRollbackMomentsPerLog();
 void TestARollbackLeavesTheWindow();
 // test_rollback_state.cpp
 void TestRollbacksStateList();
@@ -479,6 +481,8 @@ int main(int argc, char** argv)
   TestARollbackLeavesTheWindow();   // before any Init: the core's log then has no host to go to
   TestChecksum();
   TestTheSpareListsAreBounded();
+  TestTheWorkersTakeOver();
+  TestRollbackMomentsPerLog();
   TestRaceFromAMatchFile();
   TestAReplaysLineup();
   TestAReplayThatIsNotPlayed();

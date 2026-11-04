@@ -5,8 +5,11 @@
 
 #include "undo_log.h"
 
+#include "page_guard.h"
+
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <utility>
@@ -115,6 +118,90 @@ void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step)
     it = EraseEntry(s, it);
   s.first_step = step;
   s.final_below = 0;
+}
+
+void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 from, u32 to)
+{
+  u8* live = g.Ram(s.region, s.shadow.size());
+  const u8* other = gw.Ram(s.region, s.shadow.size());
+  if (live == nullptr || other == nullptr || w.region != s.region || w.shadow.size() != s.shadow.size())
+    return;
+  // what the worker watched is watched here too (open under the guard, as a page that becomes watched is)
+  for (const u32 off : w.watched_list)
+  {
+    if (s.watched[off / PAGE] || s.untracked[off / PAGE])
+      continue;
+    Watch(s, off);
+    if (s.guarding)
+      guard::Open(off / PAGE);
+  }
+  const std::vector<u8> kept = KeptParts(s, live);
+  // the blocks either timeline changed since the moment both held: a bit a block, then copied in order
+  std::vector<u64> named((s.shadow.size() / BLOCK + 63) / 64, 0);
+  const auto name = [&](const Tracking& t) {
+    for (u32 k = from; k < to; ++k)
+    {
+      const auto it = t.undo.find(k);
+      if (it == t.undo.end())
+        continue;
+      for (const auto& block : it->second.blocks)
+        named[block.first / BLOCK / 64] |= u64{1} << (block.first / BLOCK % 64);
+    }
+  };
+  name(s);
+  name(w);
+  Blocks copied;  // (for the check's shadow of Debug::undo_log "both": the content each block takes)
+  for (std::size_t i = 0; i < named.size(); ++i)
+  {
+    for (u64 bits = named[i]; bits != 0; bits &= bits - 1)
+    {
+      const u32 off = static_cast<u32>((i * 64 + static_cast<std::size_t>(std::countr_zero(bits))) * BLOCK);
+      if (s.untracked[off / PAGE])
+        continue;
+      std::memcpy(live + off, other + off, BLOCK);
+      std::memcpy(s.shadow.data() + off, other + off, BLOCK);
+      Dirty(s, off);
+      if (s.way == Tracking::Way::Both)
+      {
+        auto& block = copied.emplace_back();
+        block.first = off;
+        std::memcpy(block.second.data(), other + off, BLOCK);
+      }
+    }
+  }
+  // the kept parts stay as the present leaves them, as a restore leaves them
+  PutKeptParts(s, live, kept);
+  PutKeptParts(s, s.shadow.data(), kept);
+  if (s.way == Tracking::Way::Both)
+  {
+    CheckRestored(g, s, copied);
+    CheckKept(g, s);
+  }
+  u8* scratch = s.scratch_shadow.empty() ? nullptr : g.GetHost().Scratch();
+  const u8* their_scratch = s.scratch_shadow.empty() ? nullptr : gw.GetHost().Scratch();
+  if (scratch != nullptr && their_scratch != nullptr)
+  {
+    EachScratchStretch(std::min<std::size_t>(s.scratch_shadow.size(), gw.GetHost().ScratchSize()),
+                       [&](std::size_t at, std::size_t size) {
+                         std::memcpy(scratch + at, their_scratch + at, size);
+                         std::memcpy(s.scratch_shadow.data() + at, their_scratch + at, size);
+                       });
+  }
+  gw.CopyFrom(s.shadow_rng.data(), DOL_RNG, 4);
+  g.CopyTo(DOL_RNG, s.shadow_rng.data(), 4);
+  // the history: this log's entries of those steps go, the worker's move in
+  for (u32 k = from; k < to; ++k)
+  {
+    if (const auto it = s.undo.find(k); it != s.undo.end())
+      EraseEntry(s, it);
+    if (auto it = w.undo.find(k); it != w.undo.end())
+    {
+      w.undo_bytes -= EntryBytes(it->second);
+      s.undo_bytes += EntryBytes(it->second);
+      s.undo[k] = std::move(it->second);
+      w.undo.erase(it);
+    }
+  }
 }
 
 void DiscardChanges(Guest& g, Tracking& s)
