@@ -173,6 +173,7 @@ struct Async
   u32 started_at = 0, depth = 0, frames = 0, j_pred = 0;
   std::vector<u32> time_words;  // the task nodes' time words of W at R (nodes that leave the lists in the job)
   u32 moves = 0;  // S3: the times this job (and the jobs it started again from) was sent back
+  u64 since = 0;          // S4: the frame of the oldest correction this job runs (its delay at the adoption)
   bool below = false;     // S4: a correction below R was left to the chain (the job's base is not the session's)
   u32 perturb_at = NONE;  // tests ("perturb"): W's row of this step altered, as a misprediction would be
   bool check_pending = false;   // "async-check": the adoption of [check_from, check_to) to compare at check_to's hook
@@ -225,6 +226,11 @@ struct Rule
   u64 provisional = 0, clean = 0, chains = 0, chain_frames = 0, chain_high = 0, chained_jobs = 0, deferred = 0;
   u32 behind_high = 0;  // steps from a job's R to its adoption, at most
   std::map<u64, u64> chain_seen;
+  // a correction's delay: from the frame a row first missed a job (or a job started for it) to the adoption of the
+  // job that runs it (frames; the next job's own frames included)
+  u64 late_since = ~u64{0};  // the first frame a late row was seen since the last job's start
+  std::map<u64, u64> delay_seen;
+  u64 delay_sum = 0, delay_n = 0, delay_high = 0;
   // "async-check"
   u64 checked = 0, check_memory = 0, check_words = 0, check_moments = 0, check_rings = 0, check_kept = 0;
   u32 frame_manager = 0;  // [.bss 0xDAC] at the last comparison (the frame's words' manager)
@@ -1037,6 +1043,7 @@ void WorkerCompare(Guest& g, Session& s, u32 t)
 void Late(u32 from)
 {
   Rule& r = s_r;
+  r.late_since = std::min(r.late_since, r.frame_no);
   if (!r.chain)
   {
     r.chain = true;
@@ -1297,6 +1304,13 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     ++s_r.j_seen[a.frames];
     ++s_r.moves_adopted[a.moves];
     s_r.behind_high = std::max(s_r.behind_high, step - from);
+    {
+      const u64 delay = s_r.frame_no - a.since;
+      ++s_r.delay_seen[delay];
+      s_r.delay_sum += delay;
+      ++s_r.delay_n;
+      s_r.delay_high = std::max(s_r.delay_high, delay);
+    }
     s_r.kind = K_ADOPT;
     s_r.adopt_us += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
     if (clean)
@@ -1467,6 +1481,8 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   if (const u32 n = TheOptions().debug.worker_perturb; n != 0 && !s_r.chain && (s_r.jobs + 1) % n == 0)
     a.perturb_at = wrong + 1;  // (tests: W's row of the job's second step altered, its first misprediction's model)
   s_r.chained_jobs += s_r.chain;
+  a.since = std::min(s_r.late_since, s_r.frame_no);
+  s_r.late_since = ~u64{0};
   a.open = true;
   a.begun = false;
   a.started_at = step;
@@ -1545,9 +1561,15 @@ void WorkerStop()
   std::string lags;
   for (const auto& [lag, n] : r.chain_seen)
     lags += std::format(" {}:{}", lag, n);
+  std::string delays;
+  for (const auto& [d, n] : r.delay_seen)
+    delays += std::format(" {}:{}", d, n);
+  Notice("fzgx: rollback worker S4: correction delay (frames from a correction's first frame to its job's adoption): "
+         "{:.2f} on average, at most {} (by delay:{})", r.delay_n ? double(r.delay_sum) / r.delay_n : 0.0, r.delay_high,
+         delays.empty() ? std::string(" none") : delays);
   Notice("fzgx: rollback worker S4: chaining: adopted {} with the session's rows, {} on rows that changed since "
-         "(provisional); jobs chained {}; corrections below a job's R left to the chain {}; chains {}, frames behind "
-         "{} in all, at most {} (by lag:{}); a job's R to its adoption at most {} steps; jobs started with the worker at a frame a step or slower {}",
+         "(provisional); jobs chained {}; corrections below a job's R left to the chain {}; chains (to an adoption with the session's rows) {}, "
+         "frames {} in all, at most {} (by length:{}); a job's R to its adoption at most {} steps; jobs started with the worker at a frame a step or slower {}",
          r.clean, r.provisional, r.chained_jobs, r.deferred, r.chains, r.chain_frames, r.chain_high,
          lags.empty() ? std::string(" none") : lags, r.behind_high, r.slow);
   if (AsyncCheck())
