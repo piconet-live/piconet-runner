@@ -134,7 +134,8 @@ std::vector<Setting> Switches(const Options& o, const Environment& environment)
   }
   if (!o.aurora_colourblind.empty() && o.aurora_colourblind != "off")
     list.Set("AURORA_COLOURBLIND", o.aurora_colourblind);
-  // (the step ahead's skip, AURORA_RUNAHEAD_SKIP, is on by default with it: runahead.cpp; a test's 0 stays)
+  // (the step ahead's skip, AURORA_RUNAHEAD_SKIP, is on by default with it: runahead.cpp; a test's 0 stays. The set's
+  // AURORA_REDRAW=1 also turns on AURORA_RUNAHEAD_AFTER by default, so there is no step ahead at all; a test's 0 brings it back)
   if (o.aurora_high_refresh != 0)
   {
     list.Set("AURORA_RUNAHEAD", std::to_string(o.aurora_high_refresh));
