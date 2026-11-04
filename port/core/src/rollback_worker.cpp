@@ -12,12 +12,14 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <cstdlib>
 #include <cstring>
 #include <format>
 #include <iterator>
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "files.h"
@@ -292,26 +294,48 @@ void Outside(u32 region, u32 ram_size, Each&& each)
 }
 }  // namespace
 
+std::string ModeFor(const std::string& key, const char* env, unsigned cores)
+{
+  if (!key.empty())
+    return key;
+  if (env != nullptr && (std::string_view(env) == "off" || std::string_view(env) == "on"))
+    return env;
+  return cores >= LEAST_CORES ? "on" : "off";
+}
+
+const std::string& Mode()
+{
+  static const char* const env = std::getenv("FZGX_ROLLBACK_WORKER");
+  static const unsigned cores = std::thread::hardware_concurrency();
+  thread_local std::string key, mode;  // (the options' mode, and what it gave)
+  if (mode.empty() || key != TheOptions().debug.worker_mode)
+  {
+    key = TheOptions().debug.worker_mode;
+    mode = ModeFor(key, env, cores);
+  }
+  return mode;
+}
+
 bool On()
 {
-  return !TheOptions().debug.worker_mode.empty() && TheOptions().debug.worker_mode != "off";
+  return Mode() != "off";
 }
 
 // S2's thread: "on"; "sync" measures the same frames with no worker (the baseline).
 bool Threaded()
 {
-  return TheOptions().debug.worker_mode == "on" || TheOptions().debug.worker_mode == "async-check";
+  return Mode() == "on" || Mode() == "async-check";
 }
 
 bool Measuring()
 {
-  return Threaded() || TheOptions().debug.worker_mode == "sync";
+  return Threaded() || Mode() == "sync";
 }
 
 // S3's "async-check": every adoption is compared word for word with the sync rollback from its R instead.
 static bool AsyncCheck()
 {
-  return TheOptions().debug.worker_mode == "async-check";
+  return Mode() == "async-check";
 }
 
 void SetPipePerThread(bool per_thread)
@@ -615,7 +639,7 @@ void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from)
 {
   if (w.mode.empty())
   {
-    w.mode = TheOptions().debug.worker_mode;
+    w.mode = Mode();
     w.depth = std::max<u32>(TheOptions().debug.worker_depth, 1);
   }
   Host& host = g.GetHost();
@@ -1392,7 +1416,7 @@ void WorkerStop()
          "seen{} (average {:.2f}, foreseen {:.2f}, at most {}); worker {} steps, {} went back, a step {:.2f} ms (the "
          "game's {:.2f}), a frame's own {:.2f} ms; game's thread: starts {:.0f} us, begins {:.0f} us, adoptions {:.0f} "
          "us, waits for the worker {} ({:.0f} us)",
-         TheOptions().debug.worker_mode, std::max<u32>(TheOptions().debug.worker_depth, 1),
+         Mode(), std::max<u32>(TheOptions().debug.worker_depth, 1),
          std::thread::hardware_concurrency(), r.jobs, r.jobs ? double(r.d_sum) / r.jobs : 0.0, r.adopted, r.gave_up,
          r.cancelled, r.too_long, r.rewinds_asked, r.barred_countdown, r.barred_finish, r.barred_other, r.sync_fit, js,
          r.adopted ? double(r.j_sum) / r.adopted : 0.0, r.adopted ? double(r.j_pred_sum) / r.adopted : 0.0, r.j_high,

@@ -89,8 +89,9 @@ struct Debug
   // live race's counts). The contact task always runs whole: a file asking for contact jobs ("contact") or the
   // "trace" mode is refused
   std::string partial_mode;
-  // "rollbackWorker": the deep-rollback worker's stage S1 (fzgx/rollback_worker.h): "off" (the default), "compare" or
-  // "check", alone or as {"mode", "depth"} (the least depth a job takes, 7 by default)
+  // "rollbackWorker": the deep-rollback worker (fzgx/rollback_worker.h): "off", "compare", "check", "sync", "on" or
+  // "async-check", alone or as {"mode", "depth"} (the least depth a job takes, 7 by default); empty (not named): "on"
+  // with at least 4 hardware threads unless FZGX_ROLLBACK_WORKER=off (rollback_worker::ModeFor)
   std::string worker_mode;
   u32 worker_depth = 7;
   std::string worker_rule = "fit";  // "rule": "fit" (S2: sync when the frame fits) or "always" (tests: every job async)

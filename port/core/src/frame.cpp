@@ -362,8 +362,8 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, bool ch
   // frame that settles the race: every step is checked there.
   const u32 hold = settle ? 0 : forcing.deepest;
   const u32 known = hold == 0 ? arrived : std::max(s.checked, std::min(arrived, step > hold ? step - hold : 0));
-  // (the deep-rollback worker's thread, off by default: an open job adopted here, or the step a job given up goes back
-  // to; while one is open, its own steps' rows are its own: fzgx/rollback_worker.h)
+  // (the deep-rollback worker's thread, on from 4 hardware threads: an open job adopted here, or the step a job given
+  // up goes back to; while one is open, its own steps' rows are its own: fzgx/rollback_worker.h)
   std::optional<u32> wrong;
   const std::optional<u32> fall_back = WorkerFrame(g, s, step, settle, check);
   for (u32 t = s.checked; t < WorkerSearchTo(arrived); ++t)
@@ -400,7 +400,7 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, bool ch
   u32 run_from = wrong.value_or(step);
   if (wrong)
   {
-    WorkerPrepare(g, s, step, run_from);  // (the deep-rollback worker, off by default: fzgx/rollback_worker.h)
+    WorkerPrepare(g, s, step, run_from);  // (the deep-rollback worker: fzgx/rollback_worker.h)
     s.rollback.RestoreTo(g, step, run_from);
     WorkerAfterRestore(g, s);
     ++s.rollbacks;

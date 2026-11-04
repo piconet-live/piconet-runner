@@ -33,6 +33,7 @@ void TestChecksum();
 void TestTheSpareListsAreBounded();
 void TestTheWorkersTakeOver();
 void TestRollbackMomentsPerLog();
+void TestTheWorkersDefault();
 void TestARollbackLeavesTheWindow();
 // test_rollback_state.cpp
 void TestRollbacksStateList();
@@ -484,6 +485,7 @@ int main(int argc, char** argv)
   TestTheSpareListsAreBounded();
   TestTheWorkersTakeOver();
   TestRollbackMomentsPerLog();
+  TestTheWorkersDefault();
   TestRaceFromAMatchFile();
   TestAReplaysLineup();
   TestAReplayThatIsNotPlayed();

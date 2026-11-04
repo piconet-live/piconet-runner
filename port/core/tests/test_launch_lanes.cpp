@@ -56,7 +56,7 @@ void TestThePartialRollbackKeys()
   CHECK(Refused(with(R"({"mode": "check", "depth": 3})"), "\"debug.partialRollback.depth\" is not a setting"));
 }
 
-// "debug.rollbackWorker": the deep-rollback worker's S1 (fzgx/rollback_worker.h), off unless a test asks: a mode
+// "debug.rollbackWorker": the deep-rollback worker (fzgx/rollback_worker.h); not named, the mode stays empty (on by default: ModeFor): a mode
 // alone or {"mode", "depth"}.
 void TestTheRollbackWorkerKeys()
 {

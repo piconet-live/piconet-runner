@@ -2,6 +2,7 @@
 // S1): TakeOver, the per-log and per-memory Moments, the dirty pages and the two comparisons.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "fzgx/rollback_worker.h"
 #include "harness.h"
 #include "undo_log.h"
 
@@ -232,4 +233,21 @@ void TestRollbackMomentsPerLog()
   one.Stop();
   two.Stop();
   CHECK(one.Moments() == 3 && two.Moments() == 2 && net::Rollback::Moments(b) == mb + 3);
+}
+
+// The worker's mode (S3's default): the launch file's when it names one, else FZGX_ROLLBACK_WORKER's "off" or "on",
+// else on from 4 hardware threads.
+void TestTheWorkersDefault()
+{
+  using fzgx::rollback_worker::ModeFor;
+  CHECK(ModeFor("", nullptr, 16) == "on");
+  CHECK(ModeFor("", nullptr, 4) == "on");
+  CHECK(ModeFor("", nullptr, 3) == "off");
+  CHECK(ModeFor("", nullptr, 0) == "off");  // (hardware_concurrency unknown)
+  CHECK(ModeFor("", "off", 16) == "off");
+  CHECK(ModeFor("", "on", 2) == "on");
+  CHECK(ModeFor("", "yes", 16) == "on" && ModeFor("", "", 2) == "off");  // (another value is not taken)
+  CHECK(ModeFor("off", "on", 16) == "off");
+  CHECK(ModeFor("on", "off", 2) == "on");
+  CHECK(ModeFor("async-check", nullptr, 16) == "async-check");
 }

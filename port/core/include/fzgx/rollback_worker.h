@@ -1,7 +1,8 @@
 // The deep-rollback worker, stage S1 (research/study-rollback-second-core.md, sections 1 to 3 and 10): a deep
 // rollback's steps run again by a second CPU context over a private memory W, with a Rollback log of its own, on the
-// game's thread for now (the thread is S2). The launch file's "debug.rollbackWorker" (off by default; with it off
-// nothing here runs and nothing the game computes changes):
+// game's thread for now (the thread is S2). The mode is the launch file's "debug.rollbackWorker", else
+// FZGX_ROLLBACK_WORKER, else "on" from 4 hardware threads (ModeFor); with it "off" nothing here runs and nothing the
+// game computes changes:
 //   - "compare": every rollback at least `depth` steps deep (7 by default) is run on W first: at the frame's network
 //     hook, before the restore, W takes the pages of the game's memory either log has seen change since the last job
 //     (Rollback::TakeDirty) and the memory outside the log whole, is rewound to the rollback's step R by the game's
@@ -36,6 +37,13 @@
 
 namespace fzgx::rollback_worker
 {
+// The worker's mode: the launch file's "debug.rollbackWorker" when it names one; else FZGX_ROLLBACK_WORKER ("off" or
+// "on"; another value is not taken); else "on" with at least 4 hardware threads and "off" below (S3, the default
+// since 4 November 2026: the study's section 13). `key` the launch file's mode ("" when it names none), `env` the
+// variable (nullptr when unset), `cores` std::thread::hardware_concurrency().
+std::string ModeFor(const std::string& key, const char* env, unsigned cores);
+// This game's: ModeFor of its options, its environment and its machine.
+const std::string& Mode();
 // The switch is on (compare, check, sync or on).
 bool On();
 // S2: "on", jobs on the worker's thread (and the machine has the cores; the thread is the adapter's).
