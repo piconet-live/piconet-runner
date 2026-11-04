@@ -27,8 +27,12 @@
 //     has them); steps from R stay open until then. S4, chaining: a row that changes under a step W has run, or a
 //     correction below R, waits for the next job: W parked at A is adopted as it ran (`used` and the replay's ring hold
 //     the rows its steps ran on), the session's check then finds the first step whose row differs and the next job
-//     starts from it at once, however shallow; no deadline and no restart. The race's end checked or a job given up:
-//     the job stops and the game's sync rollback runs from its step.
+//     starts from it at once, however shallow; no deadline and no restart. A forced rollback (tests) on a step W has run is
+//     owed to the chain the same way: the next job starts there. The bounds: a job whose span or correction delay
+//     passes "catchUp" (60 steps or frames) stops and one sync rollback from its R catches up; a worker whose step
+//     takes "slowStepUs" (6 ms) or more over 60 steps, twice in a row, switches the race to sync rollbacks (a new race
+//     tries it again); no job starts deeper than "catchUp" or is adopted past 512 steps. The race's end checked or a
+//     job given up: the job stops and the game's sync rollback runs from its step.
 //   - "sync": the same frame counts and measurements with no worker, the baseline for "on".
 // SPDX-License-Identifier: GPL-3.0-or-later
 

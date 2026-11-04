@@ -52,10 +52,12 @@ constexpr u32 W_EXTRA = 1000;                       // W never reaches a frame's
 // (DolRecomp before its per-thread pipe) a store there on W would land in the game's pipe: then a job starts only
 // after the countdown's end (and before any machine has finished). With the pipe per thread W's bytes are dropped.
 constexpr u32 COUNTDOWN_END = 422;
-// A - R at most for a job's start. S4: was 30 (per-machine rollback keeps 32 runs, lanes_partial.h KEEP), but a run
-// not kept only means that step re-runs whole (PartialForget over-forgets harmlessly); a chain that falls behind
-// must still start its next job. The input and checksum rings hold 1024 steps.
-constexpr u32 MOST_SPAN = 900;
+// A - R at most for an adoption: TakeOver hands over the input and checksum rings' last 1024 steps, so far below that
+// on every path. A job's start is barred deeper than "catchUp" (60), and an open job past it is caught up sync
+// (S4; was 30 for the start, lanes_partial.h KEEP, but a run not kept only means that step re-runs whole).
+constexpr u32 MOST_ADOPT = 512;
+static_assert(MOST_ADOPT < 1024 && MOST_ADOPT > 256, "far below the rings, above the largest \"catchUp\"");
+constexpr u32 RATE_WINDOW = 60;  // W's steps per measurement of its rate ("slowStepUs"); two slow in a row switch
 constexpr u32 LEAST_CORES = 4;    // below it, no thread (study section 7, decision 5)
 constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
 constexpr double MARGIN_MS = 1.5;      // run-ahead's MARGIN_MS: room kept before the field
@@ -166,6 +168,8 @@ struct Async
   bool mid_step = false; // ... part way through a step
   std::string why;
   double r_ms = 0;       // the worker's step lately
+  double ran_sum_ms = 0;  // every step's time summed, and their count (the slow worker's switch)
+  u64 ran_n = 0;
   u64 steps = 0, rewinds = 0, waits = 0;
   std::chrono::steady_clock::time_point left{};  // the hook last returned (the worker's)
   // the game's thread's own
@@ -202,15 +206,14 @@ struct Rule
   u64 frames[KINDS] = {}, late[KINDS] = {}, drawn[KINDS] = {};
   double busy_sum[KINDS] = {}, busy_high[KINDS] = {};
   // the jobs
-  u64 jobs = 0, adopted = 0, gave_up = 0, cancelled = 0, too_long = 0, rewinds_asked = 0, sync_fit = 0,
+  u64 jobs = 0, adopted = 0, gave_up = 0, cancelled = 0, rewinds_asked = 0, sync_fit = 0,
       barred_countdown = 0, barred_other = 0, barred_finish = 0, waited_idle = 0;
   u64 j_sum = 0, j_pred_sum = 0, j_high = 0, d_sum = 0;
   std::map<u32, u64> j_seen;
   double start_us = 0, adopt_us = 0, begin_us = 0, idle_us = 0;
   u64 adopt_words = 0;
-  // S3: the restarts' cap
+  // S3: the restarts ("restarts")
   u32 restart_moves = 0;  // a job just stopped for a correction below its R: its moves + 1, for the job after it
-  u64 capped = 0;
   std::map<u32, u64> moves_adopted, moves_fell, fell_depth;
   u64 fell = 0, fell_depth_sum = 0;
   u64 unwatched = 0;  // jobs given up at their park for a page neither log watched
@@ -231,6 +234,18 @@ struct Rule
   u64 late_since = ~u64{0};  // the first frame a late row was seen since the last job's start
   std::map<u64, u64> delay_seen;
   u64 delay_sum = 0, delay_n = 0, delay_high = 0;
+  // S4: a step the chain owes a rerun from that the session's check cannot find (a forced rollback, tests, on a step W
+  // has run or below R; no row differs): the next job starts there right after the adoption, or the sync rollback of
+  // a job that ends without one goes back there. Steps from it stay open.
+  u32 owed = NONE;
+  u64 owed_n = 0, forced_ahead = 0;
+  // S4, the bounds: catch-ups (a job past "catchUp" stopped, its rollback sync) and the slow worker's switch
+  u64 catch_ups = 0, catch_up_depth_high = 0, switches = 0, barred_slow = 0, barred_deep = 0;
+  bool switched = false;     // this race's rollbacks run sync (W too slow)
+  u32 switched_starts = 0;   // the game's log's Starts at the switch (a new count: a new race, the worker again)
+  u64 window_n = 0;          // Async::ran_n and ran_sum_ms at the last measurement
+  double window_ms = 0, rate_high = 0;
+  u32 strikes = 0;
   // "async-check"
   u64 checked = 0, check_memory = 0, check_words = 0, check_moments = 0, check_rings = 0, check_kept = 0;
   u32 frame_manager = 0;  // [.bss 0xDAC] at the last comparison (the frame's words' manager)
@@ -441,6 +456,8 @@ bool HookThreaded()
   Async& a = s_a;
   Guest& gw = *w.g;
   u32 t = gw.Read32(net::STEP);
+  if (const u32 delay = TheOptions().debug.worker_delay_us; delay != 0)
+    std::this_thread::sleep_for(std::chrono::microseconds(delay));  // (tests, "delayUs": a slow PC's worker)
   const auto now = std::chrono::steady_clock::now();
   const double ran_ms = std::chrono::duration<double, std::milli>(now - a.left).count();
   if (t > 0)
@@ -474,7 +491,11 @@ bool HookThreaded()
     return false;
   }
   if (t > a.from + 1 || a.steps != 0)
+  {
     a.r_ms = a.r_ms == 0 ? ran_ms : a.r_ms + (ran_ms - a.r_ms) / 8;
+    a.ran_sum_ms += ran_ms;
+    ++a.ran_n;
+  }
   a.at = t;
   for (;;)
   {
@@ -1144,10 +1165,58 @@ void CloseJob(const char* why)
   a.open = a.begun = false;
 }
 
-// S3: the restarts' cap ("restarts", 0: none): a job sent back more often runs sync from its R instead.
-bool Capped(u32 moves)
+// S3, S4: a job stopped for a correction below its R and started again from it, while it has been restarted fewer
+// times than "restarts" allows (0 by default: never); past that the correction is the chain's (WorkerTakes).
+bool MayRestart(u32 moves)
 {
-  return moves > TheOptions().debug.worker_restarts;
+  return moves <= TheOptions().debug.worker_restarts;
+}
+
+// The step a sync rollback of the open job must go back to: its R, or lower, the step the chain owes a rerun from
+// (cleared: the sync rollback runs it), or ("async-check") the chain's first R, which its comparison runs from.
+u32 SyncFrom(u32 from)
+{
+  from = std::min(from, std::exchange(s_r.owed, NONE));
+  return s_r.chain && AsyncCheck() ? std::min(from, s_r.chain_from) : from;
+}
+
+// S4 (b): W's step rate over its last RATE_WINDOW steps, at every frame; two measurements in a row at "slowStepUs" or
+// slower and this race's rollbacks run sync (the chain would fall behind every frame: catch-up after catch-up). A new
+// race (the game's log started again) tries the worker again.
+void WatchRate(Session& s)
+{
+  Rule& r = s_r;
+  const u32 limit_us = TheOptions().debug.worker_slow_us;
+  if (limit_us == 0 || !Threaded())
+    return;
+  if (r.switched && s.rollback.Starts() != r.switched_starts)
+  {
+    r.switched = false;
+    r.strikes = 0;
+    Notice("fzgx: rollback worker: a new race: the worker's thread again");
+  }
+  double sum;
+  u64 n;
+  {
+    const std::lock_guard lock(s_a.m);
+    sum = s_a.ran_sum_ms;
+    n = s_a.ran_n;
+  }
+  if (r.switched || n - r.window_n < RATE_WINDOW)
+    return;
+  const double step_ms = (sum - r.window_ms) / double(n - r.window_n);
+  r.window_n = n;
+  r.window_ms = sum;
+  r.rate_high = std::max(r.rate_high, step_ms);
+  r.strikes = step_ms * 1000.0 >= limit_us ? r.strikes + 1 : 0;
+  if (r.strikes < 2)
+    return;
+  r.switched = true;
+  r.switched_starts = s.rollback.Starts();
+  ++r.switches;
+  Notice("fzgx: rollback worker: the worker's step {:.2f} ms on average over its last {} steps, twice at {} us or "
+         "slower: this race's rollbacks run sync (frame {}; jobs so far {}, adopted {})",
+         step_ms, RATE_WINDOW, limit_us, r.frame_no, r.jobs, r.adopted);
 }
 
 // A job that ends without an adoption, its rollback sync from its R in this frame (at `step`): the counts.
@@ -1224,6 +1293,7 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
   s_r.fall_back = false;
   Async& a = s_a;
   ++s_r.frame_no;
+  WatchRate(s);
   if (!a.open)
   {
     ChainEnds();  // (the last frame started no job after an adoption: nothing left to correct, or a sync rollback did)
@@ -1236,11 +1306,12 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
   if (!a.begun || settle || check)
   {
     CloseJob(!a.begun ? "a job not begun" : "the race's end checked");
-    FellBack(step, from);
+    const u32 back = SyncFrom(from);
+    FellBack(step, back);
     s_r.kind = K_DEEP_SYNC;
     s_r.fall_back = true;
     ChainEnds();
-    return from;
+    return back;
   }
   bool adopt = false, clean = false;
   {
@@ -1251,7 +1322,9 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     std::unique_lock lock(a.m);
     // S4: W parked at A, every step to A run, is adopted whatever rows it ran on; `clean`, they are the session's now
     // (else the session's check finds the first that differs right after, and the next job starts there)
-    adopt = !a.ended && a.parked && a.at == step && a.rewind == NONE && a.ran.size() == rows.size();
+    // (at most MOST_ADOPT steps: the rings TakeOver hands over hold 1024; the catch-up below keeps a job far shorter)
+    adopt = !a.ended && a.parked && a.at == step && a.rewind == NONE && a.ran.size() == rows.size() &&
+            step - from <= MOST_ADOPT;
     clean = adopt;
     for (std::size_t k = 0; clean && k < rows.size(); ++k)
       clean = rows[k] == a.ran[k];
@@ -1269,7 +1342,7 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     }
     CloseJob(nullptr);
     ++s_r.moves_adopted[a.moves];
-    const u32 check_from = s_r.chain ? std::min(s_r.chain_from, from) : from;
+    const u32 check_from = SyncFrom(from);
     ChainEnds();
     a.check_pending = true;
     a.check_from = check_from;
@@ -1327,6 +1400,13 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
       Notice("fzgx: rollback worker: job from {} (started at {}, depth {}) adopted at {}, {} frames after its start "
              "({} foreseen{})", from, a.started_at, a.depth, step, a.frames, a.j_pred,
              clean ? "" : "; ran on rows that changed since: the next job starts from the first");
+    if (s_r.owed != NONE)
+    {
+      // a forced rollback the job could not take (tests): the next job of the chain starts there in this frame (no
+      // fall-back: the rollback goes to WorkerStart as a correction the session found would)
+      Late(s_r.owed);
+      return std::exchange(s_r.owed, NONE);
+    }
     return std::nullopt;
   }
   bool ended;
@@ -1337,13 +1417,39 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
   if (ended)
   {
     CloseJob(nullptr);
-    FellBack(step, from);
+    const u32 back = SyncFrom(from);
+    FellBack(step, back);
     s_r.kind = K_DEEP_SYNC;
     s_r.fall_back = true;
     ChainEnds();
-    return from;
+    return back;
   }
-  // S4: no deadline (was j + 4 frames, then sync): the job runs on to the next frame's step, however far behind
+  // S4 (a), the safety bound: no deadline while the job stays within "catchUp" steps (span from the step a sync
+  // rollback would go back to, or its correction's delay in frames); past it, or with the race switched to sync
+  // (WatchRate), the job stops and one sync rollback from there catches up: one hitch, then the chain again
+  {
+    const u32 bound = TheOptions().debug.worker_catch_up;
+    const u32 base = std::min(from, s_r.chain && AsyncCheck() ? std::min(s_r.chain_from, s_r.owed) : s_r.owed);
+    const u64 span = step - base, delay = s_r.frame_no - a.since;
+    if (s_r.switched || span > bound || delay > bound)
+    {
+      CloseJob(s_r.switched ? "the worker too slow" : "caught up");
+      const u32 back = SyncFrom(from);
+      if (!s_r.switched)
+      {
+        ++s_r.catch_ups;
+        s_r.catch_up_depth_high = std::max<u64>(s_r.catch_up_depth_high, step - back);
+        Notice("fzgx: rollback worker: catch-up at step {} (frame {}): the job from {} {} steps back, its correction "
+               "{} frames late (bound {}): sync from {}, {} steps; the worker's step {:.2f} ms",
+               step, s_r.frame_no, from, span, delay, bound, back, step - back, a.r_ms);
+      }
+      FellBack(step, back);
+      s_r.kind = K_DEEP_SYNC;
+      s_r.fall_back = true;
+      ChainEnds();
+      return back;
+    }
+  }
   PublishRows(s, std::max(step, std::min(a.target, step + 1)));
   return std::nullopt;
 }
@@ -1367,25 +1473,37 @@ bool WorkerTakes(Session& s, u32 step, u32& wrong)
     return false;
   if (wrong >= a.from)
   {
-    bool late;
+    // (the session searches only below R while a job is open: a step from R here is a forced rollback's, tests, with
+    // no row that differs)
+    bool ran;
     {
       const std::lock_guard lock(a.m);
-      late = wrong < a.from + a.ran.size();  // (a step W has taken its row for, its run maybe not ended)
+      ran = wrong < a.from + a.ran.size();  // (a step W has taken its row for, its run maybe not ended)
       a.cv.notify_all();
     }
-    if (late)
+    if (ran)
+    {
+      // owed: the next job of the chain runs it again (the S4 chain's path, as a row that changed under W)
+      ++s_r.owed_n;
+      s_r.owed = std::min(s_r.owed, wrong);
       Late(a.from);
+    }
+    else
+      ++s_r.forced_ahead;  // (W has not run it yet: it runs it with the session's row)
     return true;
   }
-  if (Capped(a.moves + 1))
+  if (!MayRestart(a.moves + 1))
   {
+    // the chain's: the job is adopted as it ran (not clean), and the next starts from here (owed, for a forced one)
     s_r.deferred += !a.below;
     a.below = true;
+    s_r.owed = std::min(s_r.owed, wrong);
     Late(wrong);
     return true;
   }
   CloseJob("a correction below the job's start");
   s_r.restart_moves = a.moves + 1;  // (the job that may start from `wrong` now inherits them)
+  wrong = std::min(wrong, std::exchange(s_r.owed, NONE));
   (void)s;
   (void)step;
   return false;
@@ -1398,6 +1516,7 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   const u32 moves = std::exchange(s_r.restart_moves, 0u);
   if (!Measuring())
     return false;
+  s_r.owed = NONE;  // (no job is open: whatever was owed is this rollback's, from `wrong` or below)
   const u32 d = step - wrong, least = std::max<u32>(TheOptions().debug.worker_depth, 1);
   s_r.kind = d >= least ? K_DEEP_SYNC : K_SHALLOW;
   // S4 (study section 14: a race of humans rolls back about 6 steps every frame): a chain's next job goes to the worker
@@ -1412,6 +1531,11 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   if (cores < LEAST_CORES)
   {
     ++s_r.barred_other;
+    return false;
+  }
+  if (s_r.switched)
+  {
+    ++s_r.barred_slow;  // S4 (b): this race's worker is too slow for the chain (WatchRate)
     return false;
   }
   // Not before the countdown's end (TheOptions' "from", 422 = COUNTDOWN_END by default) in any case: with the pipe
@@ -1438,9 +1562,9 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
       }
     }
   }
-  if (d + 2 > MOST_SPAN)  // (the rings' 1024 steps; never met in a race)
+  if (d > TheOptions().debug.worker_catch_up)  // S4 (a): a job this deep would be caught up at once
   {
-    ++s_r.barred_other;
+    ++s_r.barred_deep;
     return false;
   }
   double r;
@@ -1502,7 +1626,7 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
 // Steps below `known` become final; not the open job's (its entries and checksums are the worker's to give).
 u32 WorkerKnown(u32 known)
 {
-  known = s_a.open ? std::min(known, s_a.from) : known;
+  known = s_a.open ? std::min(known, std::min(s_a.from, s_r.owed)) : known;
   // ("async-check": a chain's steps stay open from its first R, so its sync run can go back there at its end)
   return s_r.chain && AsyncCheck() ? std::min(known, s_r.chain_from) : known;
 }
@@ -1512,6 +1636,7 @@ void WorkerQuiesce()
 {
   if (s_a.open)
     CloseJob("the game stopped");
+  s_r.owed = NONE;
   WaitIdle();
 }
 
@@ -1535,13 +1660,13 @@ void WorkerStop()
   for (const auto& [j, n] : r.j_seen)
     js += std::format(" {}:{}", j, n);
   Notice("fzgx: rollback worker S2: {} mode, depth {}, {} cores; jobs {} (depth {:.1f} on average), adopted {}, gave "
-         "up {}, stopped {} ({} too long), corrections taken {}; barred: countdown {}, a finish {}, other {}; sync as it fits {}; j "
+         "up {}, stopped {}, sent back {}; barred: countdown {}, a finish {}, other {}; sync as it fits {}; j "
          "seen{} (average {:.2f}, foreseen {:.2f}, at most {}); worker {} steps, {} went back, a step {:.2f} ms (the "
          "game's {:.2f}), a frame's own {:.2f} ms; game's thread: starts {:.0f} us, begins {:.0f} us, adoptions {:.0f} "
          "us, waits for the worker {} ({:.0f} us)",
          Mode(), std::max<u32>(TheOptions().debug.worker_depth, 1),
          std::thread::hardware_concurrency(), r.jobs, r.jobs ? double(r.d_sum) / r.jobs : 0.0, r.adopted, r.gave_up,
-         r.cancelled, r.too_long, r.rewinds_asked, r.barred_countdown, r.barred_finish, r.barred_other, r.sync_fit, js,
+         r.cancelled, r.rewinds_asked, r.barred_countdown, r.barred_finish, r.barred_other, r.sync_fit, js,
          r.adopted ? double(r.j_sum) / r.adopted : 0.0, r.adopted ? double(r.j_pred_sum) / r.adopted : 0.0, r.j_high,
          s_a.steps, s_a.rewinds, s_a.r_ms, r.r_sync, r.c_high, r.start_us, r.begin_us, r.adopt_us, r.waited_idle,
          r.idle_us);
@@ -1552,11 +1677,11 @@ void WorkerStop()
       text += std::format(" {}:{}", k, n);
     return text.empty() ? std::string(" none") : text;
   };
-  Notice("fzgx: rollback worker S3: the pipe {}; restarts cap {} ({} capped); sent back, adopted jobs:{}; sent back, "
-         "jobs run sync:{}; sync from a job's R: {} (depth {:.1f} on average; by depth:{}); given up for a page neither "
-         "log watched: {}",
+  Notice("fzgx: rollback worker S3: the pipe {}; restarts {} (a job started again for a correction below its R at "
+         "most that often, then the correction is the chain's); restarted, adopted jobs:{}; restarted, jobs run sync:{}; "
+         "sync from a job's R: {} (depth {:.1f} on average; by depth:{}); given up for a page neither log watched: {}",
          s_pipe_per_thread ? "per thread (W's bytes dropped)" : "one for every thread (countdown and finish barred)",
-         TheOptions().debug.worker_restarts, r.capped, list(r.moves_adopted), list(r.moves_fell), r.fell,
+         TheOptions().debug.worker_restarts, list(r.moves_adopted), list(r.moves_fell), r.fell,
          r.fell ? double(r.fell_depth_sum) / r.fell : 0.0, list(r.fell_depth), r.unwatched);
   std::string lags;
   for (const auto& [lag, n] : r.chain_seen)
@@ -1572,6 +1697,12 @@ void WorkerStop()
          "frames {} in all, at most {} (by length:{}); a job's R to its adoption at most {} steps; jobs started with the worker at a frame a step or slower {}",
          r.clean, r.provisional, r.chained_jobs, r.deferred, r.chains, r.chain_frames, r.chain_high,
          lags.empty() ? std::string(" none") : lags, r.behind_high, r.slow);
+  Notice("fzgx: rollback worker S4: bounds: catch-ups {} (bound {} steps or frames; the deepest {} steps); starts "
+         "barred deeper than the bound {}; slow-worker switches to sync {} (at {} us a step; the slowest {} steps "
+         "{:.2f} ms on average), rollbacks barred after {}; forced rollbacks on steps W had run, run again by the next "
+         "job or the sync {}, ahead of W {}",
+         r.catch_ups, TheOptions().debug.worker_catch_up, r.catch_up_depth_high, r.barred_deep, r.switches,
+         TheOptions().debug.worker_slow_us, RATE_WINDOW, r.rate_high, r.barred_slow, r.owed_n, r.forced_ahead);
   if (AsyncCheck())
     Notice("fzgx: rollback worker S3: async-check: {} adoptions compared with their sync rollback: memory differs in {} "
            "({} words), moments in {}, checksums or rows in {}; the kept words (time, VI, the frame's) differing: {}; "

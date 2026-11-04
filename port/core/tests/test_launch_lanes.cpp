@@ -81,5 +81,11 @@ void TestTheRollbackWorkerKeys()
   CHECK(!ParseLaunchFile(with(R"({"mode": "on", "restarts": 2, "start": "whole"})"), &o) && o.debug.worker_restarts == 2 &&
         o.debug.worker_start == "whole");
   CHECK(Refused(with(R"({"mode": "on", "restarts": 31})"), "\"debug.rollbackWorker.restarts\""));
+  // S4: the catch-up bound, the slow worker's switch and its test delay
+  CHECK(!ParseLaunchFile(with(R"("on")"), &o) && o.debug.worker_catch_up == 60 && o.debug.worker_slow_us == 6000 &&
+        o.debug.worker_delay_us == 0);
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "catchUp": 30, "slowStepUs": 0, "delayUs": 7000})"), &o) &&
+        o.debug.worker_catch_up == 30 && o.debug.worker_slow_us == 0 && o.debug.worker_delay_us == 7000);
+  CHECK(Refused(with(R"({"mode": "on", "catchUp": 300})"), "\"debug.rollbackWorker.catchUp\""));
   CHECK(Refused(with(R"({"mode": "on", "start": "some"})"), "\"debug.rollbackWorker.start\""));
 }
