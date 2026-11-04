@@ -224,6 +224,7 @@ void TestARaceThatWaitsRanksTheOut();
 void TestTheLivesLibraryRuns();
 void TestCpuModeEighteen();
 void TestTheDisplayWordsRun();
+void TestTheCleanPicture();
 void TestTheGhostWords();
 void TestThePreparedInterpreterIsThePlainOne();
 void TestTheLobbysRestoreStaysOut();
@@ -604,6 +605,7 @@ int main(int argc, char** argv)
   TestTheLivesLibraryRuns();
   TestCpuModeEighteen();
   TestTheDisplayWordsRun();
+  TestTheCleanPicture();
   TestTheGhostWords();
   TestThePreparedInterpreterIsThePlainOne();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);

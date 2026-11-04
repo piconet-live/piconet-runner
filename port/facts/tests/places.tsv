@@ -342,6 +342,7 @@ STAT_ENTRY	port/core/src/files_stats.cpp	use	file::STAT_ENTRY	7
 STAT_FORMAT	port/core/src/files_stats.cpp	use	file::STAT_FORMAT	1
 SOUND_QUEUE	port/core/src/hits.cpp	use	game::SOUND_QUEUE	1
 HUD_PARTS	port/core/src/minimap_frame.cpp	use	game::HUD_PARTS	3
+CHECK_GAP	port/core/src/clean_picture.cpp	use	game::CHECK_GAP_AT	1
 MAP_CAMERAS	port/core/src/minimap_frame.cpp	use	game::MAP_CAMERAS	1
 MACHINE_DRAWN_X	port/core/src/minimap_frame.cpp	use	game::MACHINE_DRAWN_X	1
 MACHINE_DRAWN_Y	port/core/src/minimap_frame.cpp	use	game::MACHINE_DRAWN_Y	1
