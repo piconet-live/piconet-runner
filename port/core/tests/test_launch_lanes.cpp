@@ -76,4 +76,10 @@ void TestTheRollbackWorkerKeys()
   CHECK(Refused(with(R"({"mode": "on", "rule": "never"})"), "\"debug.rollbackWorker.rule\""));
   CHECK(Refused(with(R"({"depth": 3})"), "\"debug.rollbackWorker\" needs \"mode\""));
   CHECK(Refused(with(R"({"mode": "check", "depth": 0})"), "\"debug.rollbackWorker.depth\""));
+  // S3: the adoptions compared with their sync rollbacks, the restarts' cap, the job's start
+  CHECK(!ParseLaunchFile(with(R"("async-check")"), &o) && o.debug.worker_mode == "async-check");
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "restarts": 2, "start": "whole"})"), &o) && o.debug.worker_restarts == 2 &&
+        o.debug.worker_start == "whole");
+  CHECK(Refused(with(R"({"mode": "on", "restarts": 31})"), "\"debug.rollbackWorker.restarts\""));
+  CHECK(Refused(with(R"({"mode": "on", "start": "some"})"), "\"debug.rollbackWorker.start\""));
 }

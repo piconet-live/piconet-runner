@@ -73,6 +73,11 @@ bool Hook();
 void ModePoint();
 // The context met what it does not handle: the job gives up (and the game's thread runs the rollback as ever).
 void GiveUp(const std::string& why);
+// The adapter found the native module's write-gather pipe per thread (DolRecomp's staticrecomp_gather_pipe_per_thread):
+// the worker's thread has a pipe of its own, whose bytes are dropped, so a step that writes the drawing's pipe no
+// longer bars a job. Without it (an older module) a store there on the worker's thread would land in the game's pipe:
+// no job starts before the countdown's end or once a machine has finished, as in S2.
+void SetPipePerThread(bool per_thread);
 // A count for the log's last line (the adapter's: system calls replicated, block copies, dispatches).
 void Count(const char* what, u64 n);
 // The game stops: the last line.

@@ -95,6 +95,11 @@ struct Debug
   u32 worker_depth = 7;
   std::string worker_rule = "fit";  // "rule": "fit" (S2: sync when the frame fits) or "always" (tests: every job async)
   std::string worker_watch;  // "watch": a write watch on one word, "address[:first-last]" (tests, the trace module)
+  // "restarts": how many times a job may be sent back (a correction inside its steps, or a new job from below its
+  // step after one below it) before the rollback runs sync instead; 0: no cap
+  u32 worker_restarts = 2;
+  u32 worker_from = 422;  // "from": the first step a job may go back to (the countdown's end; tests: earlier)
+  std::string worker_start = "changed";  // "start": "changed" (only pages that differ copied into W) or "whole" (S2's)
   std::string partial_log;
   u32 partial_from = 0, partial_to = 0;
   bool partial_widen = false;

@@ -474,7 +474,8 @@ void WorkerOpen(Session& s, u32 run_from, u32 extra, bool held);
 // open job takes; the rule that starts a job; the final steps held at an open job's R; the stop.
 std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool check);
 u32 WorkerSearchTo(u32 arrived);
-bool WorkerTakes(Session& s, u32 step, u32 wrong);
+// (WorkerTakes: false with `wrong` moved down to the job's R when it stopped the job, the restarts' cap reached)
+bool WorkerTakes(Session& s, u32 step, u32& wrong);
 bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong);
 u32 WorkerKnown(u32 known);
 void WorkerQuiesce();

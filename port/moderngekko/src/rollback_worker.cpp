@@ -62,6 +62,8 @@ struct Worker
   void (*set_pipe)(u8**, u8*, void (*)(CPUState*)) = nullptr;  // the module's inline write-gather pipe
   alignas(32) u8 pipe[256] = {};
   u8* pipe_at = nullptr;
+  bool pipe_per_thread = false;  // the module's pipe is per thread (S3): the worker's thread drops its pipe's bytes
+  u64 pipe_dropped = 0;          // bytes the worker's steps wrote to the drawing's pipe, dropped
   std::string gave_up;
   bool running = false;
   u32 dmau = 0, dmal = 0;
@@ -98,9 +100,15 @@ void Look()
     s_w.loaded = desc->on_state_loaded;
   }
   if (module)
+  {
     s_w.set_pipe = reinterpret_cast<void (*)(u8**, u8*, void (*)(CPUState*))>(
         GetProcAddress(module, "staticrecomp_set_gather_pipe"));
+    using PerThread = int (*)();
+    const auto per_thread = reinterpret_cast<PerThread>(GetProcAddress(module, "staticrecomp_gather_pipe_per_thread"));
+    s_w.pipe_per_thread = s_w.set_pipe != nullptr && per_thread != nullptr && per_thread() != 0;
+  }
 #endif
+  rw::SetPipePerThread(s_w.pipe_per_thread);
 }
 
 // Main memory through the game's address translation (the statistics table at 0x23800000, 0x01554000 physical):
@@ -229,6 +237,16 @@ void HookFallback(CPUState*, u32 raw, u32 cia)
 void PipeFlush(CPUState* cpu)
 {
   GiveUp(std::format("a write to the drawing's pipe (in the code from {:08X}, lr {:08X})", cpu->pc, cpu->lr));
+  s_w.pipe_at = s_w.pipe;
+}
+
+// S3, on the worker's thread with a module whose pipe is per thread: the bytes a step run again writes to the drawing's
+// pipe are dropped. The game's own run of the step sent them to the drawing at its first run; a sync rollback's re-run
+// sends them again (a projection set twice, research/study-rollback-second-core.md section 10's give-ups), which
+// nothing of the race reads back: the pipe is hardware, outside the memory a step's checksum covers.
+void PipeDrop(CPUState*)
+{
+  s_w.pipe_dropped += static_cast<u64>(s_w.pipe_at - s_w.pipe);
   s_w.pipe_at = s_w.pipe;
 }
 
@@ -481,8 +499,13 @@ void ThreadMain()
     _mm_setcsr(s_t.mxcsr);  // (rounding and flush-to-zero: the game's, study section 1 item 17)
     if (s_w.loaded)
       s_w.loaded(&s_w.cpu);
+    // this thread's own pipe (the module's is per thread): what the steps write there is dropped
+    s_w.pipe_at = s_w.pipe;
+    if (s_w.pipe_per_thread)
+      s_w.set_pipe(&s_w.pipe_at, s_w.pipe, &PipeDrop);
     const auto start = std::chrono::steady_clock::now();
     Run();
+    PipeDrop(&s_w.cpu);
     s_t.us_running += static_cast<u64>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
     rw::Left();
@@ -524,9 +547,9 @@ void RunRollbackWorker(CPUState* cpu)
   LookWatch(cpu);
   static const bool forget = (rw::SetForget([](fzgx::u32 step) { lanes::PartialForget(step); }), true);
   (void)forget;
+  Look();  // (at the first hook: the module's pipe per thread or not, before the first job is weighed)
   if (!rw::Begin(&s_w.memory))
     return;
-  Look();
   ++s_w.jobs;
   if (s_w.dispatch == nullptr)
   {
@@ -577,6 +600,7 @@ void StopRollbackWorker()
   rw::Count("block copies", std::exchange(s_w.block_copies, 0));
   rw::Count("translated", std::exchange(s_w.translated_reads, 0));
   rw::Count("tasks", std::exchange(s_w.tasks, 0));
+  rw::Count("pipe bytes dropped", std::exchange(s_w.pipe_dropped, 0));
   rw::Stop();
 }
 }  // namespace fzgx_port

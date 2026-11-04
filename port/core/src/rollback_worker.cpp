@@ -14,6 +14,7 @@
 #include <thread>
 #include <cstring>
 #include <format>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <string>
@@ -44,9 +45,10 @@ constexpr u32 NONE = 0xFFFFFFFF;
 constexpr u32 EXTRA_STEPS = layout::CONTROL + 8;    // the frame routine's further steps (netframe.py): kept high on W
 constexpr u32 SOUNDS_FROM = layout::CONTROL + 492;  // a step below it was run before: muted (mute.py)
 constexpr u32 W_EXTRA = 1000;                       // W never reaches a frame's last step (the drawing's)
-// The countdown's 0 is step 421 in every race (count 420 at the race start, race-map-flow.md 4.1): a job starts only
-// after it. Before it, steps 364 to 405 write the drawing's pipe (GXSetProjectionv, S1), and the module's pipe is one
-// pointer for every thread (DolRecomp's dolrecomp_gather_pipe): a store there on W would land in the game's pipe.
+// The countdown's 0 is step 421 in every race (count 420 at the race start, race-map-flow.md 4.1). Before it, steps
+// 364 to 405 write the drawing's pipe (GXSetProjectionv, S1). With a module whose pipe is one pointer for every thread
+// (DolRecomp before its per-thread pipe) a store there on W would land in the game's pipe: then a job starts only
+// after the countdown's end (and before any machine has finished). With the pipe per thread W's bytes are dropped.
 constexpr u32 COUNTDOWN_END = 422;
 constexpr u32 MOST_SPAN = 30;     // A - R at most (per-machine rollback keeps 32 runs, lanes_partial.h KEEP)
 constexpr u32 LEAST_CORES = 4;    // below it, no thread (study section 7, decision 5)
@@ -55,6 +57,13 @@ constexpr double MARGIN_MS = 1.5;      // run-ahead's MARGIN_MS: room kept befor
 constexpr double START_MS = 0.5;       // c of the study's section 4: a job's start and the thread's wake
 constexpr double FIRST_CONST_MS = 5.4; // a frame's own cost before one is measured (study section 4)
 constexpr double FIRST_STEP_MS = 2.0;  // a step run again before one is measured
+// S3: the code outside the log, which no step writes (the DOL's text, main.rel's text, constructors and read-only
+// data up to its data, where the log's region starts; whole pages): taken into W with the whole memory, then only
+// compared at every CODE_CHECK-th job, the pages that differ (none expected: the native module cannot follow changed
+// code) copied and counted in the log's line.
+constexpr u32 DOL_TEXT_FROM = 0x80004000, DOL_TEXT_TO = 0x8008F000;  // (DOL text 0x80003100 to 0x8008FF00)
+constexpr u32 REL_CODE_FROM = (game::REL_TEXT_AT + 0xFFF) & ~0xFFFu, REL_CODE_TO = game::REL_DATA_AT & ~0xFFFu;
+constexpr u32 CODE_CHECK = 64;
 // The VI retrace callbacks' words (S1, difference 1): written by interrupts the worker never takes
 constexpr u32 VI_COUNT = game::REL_BSS_AT + 0x6F640, PAD_READY = game::REL_DATA_AT + 0x2B64;
 
@@ -145,8 +154,12 @@ struct Async
   bool open = false, begun = false;
   u32 started_at = 0, depth = 0, frames = 0, j_pred = 0;
   std::vector<u32> time_words;  // the task nodes' time words of W at R (nodes that leave the lists in the job)
+  u32 moves = 0;  // S3: the times this job (and the jobs it started again from) was sent back
+  bool check_pending = false;   // "async-check": the adoption of [check_from, check_to) to compare at check_to's hook
+  u32 check_from = 0, check_to = 0;
 };
 Async s_a;
+bool s_pipe_per_thread = false;  // the module's pipe is per thread (SetPipePerThread)
 thread_local bool t_worker = false;  // this is the worker's thread
 
 // The rule's measurements and the frame counts (game's thread)
@@ -172,6 +185,13 @@ struct Rule
   std::map<u32, u64> j_seen;
   double start_us = 0, adopt_us = 0, begin_us = 0, idle_us = 0;
   u64 adopt_words = 0;
+  // S3: the restarts' cap
+  u32 restart_moves = 0;  // a job just stopped for a correction below its R: its moves + 1, for the job after it
+  u64 capped = 0;
+  std::map<u32, u64> moves_adopted, moves_fell, fell_depth;
+  u64 fell = 0, fell_depth_sum = 0;
+  // "async-check"
+  u64 checked = 0, check_memory = 0, check_words = 0, check_moments = 0, check_rings = 0, check_kept = 0;
 };
 Rule s_r;
 enum Kind
@@ -267,12 +287,23 @@ bool On()
 // S2's thread: "on"; "sync" measures the same frames with no worker (the baseline).
 bool Threaded()
 {
-  return TheOptions().debug.worker_mode == "on";
+  return TheOptions().debug.worker_mode == "on" || TheOptions().debug.worker_mode == "async-check";
 }
 
 bool Measuring()
 {
-  return TheOptions().debug.worker_mode == "on" || TheOptions().debug.worker_mode == "sync";
+  return Threaded() || TheOptions().debug.worker_mode == "sync";
+}
+
+// S3's "async-check": every adoption is compared word for word with the sync rollback from its R instead.
+static bool AsyncCheck()
+{
+  return TheOptions().debug.worker_mode == "async-check";
+}
+
+void SetPipePerThread(bool per_thread)
+{
+  s_pipe_per_thread = per_thread;
 }
 
 void SetForget(void (*forget)(u32 step))
@@ -439,8 +470,9 @@ bool Hook()
 
 void ModePoint()
 {
-  if (w.job == Job::RUNNING)
-    mode::Step(*w.g);
+  // (S3: on the worker's thread too; mode.cpp keeps a race's state in the guest's block, and W's run says nothing)
+  if (t_worker || w.job == Job::RUNNING)
+    mode::Step(*w.g, true);
 }
 
 void GiveUp(const std::string& why)
@@ -516,6 +548,14 @@ void WorkerPrepare(Guest& g, Session& s, u32 step, u32 run_from)
     ++w.uncompared;  // (a frame that ended before its step L: the race's end cut it)
     w.job = Job::NONE;
   }
+  if (std::exchange(s_a.check_pending, false) && run_from == s_a.check_from && step == s_a.check_to)
+  {
+    // "async-check": the sync rollback of an adoption, compared with W at the hook of A (WorkerCompare)
+    w.from = run_from;
+    w.to = step;
+    w.job = Job::RAN;
+    return;
+  }
   if (!On() || Measuring() || s.practice || s.scrub.forked || step - run_from < w.depth || !s.rollback.Active())
     return;
   const Timed timed{"us preparing"};
@@ -551,39 +591,108 @@ void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from)
   u8* live = host.Ram();
   u8* mine = w.memory->ram.data();
   // W: the pages either log may have seen change since the last job (all of it the first time, or when the race's
-  // log started again), the memory outside the log and the locked cache whole, the window
-  const std::vector<u32> dirty = s.rollback.TakeDirty();
-  const std::vector<u32> worker_dirty = w.log.Active() ? w.log.TakeDirty() : std::vector<u32>();
+  // log started again; each page once), the memory outside the log and the locked cache whole, the window. S3
+  // ("start": "changed", the default): a page is compared first and copied only when it differs. The memory outside
+  // the log is mostly code and data no step writes: compared, it costs two reads a page where a copy costs a read, a
+  // write and the write's own read, and W's lines stay as they are.
+  const bool changed = TheOptions().debug.worker_start != "whole";
+  u64* copied = &w.pages_copied;
+  const auto take = [&](u32 at, u32 size) {
+    if (!changed)
+    {
+      std::memcpy(mine + at, live + at, size);
+      w.pages_copied += size / PAGE;
+      *copied += size / PAGE;
+      return;
+    }
+    for (u32 end = at + size; at < end; at += PAGE)
+    {
+      const u32 n = std::min<u32>(PAGE, end - at);
+      if (std::memcmp(mine + at, live + at, n) != 0)
+      {
+        std::memcpy(mine + at, live + at, n);
+        ++w.pages_copied;
+        ++*copied;
+      }
+    }
+  };
+  // outside the log, the code apart: compared only at every CODE_CHECK-th job ("whole": copied as all the rest)
+  const bool code_now = !changed || w.jobs % CODE_CHECK == 0;
+  const auto outside = [&](u32 at, u32 size) {
+    const u32 end = at + size;
+    for (const auto& [from, to] : {std::pair{DOL_TEXT_FROM - RAM, DOL_TEXT_TO - RAM}, std::pair{REL_CODE_FROM - RAM, REL_CODE_TO - RAM}})
+    {
+      if (from >= end || to <= at)
+        continue;
+      if (from > at)
+        take(at, from - at);
+      if (code_now)
+      {
+        copied = &w.counts["pages: code copied (differed)"];
+        take(std::max(at, from), std::min(end, to) - std::max(at, from));
+        copied = &w.counts["pages: outside copied"];
+      }
+      at = std::min(end, to);
+    }
+    if (at < end)
+      take(at, end - at);
+  };
+  std::vector<u32> pages;
+  {
+    const Timed timed{"us start: dirty pages taken"};
+    const std::vector<u32> dirty = s.rollback.TakeDirty();
+    const std::vector<u32> worker_dirty = w.log.Active() ? w.log.TakeDirty() : std::vector<u32>();
+    pages.reserve(dirty.size() + worker_dirty.size());
+    std::set_union(dirty.begin(), dirty.end(), worker_dirty.begin(), worker_dirty.end(), std::back_inserter(pages));
+    w.counts["pages named (game's log)"] += dirty.size();
+    w.counts["pages named (W's log)"] += worker_dirty.size();
+    w.counts["pages named (both, once)"] += pages.size();
+  }
   if (!w.primed || region != w.region)
   {
+    const Timed timed{"us start: whole memory"};
     std::memcpy(mine, live, ram_size);
     w.pages_copied += ram_size / PAGE;
   }
   else
   {
-    for (const std::vector<u32>* pages : {&dirty, &worker_dirty})
     {
-      for (const u32 off : *pages)
-        std::memcpy(mine + (region - RAM) + off, live + (region - RAM) + off, PAGE);
-      w.pages_copied += pages->size();
+      const Timed timed{"us start: the log's pages"};
+      copied = &w.counts["pages: the log's copied"];
+      for (const u32 off : pages)
+        take((region - RAM) + off, PAGE);
     }
-    Outside(region, ram_size, [&](u32 at, u32 size) { std::memcpy(mine + at, live + at, size); });
+    {
+      const Timed timed{"us start: outside the log, below"};
+      copied = &w.counts["pages: outside copied"];
+      outside(0, region - RAM);
+    }
+    const Timed timed{"us start: outside the log, above"};
+    copied = &w.counts["pages: above the log copied"];
+    take(net::STATE_END - RAM, ram_size - (net::STATE_END - RAM));
   }
-  if (host.Scratch() != nullptr)
-    std::memcpy(w.memory->cache.data(), host.Scratch(), host.ScratchSize());
-  w.window.Restore(Data().Snapshot());
+  {
+    const Timed timed{"us start: cache and window"};
+    if (host.Scratch() != nullptr)
+      std::memcpy(w.memory->cache.data(), host.Scratch(), host.ScratchSize());
+    w.window.Restore(Data().Snapshot());
+  }
   w.primed = true;
   if (w.log.Active() && w.log.Region() != region)
     w.log.Stop();
   w.region = region;
   // rewound by the game's log, and the worker's log's moment before R
-  s.rollback.Apply(*w.g, step, run_from);
+  {
+    const Timed timed{"us start: Apply"};
+    s.rollback.Apply(*w.g, step, run_from);
+  }
+  const Timed timed{"us start: Adopt"};
   if (!w.log.Active())
     w.log.Start(*w.g);
   w.log.Adopt(*w.g, s.rollback, run_from);
   if (w.jobs <= 2)
-    Notice("fzgx: rollback worker: job {} from {} to {} prepared ({} and {} pages taken)", w.jobs, run_from, step,
-           dirty.size(), worker_dirty.size());
+    Notice("fzgx: rollback worker: job {} from {} to {} prepared ({} pages taken, both logs)", w.jobs, run_from, step,
+           pages.size());
 }
 
 // After the restore: W must be the restored memory on all a restore puts back (the dirty pages and Apply are right).
@@ -608,6 +717,7 @@ void WorkerAfterRestore(Guest& g, Session& s)
 
 // The frame's steps are known (RunSteps): the job runs only when the frame runs every step to L (not held, not cut).
 void PublishRows(Session& s, u32 upto);
+std::vector<u32> KeptWords(const Guest& g, const Guest& gw);
 
 void WorkerOpen(Session& s, u32 run_from, u32 extra, bool held)
 {
@@ -675,18 +785,31 @@ void WorkerCompare(Guest& g, Session& s, u32 t)
   ++w.compared;
   Guest& gw = *w.g;
   std::vector<u32> words;
-  const std::vector<u32> time = TimeWords(g, gw);
+  // (S3's "async-check": the words an adoption keeps as the game has them, KeptWords, are left out as the time
+  // words are, and counted)
+  const bool threaded = Threaded();
+  const std::vector<u32> time = threaded ? KeptWords(g, gw) : TimeWords(g, gw);
   u32 time_differ = 0;
   for (const u32 a : time)
     time_differ += g.Read32(a) != gw.Read32(a);
   w.time_jobs += time_differ != 0;
   w.time_words += time_differ;
+  if (threaded)
+  {
+    ++s_r.checked;
+    s_r.check_kept += time_differ;
+  }
   if (const u32 n = s.rollback.Compare(g, gw, &words, 8, &time); n != 0)
   {
     ++w.memory_differ;
     w.memory_words += n;
+    if (threaded)
+    {
+      ++s_r.check_memory;
+      s_r.check_words += n;
+    }
     for (const u32 a : words)
-      if (w.watch.size() < 4 && std::find(w.watch.begin(), w.watch.end(), a) == w.watch.end())
+      if (!threaded && w.watch.size() < 4 && std::find(w.watch.begin(), w.watch.end(), a) == w.watch.end())
         w.watch.push_back(a);
     if (Say("memory"))
     {
@@ -699,6 +822,7 @@ void WorkerCompare(Guest& g, Session& s, u32 t)
   if (const u32 k = s.rollback.CompareMoments(g, w.log, gw, w.from, w.to, &time); k != 0xFFFFFFFF)
   {
     ++w.entries_differ;
+    s_r.check_moments += threaded;
     if (Say("moments"))
       Notice("fzgx: rollback worker: the job from {} to {}: the logs' moments differ before step {} (the latest)", w.from,
              w.to, k);
@@ -711,6 +835,7 @@ void WorkerCompare(Guest& g, Session& s, u32 t)
     if (Rollback::KeptChecksum(g, k) != Rollback::KeptChecksum(gw, k) || std::memcmp(a, b, sizeof(a)) != 0)
     {
       ++w.rings_differ;
+      s_r.check_rings += threaded;
       if (Say("rings"))
         Notice("fzgx: rollback worker: the job from {} to {}: step {}'s checksum ({:08x} here, {:08x} on W) or rows "
                "differ", w.from, w.to, k, Rollback::KeptChecksum(g, k), Rollback::KeptChecksum(gw, k));
@@ -795,6 +920,7 @@ void PublishRows(Session& s, u32 upto)
     changed = std::min(changed, upto);
   if (changed != NONE && changed < a.at)
   {
+    a.moves += a.rewind == NONE;  // (a send-back not yet taken: the same one, lower)
     a.rewind = std::min(a.rewind, changed);
     ++s_r.rewinds_asked;
   }
@@ -839,6 +965,23 @@ void CloseJob(const char* why)
     ++w.why[why];
   }
   a.open = a.begun = false;
+}
+
+// S3: the restarts' cap ("restarts", 0: none): a job sent back more often runs sync from its R instead.
+bool Capped(u32 moves)
+{
+  const u32 cap = TheOptions().debug.worker_restarts;
+  return cap != 0 && moves > cap;
+}
+
+// A job that ends without an adoption, its rollback sync from its R in this frame (at `step`): the counts.
+void FellBack(u32 step, u32 from)
+{
+  const u32 d = step - from;
+  ++s_r.fell;
+  s_r.fell_depth_sum += d;
+  ++s_r.fell_depth[d];
+  ++s_r.moves_fell[s_a.moves];
 }
 
 // The words an adoption keeps as the game has them: what W cannot have (the VI callbacks' words, which interrupts
@@ -901,9 +1044,11 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
   s_r.kind = K_OPEN;
   ++a.frames;
   const u32 from = a.from;
+  s_r.restart_moves = 0;
   if (!a.begun || settle || check)
   {
     CloseJob(!a.begun ? "a job not begun" : "the race's end checked");
+    FellBack(step, from);
     s_r.kind = K_DEEP_SYNC;
     s_r.fall_back = true;
     return from;
@@ -919,6 +1064,24 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     for (std::size_t k = 0; same && k < rows.size(); ++k)
       same = rows[k] == a.rows[k];
     adopt = !a.ended && a.parked && a.at == step && a.rewind == NONE && same;
+  }
+  if (adopt && AsyncCheck())
+  {
+    // "async-check": the job stopped where it stands (at A), and the sync rollback from R runs in this frame; at the
+    // hook of A the two are compared (WorkerPrepare, WorkerCompare)
+    {
+      const std::lock_guard lock(a.m);
+      a.stop = true;
+      a.cv.notify_all();
+    }
+    CloseJob(nullptr);
+    ++s_r.moves_adopted[a.moves];
+    a.check_pending = true;
+    a.check_from = from;
+    a.check_to = step;
+    s_r.kind = K_DEEP_SYNC;
+    s_r.fall_back = true;
+    return from;
   }
   if (adopt)
   {
@@ -943,6 +1106,7 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     s_r.j_pred_sum += a.j_pred;
     s_r.j_high = std::max<u64>(s_r.j_high, a.frames);
     ++s_r.j_seen[a.frames];
+    ++s_r.moves_adopted[a.moves];
     s_r.kind = K_ADOPT;
     s_r.adopt_us += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
     if (s_r.adopted <= 3)
@@ -960,11 +1124,22 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
     if (!ended)
       ++s_r.too_long;
     CloseJob(ended ? nullptr : "too long");
+    FellBack(step, from);
     s_r.kind = K_DEEP_SYNC;
     s_r.fall_back = true;
     return from;
   }
   PublishRows(s, std::max(step, std::min(a.target, step + 1)));
+  if (Capped(a.moves))
+  {
+    // sent back once too often: the rollback runs sync from R now, before it falls further behind
+    ++s_r.capped;
+    CloseJob("restarts capped");
+    FellBack(step, from);
+    s_r.kind = K_DEEP_SYNC;
+    s_r.fall_back = true;
+    return from;
+  }
   return std::nullopt;
 }
 
@@ -977,21 +1152,41 @@ u32 WorkerSearchTo(u32 arrived)
 
 // A correction at `wrong` while a job is open: the worker takes it (true: it goes back there itself), or, below the
 // job's R, the job is stopped and the correction is the session's (false).
-bool WorkerTakes(Session& s, u32 step, u32 wrong)
+bool WorkerTakes(Session& s, u32 step, u32& wrong)
 {
   Async& a = s_a;
   if (!a.open)
     return false;
   if (wrong >= a.from)
   {
-    const std::lock_guard lock(a.m);
-    if (wrong < a.at)
-      a.rewind = std::min(a.rewind, wrong);
-    a.cv.notify_all();
-    ++s_r.rewinds_asked;
-    return true;
+    bool capped = false;
+    {
+      const std::lock_guard lock(a.m);
+      if (wrong < a.at)
+      {
+        a.moves += a.rewind == NONE;
+        capped = Capped(a.moves);
+        if (!capped)
+          a.rewind = std::min(a.rewind, wrong);
+      }
+      a.cv.notify_all();
+    }
+    if (!capped)
+    {
+      ++s_r.rewinds_asked;
+      return true;
+    }
+    // S3: sent back once too often: the job stops and its rollback runs sync from R in this frame
+    ++s_r.capped;
+    CloseJob("restarts capped");
+    FellBack(step, a.from);
+    wrong = a.from;
+    s_r.kind = K_DEEP_SYNC;
+    s_r.fall_back = true;
+    return false;
   }
   CloseJob("a correction below the job's start");
+  s_r.restart_moves = a.moves + 1;  // (the job that may start from `wrong` now inherits them)
   (void)s;
   (void)step;
   return false;
@@ -1001,6 +1196,7 @@ bool WorkerTakes(Session& s, u32 step, u32 wrong)
 // restore: the game goes on with its predicted steps); false, the session's sync rollback as ever.
 bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
 {
+  const u32 moves = std::exchange(s_r.restart_moves, 0u);
   if (!Measuring())
     return false;
   const u32 d = step - wrong, least = std::max<u32>(TheOptions().debug.worker_depth, 1);
@@ -1008,19 +1204,32 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   if (!Threaded() || s_r.fall_back || s.practice || s.scrub.forked || !s.rollback.Active() || d < least)
     return false;
   static const unsigned cores = std::thread::hardware_concurrency();
-  const boot::Match* m = boot::Get();
-  if (cores < LEAST_CORES || (m && m->game_mode))
+  if (cores < LEAST_CORES)
   {
     ++s_r.barred_other;
     return false;
   }
-  if (wrong < COUNTDOWN_END)
+  if (Capped(moves))
+  {
+    ++s_r.capped;
+    ++s_r.moves_fell[moves];
+    ++s_r.fell;
+    s_r.fell_depth_sum += d;
+    ++s_r.fell_depth[d];
+    return false;
+  }
+  // Not before the countdown's end (TheOptions' "from", 422 = COUNTDOWN_END by default) in any case: with the pipe
+  // per thread, jobs from the countdown's steps left the game writing through a null pointer in the drawing after
+  // their adoption (S3, research/study-rollback-second-core.md section 12)
+  if (wrong < (s_pipe_per_thread ? TheOptions().debug.worker_from : COUNTDOWN_END))
   {
     ++s_r.barred_countdown;
     return false;
   }
-  // Not once a machine has finished: the race's end can then fall in the job, and W's frame routine would cut its
-  // steps there and go on to the frame's drawing (frame_entry.py `extra_cut`), whose pipe is the game's.
+  // With a module whose pipe is one for every thread, not once a machine has finished: the race's end can then fall
+  // in the job, and W's frame routine would cut its steps there and go on to the frame's drawing (frame_entry.py
+  // `extra_cut`), whose pipe is the game's. With the pipe per thread the cut gives the job up (W's write of +492).
+  if (!s_pipe_per_thread)
   {
     const u32 module = g.Read32(net::MODULE_POINTER);
     const u32 count = g.Read8(module + net::MACHINE_COUNT), machines = g.Read32(module + net::MACHINES);
@@ -1049,8 +1258,8 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
     ++s_r.barred_other;
     return false;
   }
-  const auto start = std::chrono::steady_clock::now();
   WaitIdle();
+  const auto start = std::chrono::steady_clock::now();  // (after the wait, which idle_us counts)
   PrepareMemory(g, s, step, wrong);
   Async& a = s_a;
   {
@@ -1064,7 +1273,11 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
     a.seats = s.seats;
     a.at = wrong;
   }
-  a.time_words = TimeWords(*w.g, *w.g);
+  {
+    const Timed timed{"us start: time words"};
+    a.time_words = TimeWords(*w.g, *w.g);
+  }
+  a.moves = moves;
   a.open = true;
   a.begun = false;
   a.started_at = step;
@@ -1126,6 +1339,21 @@ void WorkerStop()
          s_a.steps, s_a.rewinds, s_a.r_ms, r.r_sync, r.c_high, r.start_us, r.begin_us, r.adopt_us, r.waited_idle,
          r.idle_us);
   Notice("fzgx: rollback worker S2: frames by kind:{}", kinds);
+  const auto list = [](const std::map<u32, u64>& m) {
+    std::string text;
+    for (const auto& [k, n] : m)
+      text += std::format(" {}:{}", k, n);
+    return text.empty() ? std::string(" none") : text;
+  };
+  Notice("fzgx: rollback worker S3: the pipe {}; restarts cap {} ({} capped); sent back, adopted jobs:{}; sent back, "
+         "jobs run sync:{}; sync from a job's R: {} (depth {:.1f} on average; by depth:{})",
+         s_pipe_per_thread ? "per thread (W's bytes dropped)" : "one for every thread (countdown and finish barred)",
+         TheOptions().debug.worker_restarts, r.capped, list(r.moves_adopted), list(r.moves_fell), r.fell,
+         r.fell ? double(r.fell_depth_sum) / r.fell : 0.0, list(r.fell_depth));
+  if (AsyncCheck())
+    Notice("fzgx: rollback worker S3: async-check: {} adoptions compared with their sync rollback: memory differs in {} "
+           "({} words), moments in {}, checksums or rows in {}; the kept words (time, VI) differing: {}",
+           r.checked, r.check_memory, r.check_words, r.check_moments, r.check_rings, r.check_kept);
   std::string counts;
   for (const auto& [text, n] : w.counts)
     counts += std::format(" {} {}", text, n);
