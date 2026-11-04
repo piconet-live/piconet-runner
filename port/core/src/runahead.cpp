@@ -602,11 +602,13 @@ bool SameCamera(const Camera& c, const Camera& d)
          SameBits(c.eye, d.eye, sizeof c.eye) && SameBits(&c.a, &d.a, sizeof c.a) && SameBits(&c.b, &d.b, sizeof c.b);
 }
 
-// Two Takes, every field bit for bit: whether the machines and whether the camera differ.
+// Two Takes, every field bit for bit: whether the machines and whether the camera differ. Only the race's machines: the
+// seats after them hold no machine, and their blocks' bytes change between the drawing and the next tick (m283, 7 racers:
+// every difference the step ahead's check found there, 1382 of 3325, was in seats 7 to 29).
 std::pair<bool, bool> Differ(const State& a, const State& b)
 {
   bool machines = a.count != b.count;
-  for (u32 i = 0; i < SEATS; ++i)
+  for (u32 i = 0; i < std::min(std::max(a.count, b.count), SEATS); ++i)
     machines |= !SameMachine(a.machine[i], b.machine[i]);
   return {machines, !SameCamera(a.camera, b.camera)};
 }
@@ -615,7 +617,7 @@ std::pair<bool, bool> Differ(const State& a, const State& b)
 std::string Differences(const State& a, const State& b, const net::Session* ss)
 {
   std::string out;
-  for (u32 i = 0; i < SEATS; ++i)
+  for (u32 i = 0; i < std::min(std::max(a.count, b.count), SEATS); ++i)
   {
     const Machine &x = a.machine[i], &y = b.machine[i];
     if (SameMachine(x, y))
@@ -1260,7 +1262,7 @@ void AtTheDrawing()
       ++s.stats.after_compared;
       s.stats.after_machines += machines;
       s.stats.after_camera += camera;
-      for (u32 i = 0; i < SEATS; ++i)
+      for (u32 i = 0; i < std::min(s.after_state.count, SEATS); ++i)
         s.stats.after_most = std::max(s.stats.after_most, Move(s.ahead.machine[i].pose, s.after_state.machine[i].pose));
       if ((machines || camera) && s.differences_said++ < 20)
         Notice("fzgx: run ahead: step {} ahead differs from the true step at its drawing:{}", s.after_tick_step,
