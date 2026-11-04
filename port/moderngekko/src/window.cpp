@@ -84,7 +84,10 @@ bool HostCall(CPUState* cpu, u32 address, void*)
       ++s_state.steps;
       fzgx::NetSync();
       if (s_state.native)
+      {
         lanes::CensusAfterNet(cpu);
+        RunRollbackWorker(cpu);  // (the deep-rollback worker, off unless its key asks: fzgx/rollback_worker.h)
+      }
     }
     else if (address == table::HOST_TICK)
     {

@@ -464,6 +464,12 @@ Row RowFor(const Session& s, u32 t);
 void WriteRow(Guest& g, const Session& s, u32 t, const Row& row);
 void ChecksumPrevious(Guest& g, Session& s, bool extra);
 void ExtraStep(Guest& g, Session& s);
+// The deep-rollback worker (rollback_worker.cpp, fzgx/rollback_worker.h): a job's start before the restore, W
+// checked after it, the job opened when the frame runs every step to L, and compared at the hook of L.
+void WorkerPrepare(Guest& g, Session& s, u32 step, u32 run_from);
+void WorkerAfterRestore(Guest& g, Session& s);
+void WorkerOpen(u32 extra, bool held);
+void WorkerCompare(Guest& g, Session& s, u32 t);
 void CloseFrameWork(Session& s, bool flush);
 
 // frame.cpp

@@ -107,6 +107,7 @@ void ExtraStep(Guest& g, Session& s)
     s.frontier = t + 1;
   }
   s.rollback.SaveStep(g, t, false);
+  WorkerCompare(g, s, t);  // (the deep-rollback worker, off by default: fzgx/rollback_worker.h)
   Row row = RowFor(s, t);
   WriteRow(g, s, t, row);
   s.used[t] = std::move(row);

@@ -157,6 +157,7 @@ void TestSavesDamagedAtRandom();
 void TestALaunchFile();
 void TestALaunchFileThatIsRefused();
 void TestThePartialRollbackKeys();
+void TestTheRollbackWorkerKeys();
 void TestALaunchFilesTaskbarButton();
 void TestALaunchFileOfTheEmulatorsSide();
 void TestTheWindowsControlsAndTheUsersSettings();
@@ -535,6 +536,7 @@ int main(int argc, char** argv)
   TestALaunchFile();
   TestALaunchFileThatIsRefused();
   TestThePartialRollbackKeys();
+  TestTheRollbackWorkerKeys();
   TestALaunchFilesTaskbarButton();
   TestALaunchFileOfTheEmulatorsSide();
   TestTheWindowsControlsAndTheUsersSettings();

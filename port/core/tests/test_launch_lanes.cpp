@@ -55,3 +55,20 @@ void TestThePartialRollbackKeys()
     CHECK(Refused(with(contact), "\"debug.partialRollback.contact\" is no setting: the contact jobs were removed on 2026-10-25"));
   CHECK(Refused(with(R"({"mode": "check", "depth": 3})"), "\"debug.partialRollback.depth\" is not a setting"));
 }
+
+// "debug.rollbackWorker": the deep-rollback worker's S1 (fzgx/rollback_worker.h), off unless a test asks: a mode
+// alone or {"mode", "depth"}.
+void TestTheRollbackWorkerKeys()
+{
+  const auto with = [](const std::string& value) { return R"({"about": "x", "debug": {"rollbackWorker": )" + value + "}}"; };
+  Options o;
+  CHECK(!ParseLaunchFile(R"({"about": "x"})", &o) && o.debug.worker_mode.empty() && o.debug.worker_depth == 7);
+  CHECK(!ParseLaunchFile(with(R"("off")"), &o) && o.debug.worker_mode == "off" && DebugSettingsOn(o.debug).empty());
+  CHECK(!ParseLaunchFile(with(R"("check")"), &o) && o.debug.worker_mode == "check" &&
+        DebugSettingsOn(o.debug) == std::vector<std::string>{"debug.rollbackWorker"});
+  CHECK(!ParseLaunchFile(with(R"({"mode": "compare", "depth": 3})"), &o) && o.debug.worker_mode == "compare" &&
+        o.debug.worker_depth == 3);
+  CHECK(Refused(with(R"("adopt")"), "\"debug.rollbackWorker\" is not \"off\", \"compare\", \"check\""));
+  CHECK(Refused(with(R"({"depth": 3})"), "\"debug.rollbackWorker\" needs \"mode\""));
+  CHECK(Refused(with(R"({"mode": "check", "depth": 0})"), "\"debug.rollbackWorker.depth\""));
+}

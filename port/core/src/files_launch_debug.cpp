@@ -93,6 +93,32 @@ void ReadPartialKeys(Part& p, Debug* d, std::string* problem)
     p.Refuse("partialRollback", "needs \"mode\" (\"off\", \"check\" or \"writes\") or \"log\"");
 }
 
+// "debug.rollbackWorker": the deep-rollback worker's S1 (fzgx/rollback_worker.h): a mode alone or {"mode", "depth"}.
+void ReadWorkerKeys(Part& p, Debug* d, std::string* problem)
+{
+  const picojson::value* v = p.Take("rollbackWorker");
+  if (!v)
+    return;
+  const auto mode = [&](const std::string& m) {
+    if (m == "off" || m == "compare" || m == "check")
+      d->worker_mode = m;
+    else
+      p.Refuse("rollbackWorker", "is not \"off\", \"compare\", \"check\" or an object with one of them as \"mode\"");
+  };
+  if (v->is<std::string>())
+    return mode(v->get<std::string>());
+  if (!v->is<picojson::object>())
+    return p.Refuse("rollbackWorker", "is not \"off\", \"compare\", \"check\" or an object");
+  Part f(v->get<picojson::object>(), p.Under("rollbackWorker"), problem);
+  std::string m;
+  f.OneOf("mode", &m, {"off", "compare", "check"});
+  f.Whole("depth", &d->worker_depth, 1, 24);
+  f.Done();
+  if (m.empty())
+    return p.Refuse("rollbackWorker", "needs \"mode\" (\"off\", \"compare\" or \"check\")");
+  mode(m);
+}
+
 // "debug.standStill": the freeze on purpose (fzgx::Debug says what it does).
 void ReadStandStill(Part& p, Debug* d, std::string* problem)
 {

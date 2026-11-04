@@ -88,6 +88,7 @@ std::vector<std::string> DebugSettingsOn(const Debug& d)
   add(!d.late_seats.empty(), "lateSeats");
   add(d.late_noise != 0, "lateNoise");
   add(!d.partial_mode.empty() || !d.partial_log.empty() || !d.partial_guard, "partialRollback");
+  add(!d.worker_mode.empty() && d.worker_mode != "off", "rollbackWorker");
   add(d.skip_draws != 0, "skipDraws");
   add(d.buffer_share != 40, "bufferShare");
   add(d.buffer_steps != 0, "bufferSteps");

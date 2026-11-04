@@ -472,6 +472,7 @@ void AfterStop()
   StopDrawnFrames();
   StopWatchingPictures();
   lanes::CensusStop();
+  StopRollbackWorker();
   lanes::Stop();
   LiftLoadPace(false);  // (a game closed while it loaded: the settings are the process's, put back all the same)
   fzgx::MemoryGone();   // (Core::Shutdown has let the game's memory go: the undo log's guard touches none of it)

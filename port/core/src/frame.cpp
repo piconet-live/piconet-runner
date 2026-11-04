@@ -387,7 +387,9 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
   u32 run_from = wrong.value_or(step);
   if (wrong)
   {
+    WorkerPrepare(g, s, step, run_from);  // (the deep-rollback worker, off by default: fzgx/rollback_worker.h)
     s.rollback.RestoreTo(g, step, run_from);
+    WorkerAfterRestore(g, s);
     ++s.rollbacks;
     s.max_depth = std::max(s.max_depth, step - run_from);
     s.summary.Rollback(step - run_from);
@@ -403,6 +405,7 @@ void RunSteps(Guest& g, Session& s, u32 step, const FrameSteps& steps)
   // the steps the frame runs: from run_from to `step`, the catch-up steps after it; held, to the step before `step`
   const u32 extra = step - run_from + catch_up - (held ? 1 : 0);
   Rollback::Resimulate(g, extra);
+  WorkerOpen(extra, held);
   s.last_extra = extra;
   s.work.depth = step - run_from;
   s.work.catch_up = catch_up;

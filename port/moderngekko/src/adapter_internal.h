@@ -160,6 +160,10 @@ void StartRunAhead();
 void StopRunAhead();
 bool RunAheadAtTick(CPUState* cpu);
 void RunAheadReturned(CPUState* cpu);
+// The deep-rollback worker's CPU context (rollback_worker.cpp, fzgx/rollback_worker.h): after the network hook, a
+// job prepared there runs on its memory; at the stop, its line.
+void RunRollbackWorker(CPUState* cpu);
+void StopRollbackWorker();
 void StartDrawnFrames();
 void StopDrawnFrames();
 // aurora.cpp: Aurora as the presenter (the launch file's "debug.renderer"), its data folder and its line at the stop.
