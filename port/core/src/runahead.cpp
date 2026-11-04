@@ -855,7 +855,13 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
   if (const char* path = std::getenv("AURORA_RUNAHEAD_PATH"))
     s.path = std::fopen(path, "w");
   if (const char* path = std::getenv("AURORA_RUNAHEAD_TIMES"))
-    s.times = std::fopen(path, "w");
+  {
+    // "{t}" in the name: the steady clock in us, so that two games given one environment (a pair race) write two files
+    std::string name = path;
+    if (const auto at = name.find("{t}"); at != std::string::npos)
+      name.replace(at, 3, std::to_string(Us(Tick::now())));
+    s.times = std::fopen(name.c_str(), "w");
+  }
   Notice("fzgx: run ahead: {} pictures a second asked for, {} between two steps at most", s.rate, s.most);
 }
 
