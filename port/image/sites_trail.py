@@ -130,13 +130,19 @@ ts_stock:
     patch(site, word, 0, "trail_streak")
     middle.append((site, ["r0", "r11", "r12", "cr0", "lr", "f6", "f7"], "trail_streak"))
 
-    # a boost's bolts (r25 the machine's effect; the new effect on the stack at 0x38; f5 the bolt's own brightness)
-    site = TEXT + 0x6AAA0   # the colour's last store, stfs f0,0x5C(r1) (0x6AA9C is its green, stfs f1,0x58(r1))
+    # a boost's bolts (r25 the machine's effect; the new effect on the stack at 0x38; f5 the bolt's own brightness). The
+    # site is the colour's last store, stfs f0,0x5C(r1) (0x6AA9C before it is the green's); the effects' generator is
+    # called next (0x6AAA4), and a direct call counts r0 as read (liveness.py): r0 is kept on the routine's own frame.
+    site = TEXT + 0x6AAA0
     word = stock(site, 0xD001005C)
     r.add("trail_bolts", f"""    .long {word:#010x}
 """ + test + """    beq tb_stock
+    stwu 1, -0x10(1)
+    stw 0, 8(1)
     lha 11, 0x18(25)
     @bl trail_sparks
+    lwz 0, 8(1)
+    addi 1, 1, 0x10
     beq tb_stock
     fmuls 1, 1, 5
     fmuls 3, 3, 5
@@ -148,7 +154,7 @@ tb_stock:
 """ + f"""    @b {site + 4:#x}
 """)
     patch(site, word, 0, "trail_bolts")
-    middle.append((site, ["r0", "r11", "r12", "cr0", "lr", "f1", "f3", "f4", "f6", "f7"], "trail_bolts"))
+    middle.append((site, ["r11", "r12", "cr0", "lr", "f1", "f3", "f4", "f6", "f7"], "trail_bolts"))
 
     # a boost's sparkles (r30 the machine's block; the new effect on the stack at 0x44, r3 points to it, its colour
     # about to be finished)
