@@ -355,6 +355,15 @@ u32 Rollback::Region() const
   return m->tracking ? m->region : 0;
 }
 
+// A word (its offset in the region) in one of the kept parts a restore leaves as they are.
+static bool InKept(const std::vector<std::pair<u32, u32>>& kept, u32 off)
+{
+  for (const auto& [at, len] : kept)
+    if (off + 4 > at && off < at + len)
+      return true;
+  return false;
+}
+
 u32 Rollback::Compare(const Guest& g, const Guest& other, std::vector<u32>* words, std::size_t most,
                       const std::vector<u32>* ignore) const
 {
@@ -370,10 +379,6 @@ u32 Rollback::Compare(const Guest& g, const Guest& other, std::vector<u32>* word
       words->push_back(address);
     ++count;
   };
-  // the kept parts, as a mask of the words a restore leaves
-  std::vector<u8> kept(s.shadow.size() / 4, 0);
-  for (const auto& [off, len] : s.kept)
-    std::fill(kept.begin() + off / 4, kept.begin() + (off + len + 3) / 4, u8{1});
   const u8* a = g.Ram(s.region, s.shadow.size());
   const u8* b = other.Ram(s.region, s.shadow.size());
   for (u32 page = 0; a != nullptr && b != nullptr && page < s.shadow.size() / PAGE; ++page)
@@ -383,7 +388,7 @@ u32 Rollback::Compare(const Guest& g, const Guest& other, std::vector<u32>* word
       continue;
     for (u32 w = off; w < off + PAGE; w += 4)
     {
-      if (!kept[w / 4] && std::memcmp(a + w, b + w, 4) != 0 && !ignored(s.region + w))
+      if (std::memcmp(a + w, b + w, 4) != 0 && !InKept(s.kept, w) && !ignored(s.region + w))
         note(s.region + w);
     }
   }
@@ -437,18 +442,17 @@ u32 Rollback::CompareMoments(const Guest& g, const Rollback& other, const Guest&
       std::memcpy(pair.second.data(), cy + off, 32);
   }
   // what a restore leaves: untracked pages and the kept parts
-  std::vector<u8> kept(x.shadow.size() / 4, 0);
-  for (const auto& [off, len] : x.kept)
-    std::fill(kept.begin() + off / 4, kept.begin() + (off + len + 3) / 4, u8{1});
   for (auto it = blocks.begin(); it != blocks.end();)
     it = x.untracked[it->first / PAGE] ? blocks.erase(it) : std::next(it);
   u32 rx = g.Read32(DOL_RNG), ry = other_memory.Read32(DOL_RNG);
   const auto same = [&]() {
     for (const auto& [off, pair] : blocks)
     {
+      if (pair.first == pair.second)
+        continue;
       for (u32 w = 0; w < 32; w += 4)
       {
-        if (std::memcmp(pair.first.data() + w, pair.second.data() + w, 4) != 0 && !kept[(off + w) / 4] &&
+        if (std::memcmp(pair.first.data() + w, pair.second.data() + w, 4) != 0 && !InKept(x.kept, off + w) &&
             !(ignore != nullptr && std::binary_search(ignore->begin(), ignore->end(), x.region + off + w)))
           return false;
       }
