@@ -177,6 +177,7 @@ struct Tracking
   // Rollback::Moments: this log's own count, and the memory it was started on
   u32 moments = 0;
   const Host* home = nullptr;
+  u32 starts = 0;  // Rollback::Starts
   // Rollback::TakeDirty: per page, its content may have changed since the last take; every page (after a Start)
   std::vector<u8> dirty;
   bool all_dirty = true;

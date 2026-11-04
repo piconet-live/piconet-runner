@@ -55,6 +55,9 @@ void ThreadStarts();
 void Left();
 // The game stops: an open job is stopped and the worker's thread is idle (before the adapter joins it).
 void Quiesce();
+// The emulator is about to stop (any thread; the adapter's Core::Stop hook, before the CPU stops and the native module
+// W's steps run in is unloaded): the worker's thread leaves its job and no job begins on it after. Stop lifts it.
+void Close();
 // Tests: the launch file's write watch ("address[:first-last]"; empty: none).
 const std::string& WatchSpec();
 

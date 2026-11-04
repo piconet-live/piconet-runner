@@ -120,6 +120,7 @@ struct Worker
   Rollback log{false};
   bool primed = false;  // W holds the game's memory but for the pages TakeDirty names
   u32 region = 0;
+  u32 game_starts = 0;  // the game's log's Starts when W's log last started (a new count: a new race's log)
   Job job = Job::NONE;
   u32 from = 0, to = 0;
   std::vector<u8> outside_before;  // W outside the log at the job's start ("check")
@@ -172,6 +173,7 @@ struct Async
   u32 check_from = 0, check_to = 0;
 };
 Async s_a;
+bool s_closed = false;  // Close: no job begins on the worker's thread (under s_a.m)
 bool s_pipe_per_thread = false;  // the module's pipe is per thread (SetPipePerThread)
 thread_local bool t_worker = false;  // this is the worker's thread
 
@@ -380,6 +382,8 @@ bool Begin(Memory* memory)
     gw.Write32(EXTRA_STEPS, W_EXTRA);
     {
       const std::lock_guard lock(s_a.m);
+      if (s_closed)
+        return false;  // (the emulator stops: the job stays not begun, and the next frame, if any, closes it)
       s_a.running = true;
       s_a.at = s_a.from;
       s_a.left = std::chrono::steady_clock::now();
@@ -421,18 +425,20 @@ bool HookThreaded()
   {
     a.why = std::format("the steps went another way (step {} in a job from {})", t, a.from);
     a.ended = true;
+    a.mid_step = true;  // W stands after a step no log saw end
     a.cv.notify_all();
     return false;
   }
   // W's log has no guard and compares only its watched pages, so a page neither log watched (a fresh heap page first
   // written inside the job) would have no entries: a later restore inside the job's steps would leave it as it is
   // now, and TakeOver would not name it. Before W waits at its target, every page is compared once (the scan a
-  // frame's own step gets); a page found there gives the job up (the sync rollback runs), and is watched from then on.
+  // frame's own step gets). A page W's log first watches inside a job (found there, or in its learning steps, which
+  // compare every page) gives the job up (the sync rollback runs), and is watched from then on.
   const bool park = t >= a.target;
   lock.unlock();
-  const u32 late = w.log.LatePages();
+  const u32 watched = w.log.WatchedPages();
   w.log.SaveStep(gw, t, park);
-  const bool unwatched = w.log.LatePages() != late;
+  const bool unwatched = w.log.WatchedPages() != watched;
   lock.lock();
   if (unwatched)
   {
@@ -550,6 +556,18 @@ void GiveUp(const std::string& why)
     s_a.cv.notify_all();
     return;
   }
+  if (s_a.open && s_a.begun)
+  {
+    // a threaded job given up on the game's thread (the module's dispatch not found): told as the worker's own, so
+    // the next frame closes it and runs its rollback sync (W's window and step word are the job's: no log saw them)
+    const std::lock_guard lock(s_a.m);
+    if (!s_a.ended)
+      s_a.why = why;
+    s_a.ended = true;
+    s_a.mid_step = true;
+    s_a.cv.notify_all();
+    return;
+  }
   if (w.job != Job::NONE)
     ++w.gave_up;
   ++w.why[why];
@@ -565,6 +583,15 @@ void Quiesce()
   net::WorkerQuiesce();
 }
 
+void Close()
+{
+  std::unique_lock lock(s_a.m);
+  s_closed = true;
+  s_a.stop = true;
+  s_a.cv.notify_all();
+  s_a.cv.wait(lock, [] { return !s_a.running; });
+}
+
 void Count(const char* what, u64 n)
 {
   w.counts[what] += n;
@@ -573,6 +600,10 @@ void Count(const char* what, u64 n)
 void Stop()
 {
   net::WorkerStop();
+  {
+    const std::lock_guard lock(s_a.m);
+    s_closed = false;
+  }
   if (!On() || Measuring() || w.jobs == 0)
     return;
   std::string why, counts, outside;
@@ -740,7 +771,10 @@ void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from)
     w.window.Restore(Data().Snapshot());
   }
   w.primed = true;
-  if (w.log.Active() && w.log.Region() != region)
+  // W's log starts again whenever the game's does (each race, and a new region): its shadow of the pages neither log
+  // watches would hold the last race's bytes, and its learning steps would log those as the pages' content before a
+  // step (a later restore inside a job, or the game's after an adoption, would write them back).
+  if (w.log.Active() && (w.log.Region() != region || w.game_starts != s.rollback.Starts()))
     w.log.Stop();
   w.region = region;
   // rewound by the game's log, and the worker's log's moment before R
@@ -750,7 +784,10 @@ void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from)
   }
   const Timed timed{"us start: Adopt"};
   if (!w.log.Active())
+  {
     w.log.Start(*w.g);
+    w.game_starts = s.rollback.Starts();
+  }
   w.log.Adopt(*w.g, s.rollback, run_from);
   if (w.jobs <= 2)
     Notice("fzgx: rollback worker: job {} from {} to {} prepared ({} pages taken, both logs)", w.jobs, run_from, step,
@@ -1330,7 +1367,11 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
     ++s_r.barred_other;
     return false;
   }
-  const double r = s_a.r_ms > 0 ? s_a.r_ms : s_r.r_sync;
+  double r;
+  {
+    const std::lock_guard lock(s_a.m);  // (the worker's thread writes it at each hook)
+    r = s_a.r_ms > 0 ? s_a.r_ms : s_r.r_sync;
+  }
   if (TheOptions().debug.worker_rule != "always" && s_r.c_high + d * s_r.r_sync + MARGIN_MS <= FIELD_MS)
   {
     ++s_r.sync_fit;

@@ -582,8 +582,22 @@ void RunRollbackWorker(CPUState* cpu)
     s_w.loaded(cpu);  // (the host's floating-point control back to the game's)
 }
 
+// The emulator's stop: Core::Stop tells it (on the thread that stops the emulator) before it stops the CPU, and
+// Core::Shutdown then unloads the native module (StaticRecompCore::Shutdown) before AfterStop runs. A job's steps run
+// in that module on the worker's thread, so the thread leaves its job here, and no job begins after.
+static Common::EventHook s_stop_hook;
+
+void WatchStopForRollbackWorker()
+{
+  s_stop_hook = Core::AddOnStateChangedCallback([](Core::State state) {
+    if (state == Core::State::Stopping)
+      rw::Close();
+  });
+}
+
 void StopRollbackWorker()
 {
+  s_stop_hook = {};
   rw::Quiesce();  // (an open job stopped: the thread waits for the next)
   {
     const std::lock_guard lock(s_t.m);

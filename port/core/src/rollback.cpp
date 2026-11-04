@@ -88,7 +88,13 @@ void Rollback::Start(Guest& g)
 {
   m->home = &g.GetHost();
   m->Moved(g);
+  ++m->starts;
   StartTracking(g, *m);
+}
+
+u32 Rollback::Starts() const
+{
+  return m->starts;
 }
 
 void Rollback::Stop()
@@ -534,6 +540,11 @@ u32 Rollback::CompareMoments(const Guest& g, const Rollback& other, const Guest&
 u32 Rollback::LatePages() const
 {
   return m->late_pages;
+}
+
+u32 Rollback::WatchedPages() const
+{
+  return static_cast<u32>(m->watched_list.size());
 }
 
 Work Rollback::TakeWork()

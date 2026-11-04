@@ -136,6 +136,11 @@ public:
   Work TakeWork();
   // Pages first seen changing after the learning steps (late pages), in all since Start.
   u32 LatePages() const;
+  // The pages watched now (every page seen changing since Start, the learning steps' too; with the guard, a page
+  // that rests leaves them).
+  u32 WatchedPages() const;
+  // The times Start was called on this log: a new count is a new race's log (a fresh shadow, nothing watched yet).
+  u32 Starts() const;
 
   // The lowest step RestoreTo may name now (the log holds every step from it on), and the memory the log's entries
   // take now.

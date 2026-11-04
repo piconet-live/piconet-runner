@@ -235,6 +235,67 @@ void TestRollbackMomentsPerLog()
   CHECK(one.Moments() == 3 && two.Moments() == 2 && net::Rollback::Moments(b) == mb + 3);
 }
 
+// A log whose memory took a new race's bytes behind its back (W's, copied from the game's at a job's start) has a
+// stale shadow of the pages it does not watch: its learning steps, which compare every page, log the old race's bytes
+// as those pages' content before the step, and a restore writes them back. Started again (as W's log is whenever
+// the game's starts: Starts), it logs the present only. And a page first seen changing in any step, learning ones
+// too, is a new watched page (WatchedPages: what gives a job up).
+void TestTheWorkersLogStartsWithTheRace()
+{
+  TestHost host, game_host;
+  ModData data, game_data;
+  Guest g(host, data), game_g(game_host, game_data);
+  std::mt19937 rng(20261105);
+  FakeGame(host, g, rng);
+  game_host.ram = host.ram;
+  const u32 first = (MODULE + net::DATA) & ~(net::PAGE - 1);
+  const u32 page = first + 70 * net::PAGE;  // a page the first race never writes
+  net::Rollback game, w(false);
+  game.Start(game_g);
+  w.Start(g);
+  CHECK(game.Starts() == 1 && w.Starts() == 1 && w.WatchedPages() == 0);
+  for (u32 step = 0; step < 130; ++step)  // race 1: past both logs' learning steps
+  {
+    w.SaveStep(g, step, false);
+    g.Write32(first + 8, step);
+  }
+  w.SaveStep(g, 130, false);
+  CHECK(w.WatchedPages() == 1);
+  const u32 race1 = g.Read32(page);
+  // race 2: the game's log starts again; the memory takes the new race's bytes (W: copied from the game's)
+  game.Stop();
+  game.Start(game_g);
+  CHECK(game.Starts() == 2);
+  g.Write32(page, race1 ^ 0x5A5A5A5A);
+  const u32 race2 = g.Read32(page);
+  // not started again: a full comparison finds the page (late), and a restore to before it writes race 1's bytes
+  {
+    w.SaveStep(g, 200, true);
+    g.Write32(first + 8, 1);
+    w.SaveStep(g, 201, true);
+    CHECK(w.WatchedPages() == 2 && w.LatePages() == 1);
+    w.RestoreTo(g, 201, 199);  // (the change found at 200's comparison is step 199's)
+    CHECK(g.Read32(page) == race1);  // the hazard
+    g.Write32(page, race2);
+  }
+  // started again with the game's: the present is the shadow, so nothing of race 1 comes back
+  w.Stop();
+  w.Start(g);
+  CHECK(w.Starts() == 2 && w.WatchedPages() == 0);
+  const u32 watched = w.WatchedPages(), late = w.LatePages();
+  w.SaveStep(g, 300, false);  // (a learning step: every page compared)
+  CHECK(w.WatchedPages() == watched);
+  const u32 before = g.Read32(page + 4);
+  g.Write32(page + 4, before ^ 7);  // a page first written in a learning step: watched from here on (a job gives up)
+  w.SaveStep(g, 301, false);
+  CHECK(w.WatchedPages() == watched + 1 && w.LatePages() == late);  // (not a late page: no other count sees it)
+  w.RestoreTo(g, 301, 300);
+  CHECK(g.Read32(page) == race2 && g.Read32(page + 4) == before);
+  game.Stop();
+  w.Stop();
+  CHECK(host.log.empty() && game_host.log.empty());
+}
+
 // The worker's mode (S3's default): the launch file's when it names one, else FZGX_ROLLBACK_WORKER's "off" or "on",
 // else on from 4 hardware threads.
 void TestTheWorkersDefault()

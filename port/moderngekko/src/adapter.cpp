@@ -369,6 +369,7 @@ void BeforeBoot(StaticRecompModuleSource& source)
 {
   if (!InUse())
     return;
+  WatchStopForRollbackWorker();
   // The CPU core is the one the runner chose from this start's settings: the native module's, or the emulator's JIT
   // when the launch file's "debug.jit" asks for the reference. Set as the run's own value, which wins over a
   // settings file that names another core.
