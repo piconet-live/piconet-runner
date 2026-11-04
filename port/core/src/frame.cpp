@@ -349,7 +349,7 @@ void NoteBurst(Session& s, u32 step, u32 arrived, u32 depth)
 
 // The predictions checked against the official frames that are here; the memory back to before the first wrong step
 // (or, tests, a forced rollback's).
-FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const Forcing& forcing)
+FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, bool check, const Forcing& forcing)
 {
   // the first step whose inputs turned out wrong, among the steps whose official frames are here
   const u32 arrived = std::min<u32>(Have(s), step);
@@ -362,8 +362,11 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
   // frame that settles the race: every step is checked there.
   const u32 hold = settle ? 0 : forcing.deepest;
   const u32 known = hold == 0 ? arrived : std::max(s.checked, std::min(arrived, step > hold ? step - hold : 0));
+  // (the deep-rollback worker's thread, on from 4 hardware threads: an open job adopted here, or the step a job given
+  // up goes back to; while one is open, its own steps' rows are its own: fzgx/rollback_worker.h)
   std::optional<u32> wrong;
-  for (u32 t = s.checked; t < arrived; ++t)
+  const std::optional<u32> fall_back = WorkerFrame(g, s, step, settle, check);
+  for (u32 t = s.checked; t < WorkerSearchTo(arrived); ++t)
   {
     const auto it = s.used.find(t);
     if (it == s.used.end() || it->second != s.official[t])
@@ -372,6 +375,8 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
       break;
     }
   }
+  if (fall_back && (!wrong || *fall_back < *wrong))
+    wrong = fall_back;
   // the test switch
   if (forcing.every != 0 && !wrong && !settle && s.normal_steps % forcing.every == 0)
   {
@@ -384,10 +389,20 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
       s.work.forced = true;
     }
   }
+  if (wrong && (WorkerTakes(s, step, *wrong) || WorkerStart(g, s, step, *wrong)))
+  {
+    // the worker's: the game goes on with its predicted steps
+    ++s.rollbacks;
+    s.max_depth = std::max(s.max_depth, step - *wrong);
+    s.summary.Rollback(step - *wrong);
+    wrong.reset();
+  }
   u32 run_from = wrong.value_or(step);
   if (wrong)
   {
+    WorkerPrepare(g, s, step, run_from);  // (the deep-rollback worker: fzgx/rollback_worker.h)
     s.rollback.RestoreTo(g, step, run_from);
+    WorkerAfterRestore(g, s);
     ++s.rollbacks;
     s.max_depth = std::max(s.max_depth, step - run_from);
     s.summary.Rollback(step - run_from);
@@ -403,12 +418,13 @@ void RunSteps(Guest& g, Session& s, u32 step, const FrameSteps& steps)
   // the steps the frame runs: from run_from to `step`, the catch-up steps after it; held, to the step before `step`
   const u32 extra = step - run_from + catch_up - (held ? 1 : 0);
   Rollback::Resimulate(g, extra);
+  WorkerOpen(s, run_from, extra, held);
   s.last_extra = extra;
   s.work.depth = step - run_from;
   s.work.catch_up = catch_up;
   s.work.held = held;
   s.work.extra = s.last_extra;
-  s.checked = known;
+  s.checked = WorkerKnown(known);
   for (auto it = s.used.begin(); it != s.used.end() && it->first < s.checked;)
     it = s.used.erase(it);
   s.rollback.Final(s.checked);
@@ -500,7 +516,7 @@ void NormalStep(Guest& g, Session& s)
   FrameSteps steps;
   {
     FZGX_TIME(Predictions);
-    steps = CheckPredictions(g, s, step, kind.settle, forcing);
+    steps = CheckPredictions(g, s, step, kind.settle, kind.check, forcing);
   }
   const double ahead = StepsAhead(s, step);
   if (!s.playback && !TallyTheWatchersFrame(s, true, frame_now, step))  // (the schedule's own figure, no clock read)

@@ -464,6 +464,23 @@ Row RowFor(const Session& s, u32 t);
 void WriteRow(Guest& g, const Session& s, u32 t, const Row& row);
 void ChecksumPrevious(Guest& g, Session& s, bool extra);
 void ExtraStep(Guest& g, Session& s);
+// The deep-rollback worker (rollback_worker.cpp, fzgx/rollback_worker.h): a job's start before the restore, W
+// checked after it, the job opened when the frame runs every step to L, and compared at the hook of L.
+void WorkerPrepare(Guest& g, Session& s, u32 step, u32 run_from);
+void WorkerAfterRestore(Guest& g, Session& s);
+void WorkerOpen(Session& s, u32 run_from, u32 extra, bool held);
+// S2, the worker's thread (debug.rollbackWorker "on"; "sync" measures the same frames with none): at the predictions'
+// check, an adoption or the step a job given up goes back to; the search's end below an open job; a correction the
+// open job takes; the rule that starts a job; the final steps held at an open job's R; the stop.
+std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool check);
+u32 WorkerSearchTo(u32 arrived);
+// (WorkerTakes: false with `wrong` moved down to the job's R when it stopped the job, the restarts' cap reached)
+bool WorkerTakes(Session& s, u32 step, u32& wrong);
+bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong);
+u32 WorkerKnown(u32 known);
+void WorkerQuiesce();
+void WorkerStop();
+void WorkerCompare(Guest& g, Session& s, u32 t);
 void CloseFrameWork(Session& s, bool flush);
 
 // frame.cpp

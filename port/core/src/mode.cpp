@@ -2512,7 +2512,7 @@ const char* FaultText(u32 fault)
 }
 }  // namespace
 
-void Step(Guest& g)
+void Step(Guest& g, bool quiet)
 {
   const boot::Match* m = boot::Get();
   const u32 block = g.Read32(layout::MODES + 4);
@@ -2521,7 +2521,7 @@ void Step(Guest& g)
   // where the starts fell, once each a run of the game: every game says the same steps
   const u32 runs = g.Read32(block + RUNS);
   static u32 told = 0;
-  if (runs < 2 && told == runs)
+  if (!quiet && runs < 2 && told == runs)
   {
     told = runs + 1;
     Notice("fzgx: game mode: {} at step {}, phase {:#x}", runs == 0 ? "game_start" : "countdown", g.Read32(net::STEP),
@@ -2535,7 +2535,7 @@ void Step(Guest& g)
   hud::ShowFault(g, *m->game_mode, g.Read32(block + END) == 1);
   // the log, once a run of the game (a step run again says nothing new); the block holds what the race is
   static bool said = false;
-  if (!said && g.Read32(block + END) == 1)
+  if (!quiet && !said && g.Read32(block + END) == 1)
   {
     said = true;
     Error("fzgx: mode error: \"{}\" ({}) at step {}: {}; the race ends here for everyone", m->game_mode->name,

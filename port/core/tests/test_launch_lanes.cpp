@@ -55,3 +55,31 @@ void TestThePartialRollbackKeys()
     CHECK(Refused(with(contact), "\"debug.partialRollback.contact\" is no setting: the contact jobs were removed on 2026-10-25"));
   CHECK(Refused(with(R"({"mode": "check", "depth": 3})"), "\"debug.partialRollback.depth\" is not a setting"));
 }
+
+// "debug.rollbackWorker": the deep-rollback worker (fzgx/rollback_worker.h); not named, the mode stays empty (on by default: ModeFor): a mode
+// alone or {"mode", "depth"}.
+void TestTheRollbackWorkerKeys()
+{
+  const auto with = [](const std::string& value) { return R"({"about": "x", "debug": {"rollbackWorker": )" + value + "}}"; };
+  Options o;
+  CHECK(!ParseLaunchFile(R"({"about": "x"})", &o) && o.debug.worker_mode.empty() && o.debug.worker_depth == 7);
+  CHECK(!ParseLaunchFile(with(R"("off")"), &o) && o.debug.worker_mode == "off" && DebugSettingsOn(o.debug).empty());
+  CHECK(!ParseLaunchFile(with(R"("check")"), &o) && o.debug.worker_mode == "check" &&
+        DebugSettingsOn(o.debug) == std::vector<std::string>{"debug.rollbackWorker"});
+  CHECK(!ParseLaunchFile(with(R"({"mode": "compare", "depth": 3})"), &o) && o.debug.worker_mode == "compare" &&
+        o.debug.worker_depth == 3);
+  CHECK(Refused(with(R"("adopt")"), "\"debug.rollbackWorker\" is not \"off\", \"compare\", \"check\""));
+  // S2: the thread ("on"), its baseline ("sync"), the rule and the write watch
+  CHECK(!ParseLaunchFile(with(R"("on")"), &o) && o.debug.worker_mode == "on" && o.debug.worker_rule == "fit");
+  CHECK(!ParseLaunchFile(with(R"({"mode": "sync", "rule": "always", "watch": "805973D4:415-430"})"), &o) &&
+        o.debug.worker_mode == "sync" && o.debug.worker_rule == "always" && o.debug.worker_watch == "805973D4:415-430");
+  CHECK(Refused(with(R"({"mode": "on", "rule": "never"})"), "\"debug.rollbackWorker.rule\""));
+  CHECK(Refused(with(R"({"depth": 3})"), "\"debug.rollbackWorker\" needs \"mode\""));
+  CHECK(Refused(with(R"({"mode": "check", "depth": 0})"), "\"debug.rollbackWorker.depth\""));
+  // S3: the adoptions compared with their sync rollbacks, the restarts' cap, the job's start
+  CHECK(!ParseLaunchFile(with(R"("async-check")"), &o) && o.debug.worker_mode == "async-check");
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "restarts": 2, "start": "whole"})"), &o) && o.debug.worker_restarts == 2 &&
+        o.debug.worker_start == "whole");
+  CHECK(Refused(with(R"({"mode": "on", "restarts": 31})"), "\"debug.rollbackWorker.restarts\""));
+  CHECK(Refused(with(R"({"mode": "on", "start": "some"})"), "\"debug.rollbackWorker.start\""));
+}

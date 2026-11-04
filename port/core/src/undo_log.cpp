@@ -226,6 +226,8 @@ void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
     std::memcpy(s.shadow_rng.data(), rng, 4);
   }
   s.blocks_logged += static_cast<u32>(entry.blocks.size() + entry.scratch.size());
+  for (const auto& block : entry.blocks)
+    Dirty(s, block.first);
 #ifdef FZGX_HOST_TIMERS
   NotePages(learning ? 0 : frame_step ? 1 : full ? 2 : 3, entry);
 #endif
@@ -278,6 +280,7 @@ void Restore(Guest& g, Tracking& s, u32 from, u32 t)
     {
       std::memcpy(live + b->first, b->second.data(), BLOCK);
       std::memcpy(s.shadow.data() + b->first, b->second.data(), BLOCK);
+      Dirty(s, b->first);
     }
     if (s.way == Tracking::Way::Both)
       CheckRestored(g, s, it->second.blocks);
@@ -471,7 +474,10 @@ void StartTracking(Guest& g, Tracking& s)
       a = end;
     }
   }
-  TellPutBack(&s, PutBack(g, s));
+  if (s.tells)
+    TellPutBack(&s, PutBack(g, s));
+  s.dirty.assign(s.shadow.size() / PAGE, 0);
+  s.all_dirty = true;
   s.watched_list.clear();
   s.keep_watching = false;
   s.tracked_steps = 0;

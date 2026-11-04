@@ -26,6 +26,7 @@ using launch::Part;
 using launch::ReadEmulatorSide;
 using launch::ReadLanesOff;
 using launch::ReadPartialKeys;
+using launch::ReadWorkerKeys;
 using launch::ReadRedraw;
 using launch::ReadStandStill;
 using launch::RefuseRemovedKeys;
@@ -112,6 +113,7 @@ void ReadDebug(Part& file, Debug* d, std::string* problem)
   }
   ReadStandStill(p, d, problem);
   ReadPartialKeys(p, d, problem);
+  ReadWorkerKeys(p, d, problem);
   ReadEmulatorSide(p, d);
   p.Done();
 }

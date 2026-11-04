@@ -34,6 +34,10 @@ void TestTheLockedCacheInTheUndoLog();
 void TestTheRollbackInterface();
 void TestChecksum();
 void TestTheSpareListsAreBounded();
+void TestTheWorkersTakeOver();
+void TestRollbackMomentsPerLog();
+void TestTheWorkersDefault();
+void TestTheWorkersLogStartsWithTheRace();
 void TestARollbackLeavesTheWindow();
 // test_rollback_state.cpp
 void TestRollbacksStateList();
@@ -158,6 +162,7 @@ void TestSavesDamagedAtRandom();
 void TestALaunchFile();
 void TestALaunchFileThatIsRefused();
 void TestThePartialRollbackKeys();
+void TestTheRollbackWorkerKeys();
 void TestALaunchFilesTaskbarButton();
 void TestALaunchFileOfTheEmulatorsSide();
 void TestTheWindowsControlsAndTheUsersSettings();
@@ -484,6 +489,10 @@ int main(int argc, char** argv)
   TestARollbackLeavesTheWindow();   // before any Init: the core's log then has no host to go to
   TestChecksum();
   TestTheSpareListsAreBounded();
+  TestTheWorkersTakeOver();
+  TestRollbackMomentsPerLog();
+  TestTheWorkersDefault();
+  TestTheWorkersLogStartsWithTheRace();
   TestRaceFromAMatchFile();
   TestAReplaysLineup();
   TestAReplayThatIsNotPlayed();
@@ -536,6 +545,7 @@ int main(int argc, char** argv)
   TestALaunchFile();
   TestALaunchFileThatIsRefused();
   TestThePartialRollbackKeys();
+  TestTheRollbackWorkerKeys();
   TestALaunchFilesTaskbarButton();
   TestALaunchFileOfTheEmulatorsSide();
   TestTheWindowsControlsAndTheUsersSettings();

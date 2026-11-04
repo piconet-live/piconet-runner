@@ -270,8 +270,9 @@ void Run(Guest& g, const Package& p, u32 block, u32 module);
 // game_start's pass alone (mode_begin, port/image/sites_mode.py): the block's run count goes from 0 to 1. Run on a count
 // of 0 does this first, so a test may start from either.
 void GameStart(Guest& g, const Package& p, u32 block, u32 module);
-// The mode point's host call: the race's mode run, and a mode error said once in the log.
-void Step(Guest& g);
+// The mode point's host call: the race's mode run, and a mode error said once in the log. `quiet`: nothing said (the
+// deep-rollback worker's steps on W, fzgx/rollback_worker.h, maybe on its own thread: the game's run says it).
+void Step(Guest& g, bool quiet = false);
 // Seat `seat`'s record in the block; 0 without a block.
 u32 Record(const Guest& g, u32 seat);
 // Seat `seat`'s move (MOVES: read by the image's mode_speed in the machine's step) and its rolling start's saved

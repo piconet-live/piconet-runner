@@ -4,6 +4,7 @@
 
 #include "adapter_internal.h"
 #include "lanes.h"
+#include "lanes_census.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -67,6 +68,8 @@ void CountFrame()
 // that calls it (port/image/sites_hfr.py) reads it.
 bool HostCall(CPUState* cpu, u32 address, void*)
 {
+  if (s_state.native && (IsOurs(address) || lanes::IsTask(address)))
+    lanes::CensusHostCall(cpu, address);  // (the deep-rollback probe, off unless its key asks: lanes_census.h)
   if (lanes::IsTask(address))  // the machines' task, with the per-machine rollback on (lanes.h)
     return lanes::TaskCall(cpu);
   if (address == HOST_CALLS_END && s_state.native)  // a call of the step run ahead has returned (run_ahead.cpp)
@@ -80,6 +83,11 @@ bool HostCall(CPUState* cpu, u32 address, void*)
     {
       ++s_state.steps;
       fzgx::NetSync();
+      if (s_state.native)
+      {
+        lanes::CensusAfterNet(cpu);
+        RunRollbackWorker(cpu);  // (the deep-rollback worker, off unless its key asks: fzgx/rollback_worker.h)
+      }
     }
     else if (address == table::HOST_TICK)
     {
