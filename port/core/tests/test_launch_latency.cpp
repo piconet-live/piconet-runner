@@ -87,11 +87,14 @@ void TestTheLatencyTestSettings()
 
 void TestTheLanesSettings();  // test_launch_lanes.cpp
 void TestTrueWidescreen();    // test_launch_widescreen.cpp
+void TestTheAuroraSwitches();  // test_aurora_switches.cpp
 
-// The launch file's keys a player's start may hold beside the race's: presentation, delay, lanes (0), true widescreen.
+// The launch file's keys a player's start may hold beside the race's: presentation, delay, lanes (0), true widescreen,
+// and the Aurora switches the picture's keys bring.
 void TestTheLaunchFilesPlayersKeys()
 {
   TestTheLatencyTestSettings();
   TestTheLanesSettings();
   TestTrueWidescreen();
+  TestTheAuroraSwitches();
 }

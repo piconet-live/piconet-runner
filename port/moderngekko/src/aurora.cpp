@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "adapter_internal.h"
+#include "fzgx/aurora_switches.h"
 
 #include <filesystem>
 #include <system_error>
@@ -17,6 +18,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -54,46 +56,15 @@ void SetSwitch(const char* name, const std::string& value)
 #endif
 }
 
-// A switch a player's setting brings with it, unless the start already has it set (a test's own value stays, 0 = off)
-void SetSwitchUnlessSet(const char* name, const char* value)
-{
-  if (std::getenv(name) == nullptr)
-    SetSwitch(name, value);
-}
-
-// High refresh's tested set (owner-slots240-unleashed.cmd, gxr/240-slots): the pictures between drawn again from the
-// true frame's draws as render bundles, paced to the refreshes, asked on time while the next true frame decodes, its
-// offscreen passes not drawn again, each picture its own refresh (Fifo)
-constexpr const char* HIGH_REFRESH_SET[][2] = {
-    {"AURORA_REDRAW", "1"},          {"AURORA_REDRAW_BUNDLES", "1"},  {"AURORA_PACE", "1"},
-    {"AURORA_PRESENT_OVERLAP", "1"}, {"AURORA_PRESENT_SLOTS", "1"},   {"AURORA_REDRAW_SKIP_OFFSCREEN", "1"},
-    {"AURORA_PRESENT_FIFO", "1"},
-};
-
-// The player's settings in the launch file. A key left out leaves its switch alone, so a test's own switches stay.
+// The player's settings in the launch file (fzgx/aurora_switches.h: what each brings, tested in the core). A key left
+// out leaves its switches alone, and a set a setting brings leaves a switch the start has set alone, so a test's own
+// switches stay.
 void SetSwitches(const fzgx::Options& o)
 {
-  if (o.aurora_edges >= 4)  // (1 or 4 are the only counts every graphics card has)
-    SetSwitch("AURORA_MSAA", "4");
-  if (o.aurora_textures > 1)
-  {
-    SetSwitch("AURORA_ANISO", std::to_string(o.aurora_textures));
-    SetSwitch("AURORA_ANISO_GX", "0");
-    SetSwitch("AURORA_ANISO_ALL", "1");
-  }
-  if (!o.aurora_colourblind.empty() && o.aurora_colourblind != "off")
-    SetSwitch("AURORA_COLOURBLIND", o.aurora_colourblind);
-  // (the step ahead's skip, AURORA_RUNAHEAD_SKIP, is on by default with it: runahead.cpp; a test's 0 stays)
-  if (o.aurora_high_refresh != 0)
-  {
-    SetSwitch("AURORA_RUNAHEAD", std::to_string(o.aurora_high_refresh));
-    for (const auto& s : HIGH_REFRESH_SET)
-      SetSwitchUnlessSet(s[0], s[1]);
-  }
-  // With the rays on (AURORA_RT=1, the live pass): the stream thread hands the draws' state keys to the translate
-  // threads (gxr/240-capture)
-  if (const char* rays = std::getenv("AURORA_RT"); rays != nullptr && rays[0] == '1')
-    SetSwitchUnlessSet("AURORA_RT_CAPTURE_ASYNC", "1");
+  const std::vector<fzgx::aurora::Setting> set = fzgx::aurora::Switches(o, [](const char* name) { return std::getenv(name); });
+  for (const fzgx::aurora::Setting& s : set)
+    SetSwitch(s.name.c_str(), s.value);
+  s_core_host.Log(fzgx::LogLevel::Notice, fzgx::aurora::Line(o, set));
 }
 
 u32 AskedScale(const fzgx::Options& o)
