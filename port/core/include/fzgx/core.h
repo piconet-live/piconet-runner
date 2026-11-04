@@ -111,6 +111,10 @@ struct Debug
   // race's rollbacks run sync, and the worker is tried again 10 s later (or at a new race); 0: never
   u32 worker_slow_us = 6000;
   u32 worker_delay_us = 0;  // "delayUs": tests, W sleeps this long at every step (a slow PC's worker)
+  u32 worker_delay_from = 0, worker_delay_to = 0;  // "delayFrom", "delayTo": ... only at W's steps in [from, to) (to 0:
+                                                   // no end; a load for a while)
+  u32 worker_spike_at = 0, worker_spike_us = 0;    // "spikeAt", "spikeUs": tests, once, this much added to the time of
+                                                   // W's first measured step at or past spikeAt (a spike: section 19)
   u32 worker_from = 422;  // "from": the first step a job may go back to (the countdown's end; tests: earlier)
   std::string worker_start = "changed";  // "start": "changed" (only pages that differ copied into W) or "whole" (S2's)
   std::string partial_log;

@@ -6,6 +6,7 @@
 #include "harness.h"
 #include "rollback_worker_guard.h"
 #include "rollback_worker_kept.h"
+#include "rollback_worker_pace.h"
 #include "undo_log.h"
 
 namespace
@@ -438,4 +439,119 @@ void TestTheWorkersGuards()
   CHECK(guard::Moved());
   rw::SetCodeGeneration(nullptr);
   CHECK(!guard::Moved());
+}
+
+// The slow worker's switch and the trial of W's estimate (study section 19): one spike that sets W's estimate near a
+// frame bars every start, W never runs and its estimate never moves. The barred windows strike on the estimate, the
+// race is switched (and logged), and the retry gives W a fresh estimate: a good PC's worker runs again and stays on.
+// A PC whose worker really is slow is switched again; with "slowStepUs" 0 the estimate is reseeded after RETRY_S.
+void TestTheWorkersPace()
+{
+  BEGIN_TEST();
+  namespace pace = fzgx::rollback_worker::pace;
+  using pace::Verdict;
+  std::vector<float> window;
+  pace::Now now;
+  now.limit_us = 6000;
+  now.starts = 1;
+  // a frame of a good PC: W runs 4 steps of 3 ms (a frame a step and some)
+  const auto run = [&](float step_ms) {
+    for (int k = 0; k < 4; ++k)
+      window.push_back(step_ms);
+  };
+  pace::Pace p;
+  CHECK(p.Watch(now, window) == Verdict::NONE);  // (the first window starts)
+  now.estimate_ms = 3;
+  double t = 0;
+  for (; t < 5; t += 1.0 / 60)
+  {
+    now.s = t;
+    run(3);
+    CHECK(p.Watch(now, window) == Verdict::NONE);
+  }
+  CHECK(p.switches == 0 && p.barred_windows == 0 && p.rate_high == 3);
+  // the spike: the estimate at 16.5 ms, every start barred late from now on, W runs no step; before the fix no
+  // window ever ended and nothing was logged
+  now.estimate_ms = 16.5;
+  Verdict seen = Verdict::NONE;
+  double switched_at = -1;
+  for (; t < 9 && seen == Verdict::NONE; t += 1.0 / 60)
+  {
+    now.s = t;
+    ++now.barred_late;
+    ++now.behind;
+    seen = p.Watch(now, window);
+    if (seen == Verdict::SWITCH)
+      switched_at = t;
+  }
+  CHECK(seen == Verdict::SWITCH && p.switched && p.switches == 1 && p.step_n == 0 && p.step_ms == 16.5);
+  // (the first barred window ends within a window of the spike, the switch STRIKES - 1 windows after it)
+  CHECK(switched_at >= 5 + (pace::STRIKES - 1) * pace::WINDOW_S && switched_at < 5 + pace::STRIKES * pace::WINDOW_S + 0.1);
+  CHECK(p.barred_windows == pace::STRIKES);
+  // switched: every start barred while switched (not late ones), nothing until RETRY_S
+  for (; t < switched_at + pace::RETRY_S - 0.05; t += 1.0 / 60)
+  {
+    now.s = t;
+    CHECK(p.Watch(now, window) == Verdict::NONE);
+  }
+  for (; t < switched_at + pace::RETRY_S + 0.05 && seen != Verdict::RETRY; t += 1.0 / 60)
+  {
+    now.s = t;
+    seen = p.Watch(now, window);
+  }
+  CHECK(seen == Verdict::RETRY && !p.switched && p.retries == 1 && !p.new_race);
+  // the retry: the caller gives W a fresh estimate (the game's own rerun step); a good PC's worker runs at 3 ms again
+  // and stays on for the rest of the race
+  now.estimate_ms = 3;
+  const double retried_at = t;
+  for (; t < retried_at + 30; t += 1.0 / 60)
+  {
+    now.s = t;
+    run(3);
+    CHECK(p.Watch(now, window) == Verdict::NONE);
+  }
+  CHECK(p.switches == 1 && !p.switched && window.size() < 4 * 60 + 8);
+  // a worker that really is slow (8 ms a step, its starts still barred late now and then): switched again, logged
+  for (seen = Verdict::NONE; t < retried_at + 40 && seen == Verdict::NONE; t += 1.0 / 60)
+  {
+    now.s = t;
+    run(8);
+    ++now.behind;
+    seen = p.Watch(now, window);
+  }
+  CHECK(seen == Verdict::SWITCH && p.switches == 2 && p.step_n >= pace::WINDOW && p.step_ms == 8);
+  // a new race ends the switch at once
+  now.starts = 2;
+  t += 1.0 / 60;
+  now.s = t;
+  CHECK(p.Watch(now, window) == Verdict::RETRY && p.new_race && p.retries == 2);
+  // a brief load on a good PC (a window's median slow, no catch-ups) does not switch
+  for (fzgx::u32 k = 0; k < 2 * pace::STRIKES; ++k)
+  {
+    t += pace::WINDOW_S + 0.01;
+    now.s = t;
+    for (fzgx::u32 n = 0; n < pace::WINDOW; ++n)
+      window.push_back(9);
+    CHECK(p.Watch(now, window) == Verdict::NONE);
+  }
+  CHECK(p.switches == 2);
+  // "slowStepUs" 0 (no switch): a worker barred by its estimate gets a fresh one after RETRY_S, not before
+  pace::Pace q;
+  window.clear();
+  now = pace::Now{};
+  CHECK(q.Watch(now, window) == Verdict::NONE);
+  now.estimate_ms = 16.5;
+  for (t = 0, seen = Verdict::NONE; t < 20 && seen == Verdict::NONE; t += 1.0 / 60)
+  {
+    now.s = t;
+    ++now.barred_late;
+    seen = q.Watch(now, window);
+  }
+  CHECK(seen == Verdict::RESEED && q.reseeds == 1 && q.switches == 0 && t >= pace::RETRY_S && t < pace::RETRY_S + 1.1);
+  // and its windows are emptied as they end (no switch kept them growing before)
+  for (fzgx::u32 n = 0; n < 2 * pace::WINDOW; ++n)
+    window.push_back(3);
+  t += pace::WINDOW_S + 0.01;
+  now.s = t;
+  CHECK(q.Watch(now, window) == Verdict::NONE && window.empty());
 }

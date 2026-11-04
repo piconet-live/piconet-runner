@@ -86,6 +86,10 @@ void TestTheRollbackWorkerKeys()
         o.debug.worker_delay_us == 0);
   CHECK(!ParseLaunchFile(with(R"({"mode": "on", "catchUp": 30, "slowStepUs": 0, "delayUs": 7000})"), &o) &&
         o.debug.worker_catch_up == 30 && o.debug.worker_slow_us == 0 && o.debug.worker_delay_us == 7000);
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "delayUs": 9000, "delayFrom": 1500, "delayTo": 2700, "spikeAt": 900,
+                                  "spikeUs": 150000})"), &o) &&
+        o.debug.worker_delay_from == 1500 && o.debug.worker_delay_to == 2700 && o.debug.worker_spike_at == 900 &&
+        o.debug.worker_spike_us == 150000);
   CHECK(Refused(with(R"({"mode": "on", "catchUp": 300})"), "\"debug.rollbackWorker.catchUp\""));
   CHECK(Refused(with(R"({"mode": "on", "start": "some"})"), "\"debug.rollbackWorker.start\""));
 }
