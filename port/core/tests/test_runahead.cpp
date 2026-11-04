@@ -1,4 +1,4 @@
-// High refresh with no step ahead (runahead.cpp, AURORA_RUNAHEAD_AFTER with AURORA_REDRAW): the tick runs nothing of the
+// High refresh with no step ahead (runahead.cpp, AURORA_RUNAHEAD_AFTER, on by default with AURORA_REDRAW): the tick runs nothing of the
 // game's, the request leaves at DRAW_ASK = 1 with the poses after the true step and the command stream's position the tick
 // saw; none when no step ran since the tick (a pause, a held frame) or when the race's guards no longer hold there.
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -69,7 +69,6 @@ void TestHighRefreshWithNoStepAhead()
   ARace(g);
   setenv("AURORA_RUNAHEAD", "240", 1);
   setenv("AURORA_REDRAW", "1", 1);
-  setenv("AURORA_RUNAHEAD_AFTER", "1", 1);
   u64 position = 500;
   u32 ran = 0;
   std::vector<runahead::RedrawRequest> asked;
@@ -145,6 +144,27 @@ void TestHighRefreshWithNoStepAhead()
   CHECK(report.find("1 passes with no step since the tick, 1 out of the race by then") != std::string::npos);
   CHECK(report.find("0/1/2/3/more 1/2/1/0/0") != std::string::npos);
   CHECK(report.find("against the next tick: 1 compared, machines differed 0, camera differed 0") != std::string::npos);
+  runahead::Stop();
+  // AURORA_RUNAHEAD_AFTER=0: the step ahead again (here it finds no step wrapper in the image, and goes off), and none without REDRAW
+  setenv("AURORA_RUNAHEAD_AFTER", "0", 1);
+  net::s_session->watch = net::Watch::Drifting;  // (no input of a seat of this test's to send at the tick)
+  runahead::Start([](float) {}, [&](u32) { ++ran; }, [&](const runahead::RedrawRequest& r) { asked.push_back(r); },
+                  [&] { return position; });
+  g.Write32(net::STEP, 200);
+  CHECK(!runahead::Begin());
+  g.Write32(net::STEP, 201);
+  CHECK(!runahead::Begin());
+  CHECK(!runahead::On());
+  runahead::Stop();
+  unsetenv("AURORA_RUNAHEAD_AFTER");
+  unsetenv("AURORA_REDRAW");
+  runahead::Start([](float) {}, [&](u32) { ++ran; }, [&](const runahead::RedrawRequest& r) { asked.push_back(r); },
+                  [&] { return position; });
+  g.Write32(net::STEP, 300);
+  runahead::Begin();
+  g.Write32(net::STEP, 301);
+  CHECK(!runahead::Begin());
+  CHECK(!runahead::On());
   runahead::Stop();
   unsetenv("AURORA_RUNAHEAD");
   unsetenv("AURORA_REDRAW");

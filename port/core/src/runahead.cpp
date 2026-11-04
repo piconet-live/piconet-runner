@@ -841,7 +841,7 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
   }
   s.compare = s.skip != 0 && std::getenv("AURORA_TEST_SKIP_COMPARE") != nullptr;
   const char* after = std::getenv("AURORA_RUNAHEAD_AFTER");
-  s.after = s.redrawing && after != nullptr && after[0] == '1';
+  s.after = s.redrawing && (after == nullptr || after[0] != '0');  // (on wherever the renderer redraws; 0: the step ahead, for tests)
   s.after_compare = !s.after && std::getenv("AURORA_TEST_AFTER_COMPARE") != nullptr;
   if (s.after)
     Notice("fzgx: run ahead: no step ahead; the machines and the camera after the true step, at its drawing (AURORA_RUNAHEAD_AFTER)");

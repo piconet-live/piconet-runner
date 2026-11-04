@@ -6,7 +6,7 @@
 // AURORA_RUNAHEAD_SKIP (on by default with run-ahead; 0 turns it off, for tests and comparison): the step ahead leaves out
 // the task lists whose work is undone unseen (the effects, BackGroundCalc, the face board, ...: runahead.cpp, SKIP_LISTS);
 // AURORA_TEST_SKIP_COMPARE runs each step ahead both ways and compares what is read from it.
-// AURORA_RUNAHEAD_AFTER (with AURORA_REDRAW only): no step ahead at all. The machines and the camera are taken after the
+// AURORA_RUNAHEAD_AFTER (on by default with AURORA_REDRAW, which it needs; 0: the step ahead, for tests and comparison): no step ahead at all. The machines and the camera are taken after the
 // frame's own true step, at the image's store DRAW_ASK = 1 (the frame's drawing is about to begin), and the request leaves
 // there with the command stream's position the tick saw. Nothing new runs in the game: no undo, no muted run, the mode's
 // rules and the per-machine rollback untouched. AURORA_TEST_AFTER_COMPARE (today's step ahead on): the same Take at
