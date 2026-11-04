@@ -98,6 +98,10 @@ void MinimapSummary();  // its line in the log, at the end
 void PresentTick(Guest& g);
 void PresentRaceFrame();
 void PresentAsked(Guest& g, u32 value);
+// The race frames the late-frame skip found would be late, so far; the last drawn race frame's time from its tick to
+// its drawing's end (-1: none since the last ask). For the deep-rollback worker's rule and its frame counts.
+u32 PresentLateFrames();
+double PresentLastBusyMs();
 void PresentEnd();
 }  // namespace net
 

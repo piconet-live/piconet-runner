@@ -322,9 +322,9 @@ u32 Rollback::KeptChecksum(const Guest& g, u32 step)
   return g.Read32(CHECKSUMS + (step & 1023) * 4);
 }
 
-void Rollback::TakeOver(Guest& g, Rollback& worker, const Guest& gw, u32 from, u32 to)
+void Rollback::TakeOver(Guest& g, Rollback& worker, const Guest& gw, u32 from, u32 to, const std::vector<u32>* keep)
 {
-  TakeOverMoment(g, *m, *worker.m, gw, from, to);
+  TakeOverMoment(g, *m, *worker.m, gw, from, to, keep);
   // the checksums and the rows the worker's steps ran with (at most the rings' 1024 steps)
   for (u32 k = std::max(from, to > 1024 ? to - 1024 : 0); k < to; ++k)
   {

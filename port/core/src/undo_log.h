@@ -333,7 +333,7 @@ void ExchangeMoment(Guest& g, const Tracking& a, const Tracking& b, Rollback::Mo
 void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step);
 void DiscardChanges(Guest& g, Tracking& s);
 // Rollback::TakeOver's memory and history (undo_moments.cpp).
-void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 from, u32 to);
+void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 from, u32 to, const std::vector<u32>* keep);
 // A page's content may have changed (Rollback::TakeDirty).
 inline void Dirty(Tracking& s, u32 off)
 {

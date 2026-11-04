@@ -100,10 +100,10 @@ void ReadWorkerKeys(Part& p, Debug* d, std::string* problem)
   if (!v)
     return;
   const auto mode = [&](const std::string& m) {
-    if (m == "off" || m == "compare" || m == "check")
+    if (m == "off" || m == "compare" || m == "check" || m == "sync" || m == "on")
       d->worker_mode = m;
     else
-      p.Refuse("rollbackWorker", "is not \"off\", \"compare\", \"check\" or an object with one of them as \"mode\"");
+      p.Refuse("rollbackWorker", "is not \"off\", \"compare\", \"check\", \"sync\", \"on\" or an object with one of them as \"mode\"");
   };
   if (v->is<std::string>())
     return mode(v->get<std::string>());
@@ -111,8 +111,10 @@ void ReadWorkerKeys(Part& p, Debug* d, std::string* problem)
     return p.Refuse("rollbackWorker", "is not \"off\", \"compare\", \"check\" or an object");
   Part f(v->get<picojson::object>(), p.Under("rollbackWorker"), problem);
   std::string m;
-  f.OneOf("mode", &m, {"off", "compare", "check"});
+  f.OneOf("mode", &m, {"off", "compare", "check", "sync", "on"});
+  f.OneOf("rule", &d->worker_rule, {"fit", "always"});
   f.Whole("depth", &d->worker_depth, 1, 24);
+  f.Words("watch", &d->worker_watch);
   f.Done();
   if (m.empty())
     return p.Refuse("rollbackWorker", "needs \"mode\" (\"off\", \"compare\" or \"check\")");

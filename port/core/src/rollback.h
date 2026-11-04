@@ -170,8 +170,9 @@ public:
   // a restore leaves them. The worker's entries of those steps move into this log in place of its own (no copy), the
   // pages it watches are watched here too, and the checksum ring and the input rows of those steps are copied from
   // `gw`'s window. A later RestoreTo to any step from `from` on gives the moment the worker had there. Memory outside
-  // the log is not touched.
-  void TakeOver(Guest& g, Rollback& worker, const Guest& gw, u32 from, u32 to);
+  // the log is not touched. `keep` (guest addresses of words): kept as the memory has them now, in it and in the shadow,
+  // as the kept parts are (the words W cannot have: what interrupts and the time base write).
+  void TakeOver(Guest& g, Rollback& worker, const Guest& gw, u32 from, u32 to, const std::vector<u32>* keep = nullptr);
   // The pages (offsets in the tracked memory) whose content may have changed since the last call: those this log
   // logged, put back or wrote, every untracked page and every page holding a kept part (they change unlogged); all
   // of them after a Start. What a copy of the memory must take again to be the memory once more.

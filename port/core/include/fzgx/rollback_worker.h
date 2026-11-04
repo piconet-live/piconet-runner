@@ -15,7 +15,17 @@
 //     words outside the log the worker's steps changed take back the values they had at the job's start (the
 //     predicted timeline's, which the worker does not hand over), but for the running thread's stack. A playback
 //     that stays exact shows these words do not reach the checksum.
-// Nothing is adopted (Rollback::TakeOver is S2's): the game's thread goes on with its own steps.
+// In those two nothing is adopted: the game's thread goes on with its own steps. S2 (section 11):
+//   - "on": the worker's thread. At a rollback at least `depth` deep, from the countdown's end on, before any machine
+//     has finished, on a machine of 4 cores or more, and when the frame would not fit as a sync rollback (its own
+//     cost lately plus d steps run again lately plus 1.5 ms over a field; "rule": "always" for tests), the game does
+//     not restore: W is prepared as above and the context runs on the thread, taking each step's row from the job
+//     (published at every frame: a row that changed sends it back to that step on its own log), and waits at the
+//     next frame's step. At the hook of the step A it stands at, after SaveStep(A), with the rows unchanged, the game
+//     takes it over (Rollback::TakeOver, the VI callbacks' words and the task manager's time words kept as the game
+//     has them); steps from R stay open until then. A correction below R, the race's end checked, a job given up or
+//     one past j + 4 frames: the job stops and the game's sync rollback runs from its step.
+//   - "sync": the same frame counts and measurements with no worker, the baseline for "on".
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -26,8 +36,19 @@
 
 namespace fzgx::rollback_worker
 {
-// The switch is on (compare or check).
+// The switch is on (compare, check, sync or on).
 bool On();
+// S2: "on", jobs on the worker's thread (and the machine has the cores; the thread is the adapter's).
+bool Threaded();
+// The adapter's per-machine rollback forgets a step's kept run (at an adoption, for every step the worker ran).
+void SetForget(void (*forget)(u32 step));
+// The worker's thread: it starts (once), and it has left a job (after Begin's job ended, given up or stopped).
+void ThreadStarts();
+void Left();
+// The game stops: an open job is stopped and the worker's thread is idle (before the adapter joins it).
+void Quiesce();
+// Tests: the launch file's write watch ("address[:first-last]"; empty: none).
+const std::string& WatchSpec();
 
 // The CPU context's memory for a job about to run.
 struct Memory
@@ -36,6 +57,7 @@ struct Memory
   u32 ram_size = 0;
   u8* cache = nullptr;  // the locked cache's window
   u32 cache_size = 0;
+  bool threaded = false;  // S2: the job runs on the worker's thread (else S1's, on the game's, at once)
 };
 // After the game's network hook has returned (the adapter's host call): a job prepared in this hook is to run now.
 // False: none. The context starts from the game's registers at this hook.
@@ -43,7 +65,8 @@ bool Begin(Memory* memory);
 // W's data window: the context's slow accesses to the window are served from it.
 ModData& Window();
 // The context reached the network hook: the step about to run's words are written into W (or not, at the job's last
-// hook). True: go on; false: the job's steps are run (the context stops here).
+// hook). True: go on; false: the job's steps are run (the context stops here). On the worker's thread (S2): it may
+// wait there for the game's news (the next rows, a step to go back to, the adoption).
 bool Hook();
 // The context reached the mode point (the image's HOST_MODE): the game mode's rules run on W (mode.cpp keeps every
 // state between two steps in the guest's block; a race without a mode returns at once).

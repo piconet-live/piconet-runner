@@ -120,7 +120,7 @@ void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step)
   s.final_below = 0;
 }
 
-void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 from, u32 to)
+void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 from, u32 to, const std::vector<u32>* keep)
 {
   u8* live = g.Ram(s.region, s.shadow.size());
   const u8* other = gw.Ram(s.region, s.shadow.size());
@@ -136,6 +136,18 @@ void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 fro
       guard::Open(off / PAGE);
   }
   const std::vector<u8> kept = KeptParts(s, live);
+  // the caller's words kept as the present has them (the deep-rollback worker: words an interrupt or the time base
+  // writes, which W never has)
+  std::vector<std::pair<u32, u32>> kept_words;
+  for (const u32 a : keep ? *keep : std::vector<u32>())
+  {
+    if (a >= s.region && a - s.region + 4 <= s.shadow.size() && (a & 3) == 0 && !s.untracked[(a - s.region) / PAGE])
+    {
+      u32 raw;
+      std::memcpy(&raw, live + (a - s.region), 4);
+      kept_words.emplace_back(a - s.region, raw);
+    }
+  }
   // the blocks either timeline changed since the moment both held: a bit a block, then copied in order
   std::vector<u64> named((s.shadow.size() / BLOCK + 63) / 64, 0);
   const auto name = [&](const Tracking& t) {
@@ -172,6 +184,11 @@ void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 fro
   // the kept parts stay as the present leaves them, as a restore leaves them
   PutKeptParts(s, live, kept);
   PutKeptParts(s, s.shadow.data(), kept);
+  for (const auto& [off, value] : kept_words)
+  {
+    std::memcpy(live + off, &value, 4);
+    std::memcpy(s.shadow.data() + off, &value, 4);
+  }
   if (s.way == Tracking::Way::Both)
   {
     CheckRestored(g, s, copied);

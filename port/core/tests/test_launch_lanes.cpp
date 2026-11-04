@@ -69,6 +69,11 @@ void TestTheRollbackWorkerKeys()
   CHECK(!ParseLaunchFile(with(R"({"mode": "compare", "depth": 3})"), &o) && o.debug.worker_mode == "compare" &&
         o.debug.worker_depth == 3);
   CHECK(Refused(with(R"("adopt")"), "\"debug.rollbackWorker\" is not \"off\", \"compare\", \"check\""));
+  // S2: the thread ("on"), its baseline ("sync"), the rule and the write watch
+  CHECK(!ParseLaunchFile(with(R"("on")"), &o) && o.debug.worker_mode == "on" && o.debug.worker_rule == "fit");
+  CHECK(!ParseLaunchFile(with(R"({"mode": "sync", "rule": "always", "watch": "805973D4:415-430"})"), &o) &&
+        o.debug.worker_mode == "sync" && o.debug.worker_rule == "always" && o.debug.worker_watch == "805973D4:415-430");
+  CHECK(Refused(with(R"({"mode": "on", "rule": "never"})"), "\"debug.rollbackWorker.rule\""));
   CHECK(Refused(with(R"({"depth": 3})"), "\"debug.rollbackWorker\" needs \"mode\""));
   CHECK(Refused(with(R"({"mode": "check", "depth": 0})"), "\"debug.rollbackWorker.depth\""));
 }

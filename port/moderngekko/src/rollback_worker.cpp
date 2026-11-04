@@ -12,18 +12,26 @@
 #include "adapter_internal.h"
 #include "lanes_internal.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <chrono>
 #include <format>
 #include <string>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <unordered_map>
+#include <unordered_set>
+#include <xmmintrin.h>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <intrin.h>
 #endif
 
 #include "Core/Core.h"
@@ -55,8 +63,13 @@ struct Worker
   alignas(32) u8 pipe[256] = {};
   u8* pipe_at = nullptr;
   std::string gave_up;
+  bool running = false;
   u32 dmau = 0, dmal = 0;
   std::unordered_map<u32, u32> translated;  // a page's translation (the statistics table), from the game's MMU
+  // S2: the pages translated at a job's start on the game's thread (the statistics table's, and those a job met)
+  std::unordered_set<u32> pages;
+  u32 missed = 0;  // a page a job on the thread met untranslated (its next job takes it)
+  bool threaded = false;
   u64 jobs = 0;
   const u8* game_ram = nullptr;
   u64 dispatches = 0, system_calls = 0, block_copies = 0, translated_reads = 0, tasks = 0;
@@ -96,6 +109,12 @@ u8* Translated(u32 ea, u32 size)
 {
   const u32 page = ea & ~0xFFFu;
   auto it = s_w.translated.find(page);
+  if (it == s_w.translated.end() && s_w.threaded)
+  {
+    // (the game's MMU is the game's thread's: the page is taken at the next job's start)
+    s_w.missed = page;
+    return nullptr;
+  }
   if (it == s_w.translated.end())
   {
     const std::optional<u32> physical = Core::System::GetInstance().GetMMU().GetTranslatedAddress(page);
@@ -125,6 +144,11 @@ u64 HookRead(CPUState*, u32 ea, u8 size)
 
 void HookWrite(CPUState*, u32 ea, u64 value, u8 size)
 {
+  // On the thread W keeps +492 past every step it runs, so the frame routine itself writes it only where the race's
+  // end cuts a frame's steps (frame_entry.py `extra_cut`): what follows is the frame's drawing, whose pipe is the
+  // game's. The job gives up at once.
+  if (s_w.threaded && ea == table::CONTROL + 492)
+    GiveUp("the race's end cut W's steps");
   if (fzgx::ModData::Contains(ea, size))
     return rw::Window().Write(ea, value, size);
   if (u8* p = Translated(ea, size))
@@ -211,6 +235,91 @@ void PipeFlush(CPUState* cpu)
 bool HookHostCall(CPUState*, u32)
 {
   return false;
+}
+
+// Test only: a write watch on one word (the launch file's debug.rollbackWorker "watch": "address[:first-last]", with the access-trace
+// module, DolRecomp's DOLRECOMP_MEM_TRACE): every native store to it in those steps, the game's and W's, goes to the
+// log with its value, the step, whether it is a step run again, the OS's running thread and the store's place in the
+// module (the host return address's offset in the module's image: the guest function is found from it offline).
+struct WriteWatch
+{
+  bool looked = false;
+  u32 word = 0, first = 0, last = 0xFFFFFFFF;
+  u32 step_game = 0, sim_to = 0;  // the game's step about to run and its +492 at its last network hook
+  bool pending = false, pending_w = false;
+  uintptr_t base = 0;
+  u32 lines = 0;
+  std::string text;
+};
+WriteWatch s_watch;
+
+u32 Big(const u8* p)
+{
+  return static_cast<u32>(p[0]) << 24 | static_cast<u32>(p[1]) << 16 | static_cast<u32>(p[2]) << 8 | p[3];
+}
+
+void WatchAccess(unsigned address, unsigned width_and_write)
+{
+  WriteWatch& x = s_watch;
+  if (x.pending)
+  {
+    const u8* ram = x.pending_w ? s_w.memory.ram : s_w.game_ram;
+    if (ram != nullptr && x.lines < 200)
+    {
+      ++x.lines;
+      s_core_host.Log(fzgx::LogLevel::Notice, std::format("fzgx: write watch: {}; the word is now {:08x}", x.text, Big(ram + (x.word & 0x01FFFFFFu))));
+    }
+    x.pending = false;
+  }
+  if ((width_and_write & 0x100u) == 0)
+    return;
+  const u32 width = width_and_write & 0xFFu;
+  if (address + width <= x.word || address >= x.word + 4)
+    return;
+  const bool on_w = s_w.running;
+  const u32 step = on_w ? static_cast<u32>(rw::Window().Read(table::CONTROL + 124, 4)) : x.step_game;
+  if (step < x.first || step > x.last)
+    return;
+  const u8* ram = on_w ? s_w.memory.ram : s_w.game_ram;
+  if (ram == nullptr)
+    return;
+  uintptr_t back = 0;
+#ifdef _MSC_VER
+  back = reinterpret_cast<uintptr_t>(_ReturnAddress());
+#endif
+  x.text = std::format("{} at step {} ({}), a {}-byte store to {:08x}, thread {:08x}, from the module's +{:x}",
+                       on_w ? "W" : "the game", step, on_w ? "W's run" : (step < x.sim_to ? "run again" : "first run"),
+                       width, address, Big(ram + 0xE4), back - x.base);
+  x.pending = true;
+  x.pending_w = on_w;
+}
+
+void LookWatch(CPUState* cpu)
+{
+  s_watch.step_game = static_cast<u32>(fzgx::Data().Read(table::CONTROL + 124, 4));
+  s_watch.sim_to = static_cast<u32>(fzgx::Data().Read(table::CONTROL + 492, 4));
+  s_w.game_ram = cpu->ram;
+  if (std::exchange(s_watch.looked, true))
+    return;
+#ifdef _WIN32
+  const char* spec = rw::WatchSpec().c_str();
+  if (*spec == 0)
+    return;
+  unsigned word = 0, first = 0, last = 0xFFFFFFFFu;
+  if (std::sscanf(spec, "%x:%u-%u", &word, &first, &last) < 1)
+    return;
+  s_watch.word = word & ~3u;
+  s_watch.first = first;
+  s_watch.last = last;
+  const HMODULE module = GetModuleHandleW(std::filesystem::path(lanes::s_work.module).filename().c_str());
+  using SetTrace = void (*)(void (*)(unsigned, unsigned));
+  const auto set = module ? reinterpret_cast<SetTrace>(GetProcAddress(module, "fz_set_trace")) : nullptr;
+  s_watch.base = reinterpret_cast<uintptr_t>(module);
+  if (set)
+    set(&WatchAccess);
+  s_core_host.Log(fzgx::LogLevel::Notice, std::format("fzgx: write watch: {:08x}, steps {} to {}: {}", s_watch.word, first, last,
+         set ? "the module's access trace listened to" : "no access trace in this module"));
+#endif
 }
 
 // The context's state: the game's at the hook, but its memory, hooks, MSR.FP set, no clock.
@@ -342,15 +451,93 @@ void Run()
 }
 }  // namespace
 
+// S2: the worker's thread. It waits for a job, runs it (Run, its hooks waiting for the game's news inside), and tells
+// the core it has left it.
+struct WorkerThread
+{
+  std::thread thread;
+  std::mutex m;
+  std::condition_variable cv;
+  bool go = false, quit = false;
+  unsigned mxcsr = 0;  // the game's thread's floating-point control, copied at each job's start
+  u64 us_running = 0;
+};
+WorkerThread s_t;
+
+constexpr u32 STATISTICS = 0x23800000;  // the statistics table's pages (study section 1 item 5), taken at every start
+constexpr u32 STATISTICS_PAGES = 16;
+
+void ThreadMain()
+{
+  rw::ThreadStarts();
+  std::unique_lock lock(s_t.m);
+  for (;;)
+  {
+    s_t.cv.wait(lock, [] { return s_t.go || s_t.quit; });
+    if (s_t.quit)
+      return;
+    s_t.go = false;
+    lock.unlock();
+    _mm_setcsr(s_t.mxcsr);  // (rounding and flush-to-zero: the game's, study section 1 item 17)
+    if (s_w.loaded)
+      s_w.loaded(&s_w.cpu);
+    const auto start = std::chrono::steady_clock::now();
+    Run();
+    s_t.us_running += static_cast<u64>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
+    rw::Left();
+    lock.lock();
+  }
+}
+
+// A job's start for the thread (the game's thread, at the hook): the context dressed from the game's registers, the
+// translated pages asked of the game's MMU now, the floating-point control copied; then the thread is woken.
+void StartThreaded(CPUState* cpu)
+{
+  s_w.game_ram = cpu->ram;
+  s_w.threaded = true;
+  Dress(*cpu);
+  if (s_w.missed != 0)
+    s_w.pages.insert(std::exchange(s_w.missed, 0u));
+  if (s_w.pages.empty())
+    for (u32 k = 0; k < STATISTICS_PAGES; ++k)
+      s_w.pages.insert(STATISTICS + k * 0x1000);
+  auto& mmu = Core::System::GetInstance().GetMMU();
+  for (const u32 page : s_w.pages)
+  {
+    const std::optional<u32> physical = mmu.GetTranslatedAddress(page);
+    s_w.translated.emplace(page, physical ? *physical : 0xFFFFFFFFu);
+  }
+  {
+    const std::lock_guard lock(s_t.m);
+    s_t.mxcsr = _mm_getcsr();
+    s_t.go = true;
+  }
+  if (!s_t.thread.joinable())
+    s_t.thread = std::thread(&ThreadMain);
+  s_t.cv.notify_all();
+}
+
 // After the game's network hook (window.cpp): a job prepared there runs now on W, and the game goes on as ever.
 void RunRollbackWorker(CPUState* cpu)
 {
+  LookWatch(cpu);
+  static const bool forget = (rw::SetForget([](fzgx::u32 step) { lanes::PartialForget(step); }), true);
+  (void)forget;
   if (!rw::Begin(&s_w.memory))
     return;
   Look();
   ++s_w.jobs;
   if (s_w.dispatch == nullptr)
-    return rw::GiveUp("the native module's dispatch was not found");
+  {
+    rw::GiveUp("the native module's dispatch was not found");
+    if (s_w.memory.threaded)
+      rw::Left();
+    return;
+  }
+  if (s_w.memory.threaded)
+    return StartThreaded(cpu);
+  s_w.threaded = false;
   s_w.game_ram = cpu->ram;
   Dress(*cpu);
   if (s_w.loaded)
@@ -359,7 +546,9 @@ void RunRollbackWorker(CPUState* cpu)
   if (s_w.set_pipe)
     s_w.set_pipe(&s_w.pipe_at, s_w.pipe, &PipeFlush);
   const auto start = std::chrono::steady_clock::now();
+  s_w.running = true;
   Run();
+  s_w.running = false;
   rw::Count("us running", static_cast<u64>(std::chrono::duration_cast<std::chrono::microseconds>(
                                                std::chrono::steady_clock::now() - start).count()));
   if (s_w.set_pipe && g_static_recomp_core)
@@ -372,6 +561,17 @@ void RunRollbackWorker(CPUState* cpu)
 
 void StopRollbackWorker()
 {
+  rw::Quiesce();  // (an open job stopped: the thread waits for the next)
+  {
+    const std::lock_guard lock(s_t.m);
+    s_t.quit = true;
+  }
+  s_t.cv.notify_all();
+  if (s_t.thread.joinable())
+    s_t.thread.join();
+  s_t.quit = false;
+  if (s_t.us_running != 0)
+    rw::Count("us running on the thread", std::exchange(s_t.us_running, 0));
   rw::Count("dispatches", std::exchange(s_w.dispatches, 0));
   rw::Count("system calls", std::exchange(s_w.system_calls, 0));
   rw::Count("block copies", std::exchange(s_w.block_copies, 0));

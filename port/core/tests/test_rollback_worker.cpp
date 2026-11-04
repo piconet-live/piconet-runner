@@ -120,6 +120,7 @@ void TestTheWorkersTakeOver()
     worker.SaveStep(gw, step, false);
     corrected.push_back(Take(gw, other, first, size));
     Poke(gw, other, first, size, step, 1);
+    gw.Write32(first + 0x10, 0xDD000000 + step);  // a word the adoption keeps as the game has it (S2: a time word)
     const u8 row[6] = {static_cast<u8>(step), 9, 9, 9, 9, 9};
     net::Rollback::UseInputs(gw, step, {0}, row);
     net::Rollback::KeepChecksum(gw, step, 0xD0000000 + step);
@@ -134,15 +135,19 @@ void TestTheWorkersTakeOver()
     g.Write32(keep_page + 8, 0xAA000000 + step);
     g.Write32(keep_part + 4, 0xBB000000 + step);
     g.Write32(0x80003100, 0xCC000000 + step);
+    g.Write32(first + 0x10, 0xEE000000 + step);
   }
   live.SaveStep(g, A, true);
   CHECK(live.Compare(g, gw, nullptr, 0) > 0);
   std::vector<u32> words;
   CHECK(live.Compare(g, gw, &words, 3) > 3 && words.size() == 3 && words[0] >= first);
 
-  // the adoption
-  live.TakeOver(g, worker, gw, R, A);
-  CHECK(live.Compare(g, gw, nullptr, 0) == 0);
+  // the adoption, one word kept as the game has it
+  const std::vector<u32> keep = {first + 0x10};
+  live.TakeOver(g, worker, gw, R, A, &keep);
+  std::vector<u32> kept_word;
+  CHECK(live.Compare(g, gw, &kept_word, 4) == 1 && kept_word.size() == 1 && kept_word[0] == first + 0x10);
+  CHECK(g.Read32(first + 0x10) == 0xEE000000 + A - 1 && gw.Read32(first + 0x10) == 0xDD000000 + A - 1);
   CHECK(live.Moments() == live_moments && net::Rollback::Moments(host) == game_moments);
   CHECK(g.Read32(keep_page + 8) == 0xAA000000 + A - 1 && g.Read32(keep_part + 4) == 0xBB000000 + A - 1);
   CHECK(g.Read32(0x80003100) == 0xCC000000 + A - 1);

@@ -93,6 +93,8 @@ struct Debug
   // "check", alone or as {"mode", "depth"} (the least depth a job takes, 7 by default)
   std::string worker_mode;
   u32 worker_depth = 7;
+  std::string worker_rule = "fit";  // "rule": "fit" (S2: sync when the frame fits) or "always" (tests: every job async)
+  std::string worker_watch;  // "watch": a write watch on one word, "address[:first-last]" (tests, the trace module)
   std::string partial_log;
   u32 partial_from = 0, partial_to = 0;
   bool partial_widen = false;
