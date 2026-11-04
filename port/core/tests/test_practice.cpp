@@ -72,11 +72,12 @@ void TestTheStickScrubsOnACurve()
 
 void TestTheRollingBuffer()
 {
-  Rewind r(0);
+  const Words minute{3600, true, true, COUNTDOWN};  // a minute's reach: the numbers below
+  Rewind r(0, minute);
   Race(r, 1000);
   CHECK(r.Front() == 1000 && r.Oldest() == 0 && r.TakeDropped().empty());
   Race(r, 4000);  // 5000 steps: the buffer holds the last minute
-  CHECK(r.Front() == 5000 && r.Oldest() == 5000 - WINDOW && r.FinalBelow() == 1400);
+  CHECK(r.Front() == 5000 && r.Oldest() == 5000 - 3600 && r.FinalBelow() == 1400);
   // keys before the one the oldest moment is reached from are let go, each once, in order
   const std::vector<u32> dropped = r.TakeDropped();
   CHECK(r.KeyFor(1400) == 1280 && dropped.size() == 10 && dropped.front() == 0 && dropped.back() == 1152);
@@ -106,7 +107,16 @@ void TestTheRollingBuffer()
   // a step the game says it ran while paused is not the race's: counted, nothing moves
   r.Ran(5000);
   CHECK(r.Misses() == 1 && r.Front() == 5000);
-  // a race shorter than a minute reaches back to its first step, not before it
+  // a resume from an earlier moment moves the front back but never the oldest moment: what has left the buffer
+  // (its undo entries final) stays out of it
+  r.Seek(2000);
+  Press(r, BUTTON_START);
+  CHECK(Hold(r, COUNTDOWN).branch || r.Count().branches == 1);
+  CHECK(r.Front() == 2000 && r.Oldest() == 1400 && r.FinalBelow() == 1400);
+  Race(r, 10);
+  Press(r, BUTTON_START);
+  CHECK(Hold(r, 100, -127).step == 1400 && r.Position() == 1400);
+  // a race shorter than the reach reaches back to its first step, not before it
   Rewind late(200);
   Race(late, 300);
   CHECK(late.Oldest() == 200 && late.KeyFor(100) == 200 && late.WantsKey(328) && !late.WantsKey(256));

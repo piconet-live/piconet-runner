@@ -113,11 +113,12 @@ void Rewind::Ran(u32 step)
   Expire();
 }
 
-// What fell out of the minute: the save, once the race has run a minute past it; the keys before the one the
+// What fell out of the buffer: the save, once the race has run the reach past it; the keys before the one the
 // oldest moment is reached from.
 void Rewind::Expire()
 {
   const u32 oldest = Oldest();
+  m_gone = oldest;
   if (m_save && *m_save < oldest)
   {
     m_save.reset();
