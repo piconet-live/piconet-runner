@@ -9,7 +9,7 @@ number of different trails.
 |---|---|---|---|
 | `trail_record` | fn_1_9885C 0x98880, a burner record's creation | +0x28 and +0x34, the nozzle's idle and boost colours (3 floats 0..255, the machine's .fmi by fn_1_983CC) | the seat's words over them, before the game copies +0x28 to the colour it blends (+0x468) |
 | `trail_streak` | fn_1_6BFB8 0x6C3C8, kind 12's spawn | f1, f3, f4: the streak's and its blobs' colour (0..1), from a jump table by machine id | the seat's sparks word |
-| `trail_bolts` | fn_1_6A7A4 0x6AA9C, kind 5's spawn for a boost (not a contact's or a wall's) | +0x1C..+0x24: the bolts' colour (128, 224, 255 x f5, f5 from the effects' generator) | the seat's sparks word x f5 |
+| `trail_bolts` | fn_1_6A7A4 0x6AAA0, kind 5's spawn for a boost (not a contact's or a wall's) | +0x1C..+0x24: the bolts' colour (128, 224, 255 x f5, f5 from the effects' generator) | the seat's sparks word x f5 |
 | `trail_sparkles` | fn_1_988DC 0x98B18, kind 6's spawn, which kind 9 inherits: the followed machine only | +0x1C..+0x24: the nozzle's idle colour / 255 | the seat's sparks word / 255 |
 
 The seat: a record's +0x48 is its machine's block (fn_1_983CC's r3), whose +4 is the racer index; an effect's +0x18
@@ -131,7 +131,7 @@ ts_stock:
     middle.append((site, ["r0", "r11", "r12", "cr0", "lr", "f6", "f7"], "trail_streak"))
 
     # a boost's bolts (r25 the machine's effect; the new effect on the stack at 0x38; f5 the bolt's own brightness)
-    site = TEXT + 0x6AA9C
+    site = TEXT + 0x6AAA0   # the colour's last store, stfs f0,0x5C(r1) (0x6AA9C is its green, stfs f1,0x58(r1))
     word = stock(site, 0xD001005C)
     r.add("trail_bolts", f"""    .long {word:#010x}
 """ + test + """    beq tb_stock

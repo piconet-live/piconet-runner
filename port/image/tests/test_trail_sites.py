@@ -93,7 +93,7 @@ class TheSeatsTrails(Build):
         put(memory, stack + top, 0x3E800000)
         put(memory, stack + top + 4, 0x3F000000)
         left, m = self.run_site(routine, memory, floats_in=(0.75, 0, 0, 0, 0, 0.5), r1=stack, r3=0x1234, **{seat_register: BLOCK if routine == "trail_sparkles" else EFFECT})
-        self.assertEqual(left, [TEXT + {"trail_bolts": 0x6AAA0, "trail_sparkles": 0x98B1C}[routine]])
+        self.assertEqual(left, [TEXT + {"trail_bolts": 0x6AAA4, "trail_sparkles": 0x98B1C}[routine]])
         self.assertEqual((m.r[1], m.r[3]), (stack, 0x1234))
         return floats(m, stack + top)
 
