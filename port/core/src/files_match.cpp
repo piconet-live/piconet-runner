@@ -209,15 +209,17 @@ u32 TrailWord(const picojson::object& trail, const char* key)
   return 0x01000000 | r << 16 | g << 8 | b;
 }
 
-// A seat's boost trail ("trail": normal, boost, sparks) into its entry of the race block.
+// A seat's boost trail ("trail": normal, boost, sparks) into its entry of the race block. Sparks left out follow the
+// boost flame's colour (the owner's 2026-11-01 choice); with neither, the game's own.
 void TrailOfSeat(const picojson::object& seat, u8* entry)
 {
   const picojson::object* t = Object(seat, "trail");
   if (!t)
     return;
+  const u32 boost = TrailWord(*t, "boost"), sparks = TrailWord(*t, "sparks");
   Put32(entry, TrailWord(*t, "normal"));
-  Put32(entry + 4, TrailWord(*t, "boost"));
-  Put32(entry + 8, TrailWord(*t, "sparks"));
+  Put32(entry + 4, boost);
+  Put32(entry + 8, sparks ? sparks : boost);
 }
 
 u32 OtherSoundsWord(const std::string& sounds)

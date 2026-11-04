@@ -76,6 +76,12 @@ void TheTrailInTheRaceBlock()
   m = SetUpOf(seat(R"({"normal": {"r": 0, "g": 0, "b": 0}, "boost": {"r": 48, "g": 24, "b": 0}})"));
   CHECK(m.has_value() && Word(entry(m, 0)) == (0x01000000 | l << 16 | l << 8 | l));
   CHECK(m.has_value() && Word(entry(m, 0) + 4) == (0x01000000 | l << 16 | (l / 2) << 8));
+  // sparks left out follow the boost flame's colour (lifted as it is)
+  CHECK(m.has_value() && Word(entry(m, 0) + 8) == (0x01000000 | l << 16 | (l / 2) << 8));
+  m = SetUpOf(seat(R"({"boost": {"r": 0, "g": 200, "b": 96}, "sparks": {"r": 200, "g": 0, "b": 16}})"));
+  CHECK(m.has_value() && Word(entry(m, 0)) == 0 && Word(entry(m, 0) + 4) == 0x0100C860 && Word(entry(m, 0) + 8) == 0x01C80010);
+  m = SetUpOf(seat(R"({"boost": {"r": 0, "g": 200, "b": 96}})"));
+  CHECK(m.has_value() && Word(entry(m, 0)) == 0 && Word(entry(m, 0) + 8) == 0x0100C860);
   // not a colour: the game's own, and the race still starts
   for (const char* bad : {R"({"normal": {"r": 256, "g": 0, "b": 0}})", R"({"normal": {"r": 1, "g": 2}})", R"({"normal": 7})", "3"})
   {
