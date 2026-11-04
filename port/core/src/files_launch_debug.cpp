@@ -163,6 +163,7 @@ constexpr EmulatorKey EMULATOR_KEYS[] = {
     {"sampleTasks", "FZGX_SAMPLE_TASKS", "1"},
     {"samplePhysics", "FZGX_SAMPLE_PHYSICS", "1"},
     {"census", "FZGX_CENSUS", "1"},
+    {"stepCensus", "FZGX_STEP_CENSUS"},  // the deep-rollback probe's files (moderngekko/src/lanes_census.h)
     {"accessTrace", "FZGX_TRACE", "1"},
     {"accessTraceNoInterrupts", "FZGX_TRACE", "noirq"},
     {"noSlowLog", "FZGX_SLOW_LOG", "0"},

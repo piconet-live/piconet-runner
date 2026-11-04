@@ -286,10 +286,10 @@ void TestALaunchFileOfTheEmulatorsSide()
     "lockstepWhitelist": "0x80001000-0x80002000",
     "probe": "C:\\runs\\r\\probe.csv", "probeNoHash": true, "paceLog": "pace.csv", "taskTimers": true, "taskDumps": "300,600",
     "taskList": true, "dumpFields": "120,240", "dumpRam": true, "sample": "samples.txt", "sampleTasks": true,
-    "samplePhysics": true, "census": true, "accessTrace": true, "noSlowLog": true, "voiceLog": "ax.bin",
+    "samplePhysics": true, "census": true, "stepCensus": "census", "accessTrace": true, "noSlowLog": true, "voiceLog": "ax.bin",
     "dispatchSamples": true, "dispatchTrace": "dispatch.txt", "windowNoActivate": true, "windowControls": true})"), &o));
   const Debug& d = o.debug;
-  CHECK(d.jit && d.cheats && d.mods && d.automation && d.load_state && d.user_settings && d.emulator.size() == 41);
+  CHECK(d.jit && d.cheats && d.mods && d.automation && d.load_state && d.user_settings && d.emulator.size() == 42);
   const auto value = [&d](const std::string& key, const std::string& name) {
     for (const EmulatorSetting& s : d.emulator)
     {
@@ -317,13 +317,14 @@ void TestALaunchFileOfTheEmulatorsSide()
   CHECK(value("dumpFields", "FZGX_DUMP_FIELDS") == "120,240" && value("dumpRam", "FZGX_DUMP_RAM") == "1");
   CHECK(value("sample", "FZGX_SAMPLE") == "samples.txt" && value("sampleTasks", "FZGX_SAMPLE_TASKS") == "1");
   CHECK(value("samplePhysics", "FZGX_SAMPLE_PHYSICS") == "1" && value("census", "FZGX_CENSUS") == "1");
+  CHECK(value("stepCensus", "FZGX_STEP_CENSUS") == "census");
   CHECK(value("accessTrace", "FZGX_TRACE") == "1" && value("noSlowLog", "FZGX_SLOW_LOG") == "0");
   CHECK(value("voiceLog", "FZGX_AXLOG") == "ax.bin" && value("dispatchSamples", "STATICRECOMP_DISPATCH_SAMPLES") == "1");
   CHECK(value("dispatchTrace", "STATICRECOMP_TRACE_FILE") == "dispatch.txt" && value("windowNoActivate", "FZGX_WINDOW_NOACTIVATE") == "1");
   CHECK(value("windowControls", "FZGX_WINDOW_CONTROLS") == "1");
-  // the log's first line names each: 6 of the runner's and the 41
+  // the log's first line names each: 6 of the runner's and the 42
   const std::vector<std::string> on = DebugSettingsOn(d);
-  CHECK(on.size() == 47 && on.front() == "debug.jit" && on[5] == "debug.userSettings" && on[6] == "debug.pad" &&
+  CHECK(on.size() == 48 && on.front() == "debug.jit" && on[5] == "debug.userSettings" && on[6] == "debug.pad" &&
         on.back() == "debug.windowControls");
   // the other kind of two settings that share a name
   CHECK(!ParseLaunchFile(Launch(R"({"accessTraceNoInterrupts": true, "slowLogEverySecond": true, "pad": "neutral"})"), &o));
