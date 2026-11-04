@@ -78,10 +78,11 @@ void TestTheAuroraSwitches()
   for (const aurora::Switch& s : aurora::RayTracingSet())
     CHECK(Of(rays, s.name) == s.value);
   CHECK(Of(rays, "AURORA_RT") == "1" && Of(rays, "AURORA_RT_CAPTURE_ASYNC") == "1");
-  // the owner's choices of build c and d's sheets, held here so a change of the set is a change of this test too
+  // the owner's choices of build c, d's sheets and the cards rule, held here so a change of the set is a change of this test too
   CHECK(Of(rays, "AURORA_RT_GLOW_HALF") == "2" && Of(rays, "AURORA_RT_LIGHT_OWN") == "1" && Of(rays, "AURORA_RT_GLOW_WIDE") == "1" &&
         Of(rays, "AURORA_RT_BEFORE_LATEST") == "1" && Of(rays, "AURORA_RT_SHADER_CACHE") == "1" &&
-        Of(rays, "AURORA_RT_SHEETS") == "1" && Of(rays, "AURORA_RT_SUN_GAIN") == "0.6" && Of(rays, "AURORA_RT_LOOK") == "2" && Of(rays, "AURORA_RT_GLOW_GAIN") == "1.4");
+        Of(rays, "AURORA_RT_SHEETS") == "1" && Of(rays, "AURORA_RT_SUN_GAIN") == "0.6" && Of(rays, "AURORA_RT_LOOK") == "2" &&
+        Of(rays, "AURORA_RT_GLOW_GAIN") == "1.4" && Of(rays, "AURORA_RT_CARDS") == "1");
   CHECK(Of(rays, "SDL_JOYSTICK_HIDAPI_GAMECUBE").empty());
   CHECK(aurora::Line(rt, {}) == "fzgx: aurora: ray tracing off, switches set: none");
   CHECK(!ParseLaunchFile(std::string(AURORA) + R"(, "auroraRayTracing": true})", &rt));
