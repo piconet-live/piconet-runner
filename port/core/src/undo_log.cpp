@@ -282,6 +282,7 @@ void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
       DropEntry(s, kept);
       kept = std::move(entry);
     }
+    kept.serial = ++s.serials;
     s.undo_bytes += EntryBytes(kept);
     if (s.keep_after)
       KeepAfterImage(g, s, t - 1, kept);

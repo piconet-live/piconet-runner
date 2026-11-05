@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "net_internal.h"
+#include "fzgx/rollback_worker.h"
 
 #include "board_net.h"
 #include "host_timers.h"
@@ -450,6 +451,9 @@ void SendInputBeforeRunAhead(Guest& g, Session& s, u32 step)
 // Before a displayed frame's own step s.
 void NormalStep(Guest& g, Session& s)
 {
+  // (a rollback job's base made on its worker's thread reads the game's log and the older job's after-images: done
+  // before this frame touches either, study section 22)
+  rollback_worker::WaitBases();
   const u32 step = g.Read32(STEP);
   ++s.normal_steps;
   freeze::ThePulse().step.store(step, std::memory_order_relaxed);  // for the freeze report: one store, nothing read

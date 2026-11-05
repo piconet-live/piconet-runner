@@ -42,6 +42,8 @@ public:
 
   // A copy of the whole window (tests compare it across a rollback; a test scene's saved state keeps it).
   std::vector<u8> Snapshot() const { return m_bytes; }
+  // The same into `out`, whose room is kept from one call to the next (no allocation once it has held a window).
+  void SnapshotInto(std::vector<u8>* out) const { out->assign(m_bytes.begin(), m_bytes.end()); }
   bool Restore(const std::vector<u8>& snapshot);
 
 private:

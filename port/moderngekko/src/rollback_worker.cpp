@@ -369,8 +369,17 @@ void LookWatch(CPUState* cpu)
 #endif
 }
 
-// The context's state: the game's at the hook, but its memory, hooks, MSR.FP set, no clock.
-void Dress(Worker& x, const CPUState& game_cpu)
+// The module's own record of the locked cache kept off in W's window (forks/dolrecomp/4-lanes): a word of W's memory,
+// written on the worker's thread after the job's base for a threaded job (rw::TakeBase), as the start wrote it before.
+void DressCache(Worker& x)
+{
+  const void* no_record = nullptr;
+  std::memcpy(x.memory.cache + lanes::WINDOW - 8, &no_record, sizeof(no_record));
+}
+
+// The context's state: the game's at the hook, but its memory, hooks, MSR.FP set, no clock. `memory`: W's word of
+// the cache's record written too (S1's jobs; a threaded job's thread writes it, DressCache).
+void Dress(Worker& x, const CPUState& game_cpu, bool memory = true)
 {
   CPUState& c = x.cpu;
   c = game_cpu;
@@ -379,8 +388,8 @@ void Dress(Worker& x, const CPUState& game_cpu)
   c.ram_size = x.memory.ram_size;
   c.exram = x.memory.cache;
   c.exram_size = lanes::WINDOW;
-  const void* no_record = nullptr;  // (the module's own record of the locked cache stays off: forks/dolrecomp/4-lanes)
-  std::memcpy(x.memory.cache + lanes::WINDOW - 8, &no_record, sizeof(no_record));
+  if (memory)
+    DressCache(x);  // (the module's own record of the locked cache stays off: forks/dolrecomp/4-lanes)
   c.external_read = &HookRead;
   c.external_write = &HookWrite;
   c.external_read32 = &HookRead32;
@@ -533,6 +542,14 @@ void ThreadMain(int slot)
     t.go = false;
     lock.unlock();
     _mm_setcsr(t.mxcsr);  // (rounding and flush-to-zero: the game's, study section 1 item 17)
+    // the job's base and the hook's words into W, here rather than on the game's thread (study section 22)
+    if (!rw::TakeBase(slot))
+    {
+      rw::Left(slot);
+      lock.lock();
+      continue;
+    }
+    DressCache(x);
     if (s_m.loaded)
       s_m.loaded(&x.cpu);
     // this thread's own pipe (the module's is per thread): what the steps write there is dropped
@@ -557,7 +574,7 @@ void StartThreaded(int slot, CPUState* cpu)
   WorkerThread& t = s_ts[slot];
   x.game_ram = cpu->ram;
   x.threaded = true;
-  Dress(x, *cpu);
+  Dress(x, *cpu, false);
   if (x.missed != 0)
     x.pages.insert(std::exchange(x.missed, 0u));
   if (x.pages.empty())
@@ -619,7 +636,10 @@ void RunRollbackWorker(CPUState* cpu)
     }
     if (x.memory.threaded)
     {
+      const auto start = std::chrono::steady_clock::now();
       StartThreaded(slot, cpu);
+      rw::Count("both: StartThreaded (tenths of us)",
+                static_cast<u64>(std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() * 10));
       continue;
     }
     if (slot != 0)

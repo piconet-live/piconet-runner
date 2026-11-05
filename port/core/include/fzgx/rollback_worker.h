@@ -108,6 +108,18 @@ struct Memory
 // for `slot` is to run now. False: none. The context starts from the game's registers at this hook. S1's jobs (on
 // the game's thread) are slot 0's.
 bool Begin(int slot, Memory* memory);
+// The worker's thread, woken for a job Begin gave it, before the job's first step: the job's base and Begin's words of
+// the hook written into W (research/study-rollback-second-core.md section 22: the rewind by the game's log, the
+// second job's Forward, the log's moment and the time words, taken at the hook and done here). False: no step runs
+// (the job was stopped meanwhile, or its base could not be made: it has ended); the thread leaves it (Left).
+bool TakeBase(int slot);
+// The game's thread, before it touches the game's log or a job again (each frame's hook, the stop): the bases begun
+// are done, waiting for a worker's thread that is still making one, and their results taken.
+void WaitBases();
+// The game's thread, at a hook that restores the game's log after a start in it (a held frame, schedule.cpp): the
+// bases taken at this hook and not yet begun are made now, on this thread, as before section 22 (a restore erases the
+// entries a start's Take holds).
+void BasesHere();
 // The calling thread's worker's data window (slot 0's on the game's thread): the context's slow accesses to the window
 // are served from it.
 ModData& Window();
