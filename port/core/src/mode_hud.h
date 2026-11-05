@@ -25,7 +25,7 @@
 //   +24 GAP's time, packed as the game's lap words (the seat's last lap line, P+0x1E0)
 //   +28 the race clock when +11 was asked: the HUD pass shows the gap popup's part and starts the wrong-way sign from it
 // At +TAGS_AT (after the records), a byte a seat: `tag`'s text, its number in the package's tag_texts from 1 (0: none).
-// The story parts' values (show_distance, show_objects) are in the slots page's tail (STORY, below): the record is full.
+// The story parts' values (show_distance, show_objects) are in page 7's tail (STORY, below): the record is full.
 // The danger zone's display reads the race side's state (mode.h DANGER: its count, as story chapter 6's).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -52,8 +52,9 @@ constexpr u32 GHOST_SOUNDS = TAGS_AT + 32, STAT_GHOST_TINT = 0x58;
 static_assert(TAGS_AT + 30 <= GHOST_SOUNDS && GHOST_SOUNDS + 4 <= STATS && STATS >= DISPLAY && STATS + 30 * STAT <= DISPLAY + 0x1000 &&
               STAT_DAMAGE + 4 <= STAT_GHOST_TINT && STAT_GHOST_TINT + 4 <= STAT);
 
-// The story parts' values, STORY_RECORD bytes a seat in the slots page's tail (mode_gap.h SLOTS_PAGE; it is the block's
-// like the rest, so the undo log and the checksum have it): +0 show_distance's metres (binary32, 0 to 99999), +4 the
+// The story parts' values, STORY_RECORD bytes a seat in the tail of the block's page 7 (the modern HUD's slots were its
+// head until that HUD was retired, 2026-11-04; the head is unused and the page keeps its size, so STORY stays where it
+// was; it is the block's like the rest, so the undo log and the checksum have it): +0 show_distance's metres (binary32, 0 to 99999), +4 the
 // flags (STORY_DISTANCE, STORY_OBJECTS: the mode gave that value), +6 show_objects's n, +7 its of (0 to 99 each).
 // A page of zeros: the game's own values.
 constexpr u32 STORY = 7 * PAGE + 0xF10, STORY_RECORD = 8;
@@ -79,8 +80,7 @@ constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
 constexpr u32 TOGETHER = 32;
 // GHOST_TASK: the code asks the look ghost or GHOST_GAP: the race's set-up makes the ghost task (sites_ghostdraw.py ghost_make).
 constexpr u32 GHOST_TASK = 64;
-// HUD_MODERN: `hud modern`: the core's own (modern_hud_frame.cpp); no site reads it.
-constexpr u32 HUD_MODERN = 128;
+// (128 was HUD_MODERN, the retired `hud modern`'s: unused.)
 // HUD_CLEAN: `hud clean`: the core's own (clean_picture.cpp: no CHECK sign, no name tags); no site reads it.
 constexpr u32 HUD_CLEAN = 256;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
@@ -135,12 +135,6 @@ constexpr u32 PHASE_INTRO = 0x27;  // the course's intro: from it on the race's 
 // The gap popup's part (fn_1_15EFEC's test of the mask, off in the default mask), for its 60 frames after a GAP.
 constexpr u32 GAP_PART = 0x400000;
 constexpr u32 GAP_STEPS = 60;
-
-// The game's mask bits the modern HUD draws itself: the energy meter (and its lightning, inside the meter's test), rank,
-// lap counter, race time, lap list, speed, the top 6 (the owner: portraits hidden on Modern). The skulls, the spare icon, wrong way and banners stay the game's.
-constexpr u32 MODERN_PARTS = PART_BITS[modes::PART_ENERGY] | PART_BITS[modes::PART_RANK] | PART_BITS[modes::PART_LAPS] |
-                             PART_BITS[modes::PART_RACE_TIME] | PART_BITS[modes::PART_LAP_TIMES] | PART_BITS[modes::PART_SPEED] |
-                             PART_BITS[modes::PART_FACES];
 
 // Whether action `id` is a display word: the interpreter applies it at once, in the order the rules run (a mode's
 // variable is written so too), without a place in the step's queue of actions on the game.

@@ -58,28 +58,14 @@ u32 Record(u32 seat)
 }
 }  // namespace
 
-// The modern HUD's slots: each word's record, the ranges, a clear; and the time gaps from the seats' distances.
-void TestTheModeHudSlotsAndGaps()
+// The time gaps from the seats' distances.
+void TestTheModeTimeGaps()
 {
   BEGIN_TEST();
   TestHost host;
   ModData data;
   Guest g(host, data);
   FakeDisplayRace(g);
-  const auto word = [&](u8 id, u32 seat, std::array<u32, 5> a) { hud::ApplySlot(g, BLOCK, id, seat, a); };
-  word(modes::ACTION_SHOWBAR, 2, {modes::BAR_WEDGE, std::bit_cast<u32>(3.0f), std::bit_cast<u32>(4.0f), modes::SLOT_UNDER_TIMES, modes::COLOUR_GOLD});
-  const u32 bar = BLOCK + hud::SlotRecord(2, modes::SLOT_UNDER_TIMES);
-  CHECK(g.Read8(bar + hud::SLOT_KIND) == hud::SLOT_BAR && g.Read8(bar + hud::SLOT_WHAT) == modes::BAR_WEDGE &&
-        g.Read8(bar + hud::SLOT_COLOUR) == modes::COLOUR_GOLD && g.Read32(bar + hud::SLOT_A) == std::bit_cast<u32>(3.0f));
-  CHECK(g.Read8(BLOCK + hud::SlotRecord(1, modes::SLOT_UNDER_TIMES) + hud::SLOT_KIND) == hud::SLOT_NONE);
-  word(modes::ACTION_SHOWFIGURE, 2, {7, modes::SLOT_BESIDE_PLACE, 0xFFFFFFFF, 0, 0});
-  const u32 figure = BLOCK + hud::SlotRecord(2, modes::SLOT_BESIDE_PLACE);
-  CHECK(g.Read8(figure + hud::SLOT_KIND) == hud::SLOT_FIGURE && g.Read8(figure + hud::SLOT_COLOUR) == hud::COLOUR_NONE && g.Read32(figure + hud::SLOT_A) == 7);
-  word(modes::ACTION_SHOWTEXT, 2, {modes::HUD_TEXTS + 1, 0, 0, modes::SLOT_MESSAGE, 0});  // a text the package cannot hold: nothing
-  CHECK(g.Read8(BLOCK + hud::SlotRecord(2, modes::SLOT_MESSAGE) + hud::SLOT_KIND) == hud::SLOT_NONE);
-  word(modes::ACTION_SHOWBAR, 2, {0, 0, 0, modes::SLOT_COUNT, 0});  // no such slot: nothing, and no other record
-  word(modes::ACTION_HUDCLEAR, 2, {modes::SLOT_UNDER_TIMES, 0, 0, 0, 0});
-  CHECK(g.Read8(bar + hud::SLOT_KIND) == hud::SLOT_NONE);
 
   // seats 0 and 1 run the same road, seat 0 five steps ahead, then seat 1 gains; lap length 6400: 100 a mini-sector
   const auto at = [&](u32 seat, float distance) {

@@ -403,7 +403,7 @@ struct Action
 {
   u8 id;
   u32 seat;
-  std::array<u32, 5> value;  // (the HUD's words have the most: five after the seat)
+  std::array<u32, 5> value;  // (room for five after the seat, the retired HUD words' most; now three at most)
 };
 
 // the cells an action pops: its arguments, a vec three
@@ -1253,12 +1253,6 @@ private:
       // (its one cell is the number: `seat` holds it) the clock's word, never 0: the game's zero paths never run
       m_g.Plain().Write16(m_module + R_BASE + R_TIMER,
                           static_cast<u16>(std::clamp<std::int64_t>(static_cast<s32>(a.seat), 1, 65535)));
-      return;
-    }
-    if (hud::IsSlotWord(a.id))
-    {
-      if (a.seat < m_count)
-        hud::ApplySlot(m_g.Plain(), m_block, a.id, a.seat, a.value);
       return;
     }
     if (hud::IsDisplay(a.id))

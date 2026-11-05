@@ -12,7 +12,6 @@
 
 // test_hfr.cpp
 void TestTheRefreshesBetweenTwoSteps();
-void TestTheModernHudLayout();
 void TestTheClassicHudMoves();
 void TestTheBlendOfAPoseAndAView();
 void TestTheCorrections();
@@ -195,7 +194,7 @@ void TestPracticeIsAMode();
 void TestAnUnknownModeFieldPassesThrough();
 void TestAGonePlayerRetires();
 void TestTheModeTagWords();
-void TestTheModeHudSlotsAndGaps();
+void TestTheModeTimeGaps();
 void TestTheCutRaceWords();
 void TestFinishSeat();
 void TestTheStatWords();
@@ -451,7 +450,6 @@ void TestStatPacks()
 void TestTheHighRefreshRate()
 {
   TestTheRefreshesBetweenTwoSteps();
-  TestTheModernHudLayout();
   TestTheClassicHudMoves();
   TestTheBlendOfAPoseAndAView();
   TestTheCorrections();
@@ -575,7 +573,7 @@ int main(int argc, char** argv)
   TestAnUnknownModeFieldPassesThrough();
   TestAGonePlayerRetires();
   TestTheModeTagWords();
-  TestTheModeHudSlotsAndGaps();
+  TestTheModeTimeGaps();
   TestTheCutRaceWords();
   TestFinishSeat();
   TestTheStatWords();

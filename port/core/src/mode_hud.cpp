@@ -35,7 +35,6 @@ u32 Story(u32 block, u32 seat)
 {
   return block + STORY + seat * STORY_RECORD;
 }
-static_assert(SlotRecord(SEATS - 1, SLOT_COUNT - 1) + SLOT_RECORD <= STORY);
 }  // namespace
 
 u32 SeatParts(const Guest& g, u32 seat)
@@ -69,49 +68,6 @@ bool IsDisplay(u8 id)
       return true;
     default:
       return false;
-  }
-}
-
-bool IsSlotWord(u8 id)
-{
-  return id == ACTION_SHOWBAR || id == ACTION_SHOWFIGURE || id == ACTION_SHOWTEXT || id == ACTION_SHOWGAP || id == ACTION_HUDCLEAR;
-}
-
-void ApplySlot(Guest& g, u32 block, u8 id, u32 seat, const std::array<u32, 5>& a)
-{
-  // the arguments after the seat, in modes.toml's order, the slot and colour among them
-  const auto put = [&](u32 slot, u32 colour, u8 kind, u32 what, u32 first, u32 second) {
-    if (slot >= SLOT_COUNT)
-      return;
-    const u32 r = block + SlotRecord(seat, slot);
-    g.Write8(r + SLOT_KIND, kind);
-    g.Write8(r + SLOT_COLOUR, colour < COLOUR_COUNT ? static_cast<u8>(colour) : COLOUR_NONE);
-    g.Write8(r + SLOT_WHAT, static_cast<u8>(what));
-    g.Write32(r + SLOT_A, first);
-    g.Write32(r + SLOT_B, second);
-  };
-  switch (id)
-  {
-    case ACTION_SHOWBAR:
-      if (a[0] < BAR_COUNT)
-        put(a[3], a[4], SLOT_BAR, a[0], a[1], a[2]);
-      break;
-    case ACTION_SHOWFIGURE:
-      put(a[1], a[2], SLOT_FIGURE, 0, a[0], 0);
-      break;
-    case ACTION_SHOWTEXT:
-      if (a[0] >= 1 && a[0] <= HUD_TEXTS)
-        put(a[3], a[4], SLOT_TEXT, a[0], a[1], a[2]);
-      break;
-    case ACTION_SHOWGAP:
-      if (a[0] < TARGET_COUNT)
-        put(a[1], a[2], SLOT_GAP, a[0], 0, 0);
-      break;
-    case ACTION_HUDCLEAR:
-      put(a[0], COLOUR_NONE, SLOT_NONE, 0, 0, 0);
-      break;
-    default:
-      break;
   }
 }
 
@@ -316,7 +272,7 @@ u32 WindowFlags(const Package& p)
   const bool points_page = Uses(p.code, ACTION_AWARD, false) || !p.results_title.empty() || !p.points_table.empty();
   return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (points_page ? POINTS_PAGE : 0) |
          (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0) | (p.start_together ? TOGETHER : 0) |
-         (NeedsGhostTask(p.code) ? GHOST_TASK : 0) | (p.hud_modern ? HUD_MODERN : 0) | (p.hud_clean ? HUD_CLEAN : 0);
+         (NeedsGhostTask(p.code) ? GHOST_TASK : 0) | (p.hud_clean ? HUD_CLEAN : 0);
 }
 
 void ShowFault(Guest& g, const Package& p, bool broken)

@@ -151,8 +151,8 @@ void SmoothSampling(ImDrawList* list);
 void NearestSampling(ImDrawList* list);
 void Draw(ImDrawList* list, const Type& type, float x, float top, ImU32 colour, const char* text,
           const ImVec4* clip = nullptr);
-// The modern HUD's text, directly on the picture: `text` with its line's foot at `baseline` and its left at `x`, leaning by
-// `shear` (of the height, about the foot), a hard black outline `outline` px around it. Figures on one pitch as `type` says.
-// The caller has SmoothSampling up; this adds no callback, so a HUD's worth of text stays one draw.
+// Outlined text, directly on the picture (the spectator's line): `text` with its line's foot at `baseline` and its left
+// at `x`, leaning by `shear` (of the height, about the foot), a hard black outline `outline` px around it. Figures on
+// one pitch as `type` says. The caller has SmoothSampling up; this adds no callback, so many lines stay one draw.
 void DrawOutlined(ImDrawList* list, const Type& type, float x, float baseline, ImU32 colour, ImU32 outline_colour, float outline, float shear, const char* text);
 }  // namespace fzgx_port::overlay

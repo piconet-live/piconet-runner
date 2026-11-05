@@ -12,8 +12,6 @@
 #include <string>
 #include <vector>
 
-#include "fzgx/hud_layout.h"
-
 namespace fzgx
 {
 using u8 = std::uint8_t;
@@ -187,64 +185,6 @@ struct InputsShow
   std::uint8_t l = 0, r = 0;
   bool operator==(const InputsShow&) const = default;
 };
-// The modern HUD (Options::modern_hud or a mode's `hud modern`; modern_hud_frame.cpp, the adapter's modern_hud.cpp): what
-// the game's own parts would show this frame, for the racer the picture follows, told once a displayed frame after the
-// frame's steps. Picture only.
-struct ModernHudShow
-{
-  bool on = false;          // the game's HUD would be up (out, finished, the results, the observer's views: off)
-  std::array<bool, hud_layout::SLOTS> shown{};  // by hud_layout::SlotId: not hidden by the mode or the layout
-  hud_layout::Layout layout;
-  hud_layout::Meter meter = hud_layout::Meter::Blade;
-  float energy = 0, max_energy = 100;
-  bool boost_open = false;  // the game's boost is to be had: the rule its own meter goes rainbow by, and no `boost off` (modern_hud_frame.cpp)
-  bool pit = false;         // on a refilling surface
-  u32 boost_left = 0;       // the game's count of an energy boost's steps (M+0x18B): up, a boost was pressed
-  float speed = 0;          // km/h
-  u32 place = 0, racers = 0;
-  u32 lap = 0, laps = 0;
-  u32 race_ms = 0, lap_ms = 0, best_ms = 0;
-  u32 lap_count = 0;        // of `lap_ms_ago`, newest first, the game keeps eight
-  std::array<u32, 8> lap_ms_ago{};
-  bool clock = false;       // a mode's clock is up (`show s, TIMER`), its seconds as the game's part would draw them
-  u32 clock_seconds = 0;
-  // The top 6: each row's picture FaceDisp renders (fn_1_D27B8), by its address (0: none), and who that is.
-  struct Head
-  {
-    u32 address = 0;
-    u32 seat = 0, row = 6, rank = 0;  // whose, on which of the board's rows (6 and over: on none), at what place
-    u32 colour = 0;                   // 0xRRGGBB: that racer's dot on the course map
-    std::array<char, 24> name{};      // as the observer's tower names them
-  };
-  std::array<Head, 6> heads{};
-  // What a mode's words draw (`show_bar`, `show_figure`, `show_text`, `show_gap`), for the racer followed.
-  enum class ModeKind : u8
-  {
-    None, Bar, Figure, Text, Gap
-  };
-  struct Gap
-  {
-    bool known = false;
-    s32 steps = 0;           // above 0: they are ahead of the racer followed
-    u32 laps = 0;            // a lap or more apart
-    s32 trend = 0;           // above 0 losing time on them, below 0 gaining
-  };
-  struct ModeSlot
-  {
-    ModeKind kind = ModeKind::None;
-    u8 bar = 0;              // modes::BAR_*
-    bool coloured = false;   // false: white, or a gap's trend colours
-    u32 rgb = 0xFFFFFF;
-    float value = 0, most = 1;
-    s32 figure = 0;
-    Gap gap;
-    std::array<char, 80> text{};  // UTF-8, its values written in
-  };
-  bool mode_slots = false;  // any below
-  std::array<ModeSlot, 7> mode_slot{};  // by SlotId from UnderPlace on
-  bool row_gaps = false;    // `show_gap s, you, top6`
-  std::array<Gap, 6> row_gap{};  // by entry of `heads`
-};
 struct MinimapShow
 {
   bool on = false;   // the map shows: the game's HUD does (fzgx/minimap.h Shows)
@@ -363,8 +303,6 @@ public:
   virtual void ShowMinimap(const MinimapShow& show);
   // The player's pad for "Show inputs" (InputsShow above), on the game's thread, when it changed; the default shows nothing.
   virtual void ShowInputs(const InputsShow& show);
-  // The modern HUD (ModernHudShow above), on the game's thread, once a displayed frame while it is on; the default shows nothing.
-  virtual void ShowModernHud(const ModernHudShow& show);
   // The scrubber's undo log is packed by the host's packer: `out` takes the packed bytes, which may refer to `prefix`
   // (the bytes packed before them, given again to Unpack); Unpack fills exactly `out_size` bytes. False (the
   // default): none, and the bytes are kept as they are.

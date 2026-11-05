@@ -63,7 +63,7 @@ void TestTheCleanPicture()
   Init(host, Options{});
   // off (a mode's other flags, no HUD_CLEAN): nothing is written
   Shown(g);
-  g.Write32(layout::MODE_HUD + hud::WINDOW_FLAGS, hud::TOGETHER | hud::HUD_MODERN);
+  g.Write32(layout::MODE_HUD + hud::WINDOW_FLAGS, hud::TOGETHER | hud::GHOST_TASK);
   clean_picture::Frame(g);
   CHECK(g.Read32(game::CHECK_GAP_AT) == std::bit_cast<u32>(-10.0f) && g.Read8(boot::NAMES) == 'A' &&
         g.Read8(layout::MODE_HUD + hud::WINDOW_TAGS) == 3 && g.Read32(layout::MODE_HUD + hud::WINDOW_RANK) == 0);
