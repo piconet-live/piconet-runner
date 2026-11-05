@@ -157,9 +157,8 @@ void LiveCameras(Guest& g, SpectatorState& st, const sp::Controls& c, const sp::
   if (c.rule().kinds == 0 || f.follow >= sp::MOST)
     return;
   // Behind the chase camera the game's HUD is the local seat's and the image keeps it off (`spechud`), so the game's HUD
-  // view, the watched racer's HUD, would show nothing: that view takes the automatic shots, which the HUD follows. The modern
-  // HUD reads the racer followed itself, so on it every camera stays what was chosen.
-  const bool wants_hud = f.view == sp::View::Game && !ModernHudOn(g);
+  // view, the watched racer's HUD, would show nothing: that view takes the automatic shots, which the HUD follows.
+  const bool wants_hud = f.view == sp::View::Game;
   const bool chase = sp::IsChase(f.kind) && !wants_hud;
   const u32 mode = chase ? SPEC_CHASE : sp::IsChase(f.kind) ? ImageMode(sp::Kind::Auto) : ImageMode(f.kind);
   ImageCameras(g, f, mode, chase ? sp::ChaseHeight(f.kind) : f.variant,
@@ -173,9 +172,6 @@ std::unique_ptr<sp::Controls> MakeControls(Guest& g, sp::Role role, u32 seat, u3
   const u32 course = g.Read32(boot::RACE + 4);
   const u32 first = role == sp::Role::KnockedOut && g.Read32(RACER) < count ? g.Read32(RACER) : seat;
   auto controls = std::make_unique<sp::Controls>(role, course, first);
-  // on the modern HUD a watcher starts on it (meter, place, times and top 6 of the racer followed); Z goes to the tower as ever
-  if (ModernHudOn(g))
-    controls->SetView(sp::View::Game);
   Notice("fzgx: spectator: {} on course {}, followed from racer {}; {}",
          role == sp::Role::Replay ? "a replay" : role == sp::Role::Spectator ? "a spectator, live" : "a racer out, live",
          course, first,

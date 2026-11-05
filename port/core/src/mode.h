@@ -27,8 +27,9 @@ namespace fzgx::mode
 // word, the engine page's clock, no-contact rows, touching rows, moves and the rolling start's saved steering). Nine
 // pages: the run's words, the globals, the edges, the generator and the waiting rules' bits; two of seat words; the
 // wait records; the team words; the engine page (the race side's state: what the events compare with, the places,
-// the points, the contact table); the displays (mode_hud.h); the modern HUD's slots and the time gaps (mode_gap.h). Every
-// page's first word is its step stamp. A mode whose rules write a stat of the stats page (the compiler's setup word
+// the points, the contact table); the displays (mode_hud.h); page 7, whose tail holds the story values (mode_hud.h
+// STORY; its head held the retired modern HUD's slots, unused now, the page kept at its size); the time gaps
+// (mode_gap.h). Every page's first word is its step stamp. A mode whose rules write a stat of the stats page (the compiler's setup word
 // stats_page; below, STATS_TWO) has one page more, after these; the block of every other mode is these nine.
 constexpr u32 BLOCK = 0x9000, PAGE = 0x1000, BLOCK_WITH_STATS = BLOCK + PAGE;
 constexpr u32 RECORDS = 0, RECORD = 16;   // a seat's: +0 flags, +4 accelerator, +8 brake, +12 the held speed
@@ -210,7 +211,6 @@ struct Package
   bool contact_off = false;
   u32 clock_limit = 0;              // steps, 0 none
   bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
-  bool hud_modern = false;          // `hud modern`: everyone on the modern HUD, whatever the player's setting
   bool hud_clean = false;           // `hud clean`: no CHECK sign and no name tags (clean_picture.h)
   bool results_points = false;      // `results points`: the first results page passes by itself
   std::string results_heading;      // `results_heading "TEXT"`: the string for the game's PRACTICE page; empty, RESULTS
@@ -221,8 +221,7 @@ struct Package
   bool spin_off = false, side_off = false, spin_immune = false;
   std::optional<u16> max_energy;    // max_energy: every seat's M+0x5DA and M+0x184 at game_start; none, the game's
   bool stats_page = false;          // the compiler's stats_page: the block has the stats page, its last (a rule writes one of its stats)
-  std::vector<std::string> hud_texts;  // the texts `show_text` names by their place from 1, UTF-8, the characters 1 and 2 where its values go
-  bool time_gaps = false;              // the compiler's: a rule reads or shows a time gap: the block's gap page is kept (mode_gap.h)
+  bool time_gaps = false;              // the compiler's: a rule reads a time gap: the block's gap page is kept (mode_gap.h)
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   bool start_together = false;      // start_together: every machine on slot 0, every no-contact row on from before step 0

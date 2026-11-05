@@ -244,10 +244,6 @@ struct Options
   bool show_frame_rate = false;  // "showFrameRate": the game window's strip shows the frame rate (a player's setting)
   bool show_inputs = false;  // "showInputs": a controller over the picture shows the player's pad (a player's setting;
                              // picture only: inputs_overlay.cpp)
-  bool modern_hud = false;   // "modernHud": the runner's own HUD in place of the game's energy, rank, laps and times (a
-                             // player's setting; picture only: modern_hud_frame.cpp, the adapter's modern_hud.cpp)
-  std::string hud_layout;    // "hudLayout": the modern HUD's layout file (fzgx/hud_layout.h); empty or unreadable: the default
-  std::string hud_meter;     // "hudMeter": the modern HUD's energy meter by name (hud_layout::MeterOf)
   // "renderer", "auroraSize", "auroraEdges", "auroraTextures", "auroraColourblind": the player's picture engine
   // (aurora.cpp in the adapter; the switches they bring: fzgx/aurora_switches.h). Empty or 0: left out
   std::string picture_renderer;

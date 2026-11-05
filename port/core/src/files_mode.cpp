@@ -263,39 +263,6 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.time_gaps = true;
         }
-        else if (id == modes::SETUP_HUDTEXTS)
-        {
-          // a value a UTF-16 unit, a 0 between texts (the compiler's ModeHudTexts), to UTF-8 for the drawing
-          p.hud_texts.assign(1, {});
-          for (size_t i = 0; i < setup_args.size(); ++i)
-          {
-            s32 c = setup_args[i];
-            if (c == 0)
-            {
-              p.hud_texts.emplace_back();
-              continue;
-            }
-            if (c < 0 || c > 0xFFFF)
-              return Fail(why, "has a HUD text with a value that is no character");
-            if (c >= 0xD800 && c < 0xDC00 && i + 1 < setup_args.size() && setup_args[i + 1] >= 0xDC00 && setup_args[i + 1] < 0xE000)
-              c = 0x10000 + ((c - 0xD800) << 10) + (setup_args[++i] - 0xDC00);
-            std::string& to = p.hud_texts.back();
-            if (c < 0x80)
-              to.push_back(static_cast<char>(c));
-            else if (c < 0x800)
-              to.push_back(static_cast<char>(0xC0 | c >> 6)), to.push_back(static_cast<char>(0x80 | (c & 63)));
-            else if (c < 0x10000)
-              to.push_back(static_cast<char>(0xE0 | c >> 12)), to.push_back(static_cast<char>(0x80 | (c >> 6 & 63))), to.push_back(static_cast<char>(0x80 | (c & 63)));
-            else
-              to.push_back(static_cast<char>(0xF0 | c >> 18)), to.push_back(static_cast<char>(0x80 | (c >> 12 & 63))), to.push_back(static_cast<char>(0x80 | (c >> 6 & 63))), to.push_back(static_cast<char>(0x80 | (c & 63)));
-          }
-          if (p.hud_texts.size() > modes::HUD_TEXTS)
-            return Fail(why, "has more HUD texts than the api's");
-        }
-        else if (id == modes::SETUP_HUDMODERN)
-        {
-          p.hud_modern = true;
-        }
         else if (id == modes::SETUP_HUDCLEAN)
         {
           p.hud_clean = true;

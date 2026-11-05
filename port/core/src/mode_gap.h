@@ -1,5 +1,6 @@
-// A game mode's time gaps and the modern HUD's slots (protocol/modes.toml: seat.gap_ahead, gap_behind, gap_leader,
-// show_gap, show_bar, show_figure, show_text), kept in two pages of the mode's block.
+// A game mode's time gaps (protocol/modes.toml: seat.gap_ahead, gap_behind, gap_leader), kept in a page of the mode's
+// block, its last (page 8; page 7 before it held the modern HUD's slots until that HUD was retired, 2026-11-04: its
+// head is unused, its tail holds the story values, mode_hud.h STORY, and the block keeps its size).
 //
 // The gaps are race state. At each run of a mode that uses them (the package's time_gaps) every seat's course distance
 // (P+0xF8, which the game works out from its checkpoints: the race map's section 3) gives a mini-sector, 64 a lap, and the step
@@ -9,9 +10,6 @@
 // so it changes only as a seat reaches a new mini-sector. It needs no state on the drawing's side, and a rollback
 // simply draws what the restored page says. A row is one lap long: a racer a lap or more away gives the laps and a
 // time that is less than the whole gap.
-//
-// The slots are display words like the page in mode_hud.h: what each seat's player sees in each slot of the modern HUD, as the
-// rules last said. Written at the mode point, read once a frame by modern_hud_frame.cpp. Nothing a step reads.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -38,22 +36,7 @@ constexpr u32 GapRow(u32 seat, u32 sector)
 constexpr u32 TREND_BACK = 8;   // the gap now against the gap this many mini-sectors ago says gaining or losing
 constexpr s32 TREND_STEPS = 6;  // a change under this many steps (0.1 s) is holding
 
-constexpr u32 SLOTS_PAGE = 7 * PAGE;
-constexpr u32 SLOT_RECORD = 16;
-// a record: +0 the kind, +1 the colour (a modes::COLOUR_*, or COLOUR_NONE), +2 the bar's kind, gap's target or text's number,
-// +4 and +8 the two values (a bar's value and most, binary32; a figure's number; a text's values)
-constexpr u32 SLOT_KIND = 0, SLOT_COLOUR = 1, SLOT_WHAT = 2, SLOT_A = 4, SLOT_B = 8;
-constexpr u8 SLOT_NONE = 0, SLOT_BAR = 1, SLOT_FIGURE = 2, SLOT_TEXT = 3, SLOT_GAP = 4;
-constexpr u8 COLOUR_NONE = 0xFF;
-constexpr u32 SlotRecord(u32 seat, u32 slot)
-{
-  return SLOTS_PAGE + 0x10 + (seat * modes::SLOT_COUNT + slot) * SLOT_RECORD;
-}
-static_assert(BLOCK == 9 * PAGE && GapRow(29, SECTORS - 1) + 2 <= GAPS_PAGE + PAGE && SlotRecord(29, modes::SLOT_COUNT - 1) + SLOT_RECORD <= SLOTS_PAGE + PAGE);
-
-bool IsSlotWord(u8 id);
-// The word: `a`, the arguments after the seat, as the interpreter popped them (the choices' ranges checked here).
-void ApplySlot(Guest& g, u32 block, u8 id, u32 seat, const std::array<u32, 5>& a);
+static_assert(BLOCK == 9 * PAGE && GapRow(29, SECTORS - 1) + 2 <= GAPS_PAGE + PAGE);
 
 // One run's arrivals, from the game's fields: every seat of `count` with a progress record.
 void NoteGaps(Guest& g, u32 block, u32 module, u32 run);
