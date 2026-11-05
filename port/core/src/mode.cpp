@@ -1481,7 +1481,7 @@ std::FILE* TraceFile()
 // its adoption (they are then the adopted runs, in order, after the game's predicted ones they take the place of) and
 // dropped when the job ends otherwise (given up, caught up, compared).
 std::mutex s_trace_m;
-std::string s_trace_job;
+std::string s_trace_job[2];  // (per worker slot: each job's own, written at its adoption in adoption order)
 
 void TracePrint(std::FILE* t, const char* format, ...)
 {
@@ -1492,7 +1492,7 @@ void TracePrint(std::FILE* t, const char* format, ...)
     char line[2048];
     std::vsnprintf(line, sizeof(line), format, args);
     const std::lock_guard lock(s_trace_m);
-    s_trace_job += line;
+    s_trace_job[rollback_worker::Slot() & 1] += line;
   }
   else
   {
@@ -2521,16 +2521,17 @@ void Prepare(Package& p)
   for (u32 i = 0; i < p.rules.size(); ++i)
     out.on_event[p.rules[i].event].push_back(static_cast<u16>(i));
 }
-void TraceJob(bool adopted)
+void TraceJob(bool adopted, int slot)
 {
   const std::lock_guard lock(s_trace_m);
-  if (adopted && !s_trace_job.empty())
+  std::string& job = s_trace_job[slot & 1];
+  if (adopted && !job.empty())
     if (std::FILE* t = TraceFile())
     {
-      std::fputs(s_trace_job.c_str(), t);
+      std::fputs(job.c_str(), t);
       std::fflush(t);
     }
-  s_trace_job.clear();
+  job.clear();
 }
 }  // namespace fzgx::mode
 

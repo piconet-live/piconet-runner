@@ -116,6 +116,9 @@ struct Debug
   u32 worker_spike_at = 0, worker_spike_us = 0;    // "spikeAt", "spikeUs": tests, once, this much added to the time of
                                                    // W's first measured step at or past spikeAt (a spike: section 19)
   u32 worker_from = 422;  // "from": the first step a job may go back to (the countdown's end; tests: earlier)
+  // "workers": 1 or 2, the second worker forced off or on (tests; research/study-rollback-second-core.md section 20.2);
+  // 0: FZGX_ROLLBACK_WORKERS's, else 2 from 6 usable hardware threads
+  u32 worker_workers = 0;
   std::string worker_start = "changed";  // "start": "changed" (only pages that differ copied into W) or "whole" (S2's)
   std::string partial_log;
   u32 partial_from = 0, partial_to = 0;

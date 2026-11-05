@@ -17,7 +17,7 @@ namespace
 std::atomic<u64 (*)()> s_generation{nullptr};
 std::atomic<const char*> s_instrumented{nullptr};
 std::atomic<bool (*)()> s_interception{nullptr};
-u64 s_generation_at = 0;
+u64 s_generation_at[2] = {};
 }  // namespace
 
 void SetCodeGeneration(u64 (*generation)())
@@ -63,16 +63,16 @@ const char* StartBar(bool pipe_per_thread)
   return nullptr;
 }
 
-void TakeGeneration()
+void TakeGeneration(int slot)
 {
   const auto generation = s_generation.load();
-  s_generation_at = generation != nullptr ? generation() : 0;
+  s_generation_at[slot & 1] = generation != nullptr ? generation() : 0;
 }
 
-bool Moved()
+bool Moved(int slot)
 {
   const auto generation = s_generation.load();
-  return generation != nullptr && generation() != s_generation_at;
+  return generation != nullptr && generation() != s_generation_at[slot & 1];
 }
 
 std::map<std::string, u64>& Barred()

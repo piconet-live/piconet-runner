@@ -630,7 +630,7 @@ void TestTheWorkersGuards()
   rw::OffLimits("a test's entry");  // (not on W: nothing)
   bool on_w = false;
   std::thread([&] {
-    rw::ThreadStarts();
+    rw::ThreadStarts(0);
     on_w = rw::OnW();
   }).join();
   CHECK(on_w && !rw::OnW());

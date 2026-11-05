@@ -35,6 +35,12 @@
 //     race); no job starts whose depth and foreseen frames pass "catchUp", and none is adopted past 512 steps. The
 //     race's end checked or a job given up: the job stops and the game's sync rollback runs from its step.
 //   - "sync": the same frame counts and measurements with no worker, the baseline for "on".
+// The second worker W2 (research/study-rollback-second-core.md section 20): two slots of one kind of worker, each a
+// memory, a log, a context and a thread. With one job O open past a row of it that turned out late (c, R < c), a
+// second job N starts on the free slot from c, its base the game's log to R and then O's after-images of R to c - 1
+// (Rollback::Forward, O's worker running on); O is adopted first, N once O is closed; O's end without an adoption
+// stops N. Only where the process may use 6 hardware threads (UsableThreads), or forced by "workers" or
+// FZGX_ROLLBACK_WORKERS; it backs off first on a slow pace. Its line is "rollback worker S6".
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -58,10 +64,17 @@ bool On();
 bool Threaded();
 // The adapter's per-machine rollback forgets a step's kept run (at an adoption, for every step the worker ran).
 void SetForget(void (*forget)(u32 step));
-// The worker's thread: it starts (once), and it has left a job (after Begin's job ended, given up or stopped).
-void ThreadStarts();
-void Left();
-// The game stops: an open job is stopped and the worker's thread is idle (before the adapter joins it).
+// A worker's thread (slot 0 W, slot 1 the second worker W2, research/study-rollback-second-core.md section 20): it
+// starts (once), and it has left a job (after Begin's job ended, given up or stopped).
+void ThreadStarts(int slot);
+void Left(int slot);
+// The calling thread's worker slot (-1: not a worker's thread).
+int Slot();
+// The second worker (section 20.2) runs only where the process may use at least 6 hardware threads: the adapter's
+// count of them (the hardware's, and on Windows the process's affinity mask), read again at each start. Unset: the
+// hardware's count.
+void SetUsableThreads(unsigned (*threads)());
+// The game stops: the open jobs are stopped and the workers' threads are idle (before the adapter joins them).
 void Quiesce();
 // The emulator is about to stop (any thread; the adapter's Core::Stop hook, before the CPU stops and the native module
 // W's steps run in is unloaded): the worker's thread leaves its job and no job begins on it after. Stop lifts it.
@@ -78,10 +91,12 @@ struct Memory
   u32 cache_size = 0;
   bool threaded = false;  // S2: the job runs on the worker's thread (else S1's, on the game's, at once)
 };
-// After the game's network hook has returned (the adapter's host call): a job prepared in this hook is to run now.
-// False: none. The context starts from the game's registers at this hook.
-bool Begin(Memory* memory);
-// W's data window: the context's slow accesses to the window are served from it.
+// After the game's network hook has returned (the adapter's host call, once per slot): a job prepared in this hook
+// for `slot` is to run now. False: none. The context starts from the game's registers at this hook. S1's jobs (on
+// the game's thread) are slot 0's.
+bool Begin(int slot, Memory* memory);
+// The calling thread's worker's data window (slot 0's on the game's thread): the context's slow accesses to the window
+// are served from it.
 ModData& Window();
 // The context reached the network hook: the step about to run's words are written into W (or not, at the job's last
 // hook). True: go on; false: the job's steps are run (the context stops here). On the worker's thread (S2): it may
@@ -90,8 +105,9 @@ bool Hook();
 // The context reached the mode point (the image's HOST_MODE): the game mode's rules run on W (mode.cpp keeps every
 // state between two steps in the guest's block; a race without a mode returns at once).
 void ModePoint();
-// The context met what it does not handle: the job gives up (and the game's thread runs the rollback as ever).
-void GiveUp(const std::string& why);
+// The context met what it does not handle: the job gives up (and the game's thread runs the rollback as ever). On a
+// worker's thread, its slot's job; on the game's thread, `slot`'s threaded job when it names one, else S1's.
+void GiveUp(const std::string& why, int slot = -1);
 // The adapter found the native module's write-gather pipe per thread (DolRecomp's staticrecomp_gather_pipe_per_thread):
 // the worker's thread has a pipe of its own, whose bytes are dropped, so a step that writes the drawing's pipe no
 // longer bars a job. Without it (an older module) a store there on the worker's thread would land in the game's pipe:

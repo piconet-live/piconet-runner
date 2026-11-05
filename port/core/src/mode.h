@@ -274,9 +274,9 @@ void GameStart(Guest& g, const Package& p, u32 block, u32 module);
 // The mode point's host call: the race's mode run, and a mode error said once in the log. `quiet`: nothing said (the
 // deep-rollback worker's steps on W, fzgx/rollback_worker.h, maybe on its own thread: the game's run says it).
 void Step(Guest& g, bool quiet = false);
-// The rollback worker's job ends (study section 17, U4): the mode trace's lines W's runs made in it are written
-// (adopted: they are the race's runs) or dropped.
-void TraceJob(bool adopted);
+// The rollback worker's job in `slot` ends (study section 17, U4; one buffer a worker slot, section 20.4): the mode
+// trace's lines W's runs made in it are written (adopted: they are the race's runs) or dropped.
+void TraceJob(bool adopted, int slot = 0);
 // Seat `seat`'s record in the block; 0 without a block.
 u32 Record(const Guest& g, u32 seat);
 // Seat `seat`'s move (MOVES: read by the image's mode_speed in the machine's step) and its rolling start's saved

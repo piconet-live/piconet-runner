@@ -92,4 +92,9 @@ void TestTheRollbackWorkerKeys()
         o.debug.worker_spike_us == 150000);
   CHECK(Refused(with(R"({"mode": "on", "catchUp": 300})"), "\"debug.rollbackWorker.catchUp\""));
   CHECK(Refused(with(R"({"mode": "on", "start": "some"})"), "\"debug.rollbackWorker.start\""));
+  // the second worker (study section 20.2): "workers" 1 or 2 forces it off or on; unset, 0 (the PC's threads decide)
+  CHECK(!ParseLaunchFile(with(R"("on")"), &o) && o.debug.worker_workers == 0);
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "workers": 2})"), &o) && o.debug.worker_workers == 2);
+  CHECK(Refused(with(R"({"mode": "on", "workers": 3})"), "\"debug.rollbackWorker.workers\""));
+  CHECK(Refused(with(R"({"mode": "on", "workers": 0})"), "\"debug.rollbackWorker.workers\""));
 }
