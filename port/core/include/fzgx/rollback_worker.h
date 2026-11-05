@@ -51,6 +51,11 @@
 
 #include "fzgx/guest.h"
 
+namespace fzgx
+{
+class Host;
+}
+
 namespace fzgx::rollback_worker
 {
 // The worker's mode: the launch file's "debug.rollbackWorker" when it names one (tests only: "off" and "sync" run the
@@ -75,6 +80,9 @@ void ThreadStarts(int slot);
 void Left(int slot);
 // The calling thread's worker slot (-1: not a worker's thread).
 int Slot();
+// The calling thread's worker's own memory as a host that does nothing (its Ram W's memory, its calls no-ops; nullptr:
+// not a worker's thread): what TheHost gives on W after OffLimits.
+Host* OwnHost();
 // The second worker (section 20.2) runs only where the process may use at least 6 hardware threads: the adapter's
 // count of them (the hardware's, and on Windows the process's affinity mask), read again at each start. Unset: the
 // hardware's count.
@@ -123,8 +131,12 @@ void SetPipePerThread(bool per_thread);
 bool OnW();
 // A host entry outside W's allowlist was reached on W's thread (the adapter's host calls, the window's side effects,
 // the machines' task call, the CPU core's hardware hooks, the core's host): with the launch file naming the worker's
-// mode (a test, a gate) the game stops loudly, with the entry's name; in a player's build the job gives up.
+// mode (a test, a gate) the game stops loudly, with the entry's name; in a player's build the job gives up, the
+// context is stopped (SetContextStop's function: its exception and cycle budget, as the adapter's own give-up), and
+// the caller does nothing and returns a neutral value (a task call false, a host call handled, TheHost OwnHost's).
 void OffLimits(const char* entry);
+// The adapter's give-up of the calling thread's context (its exception and cycle budget set), for OffLimits.
+void SetContextStop(void (*stop)(const std::string& why));
 // U1: the CPU core's code tables' generation (StaticRecompCore::CodeGeneration), taken at a job's start; a job whose
 // generation moved by its adoption gives up (a chunk native code could run was retired, invalidated or cleared while
 // W ran; a chunk checked meanwhile does not move it: W could not run it before, and runs the module's code after).

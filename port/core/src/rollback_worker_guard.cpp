@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
 #include "fzgx/rollback_worker.h"
 #include "internal.h"
@@ -17,6 +18,7 @@ namespace
 std::atomic<u64 (*)()> s_generation{nullptr};
 std::atomic<const char*> s_instrumented{nullptr};
 std::atomic<bool (*)()> s_interception{nullptr};
+std::atomic<void (*)(const std::string&)> s_context_stop{nullptr};
 u64 s_generation_at[2] = {};
 }  // namespace
 
@@ -35,6 +37,11 @@ void SetInterception(bool (*active)())
   s_interception = active;
 }
 
+void SetContextStop(void (*stop)(const std::string& why))
+{
+  s_context_stop = stop;
+}
+
 void OffLimits(const char* entry)
 {
   if (!OnW())
@@ -47,7 +54,10 @@ void OffLimits(const char* entry)
     std::fflush(stderr);
     std::abort();
   }
-  GiveUp(std::string("a host entry outside the worker's allowlist: ") + entry);
+  const std::string why = std::string("a host entry outside the worker's allowlist: ") + entry;
+  GiveUp(why);
+  if (const auto stop = s_context_stop.load())
+    stop(why);  // (the context stops at its next check; the caller returns at once, doing nothing)
 }
 
 namespace guard

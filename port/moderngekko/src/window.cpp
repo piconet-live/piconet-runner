@@ -71,7 +71,10 @@ void CountFrame()
 bool HostCall(CPUState* cpu, u32 address, void*)
 {
   if (fzgx::rollback_worker::OnW())  // (study section 17: W's host calls are its own hook table's, never these)
+  {
     fzgx::rollback_worker::OffLimits("the adapter's host call");
+    return true;  // (handled, nothing done: the job is given up and its context stopped)
+  }
   if (s_state.native && (IsOurs(address) || lanes::IsTask(address)))
     lanes::CensusHostCall(cpu, address);  // (the deep-rollback probe, off unless its key asks: lanes_census.h)
   if (lanes::IsTask(address))  // the machines' task, with the per-machine rollback on (lanes.h)

@@ -102,7 +102,10 @@ bool Holds(u32 start, u32 end)
 bool TaskCall(CPUState* cpu)
 {
   if (fzgx::rollback_worker::OnW())  // (study section 17: W runs the machines' task whole as native code, never this)
+  {
     fzgx::rollback_worker::OffLimits("the machines' task call (lanes::TaskCall)");
+    return false;
+  }
   return PartialWants(cpu->pc) && PartialCall(cpu);
 }
 

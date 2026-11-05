@@ -431,6 +431,11 @@ int Slot()
   return t_slot;
 }
 
+Host* OwnHost()
+{
+  return t_slot >= 0 ? s_ws[t_slot].memory.get() : nullptr;
+}
+
 void SetUsableThreads(unsigned (*threads)())
 {
   s_usable_threads = threads;
@@ -511,6 +516,8 @@ bool HookThreaded()
   if (t > 0)
     Rollback::KeepChecksum(gw, t - 1, Rollback::Checksum(gw));
   std::unique_lock lock(a.m);
+  if (a.ended)
+    return false;  // (given up inside the step, OffLimits: nothing of it is kept)
   if (t <= a.from)
   {
     a.why = std::format("the steps went another way (step {} in a job from {})", t, a.from);
@@ -558,7 +565,7 @@ bool HookThreaded()
   a.at = t;
   for (;;)
   {
-    if (a.stop)
+    if (a.stop || a.ended)
       return false;
     if (a.rewind != NONE)
     {

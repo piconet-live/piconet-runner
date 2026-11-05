@@ -523,6 +523,7 @@ void ThreadMain(int slot)
   rw::ThreadStarts(slot);
   // study section 17's general guard: the CPU core's own hooks (the game's hardware) are never a worker's
   StaticRecompCore::SetForeignThread([](const char* hook) { rw::OffLimits(hook); });
+  rw::SetContextStop([](const std::string& why) { GiveUp(why); });  // (this thread's context, t_w)
   std::unique_lock lock(t.m);
   for (;;)
   {
