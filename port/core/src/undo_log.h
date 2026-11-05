@@ -185,6 +185,12 @@ struct Tracking
   std::vector<u8> scratch_shadow;  // the locked cache (Host::Scratch) as it was before the previous step; empty: none
   std::array<u8, 4> shadow_rng{};
   std::map<u32, Undo> undo;  // undo[t]: memory before step t changed it
+  // Rollback::KeepAfter (the rollback workers' logs, study section 20.1): after[t] holds the content after step t of
+  // every block undo[t] names (the locked cache's and the generator word too), read at SaveStep(t + 1). Under
+  // after_mutex, so another thread may read them (Rollback::Forward) while this log's thread goes on.
+  bool keep_after = false;
+  std::map<u32, Undo> after;
+  mutable std::mutex after_mutex;
   // The lists of entries dropped (put back or final), emptied, their room kept: a new entry takes one, so that a step
   // logged allocates nothing once the race has run a while (DropEntry).
   std::vector<Blocks> spare;
@@ -334,9 +340,14 @@ void TraceFaithful(Tracking& s, const u8* live, u32 from, u32 t);
 // present; the changes since the last PreStep put back.
 void ApplyEntries(Guest& g, const Tracking& s, u32 from, u32 t);
 void ExchangeMoment(Guest& g, const Tracking& a, const Tracking& b, Rollback::Moment& m, bool copy);
-void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step);
+void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step, const std::vector<u32>* also = nullptr);
 void RebaseMemory(Guest& g, Tracking& s, u32 step, bool keep_below);
 void DiscardChanges(Guest& g, Tracking& s);
+// After-images (Tracking::after, undo_moments.cpp): those of steps from `from` on dropped, and those below `below`;
+// Rollback::Forward's writing of steps `from` to `to` - 1 onto another memory (false, nothing written: a step's are
+// not kept). `pages`: the offsets in the region of the pages written, sorted.
+void DropAfter(Tracking& s, u32 from, u32 below = 0);
+bool ForwardAfter(Guest& g, const Tracking& s, u32 from, u32 to, std::vector<u32>* pages);
 // Rollback::TakeOver's memory and history (undo_moments.cpp).
 void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 from, u32 to, const std::vector<u32>* keep);
 // A page's content may have changed (Rollback::TakeDirty).

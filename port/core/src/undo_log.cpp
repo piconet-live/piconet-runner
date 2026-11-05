@@ -152,6 +152,36 @@ void CompareEveryPage(Guest& g, Tracking& s, u32 t, bool learning, Undo& entry)
     }
   }
 }
+// Rollback::KeepAfter: the memory is the moment after step `step` (its entry just logged), so the entry's
+// after-images are the memory's content at the entry's own blocks, read here. Made outside the mutex, moved in
+// under it (Forward may be reading on another thread).
+void KeepAfterImage(Guest& g, Tracking& s, u32 step, const Undo& entry)
+{
+  const u8* live = g.Ram(s.region, s.shadow.size());
+  const u8* scratch = s.scratch_shadow.empty() ? nullptr : g.GetHost().Scratch();
+  Undo image;
+  image.blocks.resize(entry.blocks.size());
+  for (std::size_t i = 0; i < entry.blocks.size(); ++i)
+  {
+    image.blocks[i].first = entry.blocks[i].first;
+    std::memcpy(image.blocks[i].second.data(), live + entry.blocks[i].first, BLOCK);
+  }
+  for (const auto& block : entry.scratch)
+  {
+    if (scratch == nullptr)
+      break;
+    auto& to = image.scratch.emplace_back();
+    to.first = block.first;
+    std::memcpy(to.second.data(), scratch + block.first, BLOCK);
+  }
+  if (entry.has_rng)
+  {
+    image.has_rng = true;
+    g.CopyFrom(image.rng.data(), DOL_RNG, 4);
+  }
+  const std::lock_guard lock(s.after_mutex);
+  s.after[step] = std::move(image);
+}
 }  // namespace
 
 void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
@@ -253,6 +283,8 @@ void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
       kept = std::move(entry);
     }
     s.undo_bytes += EntryBytes(kept);
+    if (s.keep_after)
+      KeepAfterImage(g, s, t - 1, kept);
   }
   s.track_us += std::chrono::duration<double, std::micro>(Clock::now() - started).count();
 }
@@ -296,6 +328,7 @@ void Restore(Guest& g, Tracking& s, u32 from, u32 t)
     }
     EraseEntry(s, it);
   }
+  DropAfter(s, t);  // (the after-images go with the entries)
   u32 at = 0;
   for (const auto& [off, len] : s.kept)
   {
@@ -484,6 +517,7 @@ void StartTracking(Guest& g, Tracking& s)
   OpenUndoTrace(s);
   s.first_step = s.final_below = 0;
   s.undo_bytes = 0;
+  DropAfter(s, 0);
   s.keys.clear();
   s.key_bytes = 0;
   s.units.clear();

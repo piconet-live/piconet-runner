@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "fzgx/rollback_worker.h"
 #include "internal.h"
 #include "fzgx/runahead.h"
 #include "mode.h"
@@ -29,6 +30,17 @@ panel::Progress s_load;  // how far the start's load is (LoadField)
 }  // namespace
 
 Host& TheHost()
+{
+  if (rollback_worker::OnW())
+  {
+    rollback_worker::OffLimits("the core's host (TheHost)");
+    if (Host* own = rollback_worker::OwnHost())
+      return *own;  // (the job given up: a host that does nothing, over W's own memory)
+  }
+  return *s_host;
+}
+
+Host& TheHostAnyThread()
 {
   return *s_host;
 }
@@ -273,6 +285,11 @@ void FrameTick()
 
 void WindowWritten(u32 address, u64 value)
 {
+  if (rollback_worker::OnW())  // (study section 17: W's window stores land in its own window and call nothing)
+  {
+    rollback_worker::OffLimits("the window's side effects (WindowWritten)");
+    return;
+  }
   if (!s_host)
     return;
   if (address == layout::DRAW_ASK)

@@ -110,6 +110,7 @@ void Rollback::Stop()
   TakeOffGuard(*m);
   m->tracking = false;
   m->undo.clear();
+  DropAfter(*m, 0);
   m->letting_go.clear();
   m->letting_go_bytes = 0;
   m->spare.clear();
@@ -145,6 +146,7 @@ void Rollback::Final(u32 step)
   FZGX_TIME(Final);
   for (auto it = m->undo.begin(); it != m->undo.end() && it->first < step;)
     it = EraseEntry(*m, it);
+  DropAfter(*m, 0xFFFFFFFF, step);
   m->final_below = std::max(m->final_below, step);
 }
 
@@ -183,10 +185,29 @@ void Rollback::Apply(Guest& g, u32 from, u32 t) const
   ApplyEntries(g, *m, from, t);
 }
 
-void Rollback::Adopt(Guest& g, const Rollback& other, u32 step)
+void Rollback::Adopt(Guest& g, const Rollback& other, u32 step, const std::vector<u32>* also)
 {
   m->Moved(g);
-  AdoptMemory(g, *m, *other.m, step);
+  AdoptMemory(g, *m, *other.m, step, also);
+}
+
+void Rollback::KeepAfter(bool keep)
+{
+  m->keep_after = keep;
+  if (!keep)
+    DropAfter(*m, 0);
+}
+
+bool Rollback::Forward(Guest& g, u32 from, u32 to, std::vector<u32>* pages) const
+{
+  if (pages != nullptr)
+    pages->clear();
+  if (!ForwardAfter(g, *m, from, to, pages))
+    return false;
+  m->Moved(g);
+  if (&g.GetHost() == m->home)
+    m->all_dirty = true;
+  return true;
 }
 
 void Rollback::KeepWatching()

@@ -163,6 +163,8 @@ void RunAheadReturned(CPUState* cpu);
 // The deep-rollback worker's CPU context (rollback_worker.cpp, fzgx/rollback_worker.h): after the network hook, a
 // job prepared there runs on its memory; at the stop, its line.
 void RunRollbackWorker(CPUState* cpu);
+// The mod loader intercepts guest functions (window.cpp): the rollback worker starts no job.
+bool InterceptionActive();
 void StopRollbackWorker();
 // Before the boot: at the emulator's stop (Core::Stop, before the CPU stops and Core::Shutdown unloads the native
 // module), the worker's thread leaves its job (rw::Close); AfterStop's StopRollbackWorker comes too late for that.

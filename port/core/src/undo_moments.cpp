@@ -121,11 +121,26 @@ void ShadowTheMemory(Guest& g, Tracking& s, const Tracking& with)
 }
 }  // namespace
 
-void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step)
+void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step, const std::vector<u32>* also)
 {
   ShadowTheMemory(g, s, with);
+  const u8* live = g.Ram(s.region, s.shadow.size());
+  for (const u32 off : also ? *also : std::vector<u32>())
+  {
+    // (pages another log's after-images wrote, Rollback::Forward: this log's present there too, and watched)
+    if (off / PAGE >= s.untracked.size() || s.untracked[off / PAGE])
+      continue;
+    std::memcpy(s.shadow.data() + off, live + off, PAGE);
+    Watch(s, off);
+    if (s.way == Tracking::Way::Both)  // (as ShadowTheMemory)
+    {
+      std::memcpy(s.check_shadow.data() + off, live + off, PAGE);
+      s.check_hash[off / PAGE] = g.GetHost().PageHash(live + off, PAGE);
+    }
+  }
   for (auto it = s.undo.begin(); it != s.undo.end();)
     it = EraseEntry(s, it);
+  DropAfter(s, 0);
   s.first_step = step;
   s.final_below = 0;
 }
@@ -143,6 +158,7 @@ void RebaseMemory(Guest& g, Tracking& s, u32 step, bool keep_below)
     s.letting_go.push_back(std::move(it->second));
   }
   s.undo.erase(from, s.undo.end());
+  DropAfter(s, keep_below ? step : 0);
   if (!keep_below)
   {
     s.first_step = step;
@@ -258,6 +274,59 @@ void TakeOverMoment(Guest& g, Tracking& s, Tracking& w, const Guest& gw, u32 fro
       w.undo.erase(it);
     }
   }
+  DropAfter(w, from);  // (the worker's after-images of those steps go with its entries)
+}
+
+void DropAfter(Tracking& s, u32 from, u32 below)
+{
+  const std::lock_guard lock(s.after_mutex);
+  if (s.after.empty())
+    return;
+  s.after.erase(s.after.lower_bound(from), s.after.end());
+  s.after.erase(s.after.begin(), s.after.lower_bound(below));
+}
+
+bool ForwardAfter(Guest& g, const Tracking& s, u32 from, u32 to, std::vector<u32>* pages)
+{
+  u8* live = g.Ram(s.region, s.shadow.size());
+  if (live == nullptr || from > to)
+    return false;
+  const std::lock_guard lock(s.after_mutex);
+  for (u32 k = from; k < to; ++k)
+  {
+    if (s.after.find(k) == s.after.end())
+      return false;
+  }
+  u8* scratch = s.scratch_shadow.empty() ? nullptr : g.GetHost().Scratch();
+  const std::vector<u8> kept = KeptParts(s, live);
+  std::vector<u64> named;
+  if (pages != nullptr)
+    named.assign((s.shadow.size() / PAGE + 63) / 64, 0);
+  // in step order: a block two steps wrote takes the later step's content
+  for (auto it = s.after.lower_bound(from); it != s.after.end() && it->first < to; ++it)
+  {
+    for (const auto& [off, bytes] : it->second.blocks)
+    {
+      std::memcpy(live + off, bytes.data(), BLOCK);
+      if (pages != nullptr)
+        named[off / PAGE / 64] |= u64{1} << (off / PAGE % 64);
+    }
+    for (const auto& [off, bytes] : it->second.scratch)
+    {
+      if (scratch != nullptr)
+        std::memcpy(scratch + off, bytes.data(), BLOCK);
+    }
+    if (it->second.has_rng)
+      g.CopyTo(DOL_RNG, it->second.rng.data(), 4);
+  }
+  // the kept parts stay as the memory has them, as a restore leaves them
+  PutKeptParts(s, live, kept);
+  for (std::size_t i = 0; i < named.size(); ++i)
+  {
+    for (u64 bits = named[i]; bits != 0; bits &= bits - 1)
+      pages->push_back(static_cast<u32>((i * 64 + static_cast<std::size_t>(std::countr_zero(bits))) * PAGE));
+  }
+  return true;
 }
 
 void DiscardChanges(Guest& g, Tracking& s)

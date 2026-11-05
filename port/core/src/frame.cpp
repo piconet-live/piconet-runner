@@ -418,7 +418,7 @@ void RunSteps(Guest& g, Session& s, u32 step, const FrameSteps& steps)
   // the steps the frame runs: from run_from to `step`, the catch-up steps after it; held, to the step before `step`
   const u32 extra = step - run_from + catch_up - (held ? 1 : 0);
   Rollback::Resimulate(g, extra);
-  WorkerOpen(s, run_from, extra, held);
+  WorkerOpen(g, s, run_from, extra, held);
   s.last_extra = extra;
   s.work.depth = step - run_from;
   s.work.catch_up = catch_up;

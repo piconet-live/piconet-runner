@@ -20,11 +20,14 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <mutex>
+#include <string>
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <xmmintrin.h>
@@ -37,6 +40,7 @@
 #include "rollback.h"
 #include "stat_ranges.g.h"
 #include "files.h"
+#include "fzgx/rollback_worker.h"
 #include "util.h"
 
 namespace fzgx::mode
@@ -1467,6 +1471,30 @@ std::FILE* TraceFile()
   return file;
 }
 
+// The trace's lines of a run on the rollback worker's thread (study section 17, U4): kept for its job, written at
+// its adoption (they are then the adopted runs, in order, after the game's predicted ones they take the place of) and
+// dropped when the job ends otherwise (given up, caught up, compared).
+std::mutex s_trace_m;
+std::string s_trace_job[2];  // (per worker slot: each job's own, written at its adoption in adoption order)
+
+void TracePrint(std::FILE* t, const char* format, ...)
+{
+  std::va_list args;
+  va_start(args, format);
+  if (rollback_worker::OnW())
+  {
+    char line[2048];
+    std::vsnprintf(line, sizeof(line), format, args);
+    const std::lock_guard lock(s_trace_m);
+    s_trace_job[rollback_worker::Slot() & 1] += line;
+  }
+  else
+  {
+    std::vfprintf(t, format, args);
+  }
+  va_end(args);
+}
+
 // (debug "modeTraceEvery": the seats' lines every so many runs, 10 by default)
 u32 TraceEvery()
 {
@@ -1485,12 +1513,12 @@ void TraceSeats(Machine& m, Mem& g, u32 block, u32 module, u32 runs, bool starte
   if (!t || (started && runs % TraceEvery() != 0))
     return;
   const u32 r = module + R_BASE, slot = g.Read8(r + R_SLOT);
-  std::fprintf(t, "T %u clock %u rule %08x timer %u phase %d end %u\n", runs, g.Read32(module + game::RACE_CLOCK),
+  TracePrint(t, "T %u clock %u rule %08x timer %u phase %d end %u\n", runs, g.Read32(module + game::RACE_CLOCK),
                g.Read32(r), g.Read16(r + R_TIMER), static_cast<s16>(g.Read16(module + game::PHASE)), g.Read32(block + END));
   for (u32 seat = 0; seat < m.Count(); ++seat)
   {
     const u32 a = m.MachineOf(seat), pr = m.Progress(seat), rec = r + R_RECORDS + R_RECORD * seat;
-    std::fprintf(t,
+    TracePrint(t,
                  "S %u %u was %08x flags %08x v %.1f e %.2f lap %d dist %.0f x %.1f y %.1f z %.1f p %.1f %.1f %.1f steer %.3f "
                  "accel %.2f brake %.2f restoring %u kos %u rank %u out %u place %u time %08x cb %u contact %08x wreck %u base %.3f "
                  "boost %u\n",
@@ -1505,7 +1533,8 @@ void TraceSeats(Machine& m, Mem& g, u32 block, u32 module, u32 runs, bool starte
                  g.Read32(a + M_CPU) ? g.Read8(g.Read32(a + M_CPU) + 0x32) : 0, g.Read32(a + M_CONTACT),
                  g.Read32(block + SeatState(seat) + S_WRECK), Real(g.Read32(a + M_BASE_SPEED)), g.Read8(a + 0x18A));
   }
-  std::fflush(t);
+  if (!rollback_worker::OnW())
+    std::fflush(t);
 }
 
 // One occurrence of a discrete event: every rule on it in the file's order, its instance on `seat` (none: the rule's
@@ -1526,7 +1555,7 @@ void Fire(Machine& m, Mem& g, const Package& p, u32 block, u32 event, u32 seat, 
     if (Holds(m, g, rule, i, block, seat, false))
     {
       if (std::FILE* t = TraceFile())
-        std::fprintf(t, "E %u %s seat %d second %d\n", g.Read32(block + RUNS), rule.label.c_str(), static_cast<int>(seat),
+        TracePrint(t, "E %u %s seat %d second %d\n", g.Read32(block + RUNS), rule.label.c_str(), static_cast<int>(seat),
                      static_cast<int>(second));
       m.Run(rule.body, i, seat);
     }
@@ -1701,7 +1730,7 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
   {
     const Action& a = *queued;
     if (std::FILE* t = TraceFile())
-      std::fprintf(t, "A %u id %u seat %d %08x %08x %08x\n", g.Read32(block + RUNS), a.id, static_cast<int>(a.seat),
+      TracePrint(t, "A %u id %u seat %d %08x %08x %08x\n", g.Read32(block + RUNS), a.id, static_cast<int>(a.seat),
                    a.value[0], a.value[1], a.value[2]);
     // the race's words first: they name no seat
     switch (a.id)
@@ -2485,6 +2514,18 @@ void Prepare(Package& p)
   }
   for (u32 i = 0; i < p.rules.size(); ++i)
     out.on_event[p.rules[i].event].push_back(static_cast<u16>(i));
+}
+void TraceJob(bool adopted, int slot)
+{
+  const std::lock_guard lock(s_trace_m);
+  std::string& job = s_trace_job[slot & 1];
+  if (adopted && !job.empty())
+    if (std::FILE* t = TraceFile())
+    {
+      std::fputs(job.c_str(), t);
+      std::fflush(t);
+    }
+  job.clear();
 }
 }  // namespace fzgx::mode
 

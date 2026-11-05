@@ -468,7 +468,7 @@ void ExtraStep(Guest& g, Session& s);
 // checked after it, the job opened when the frame runs every step to L, and compared at the hook of L.
 void WorkerPrepare(Guest& g, Session& s, u32 step, u32 run_from);
 void WorkerAfterRestore(Guest& g, Session& s);
-void WorkerOpen(Session& s, u32 run_from, u32 extra, bool held);
+void WorkerOpen(Guest& g, Session& s, u32 run_from, u32 extra, bool held);
 // S2, the worker's thread (debug.rollbackWorker "on"; "sync" measures the same frames with none): at the predictions'
 // check, an adoption or the step a job given up goes back to; the search's end below an open job; a correction the
 // open job takes; the rule that starts a job; the final steps held at an open job's R; the stop.

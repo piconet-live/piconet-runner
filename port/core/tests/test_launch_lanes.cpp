@@ -56,14 +56,17 @@ void TestThePartialRollbackKeys()
   CHECK(Refused(with(R"({"mode": "check", "depth": 3})"), "\"debug.partialRollback.depth\" is not a setting"));
 }
 
-// "debug.rollbackWorker": the deep-rollback worker (fzgx/rollback_worker.h); not named, the mode stays empty (on by default: ModeFor): a mode
-// alone or {"mode", "depth"}.
+// "debug.rollbackWorker": the deep-rollback worker's test key (fzgx/rollback_worker.h); not named, the mode stays empty
+// (every player's start: on from 4 hardware threads, ModeFor): a mode alone or {"mode", "depth"}.
 void TestTheRollbackWorkerKeys()
 {
   const auto with = [](const std::string& value) { return R"({"about": "x", "debug": {"rollbackWorker": )" + value + "}}"; };
   Options o;
   CHECK(!ParseLaunchFile(R"({"about": "x"})", &o) && o.debug.worker_mode.empty() && o.debug.worker_depth == 7);
-  CHECK(!ParseLaunchFile(with(R"("off")"), &o) && o.debug.worker_mode == "off" && DebugSettingsOn(o.debug).empty());
+  // (tests only since the old path's retirement: "off" is a test setting like every other mode)
+  CHECK(!ParseLaunchFile(with(R"("off")"), &o) && o.debug.worker_mode == "off" &&
+        DebugSettingsOn(o.debug) == std::vector<std::string>{"debug.rollbackWorker"});
+  CHECK(!ParseLaunchFile(R"({"about": "x"})", &o) && DebugSettingsOn(o.debug).empty());
   CHECK(!ParseLaunchFile(with(R"("check")"), &o) && o.debug.worker_mode == "check" &&
         DebugSettingsOn(o.debug) == std::vector<std::string>{"debug.rollbackWorker"});
   CHECK(!ParseLaunchFile(with(R"({"mode": "compare", "depth": 3})"), &o) && o.debug.worker_mode == "compare" &&
@@ -86,6 +89,18 @@ void TestTheRollbackWorkerKeys()
         o.debug.worker_delay_us == 0);
   CHECK(!ParseLaunchFile(with(R"({"mode": "on", "catchUp": 30, "slowStepUs": 0, "delayUs": 7000})"), &o) &&
         o.debug.worker_catch_up == 30 && o.debug.worker_slow_us == 0 && o.debug.worker_delay_us == 7000);
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "delayUs": 9000, "delayFrom": 1500, "delayTo": 2700, "spikeAt": 900,
+                                  "spikeUs": 150000})"), &o) &&
+        o.debug.worker_delay_from == 1500 && o.debug.worker_delay_to == 2700 && o.debug.worker_spike_at == 900 &&
+        o.debug.worker_spike_us == 150000 && o.debug.worker_spike_slot == 2);
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "spikeAt": 900, "spikeUs": 150000, "spikeSlot": 1})"), &o) &&
+        o.debug.worker_spike_slot == 1);
+  CHECK(Refused(with(R"({"mode": "on", "spikeSlot": 2})"), "\"debug.rollbackWorker.spikeSlot\""));
   CHECK(Refused(with(R"({"mode": "on", "catchUp": 300})"), "\"debug.rollbackWorker.catchUp\""));
   CHECK(Refused(with(R"({"mode": "on", "start": "some"})"), "\"debug.rollbackWorker.start\""));
+  // the second worker (study section 20.2): "workers" 1 or 2 forces it off or on; unset, 0 (the PC's threads decide)
+  CHECK(!ParseLaunchFile(with(R"("on")"), &o) && o.debug.worker_workers == 0);
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "workers": 2})"), &o) && o.debug.worker_workers == 2);
+  CHECK(Refused(with(R"({"mode": "on", "workers": 3})"), "\"debug.rollbackWorker.workers\""));
+  CHECK(Refused(with(R"({"mode": "on", "workers": 0})"), "\"debug.rollbackWorker.workers\""));
 }

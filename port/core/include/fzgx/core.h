@@ -90,8 +90,8 @@ struct Debug
   // "trace" mode is refused
   std::string partial_mode;
   // "rollbackWorker": the deep-rollback worker (fzgx/rollback_worker.h): "off", "compare", "check", "sync", "on" or
-  // "async-check", alone or as {"mode", "depth"} (the least depth a job takes, 7 by default); empty (not named): "on"
-  // with at least 4 hardware threads unless FZGX_ROLLBACK_WORKER=off (rollback_worker::ModeFor)
+  // "async-check", alone or as {"mode", "depth"} (the least depth a job takes, 7 by default); tests only. Empty (not
+  // named, every player's start): "on" with at least 4 hardware threads, sync below (rollback_worker::ModeFor)
   std::string worker_mode;
   u32 worker_depth = 7;
   std::string worker_rule = "fit";  // "rule": "fit" (S2: sync when the frame fits) or "always" (tests: every job async)
@@ -111,7 +111,15 @@ struct Debug
   // race's rollbacks run sync, and the worker is tried again 10 s later (or at a new race); 0: never
   u32 worker_slow_us = 6000;
   u32 worker_delay_us = 0;  // "delayUs": tests, W sleeps this long at every step (a slow PC's worker)
+  u32 worker_delay_from = 0, worker_delay_to = 0;  // "delayFrom", "delayTo": ... only at W's steps in [from, to) (to 0:
+                                                   // no end; a load for a while)
+  u32 worker_spike_at = 0, worker_spike_us = 0;    // "spikeAt", "spikeUs": tests, once, this much added to the time of
+                                                   // W's first measured step at or past spikeAt (a spike: section 19)
+  u32 worker_spike_slot = 2;  // "spikeSlot": 0 or 1, only that slot's worker spikes (2, unset: each worker's thread)
   u32 worker_from = 422;  // "from": the first step a job may go back to (the countdown's end; tests: earlier)
+  // "workers": 1 or 2, the second worker forced off or on (tests; research/study-rollback-second-core.md section 20.2);
+  // 0: 2 from 6 usable hardware threads
+  u32 worker_workers = 0;
   std::string worker_start = "changed";  // "start": "changed" (only pages that differ copied into W) or "whole" (S2's)
   std::string partial_log;
   u32 partial_from = 0, partial_to = 0;

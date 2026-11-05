@@ -12,6 +12,9 @@
 namespace fzgx
 {
 Host& TheHost();
+// The host from any thread, the rollback worker's included (its memory's Log and PageHash, the two host calls W's
+// allowlist has: study section 17). TheHost() on W's thread is off limits (rollback_worker::OffLimits).
+Host& TheHostAnyThread();
 const Options& TheOptions();
 
 // boot.cpp, apart from IsNative, Patches and ApplyPatches (files_bundle.cpp) and StartReplay (replay.cpp). What the file readers give each other and boot.cpp is in files.h.

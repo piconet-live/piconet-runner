@@ -164,8 +164,9 @@ public:
   // shadow is not touched (the memory then is no longer this log's moment).
   void Apply(Guest& g, u32 from, u32 t) const;
   // The memory as it is now is this log's moment before step `step`: every entry is dropped, and the log holds
-  // nothing from before that step.
-  void Adopt(Guest& g, const Rollback& other, u32 step);
+  // nothing from before that step. `also` (offsets in the region, the pages another log's Forward wrote): taken as
+  // the present and watched too, as the pages either log watches are.
+  void Adopt(Guest& g, const Rollback& other, u32 step, const std::vector<u32>* also = nullptr);
   // The memory as it is now is this log's moment before `step`, a moment of the log's own race (a key of it taken,
   // TakeKey): the entries from `step` on are dropped, and with `keep_below` those below it stay, so a RestoreTo from
   // `step` goes back through them (a jump back); without, the log holds nothing from before `step` (a jump forwards,
@@ -188,6 +189,17 @@ public:
   // the log is not touched. `keep` (guest addresses of words): kept as the memory has them now, in it and in the shadow,
   // as the kept parts are (the words W cannot have: what interrupts and the time base write).
   void TakeOver(Guest& g, Rollback& worker, const Guest& gw, u32 from, u32 to, const std::vector<u32>* keep = nullptr);
+  // The second rollback worker (study section 20.1): after-images. With KeepAfter(true) the log keeps, for each step
+  // t it logs, the content after step t of every block its entry t names (the locked cache's and the generator
+  // word's too), read at SaveStep(t + 1), where the memory is that moment; a restore to t drops those from t on with
+  // the entries, Final those below its step, Stop, Start, Adopt and a TakeOver of this log's entries theirs (false:
+  // every one dropped, none kept from then on). Forward: steps `from` to `to` - 1's after-images written in step
+  // order onto another memory `g` (the same layout), the kept parts left as `g` has them, as a restore leaves them;
+  // `pages` the offsets in the region of the pages it wrote, sorted. False, nothing written: some step's are not
+  // kept. Thread-safe against this log's own thread's SaveStep, Restore and Final (a mutex of the log's own); the
+  // game's log keeps none (no cost on the game's thread's SaveStep).
+  void KeepAfter(bool keep);
+  bool Forward(Guest& g, u32 from, u32 to, std::vector<u32>* pages) const;
   // The pages (offsets in the tracked memory) whose content may have changed since the last call: those this log
   // logged, put back or wrote, every untracked page and every page holding a kept part (they change unlogged); all
   // of them after a Start. What a copy of the memory must take again to be the memory once more.
