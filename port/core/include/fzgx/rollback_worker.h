@@ -105,7 +105,8 @@ bool OnW();
 // mode (a test, a gate) the game stops loudly, with the entry's name; in a player's build the job gives up.
 void OffLimits(const char* entry);
 // U1: the CPU core's code tables' generation (StaticRecompCore::CodeGeneration), taken at a job's start; a job whose
-// generation moved by its adoption gives up (a chunk verified, retired or cleared while W ran).
+// generation moved by its adoption gives up (a chunk native code could run was retired, invalidated or cleared while
+// W ran; a chunk checked meanwhile does not move it: W could not run it before, and runs the module's code after).
 void SetCodeGeneration(u64 (*generation)());
 // U6: the native module is instrumented (a profile-training build, call counters, the access trace): `what` names
 // it, and no job starts (W's counts would race the game's). nullptr: not.
