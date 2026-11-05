@@ -189,6 +189,221 @@ void TestTheWorkersTakeOver()
   CHECK(host.log.empty() && other.log.empty());
 }
 
+// The second worker's base (study section 20.1): a job O (W, from R) has run past c on the corrected rows when the
+// row of c turns out late. N's memory is the game's, rewound to R by the game's log (Apply), then W's after-images
+// of steps R to c - 1 written over it (Forward, W running on): W's moment at c. N runs from c on the rows of now;
+// the game goes on predicted, adopts O at A1 (TakeOver) and N at A2. The game's memory is then one job's from R on
+// the corrected rows (O's to c, N's from c), a restore to any step from R gives its moment there, below R the old
+// one; the rows and checksums are O's then N's. After-images go with a restore, Final, KeepAfter(false) and Stop.
+void TestTheSecondWorkersBase()
+{
+  BEGIN_TEST();
+  TestHost host, w_host, n_host, r_host;
+  ModData data, w_data, n_data, r_data;
+  Guest g(host, data), gw(w_host, w_data), gn(n_host, n_data), gr(r_host, r_data);
+  std::mt19937 rng(20261106);
+  FakeGame(host, g, rng);
+  host.scratch.assign(0x4000, 0);
+  for (u8& b : host.scratch)
+    b = static_cast<u8>(rng());
+  const u32 first = (MODULE + net::DATA) & ~(net::PAGE - 1), size = net::STATE_END - first;
+  const u32 keep_page = first + 40 * net::PAGE, keep_part = first + 90 * net::PAGE + 0x100;
+  g.Write32(net::UNTRACKED, 2);
+  g.Write32(net::UNTRACKED + 4, keep_page);
+  g.Write32(net::UNTRACKED + 8, keep_page + net::PAGE);
+  g.Write32(net::UNTRACKED + 12, keep_part);
+  g.Write32(net::UNTRACKED + 16, keep_part + 0x40);
+  // two moments the same on what a restore puts back (the untracked page and the kept part apart)
+  const auto same = [&](const Copy& a, const Copy& b) {
+    u32 differ = 0;
+    for (u32 k = 0; k < size; ++k)
+      differ += a.ram[k] != b.ram[k] && !(first + k >= keep_page && first + k < keep_page + net::PAGE) &&
+                !(first + k >= keep_part && first + k < keep_part + 0x40);
+    return differ == 0 && a.scratch == b.scratch && a.rng == b.rng;
+  };
+  const auto row_of = [](u32 step, u8 fill) {
+    return std::array<u8, 6>{static_cast<u8>(step), fill, fill, fill, fill, fill};
+  };
+
+  net::Rollback live;
+  live.Start(g);
+  constexpr u32 R = 150, C = 155, L = 160, A1 = 163, A2 = 167;
+  std::vector<Copy> predicted;
+  for (u32 step = 0; step < L; ++step)
+  {
+    live.SaveStep(g, step, step % 3 == 0);
+    predicted.push_back(Take(g, host, first, size));
+    Poke(g, host, first, size, step, 0);
+    net::Rollback::UseInputs(g, step, {0}, row_of(step, 1).data());
+    net::Rollback::KeepChecksum(g, step, 0xC0000000 + step);
+  }
+  live.SaveStep(g, L, true);
+
+  // O's start: W the game's memory rewound to R, its log's moment there, keeping after-images
+  w_host.ram = host.ram;
+  w_host.scratch = host.scratch;
+  w_data.Restore(data.Snapshot());
+  live.Apply(gw, L, R);
+  // the reference: one job from R on the corrected rows (O's below c, N's from c)
+  r_host.ram = w_host.ram;
+  r_host.scratch = w_host.scratch;
+  r_data.Restore(w_data.Snapshot());
+  std::vector<Copy> corrected;  // the reference's moment before each step from R
+  for (u32 step = R; step < A2; ++step)
+  {
+    corrected.push_back(Take(gr, r_host, first, size));
+    Poke(gr, r_host, first, size, step, step < C ? 1 : 2);
+  }
+  corrected.push_back(Take(gr, r_host, first, size));
+  net::Rollback worker(false);
+  worker.Start(gw);
+  worker.KeepAfter(true);
+  worker.Adopt(gw, live, R);
+  CHECK(!worker.Forward(gn, R, R + 1, nullptr));  // (none kept yet)
+  // W runs from R past c on O's rows (its first hook is R + 1's, as the worker's)
+  constexpr u32 W_AT = C + 3;
+  std::vector<Copy> w_at;
+  for (u32 step = R; step < W_AT; ++step)
+  {
+    if (step != R)
+      worker.SaveStep(gw, step, false);
+    w_at.push_back(Take(gw, w_host, first, size));
+    Poke(gw, w_host, first, size, step, 1);
+    net::Rollback::UseInputs(gw, step, {0}, row_of(step, 9).data());
+    net::Rollback::KeepChecksum(gw, step, 0xD0000000 + step);
+  }
+  worker.SaveStep(gw, W_AT, false);
+  CHECK(same(w_at[C - R], corrected[C - R]));
+  CHECK(!worker.Forward(gn, R, W_AT + 1, nullptr));  // (step W_AT not run yet)
+
+  // N's base: the game's memory rewound to R by the game's log, then W's after-images of R to c - 1
+  n_host.ram = host.ram;
+  n_host.scratch = host.scratch;
+  n_data.Restore(data.Snapshot());
+  live.Apply(gn, L, R);
+  const auto before_forward = n_host.ram;
+  std::vector<u32> pages = {123};
+  CHECK(worker.Forward(gn, R, C, &pages));
+  CHECK(!pages.empty() && std::is_sorted(pages.begin(), pages.end()) &&
+        std::adjacent_find(pages.begin(), pages.end()) == pages.end());
+  {
+    // every byte Forward changed is on a page it names; and the base is W's moment at c
+    u32 unnamed = 0;
+    for (u32 k = 0; k < size; ++k)
+    {
+      const std::size_t at = first - fzgx::layout::RAM + k;
+      unnamed += n_host.ram[at] != before_forward[at] &&
+                 !std::binary_search(pages.begin(), pages.end(), k & ~(net::PAGE - 1));
+    }
+    CHECK(unnamed == 0);
+  }
+  CHECK(same(Take(gn, n_host, first, size), w_at[C - R]));
+  CHECK(gn.Read32(keep_part + 4) == g.Read32(keep_part + 4));  // (the kept part as N's memory had it)
+  net::Rollback second(false);
+  second.Start(gn);
+  second.KeepAfter(true);
+  second.Adopt(gn, live, C, &pages);
+  // N runs c to A2 - 1 on the rows of now; W runs on to A1 on O's; the game predicted to A1
+  for (u32 step = C; step < A2; ++step)
+  {
+    if (step != C)
+      second.SaveStep(gn, step, false);
+    Poke(gn, n_host, first, size, step, 2);
+    net::Rollback::UseInputs(gn, step, {0}, row_of(step, 7).data());
+    net::Rollback::KeepChecksum(gn, step, 0xE0000000 + step);
+  }
+  second.SaveStep(gn, A2, false);
+  CHECK(same(Take(gn, n_host, first, size), corrected[A2 - R]));
+  for (u32 step = W_AT; step < A1; ++step)
+  {
+    if (step != W_AT)
+      worker.SaveStep(gw, step, false);
+    Poke(gw, w_host, first, size, step, 1);
+    net::Rollback::UseInputs(gw, step, {0}, row_of(step, 9).data());
+    net::Rollback::KeepChecksum(gw, step, 0xD0000000 + step);
+  }
+  worker.SaveStep(gw, A1, false);
+  const auto game_steps = [&](u32 from, u32 to) {
+    for (u32 step = from; step < to; ++step)
+    {
+      if (step != from)
+        live.SaveStep(g, step, false);
+      Poke(g, host, first, size, step, 0);
+      g.Write32(keep_page + 8, 0xAA000000 + step);
+      g.Write32(keep_part + 4, 0xBB000000 + step);
+      g.Write32(0x80003100, 0xCC000000 + step);
+    }
+    live.SaveStep(g, to, true);
+  };
+  game_steps(L, A1);
+  // O adopted at A1 (its after-images go with its entries), the game predicted on to A2, N adopted there
+  live.TakeOver(g, worker, gw, R, A1);
+  CHECK(!worker.Forward(gr, R, C, nullptr));
+  game_steps(A1, A2);
+  live.TakeOver(g, second, gn, C, A2);
+  CHECK(same(Take(g, host, first, size), corrected[A2 - R]));
+  CHECK(g.Read32(keep_page + 8) == 0xAA000000 + A2 - 1 && g.Read32(keep_part + 4) == 0xBB000000 + A2 - 1);
+  CHECK(g.Read32(0x80003100) == 0xCC000000 + A2 - 1);
+  for (u32 step = R; step < A2; ++step)
+  {
+    u8 row[6];
+    net::Rollback::UsedInputs(g, step, {0}, row);
+    CHECK(row[1] == (step < C ? 9 : 7));
+    CHECK(net::Rollback::KeptChecksum(g, step) == (step < C ? 0xD0000000 : 0xE0000000) + step);
+  }
+  CHECK(net::Rollback::KeptChecksum(g, R - 1) == 0xC0000000 + R - 1);
+  // a restore to any step from R: the corrected moment; below R, the predicted one
+  for (u32 step = A2; step-- > R;)
+  {
+    live.RestoreTo(g, step + 1, step);
+    CHECK(same(Take(g, host, first, size), corrected[step - R]));
+  }
+  live.RestoreTo(g, R, R - 3);
+  CHECK(same(Take(g, host, first, size), predicted[R - 3]));
+  live.Stop();
+  worker.Stop();
+  second.Stop();
+
+  // the after-images go with a restore, with Final, with KeepAfter(false) and with Stop; the game's log keeps none
+  net::Rollback third(false);
+  third.Start(gr);
+  third.KeepAfter(true);
+  for (u32 step = 0; step < 10; ++step)
+  {
+    third.SaveStep(gr, step, false);
+    Poke(gr, r_host, first, size, step, 3);
+  }
+  third.SaveStep(gr, 10, false);
+  CHECK(third.Forward(gn, 0, 10, nullptr));
+  third.RestoreTo(gr, 10, 6);
+  CHECK(third.Forward(gn, 0, 6, nullptr) && !third.Forward(gn, 0, 7, nullptr) && !third.Forward(gn, 6, 7, nullptr));
+  for (u32 step = 6; step < 10; ++step)
+  {
+    if (step != 6)
+      third.SaveStep(gr, step, false);
+    Poke(gr, r_host, first, size, step, 4);
+  }
+  third.SaveStep(gr, 10, false);
+  CHECK(third.Forward(gn, 0, 10, nullptr));
+  third.Final(4);
+  CHECK(!third.Forward(gn, 3, 10, nullptr) && third.Forward(gn, 4, 10, nullptr));
+  third.KeepAfter(false);
+  CHECK(!third.Forward(gn, 4, 10, nullptr));
+  third.KeepAfter(true);
+  third.SaveStep(gr, 11, false);
+  CHECK(third.Forward(gn, 10, 11, nullptr));
+  third.Stop();
+  CHECK(!third.Forward(gn, 10, 11, nullptr));
+  net::Rollback plain;
+  plain.Start(g);
+  plain.SaveStep(g, 0, false);
+  g.Write32(first + 8, 1);
+  plain.SaveStep(g, 1, false);
+  CHECK(!plain.Forward(gn, 0, 1, nullptr));
+  plain.Stop();
+  CHECK(host.log.empty() && w_host.log.empty() && n_host.log.empty() && r_host.log.empty());
+}
+
 // The logs' own counts, the memories' counts, and the comparison of entries.
 void TestRollbackMomentsPerLog()
 {

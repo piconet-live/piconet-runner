@@ -35,6 +35,7 @@ void TestTheRollbackInterface();
 void TestChecksum();
 void TestTheSpareListsAreBounded();
 void TestTheWorkersTakeOver();
+void TestTheSecondWorkersBase();
 void TestRollbackMomentsPerLog();
 void TestTheWorkersDefault();
 void TestTheWorkersLogStartsWithTheRace();
@@ -494,6 +495,7 @@ int main(int argc, char** argv)
   TestChecksum();
   TestTheSpareListsAreBounded();
   TestTheWorkersTakeOver();
+  TestTheSecondWorkersBase();
   TestRollbackMomentsPerLog();
   TestTheWorkersDefault();
   TestTheWorkersLogStartsWithTheRace();
