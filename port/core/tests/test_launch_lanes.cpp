@@ -92,7 +92,10 @@ void TestTheRollbackWorkerKeys()
   CHECK(!ParseLaunchFile(with(R"({"mode": "on", "delayUs": 9000, "delayFrom": 1500, "delayTo": 2700, "spikeAt": 900,
                                   "spikeUs": 150000})"), &o) &&
         o.debug.worker_delay_from == 1500 && o.debug.worker_delay_to == 2700 && o.debug.worker_spike_at == 900 &&
-        o.debug.worker_spike_us == 150000);
+        o.debug.worker_spike_us == 150000 && o.debug.worker_spike_slot == 2);
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "spikeAt": 900, "spikeUs": 150000, "spikeSlot": 1})"), &o) &&
+        o.debug.worker_spike_slot == 1);
+  CHECK(Refused(with(R"({"mode": "on", "spikeSlot": 2})"), "\"debug.rollbackWorker.spikeSlot\""));
   CHECK(Refused(with(R"({"mode": "on", "catchUp": 300})"), "\"debug.rollbackWorker.catchUp\""));
   CHECK(Refused(with(R"({"mode": "on", "start": "some"})"), "\"debug.rollbackWorker.start\""));
   // the second worker (study section 20.2): "workers" 1 or 2 forces it off or on; unset, 0 (the PC's threads decide)

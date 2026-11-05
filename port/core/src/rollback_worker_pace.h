@@ -16,6 +16,19 @@ namespace fzgx::rollback_worker::pace
 // with CATCH_UPS catch-ups in their span switch the race to sync, and the worker is tried again RETRY_S later
 constexpr u32 WINDOW = 240, STRIKES = 3, CATCH_UPS = 2;
 constexpr double WINDOW_S = 1.0, RETRY_S = 10.0;
+constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
+constexpr double START_MS = 0.5;  // c of the study's section 4: a job's start and the thread's wake
+constexpr u32 FORESEEN_NEVER = 99;  // (an estimate at a frame or more: the job would never catch the game)
+
+// A worker's step estimate after one more measured step (its first sets it)
+inline double Smoothed(double r_ms, double ran_ms)
+{
+  return r_ms == 0 ? ran_ms : r_ms + (ran_ms - r_ms) / 8;
+}
+
+// j: the frames a job `d` steps deep is foreseen to take to its adoption at `r_ms` a step (study section 4), a step a
+// frame
+u32 Foreseen(u32 d, double r_ms);
 
 // What a Watch asks of the worker
 enum class Verdict
@@ -35,6 +48,7 @@ struct Now
   u64 barred_late = 0;      // the starts barred by W's pace alone (its depth within "catchUp"), so far
   double estimate_ms = 0;   // W's step estimate as the start bar takes it (r_ms)
   u32 limit_us = 0;         // "slowStepUs" (0: no switch)
+  u64 second_steps = 0;     // the second worker's steps (slot 1) taken into the windows, so far
 };
 
 struct Pace
@@ -54,6 +68,10 @@ struct Pace
   bool new_race = false;   // (a RETRY's: a new race, not the time)
   u64 last_behind = 0;     // catch-ups (and starts barred late) in the last window that ended (the second worker's
                            // bar, study section 20.2)
+  u64 window_second = 0;   // the second worker's steps at the window's start
+  bool second_idle = false;  // this Watch ended a full window in which the second worker ran no step: its estimate,
+                             // which moves only while it runs, is reseeded from the window's median (one slow step of
+                             // slot 1 would otherwise bar every later start of N for good, study section 21)
 
   // At every frame. `window`: the worker's step times since the window's start (the caller holds the mutex that
   // guards it), emptied when a window ends. A window ends after WINDOW_S with WINDOW steps (their median is W's

@@ -62,9 +62,8 @@ constexpr u32 COUNTDOWN_END = 422;
 constexpr u32 MOST_ADOPT = 512;
 static_assert(MOST_ADOPT < 1024 && MOST_ADOPT > 256, "far below the rings, above the largest \"catchUp\"");
 constexpr u32 LEAST_CORES = 4;    // below it, no thread (study section 7, decision 5)
-constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
+constexpr double FIELD_MS = pace::FIELD_MS;
 constexpr double MARGIN_MS = 1.5;      // run-ahead's MARGIN_MS: room kept before the field
-constexpr double START_MS = 0.5;       // c of the study's section 4: a job's start and the thread's wake
 constexpr double FIRST_CONST_MS = 5.4; // a frame's own cost before one is measured (study section 4)
 constexpr double FIRST_STEP_MS = 2.0;  // a step run again before one is measured
 // S3: the code outside the log, which no step writes (the DOL's text, main.rel's text, constructors and read-only
@@ -265,6 +264,8 @@ struct Rule
   // S4, the bounds: catch-ups (a job past "catchUp" stopped, its rollback sync) and the slow worker's switch
   u64 catch_ups = 0, catch_up_depth_high = 0, barred_slow = 0, barred_deep = 0;
   u64 barred_late = 0;  // starts barred only by their foreseen frames (d within the bound): catch-ups foreseen
+  u64 second_steps = 0;    // the second worker's steps taken into the pace's windows (WatchRate)
+  u64 second_reseeds = 0;  // its estimate reseeded from W's median after a window it ran no step in
   pace::Pace pace;      // the slow worker's switch and the trial of W's estimate (WatchRate); pace.switched: the
                         // race's rollbacks run sync (W too slow) until the retry
   // "async-check"
@@ -542,13 +543,14 @@ bool HookThreaded()
   if (t > a.from + 1 || a.steps != 0)
   {
     thread_local bool spiked = false;  // (each worker's thread's own)
-    if (debug.worker_spike_us != 0 && !spiked && t >= debug.worker_spike_at)
+    if (debug.worker_spike_us != 0 && !spiked && t >= debug.worker_spike_at &&
+        (debug.worker_spike_slot > 1 || static_cast<int>(debug.worker_spike_slot) == t_slot))
     {
       spiked = true;  // (tests, "spikeUs": one slow step, the PC busy for a moment, taken into W's measured steps)
       ran_ms += debug.worker_spike_us / 1000.0;
-      Notice("fzgx: rollback worker: test spike of {} us at W's step {}", debug.worker_spike_us, t);
+      Notice("fzgx: rollback worker: test spike of {} us at slot {}'s step {}", debug.worker_spike_us, t_slot, t);
     }
-    a.r_ms = a.r_ms == 0 ? ran_ms : a.r_ms + (ran_ms - a.r_ms) / 8;
+    a.r_ms = pace::Smoothed(a.r_ms, ran_ms);
     a.ran_sum_ms += ran_ms;
     ++a.ran_n;
     a.window.push_back(static_cast<float>(ran_ms));
@@ -1360,6 +1362,8 @@ void WatchRate(Session& s)
     second.swap(s_as[1].window);
     second_ms = s_as[1].r_ms;
   }
+  r.second_steps += second.size();
+  now.second_steps = r.second_steps;
   {
     const std::lock_guard lock(s_as[0].m);  // (the worker's thread writes the window and the estimate at each hook)
     std::vector<float>& window = s_as[0].window;
@@ -1374,6 +1378,21 @@ void WatchRate(Session& s)
   {
     const std::lock_guard lock(s_as[1].m);
     s_as[1].r_ms = s_as[1].r_ms > 0 ? r.r_sync : 0;
+  }
+  else if (r.pace.second_idle)
+  {
+    // A full window in which the second worker ran no step: its estimate moves only while it runs, and one slow step
+    // (about 110 ms) leaves it above a frame's room, every later start of N foreseen at FORESEEN_NEVER frames and
+    // barred, slot 1 never running to bring it down (and no RESEED: W's own windows go on). It takes W's median of
+    // that window, the same PC's step now (study section 21).
+    const std::lock_guard lock(s_as[1].m);
+    if (s_as[1].r_ms > r.pace.step_ms)
+    {
+      was_ms = std::exchange(s_as[1].r_ms, r.pace.step_ms);
+      if (++r.second_reseeds <= 3)
+        Notice("fzgx: rollback worker: the second worker ran no step in a window: its estimate {:.2f} ms afresh from "
+               "W's median {:.2f} ms (frame {}; reseeds {})", was_ms, r.pace.step_ms, r.frame_no, r.second_reseeds);
+    }
   }
   const pace::Pace& p = r.pace;
   switch (verdict)
@@ -1850,7 +1869,7 @@ StartBar CommonBar(Guest& g, u32 step, u32 wrong, double r, u32* j_pred, const c
   }
   // j: the frames the job is foreseen to take to its adoption (study section 4), a step a frame
   const u32 d = step - wrong;
-  *j_pred = r < FIELD_MS - 0.5 ? static_cast<u32>(std::ceil((d * r + START_MS) / (FIELD_MS - r))) : 99;
+  *j_pred = pace::Foreseen(d, r);
   // S4 (a): a job that would pass "catchUp" before its adoption (its span then d + j steps, its delay at least j
   // frames) would only be caught up: the sync rollback now is the shorter one
   if (d + *j_pred > TheOptions().debug.worker_catch_up)
@@ -2257,11 +2276,11 @@ void WorkerStop()
            "second jobs started {} ({:.0f} us on the game's thread), adopted {} ({} in the older job's hook), stopped "
            "with the older job {}, closed with it running (the row back to the chain) {}, run sync alone {}, compared "
            "in async-check {}, stopped for a correction below it {}, open at the game's stop {}, forward failed {}; older jobs clean as far as the second "
-           "carried them {}; starts barred:{}; slot 1 {} jobs prepared, a step {:.2f} ms",
+           "carried them {}; starts barred:{}; slot 1 {} jobs prepared, a step {:.2f} ms, reseeded {} times from W's median",
            r.threads_seen, r.workers_seen, r.second_starts, r.second_start_us, r.second_adopted, r.second_same_hook,
            r.second_stopped, r.second_back, r.second_fell, r.second_checked, r.second_restarted, r.second_at_stop,
            r.second_forward_failed, r.older_through,
-           bars.empty() ? std::string(" none") : bars, s_ws[1].jobs, s_as[1].r_ms);
+           bars.empty() ? std::string(" none") : bars, s_ws[1].jobs, s_as[1].r_ms, r.second_reseeds);
   }
   if (AsyncCheck())
     Notice("fzgx: rollback worker S3: async-check: {} adoptions compared with their sync rollback: memory differs in {} "

@@ -775,6 +775,71 @@ void TestTheWorkersPace()
   CHECK(q.Watch(now, window) == Verdict::NONE && window.empty());
 }
 
+// The second worker's estimate (study section 21): it moves only while slot 1 runs, so one slow step of N (about
+// 110 ms, the PC busy for a moment) left it above a frame's room, every later N start foreseen at FORESEEN_NEVER
+// frames and barred, and W's own good windows never reseeded it: W2 off for the session. A full window in which slot 1
+// ran no step now reseeds it from that window's median (WatchRate), and N's starts are allowed again.
+void TestTheSecondWorkersEstimate()
+{
+  BEGIN_TEST();
+  namespace pace = fzgx::rollback_worker::pace;
+  using pace::Verdict;
+  constexpr fzgx::u32 CATCH_UP = 60, DEPTH = 6;  // ("catchUp" by default; a race of humans' depth)
+  const auto allowed = [&](double r_ms) { return DEPTH + pace::Foreseen(DEPTH, r_ms) <= CATCH_UP; };
+  std::vector<float> window;
+  pace::Now now;
+  now.limit_us = 6000;
+  now.starts = 1;
+  now.estimate_ms = 3;
+  pace::Pace p;
+  CHECK(p.Watch(now, window) == Verdict::NONE);
+  // slot 1 runs a few good steps, then one slow one
+  double r1 = 0;
+  for (int k = 0; k < 20; ++k)
+    r1 = pace::Smoothed(r1, 3);
+  CHECK(allowed(r1));
+  r1 = pace::Smoothed(r1, 113);
+  CHECK(r1 > pace::FIELD_MS - 0.5 && pace::Foreseen(DEPTH, r1) == pace::FORESEEN_NEVER && !allowed(r1));
+  now.second_steps = 21;  // (its steps, taken into the window that ends below)
+  // W runs 4 steps of 3 ms a frame, slot 1 none (its starts barred): the first window still holds slot 1's steps
+  double t = 0;
+  int idle_windows = 0;
+  bool ended_with_second = false;
+  for (int frame = 0; frame < 4 * 60 && idle_windows == 0; ++frame)
+  {
+    t += 1.0 / 60;
+    now.s = t;
+    for (int k = 0; k < 4; ++k)
+      window.push_back(3);
+    const std::size_t before = window.size();
+    CHECK(p.Watch(now, window) == Verdict::NONE);  // (no RESEED nor RETRY: W's windows are good)
+    if (window.empty() && before >= pace::WINDOW)
+    {
+      if (p.second_idle)
+      {
+        ++idle_windows;
+        if (r1 > p.step_ms)
+          r1 = p.step_ms;  // (WatchRate's reseed)
+      }
+      else
+        ended_with_second = true;
+    }
+  }
+  CHECK(ended_with_second && idle_windows == 1 && r1 == 3 && allowed(r1));
+  CHECK(p.switches == 0 && p.reseeds == 0 && p.retries == 0);
+  // a window in which slot 1 ran a step is not idle: its estimate stays its own
+  t += pace::WINDOW_S + 0.01;
+  now.s = t;
+  ++now.second_steps;
+  window.assign(pace::WINDOW, 3.0f);
+  CHECK(p.Watch(now, window) == Verdict::NONE && window.empty() && !p.second_idle);
+  // and the flag holds for the Watch that ended the window only
+  t += 1.0 / 60;
+  now.s = t;
+  window.assign(pace::WINDOW, 3.0f);
+  CHECK(p.Watch(now, window) == Verdict::NONE && !p.second_idle);
+}
+
 // The two workers' rules (study section 20.2 to 20.4, rollback_worker_pair.cpp): how many workers a PC runs; when N
 // starts from O's log; the order of the adoptions (O first, N only once O is closed); the cascade (O's end without an
 // adoption stops N; N's end with O open sends its row back to the chain, with O adopted it runs sync alone); O clean as

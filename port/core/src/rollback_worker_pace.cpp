@@ -4,11 +4,17 @@
 #include "rollback_worker_pace.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <utility>
 
 namespace fzgx::rollback_worker::pace
 {
+u32 Foreseen(u32 d, double r_ms)
+{
+  return r_ms < FIELD_MS - 0.5 ? static_cast<u32>(std::ceil((d * r_ms + START_MS) / (FIELD_MS - r_ms))) : FORESEEN_NEVER;
+}
+
 void Pace::Restart(const Now& now, std::vector<float>& window)
 {
   switched = false;
@@ -16,12 +22,14 @@ void Pace::Restart(const Now& now, std::vector<float>& window)
   window_at = now.s;
   window_behind = now.behind;
   window_barred = now.barred_late;
+  window_second = now.second_steps;
   barred_since = -1;
   window.clear();
 }
 
 Verdict Pace::Watch(const Now& now, std::vector<float>& window)
 {
+  second_idle = false;
   if (switched)
   {
     new_race = now.starts != switched_starts;
@@ -51,6 +59,7 @@ Verdict Pace::Watch(const Now& now, std::vector<float>& window)
     step_ms = *mid;
     step_n = window.size();
     barred_since = -1;
+    second_idle = now.second_steps == window_second;
   }
   else
   {
@@ -64,6 +73,7 @@ Verdict Pace::Watch(const Now& now, std::vector<float>& window)
   const u64 at_start = std::exchange(window_behind, now.behind);
   last_behind = now.behind - at_start;
   window_barred = now.barred_late;
+  window_second = now.second_steps;
   window_at = now.s;
   rate_high = std::max(rate_high, step_ms);
   if (now.limit_us == 0)

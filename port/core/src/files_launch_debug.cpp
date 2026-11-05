@@ -123,6 +123,7 @@ void ReadWorkerKeys(Part& p, Debug* d, std::string* problem)
   f.Whole("delayTo", &d->worker_delay_to, 0, 1000000);
   f.Whole("spikeAt", &d->worker_spike_at, 0, 1000000);
   f.Whole("spikeUs", &d->worker_spike_us, 0, 1000000);
+  f.Whole("spikeSlot", &d->worker_spike_slot, 0, 1);
   f.Whole("from", &d->worker_from, 0, 100000);
   f.Whole("workers", &d->worker_workers, 1, 2);
   f.OneOf("start", &d->worker_start, {"changed", "whole"});

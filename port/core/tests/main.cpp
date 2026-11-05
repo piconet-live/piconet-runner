@@ -42,6 +42,7 @@ void TestTheWorkersLogStartsWithTheRace();
 void TestTheKeptWordsTable();
 void TestTheWorkersGuards();
 void TestTheWorkersPace();
+void TestTheSecondWorkersEstimate();
 void TestTheWorkersPair();
 void TestARollbackLeavesTheWindow();
 // test_rollback_state.cpp
@@ -503,6 +504,7 @@ int main(int argc, char** argv)
   TestTheKeptWordsTable();
   TestTheWorkersGuards();
   TestTheWorkersPace();
+  TestTheSecondWorkersEstimate();
   TestTheWorkersPair();
   TestRaceFromAMatchFile();
   TestAReplaysLineup();
