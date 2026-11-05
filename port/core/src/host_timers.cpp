@@ -16,17 +16,19 @@ namespace fzgx::timers
 {
 namespace
 {
-// The sums of each thread that times (study section 17, U5): the game's, and the rollback worker's on a line of
-// their own (its SaveStep, RestoreTo, checksum and mode scopes), never added into the game's.
+// The sums of each thread that times (study section 17, U5): the game's, and each rollback worker's (one a slot: W's
+// and the second worker's, study section 21) on lines of their own (its SaveStep, RestoreTo, checksum and mode
+// scopes), never added into the game's nor into each other's.
 struct Sums
 {
   std::array<Sum, Count> sums{};
   std::array<std::vector<u32>, 4> pages, scratch_pages;
 };
-Sums s_game, s_worker;
+Sums s_game, s_workers[2];
 Sums& Mine()
 {
-  return rollback_worker::OnW() ? s_worker : s_game;
+  const int slot = rollback_worker::Slot();
+  return slot >= 0 ? s_workers[slot & 1] : s_game;
 }
 constexpr const char* NAMES[] = {
     "hook",         "drain",        "checksum",    "frame-begin", "send-input",   "close-final", "rollback-begin",
@@ -61,9 +63,11 @@ Sum& At(Id id)
 void Report(u64 frames, u64 steps)
 {
   Notice("fzgx: host timers over {} displayed frames and {} steps (a profiling build)", frames, steps);
-  for (Sums* m : {&s_game, &s_worker})
+  for (Sums* m : {&s_game, &s_workers[0], &s_workers[1]})
   {
-    const char* whose = m == &s_game ? "" : " (the rollback worker's thread)";
+    const char* whose = m == &s_game        ? ""
+                        : m == &s_workers[0] ? " (the rollback worker's thread)"
+                                             : " (the second worker's thread)";
     for (int i = 0; i < Count; ++i)
     {
       const Sum& sum = m->sums[i];

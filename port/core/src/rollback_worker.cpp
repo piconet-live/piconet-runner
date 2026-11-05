@@ -183,6 +183,7 @@ struct Async
   u64 ran_n = 0;
   std::vector<float> window;  // the step times since the last rate measurement (the slow worker's switch, WatchRate)
   u64 steps = 0, rewinds = 0, waits = 0;
+  u64 unwatched = 0;  // jobs given up at their park for a page neither log watched (each slot's, under its mutex)
   std::chrono::steady_clock::time_point left{};  // the hook last returned (the worker's)
   // the game's thread's own
   bool open = false, begun = false;
@@ -238,7 +239,6 @@ struct Rule
   u32 restart_moves = 0;  // a job just stopped for a correction below its R: its moves + 1, for the job after it
   std::map<u32, u64> moves_adopted, moves_fell, fell_depth;
   u64 fell = 0, fell_depth_sum = 0;
-  u64 unwatched = 0;  // jobs given up at their park for a page neither log watched
   // S4, chaining: a row that changes under a step W has run no longer sends W back; the job is adopted as it ran
   // (`used` and the replay's ring hold the rows its steps ran on), and the session's own check then finds the step
   // and the next job starts from it. A chain: from the frame a correction first missed a job until an adoption whose
@@ -541,7 +541,7 @@ bool HookThreaded()
   lock.lock();
   if (unwatched)
   {
-    ++s_r.unwatched;
+    ++a.unwatched;  // (under this slot's mutex: the other worker counts its own)
     a.why = "a page neither log watched";
     a.ended = true;
     a.cv.notify_all();
@@ -1273,6 +1273,18 @@ void PublishRows(int k, Session& s, u32 upto)
   a.cv.notify_all();
 }
 
+// The game's thread asks the worker in slot k to stop at its next hook, without waiting (WaitIdle waits): two workers
+// asked first and then waited for stop together, not one worker's step after the other's.
+void AskStop(int k)
+{
+  Async& a = s_as[k];
+  const std::lock_guard lock(a.m);
+  if (!a.running)
+    return;
+  a.stop = true;
+  a.cv.notify_all();
+}
+
 // The game's thread waits for the worker in slot k to have left its job (it stops at its next hook).
 void WaitIdle(int k)
 {
@@ -1708,7 +1720,11 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
   if (plan.older == pair::Fate::FALL)
   {
     if (plan.newer == pair::Fate::STOP)
+    {
+      AskStop(n);
+      AskStop(o);  // (both stop at once: the waits below then overlap, not one worker's step and then the other's)
       CloseNewer(n, true);
+    }
     return FallJob(o, vo, step);
   }
   if (plan.older == pair::Fate::ADOPT)
@@ -1852,6 +1868,10 @@ StartBar CommonBar(Guest& g, u32 step, u32 wrong, double r, u32* j_pred, const c
   if (const char* bar = guard::StartBar(s_pipe_per_thread))
   {
     *guard_bar = bar;
+    static std::map<std::string, bool> said;  // (the game's thread's: a sync-only race has its reason in the log
+                                              // at once, not only in the end-of-game S5 line)
+    if (!std::exchange(said[bar], true))
+      Notice("fzgx: rollback worker: a job's start barred: {} (the rollbacks run sync while it holds; told once)", bar);
     return StartBar::OTHER;
   }
   if (s_r.pace.switched)
@@ -2192,6 +2212,18 @@ void WorkerQuiesce()
     WaitIdle(k);
 }
 
+// The jobs given up at their park for a page neither log watched, both slots' (each counts its own under its mutex)
+u64 Unwatched()
+{
+  u64 n = 0;
+  for (Async& a : s_as)
+  {
+    const std::lock_guard lock(a.m);
+    n += a.unwatched;
+  }
+  return n;
+}
+
 void WorkerStop()
 {
   WorkerQuiesce();
@@ -2234,7 +2266,7 @@ void WorkerStop()
          "sync from a job's R: {} (depth {:.1f} on average; by depth:{}); given up for a page neither log watched: {}",
          s_pipe_per_thread ? "per thread (W's bytes dropped)" : "one for every thread (countdown and finish barred)",
          TheOptions().debug.worker_restarts, list(r.moves_adopted), list(r.moves_fell), r.fell,
-         r.fell ? double(r.fell_depth_sum) / r.fell : 0.0, list(r.fell_depth), r.unwatched);
+         r.fell ? double(r.fell_depth_sum) / r.fell : 0.0, list(r.fell_depth), Unwatched());
   std::string lags;
   for (const auto& [lag, n] : r.chain_seen)
     lags += std::format(" {}:{}", lag, n);
