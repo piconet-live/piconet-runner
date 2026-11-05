@@ -59,7 +59,6 @@ Verdict Pace::Watch(const Now& now, std::vector<float>& window)
     step_ms = *mid;
     step_n = window.size();
     barred_since = -1;
-    second_idle = now.second_steps == window_second;
   }
   else
   {
@@ -70,6 +69,7 @@ Verdict Pace::Watch(const Now& now, std::vector<float>& window)
       barred_since = window_at;
   }
   window.clear();
+  second_idle = now.second_steps == window_second;
   const u64 at_start = std::exchange(window_behind, now.behind);
   last_behind = now.behind - at_start;
   window_barred = now.barred_late;

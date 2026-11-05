@@ -838,6 +838,31 @@ void TestTheSecondWorkersEstimate()
   now.s = t;
   window.assign(pace::WINDOW, 3.0f);
   CHECK(p.Watch(now, window) == Verdict::NONE && !p.second_idle);
+  // the run-retire spike (c03, "always"): W's own starts barred short of a full window too (a chain's next job taken
+  // by slot 1 while W's thread leaves its last, foreseen at FORESEEN_NEVER), so windows end barred, on W's estimate;
+  // slot 1 idle in one is reseeded all the same, from W's estimate
+  pace::Pace q;
+  window.clear();
+  now = pace::Now{};
+  now.limit_us = 6000;
+  now.starts = 1;
+  now.estimate_ms = 2.5;  // (W's: the open job's slot is 0)
+  CHECK(q.Watch(now, window) == Verdict::NONE);
+  r1 = pace::Smoothed(2.5, 152.5);
+  CHECK(!allowed(r1));
+  bool idle = false;
+  for (t = 0; t < 3 && !idle; t += 1.0 / 60)
+  {
+    now.s = t;
+    window.push_back(2.5f);  // (a step a frame: never a full window)
+    ++now.barred_late;
+    ++now.behind;
+    CHECK(q.Watch(now, window) == Verdict::NONE);
+    idle = q.second_idle;
+  }
+  CHECK(idle && q.step_n == 0 && q.step_ms == 2.5 && q.switches == 0);
+  r1 = std::min(r1, now.estimate_ms);  // (WatchRate: a barred window's reseed takes W's estimate)
+  CHECK(allowed(r1));
 }
 
 // The two workers' rules (study section 20.2 to 20.4, rollback_worker_pair.cpp): how many workers a PC runs; when N

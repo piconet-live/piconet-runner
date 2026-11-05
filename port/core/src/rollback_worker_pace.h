@@ -69,9 +69,10 @@ struct Pace
   u64 last_behind = 0;     // catch-ups (and starts barred late) in the last window that ended (the second worker's
                            // bar, study section 20.2)
   u64 window_second = 0;   // the second worker's steps at the window's start
-  bool second_idle = false;  // this Watch ended a full window in which the second worker ran no step: its estimate,
-                             // which moves only while it runs, is reseeded from the window's median (one slow step of
-                             // slot 1 would otherwise bar every later start of N for good, study section 21)
+  bool second_idle = false;  // this Watch ended a window (full, or barred) in which the second worker ran no step: its
+                             // estimate, which moves only while it runs, is reseeded from W's (the window's median, or
+                             // W's own estimate in a barred window); one slow step of slot 1 would otherwise bar every
+                             // later start on slot 1 for good (study section 21)
 
   // At every frame. `window`: the worker's step times since the window's start (the caller holds the mutex that
   // guards it), emptied when a window ends. A window ends after WINDOW_S with WINDOW steps (their median is W's

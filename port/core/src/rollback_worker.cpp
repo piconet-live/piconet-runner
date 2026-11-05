@@ -265,7 +265,7 @@ struct Rule
   u64 catch_ups = 0, catch_up_depth_high = 0, barred_slow = 0, barred_deep = 0;
   u64 barred_late = 0;  // starts barred only by their foreseen frames (d within the bound): catch-ups foreseen
   u64 second_steps = 0;    // the second worker's steps taken into the pace's windows (WatchRate)
-  u64 second_reseeds = 0;  // its estimate reseeded from W's median after a window it ran no step in
+  u64 second_reseeds = 0;  // its estimate reseeded from W's step after a window it ran no step in
   pace::Pace pace;      // the slow worker's switch and the trial of W's estimate (WatchRate); pace.switched: the
                         // race's rollbacks run sync (W too slow) until the retry
   // "async-check"
@@ -1400,17 +1400,24 @@ void WatchRate(Session& s)
   }
   else if (r.pace.second_idle)
   {
-    // A full window in which the second worker ran no step: its estimate moves only while it runs, and one slow step
-    // (about 110 ms) leaves it above a frame's room, every later start of N foreseen at FORESEEN_NEVER frames and
-    // barred, slot 1 never running to bring it down (and no RESEED: W's own windows go on). It takes W's median of
-    // that window, the same PC's step now (study section 21).
-    const std::lock_guard lock(s_as[1].m);
-    if (s_as[1].r_ms > r.pace.step_ms)
+    // A window in which the second worker ran no step: its estimate moves only while it runs, and one slow step
+    // (about 110 ms) leaves it above a frame's room, every later start on slot 1 (N, or a chain's job while W's thread
+    // leaves its last) foreseen at FORESEEN_NEVER frames and barred, slot 1 never running to bring it down (and no
+    // RESEED nor switch: W's own pace is good). It takes W's: the window's median, or in a window barred short of its
+    // steps W's own estimate (the same PC's step now; study section 21).
+    double w_ms;
     {
-      was_ms = std::exchange(s_as[1].r_ms, r.pace.step_ms);
+      const std::lock_guard lock(s_as[0].m);
+      w_ms = r.pace.step_n != 0 ? r.pace.step_ms : s_as[0].r_ms > 0 ? s_as[0].r_ms : r.r_sync;
+    }
+    const std::lock_guard lock(s_as[1].m);
+    if (w_ms > 0 && s_as[1].r_ms > w_ms)
+    {
+      was_ms = std::exchange(s_as[1].r_ms, w_ms);
       if (++r.second_reseeds <= 3)
         Notice("fzgx: rollback worker: the second worker ran no step in a window: its estimate {:.2f} ms afresh from "
-               "W's median {:.2f} ms (frame {}; reseeds {})", was_ms, r.pace.step_ms, r.frame_no, r.second_reseeds);
+               "W's {:.2f} ms ({}; frame {}; reseeds {})", was_ms, w_ms,
+               r.pace.step_n != 0 ? "the window's median" : "its estimate", r.frame_no, r.second_reseeds);
     }
   }
   const pace::Pace& p = r.pace;
@@ -2315,7 +2322,7 @@ void WorkerStop()
            "second jobs started {} ({:.0f} us on the game's thread), adopted {} ({} in the older job's hook), stopped "
            "with the older job {}, closed with it running (the row back to the chain) {}, run sync alone {}, compared "
            "in async-check {}, stopped for a correction below it {}, open at the game's stop {}, forward failed {}; older jobs clean as far as the second "
-           "carried them {}; starts barred:{}; slot 1 {} jobs prepared, a step {:.2f} ms, reseeded {} times from W's median",
+           "carried them {}; starts barred:{}; slot 1 {} jobs prepared, a step {:.2f} ms, reseeded {} times from W's",
            r.threads_seen, r.workers_seen, r.second_starts, r.second_start_us, r.second_adopted, r.second_same_hook,
            r.second_stopped, r.second_back, r.second_fell, r.second_checked, r.second_restarted, r.second_at_stop,
            r.second_forward_failed, r.older_through,
