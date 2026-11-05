@@ -188,7 +188,41 @@ void Rollback::Apply(Guest& g, u32 from, u32 t) const
 void Rollback::Adopt(Guest& g, const Rollback& other, u32 step, const std::vector<u32>* also)
 {
   m->Moved(g);
-  AdoptMemory(g, *m, *other.m, step, also);
+  AdoptMemory(g, *m, other.m->watched, step, also);
+}
+
+std::shared_ptr<const Rollback::Taken> Rollback::Take(u32 from, u32 t) const
+{
+  auto taken = std::make_shared<Taken>();
+  taken->home = m->home;
+  taken->region = m->region;
+  taken->size = m->shadow.size();
+  taken->scratch = !m->scratch_shadow.empty();
+  taken->kept = m->kept;
+  for (u32 k = from; k-- > t;)
+  {
+    if (const auto it = m->undo.find(k); it != m->undo.end())
+      taken->entries.push_back(&it->second);
+  }
+  taken->watched = m->watched;
+  return taken;
+}
+
+void Rollback::Apply(Guest& g, const Taken& taken)
+{
+  if (&g.GetHost() == taken.home)
+    return;  // (onto another memory only: the log's own would need its dirty pages named, as Apply does)
+  {
+    const std::lock_guard lock(s_moments_mutex);  // (as Moved: the memory's moments)
+    ++MomentsOf(&g.GetHost());
+  }
+  ApplyTaken(g, taken);
+}
+
+void Rollback::Adopt(Guest& g, const Taken& other, u32 step, const std::vector<u32>* also)
+{
+  m->Moved(g);
+  AdoptMemory(g, *m, other.watched, step, also);
 }
 
 void Rollback::KeepAfter(bool keep)

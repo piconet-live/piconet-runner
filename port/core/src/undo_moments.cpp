@@ -22,22 +22,43 @@ namespace
 constexpr u32 BLOCK = 32;
 
 // The parts of pages kept through a restore (Tracking::kept), as the memory holds them now; and written back.
-std::vector<u8> KeptParts(const Tracking& s, const u8* live)
+std::vector<u8> KeptParts(const std::vector<std::pair<u32, u32>>& parts, const u8* live)
 {
   std::vector<u8> kept;
-  for (const auto& [off, len] : s.kept)
+  for (const auto& [off, len] : parts)
     kept.insert(kept.end(), live + off, live + off + len);
   return kept;
 }
 
-void PutKeptParts(const Tracking& s, u8* live, const std::vector<u8>& kept)
+void PutKeptParts(const std::vector<std::pair<u32, u32>>& parts, u8* live, const std::vector<u8>& kept)
 {
   u32 at = 0;
-  for (const auto& [off, len] : s.kept)
+  for (const auto& [off, len] : parts)
   {
     std::memcpy(live + off, kept.data() + at, len);
     at += len;
   }
+}
+
+std::vector<u8> KeptParts(const Tracking& s, const u8* live)
+{
+  return KeptParts(s.kept, live);
+}
+
+void PutKeptParts(const Tracking& s, u8* live, const std::vector<u8>& kept)
+{
+  PutKeptParts(s.kept, live, kept);
+}
+
+// One entry's before-images written into the memory (ApplyEntries, ApplyTaken)
+void ApplyEntry(const Undo& entry, u8* live, u8* scratch, u8* rng)
+{
+  for (auto b = entry.blocks.rbegin(); b != entry.blocks.rend(); ++b)
+    std::memcpy(live + b->first, b->second.data(), BLOCK);
+  for (auto b = entry.scratch.rbegin(); scratch != nullptr && b != entry.scratch.rend(); ++b)
+    std::memcpy(scratch + b->first, b->second.data(), BLOCK);
+  if (entry.has_rng)
+    std::memcpy(rng, entry.rng.data(), 4);
 }
 
 // The locked cache's two tracked stretches: before and after the part a rollback leaves as it is.
@@ -58,17 +79,21 @@ void ApplyEntries(Guest& g, const Tracking& s, u32 from, u32 t)
   const std::vector<u8> kept = KeptParts(s, live);
   for (u32 k = from; k-- > t;)
   {
-    const auto it = s.undo.find(k);
-    if (it == s.undo.end())
-      continue;
-    for (auto b = it->second.blocks.rbegin(); b != it->second.blocks.rend(); ++b)
-      std::memcpy(live + b->first, b->second.data(), BLOCK);
-    for (auto b = it->second.scratch.rbegin(); scratch != nullptr && b != it->second.scratch.rend(); ++b)
-      std::memcpy(scratch + b->first, b->second.data(), BLOCK);
-    if (it->second.has_rng)
-      std::memcpy(rng, it->second.rng.data(), 4);
+    if (const auto it = s.undo.find(k); it != s.undo.end())
+      ApplyEntry(it->second, live, scratch, rng);
   }
   PutKeptParts(s, live, kept);
+}
+
+void ApplyTaken(Guest& g, const Rollback::Taken& taken)
+{
+  u8* live = g.Ram(taken.region, taken.size);
+  u8* rng = g.Ram(DOL_RNG, 4);
+  u8* scratch = taken.scratch ? g.GetHost().Scratch() : nullptr;
+  const std::vector<u8> kept = KeptParts(taken.kept, live);
+  for (const Undo* entry : taken.entries)
+    ApplyEntry(*entry, live, scratch, rng);
+  PutKeptParts(taken.kept, live, kept);
 }
 
 void ExchangeMoment(Guest& g, const Tracking& a, const Tracking& b, Rollback::Moment& m, bool copy)
@@ -100,12 +125,12 @@ namespace
 {
 // The memory as it is now, on the pages either log watches, the locked cache and the generator word, is the log's
 // shadow (its present).
-void ShadowTheMemory(Guest& g, Tracking& s, const Tracking& with)
+void ShadowTheMemory(Guest& g, Tracking& s, const std::vector<u8>& with_watched)
 {
   const u8* live = g.Ram(s.region, s.shadow.size());
   for (std::size_t page = 0; page < s.watched.size(); ++page)
   {
-    if (s.untracked[page] || !(s.watched[page] || with.watched[page]))
+    if (s.untracked[page] || !(s.watched[page] || (page < with_watched.size() && with_watched[page])))
       continue;
     std::memcpy(s.shadow.data() + page * PAGE, live + page * PAGE, PAGE);
     Watch(s, static_cast<u32>(page * PAGE));
@@ -121,9 +146,9 @@ void ShadowTheMemory(Guest& g, Tracking& s, const Tracking& with)
 }
 }  // namespace
 
-void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step, const std::vector<u32>* also)
+void AdoptMemory(Guest& g, Tracking& s, const std::vector<u8>& with_watched, u32 step, const std::vector<u32>* also)
 {
-  ShadowTheMemory(g, s, with);
+  ShadowTheMemory(g, s, with_watched);
   const u8* live = g.Ram(s.region, s.shadow.size());
   for (const u32 off : also ? *also : std::vector<u32>())
   {
@@ -147,7 +172,7 @@ void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step, const st
 
 void RebaseMemory(Guest& g, Tracking& s, u32 step, bool keep_below)
 {
-  ShadowTheMemory(g, s, s);
+  ShadowTheMemory(g, s, s.watched);
   // (let go a few at a time by the next steps' PreStep: a jump drops up to some 18,000 entries, 2 us each)
   const auto from = keep_below ? s.undo.lower_bound(step) : s.undo.begin();
   for (auto it = from; it != s.undo.end(); ++it)

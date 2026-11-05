@@ -405,6 +405,90 @@ void TestTheSecondWorkersBase()
   CHECK(host.log.empty() && w_host.log.empty() && n_host.log.empty() && r_host.log.empty());
 }
 
+// A worker's start in two halves (study section 22): what Apply and Adopt read of the game's log taken at the hook
+// (Rollback::Take), and the work on the worker's memory done from it later, while the game's log goes on (more steps
+// saved, a page it watches first meanwhile). The worker's memory and its log's moment must be what Apply and Adopt
+// at the hook make them: the same memory, the same pages watched, the same dirty pages, and the same moments after
+// steps run on both from R (a restore back to R and to a step between).
+void TestTheWorkersBaseTaken()
+{
+  BEGIN_TEST();
+  TestHost host, a_host, b_host;
+  ModData data, a_data, b_data;
+  Guest g(host, data), ga(a_host, a_data), gb(b_host, b_data);
+  std::mt19937 rng(20261105);
+  FakeGame(host, g, rng);
+  host.scratch.assign(0x4000, 0);
+  for (u8& b : host.scratch)
+    b = static_cast<u8>(rng());
+  const u32 first = (MODULE + net::DATA) & ~(net::PAGE - 1), size = net::STATE_END - first;
+  const u32 keep_part = first + 90 * net::PAGE + 0x100;
+  g.Write32(net::UNTRACKED, 1);
+  g.Write32(net::UNTRACKED + 4, keep_part);
+  g.Write32(net::UNTRACKED + 8, keep_part + 0x40);
+  net::Rollback live;
+  live.Start(g);
+  constexpr u32 R = 150, L = 160;
+  for (u32 step = 0; step < L; ++step)
+  {
+    live.SaveStep(g, step, step % 3 == 0);
+    Poke(g, host, first, size, step, 0);
+  }
+  live.SaveStep(g, L, true);
+  // both workers' memories the game's at L, their logs started there (a slot's log runs on from its last job)
+  a_host.ram = b_host.ram = host.ram;
+  a_host.scratch = b_host.scratch = host.scratch;
+  a_data.Restore(data.Snapshot());
+  b_data.Restore(data.Snapshot());
+  net::Rollback wa(false), wb(false);
+  wa.Start(ga);
+  wb.Start(gb);
+  // A: at the hook, as before; B: taken at the hook, done after the game's log went on
+  live.Apply(ga, L, R);
+  wa.Adopt(ga, live, R);
+  const auto taken = live.Take(L, R);
+  const u32 game_moments = net::Rollback::Moments(host), b_moments = net::Rollback::Moments(b_host);
+  const u32 fresh_page = first + (size / net::PAGE - 3) * net::PAGE;  // a page the game's log first watches after
+  CHECK(live.WatchedPages() == wa.WatchedPages());
+  for (u32 step = L; step < L + 4; ++step)
+  {
+    if (step != L)
+      live.SaveStep(g, step, false);
+    Poke(g, host, first, size, step, 0);
+    g.Write32(fresh_page + 4 * step, 0xF0000000 + step);
+  }
+  live.SaveStep(g, L + 4, true);
+  CHECK(live.WatchedPages() > wa.WatchedPages());  // (the game's log watches more now than at the Take)
+  net::Rollback::Apply(g, *taken);  // (onto the log's own memory: refused, nothing written)
+  CHECK(net::Rollback::Moments(host) == game_moments);
+  net::Rollback::Apply(gb, *taken);
+  CHECK(net::Rollback::Moments(b_host) == b_moments + 1);
+  wb.Adopt(gb, *taken, R);
+  CHECK(a_host.ram == b_host.ram && a_host.scratch == b_host.scratch);
+  CHECK(wa.WatchedPages() == wb.WatchedPages() && wa.Moments() == wb.Moments());
+  CHECK(wa.TakeDirty() == wb.TakeDirty());
+  // the same steps on both from R: the same entries (a restore gives the same moments) and the same dirty pages
+  for (u32 step = R; step < R + 8; ++step)
+  {
+    wa.SaveStep(ga, step, step % 3 == 0);
+    wb.SaveStep(gb, step, step % 3 == 0);
+    Poke(ga, a_host, first, size, step, 1);
+    Poke(gb, b_host, first, size, step, 1);
+  }
+  wa.SaveStep(ga, R + 8, true);
+  wb.SaveStep(gb, R + 8, true);
+  CHECK(wa.TakeDirty() == wb.TakeDirty());
+  wa.RestoreTo(ga, R + 8, R + 3);
+  wb.RestoreTo(gb, R + 8, R + 3);
+  CHECK(a_host.ram == b_host.ram && a_host.scratch == b_host.scratch);
+  wa.RestoreTo(ga, R + 3, R);
+  wb.RestoreTo(gb, R + 3, R);
+  CHECK(a_host.ram == b_host.ram && a_host.scratch == b_host.scratch);
+  live.Stop();
+  wa.Stop();
+  wb.Stop();
+}
+
 // The logs' own counts, the memories' counts, and the comparison of entries.
 void TestRollbackMomentsPerLog()
 {

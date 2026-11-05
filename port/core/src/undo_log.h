@@ -335,12 +335,25 @@ void TraceHeaps(Guest& g, Tracking& s, const std::string& when);
 // compared with it, a line for every page that did not come back as it was.
 void TraceCopy(Tracking& s, const u8* live, u32 t);
 void TraceFaithful(Tracking& s, const u8* live, u32 from, u32 t);
+// Rollback::Take (rollback.h): what Apply and Adopt read of a log, held for another thread.
+struct Rollback::Taken
+{
+  const Host* home = nullptr;          // the log's own memory (Apply(g, taken) refuses it)
+  u32 region = 0;
+  std::size_t size = 0;                // the tracked memory's size (the shadow's)
+  bool scratch = false;                // the log tracks the locked cache
+  std::vector<std::pair<u32, u32>> kept;
+  std::vector<const Undo*> entries;    // the entries of steps `from` - 1 down to t, in that order (those the log holds)
+  std::vector<u8> watched;             // per page: watched at the Take
+};
 // undo_moments.cpp (rollback.h, "two moments"): the entries of steps `from` - 1 down to t applied to the memory
 // alone; the pages either log watches exchanged with (or copied from) a kept moment; the memory taken as the log's
 // present; the changes since the last PreStep put back.
 void ApplyEntries(Guest& g, const Tracking& s, u32 from, u32 t);
+void ApplyTaken(Guest& g, const Rollback::Taken& taken);
 void ExchangeMoment(Guest& g, const Tracking& a, const Tracking& b, Rollback::Moment& m, bool copy);
-void AdoptMemory(Guest& g, Tracking& s, const Tracking& with, u32 step, const std::vector<u32>* also = nullptr);
+void AdoptMemory(Guest& g, Tracking& s, const std::vector<u8>& with_watched, u32 step,
+                 const std::vector<u32>* also = nullptr);
 void RebaseMemory(Guest& g, Tracking& s, u32 step, bool keep_below);
 void DiscardChanges(Guest& g, Tracking& s);
 // After-images (Tracking::after, undo_moments.cpp): those of steps from `from` on dropped, and those below `below`;

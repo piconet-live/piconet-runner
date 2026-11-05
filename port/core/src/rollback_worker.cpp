@@ -202,6 +202,24 @@ struct Async
   bool newer = false;   // this job is N, derived from the other slot's open job (until that one is closed)
   bool second = false;  // this job was started as N (the S6 line's counts)
   bool second_tried = false;  // a job N was started from this one (one at most: its late row is then the chain's)
+  // The job's base on its worker's thread (study section 22): at the start's hook the game's thread copies the game's
+  // memory (the pages either log named, outside the log, the cache and window) and takes what the rest reads (the
+  // game's log's entries down to R and its watched pages: Rollback::Take; for N, O's slot and steps); the worker's
+  // thread then, before its first step, rewinds its memory by those entries (Apply), writes O's after-images (N:
+  // Forward), takes its log's moment (KeepAfter, Adopt), reads the time words and writes Begin's words of the hook.
+  // The game's thread waits for it at its next frame (WaitBases) before it touches either log.
+  bool base_deferred = false;  // the rewind, Forward, Adopt and time words are the worker's (else done at the hook)
+  bool base_pending = false;   // the worker's thread has not finished the base (its mutex)
+  bool base_collect = false;   // the game's thread has not yet taken the base's results (WaitBases)
+  std::shared_ptr<const Rollback::Taken> base_taken;
+  bool base_keep_after = false;
+  u32 base_at = 0;              // the step the slot's log's moment is taken before (R; N's c)
+  int base_forward = -1;        // N: O's slot, whose after-images of base_from .. base_at - 1 go over the rewind
+  bool base_forward_ok = true;
+  std::vector<u32> base_pages;  // N: the pages Forward wrote (the game's thread puts them into the slot's pending)
+  std::vector<u8> base_window_taken;  // the game's window when its memory was taken (TakeTheGame)
+  std::vector<u8> base_window;  // Begin's: the game's window at the hook
+  double base_us = 0;           // the base's time on the worker's thread
 };
 Async s_as[SLOTS];
 // Close: no job begins on either worker's thread (under s_as[0].m)
@@ -463,23 +481,14 @@ bool Begin(int slot, Memory* memory)
     // the job's start (S2): W's window from the game's at this hook, the step word and the row of R, the frame's
     // further steps kept high; N's ring holds O's rows from O's R to N's c (study section 20.1)
     const auto start = std::chrono::steady_clock::now();
-    Guest& gw = *x.g;
-    x.window.Restore(Data().Snapshot());
-    gw.Write32(net::STEP, a.from);
+    // (W's words of this hook are written on its thread, after its base: TakeBase, study section 22)
+    a.base_window = Data().Snapshot();
     {
       const std::lock_guard lock(a.m);
-      for (std::size_t k = 0; k < a.base_rows.size(); ++k)
-        Rollback::UseInputs(gw, a.base_from + static_cast<u32>(k), a.seats, a.base_rows[k].data());
-      for (std::size_t k = 0; k < a.base_sums.size(); ++k)
-        Rollback::KeepChecksum(gw, a.base_from + static_cast<u32>(k), a.base_sums[k]);
       a.ran.clear();
       if (!a.rows.empty())
-      {
         a.ran.push_back(a.rows[0]);
-        Rollback::UseInputs(gw, a.from, a.seats, a.ran[0].data());
-      }
     }
-    gw.Write32(EXTRA_STEPS, W_EXTRA);
     {
       // (s_closed is under slot 0's mutex, taken first whenever both are: Close cannot miss a thread that starts)
       std::unique_lock closed(s_as[0].m);
@@ -513,6 +522,111 @@ bool Begin(int slot, Memory* memory)
   memory->cache = w.memory->cache.data();
   memory->cache_size = static_cast<u32>(w.memory->cache.size());
   return true;
+}
+
+// The worker's thread, before its job's first step (study section 22): what the start's hook took becomes W's base
+// there, in the order the hook did it before: the game's window as its memory was taken, the rewind by the game's
+// log's entries to R (Apply), for N O's after-images of R to c - 1 (Forward), the log's moment (KeepAfter, Adopt), the
+// time words; then Begin's words of the hook (its window, the step word, N's rows and checksums from O's R, the first
+// row, the frame's further steps kept high). A failed Forward ends the job before its first step (its row goes back
+// to the chain, as a second job's give-up). False: no step runs.
+bool TakeBase(int slot)
+{
+  Async& a = s_as[slot];
+  Worker& x = s_ws[slot];
+  Guest& gw = *x.g;
+  {
+    const std::lock_guard lock(a.m);
+    if (!a.base_pending)
+      return !a.stop && !a.ended;
+  }
+  const auto start = std::chrono::steady_clock::now();
+  bool ok = true;
+  std::vector<u32> pages, time_words;
+  if (a.base_deferred)
+  {
+    x.window.Restore(a.base_window_taken);
+    Rollback::Apply(gw, *a.base_taken);
+    if (a.base_forward >= 0)
+      ok = s_ws[a.base_forward].log.Forward(gw, a.base_from, a.base_at, &pages);
+    if (ok)
+    {
+      x.log.KeepAfter(a.base_keep_after);
+      x.log.Adopt(gw, *a.base_taken, a.base_at, a.base_forward >= 0 ? &pages : nullptr);
+      time_words = TimeWords(gw, gw);
+    }
+  }
+  if (ok)
+  {
+    x.window.Restore(a.base_window);
+    gw.Write32(net::STEP, a.from);
+    {
+      const std::lock_guard lock(a.m);
+      for (std::size_t k = 0; k < a.base_rows.size(); ++k)
+        Rollback::UseInputs(gw, a.base_from + static_cast<u32>(k), a.seats, a.base_rows[k].data());
+      for (std::size_t k = 0; k < a.base_sums.size(); ++k)
+        Rollback::KeepChecksum(gw, a.base_from + static_cast<u32>(k), a.base_sums[k]);
+      if (!a.ran.empty())
+        Rollback::UseInputs(gw, a.from, a.seats, a.ran[0].data());
+    }
+    gw.Write32(EXTRA_STEPS, W_EXTRA);
+  }
+  const std::lock_guard lock(a.m);
+  if (a.base_deferred)
+    a.time_words = std::move(time_words);
+  a.base_pages = std::move(pages);
+  a.base_forward_ok = ok;
+  a.base_us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
+  a.base_pending = false;
+  if (!ok && !a.ended)
+  {
+    a.why = "the older job's after-images to its step were not kept (the second job's base)";
+    a.ended = true;
+  }
+  a.left = std::chrono::steady_clock::now();
+  a.cv.notify_all();
+  return ok && !a.stop && !a.ended;
+}
+
+// The game's thread, before it touches either log or a job (each frame's hook, the stop): every base begun is done
+// (it waits for the worker's thread to finish one, which it is doing or about to), and its results taken: the pages
+// N's Forward wrote into the slot's pending set, the base's time on its thread.
+void WaitBases()
+{
+  for (int k = 0; k < SLOTS; ++k)
+  {
+    Async& a = s_as[k];
+    std::unique_lock lock(a.m);
+    if (!a.base_collect)
+      continue;
+    if (a.base_pending)
+    {
+      const auto start = std::chrono::steady_clock::now();
+      if (!a.running)
+        a.base_pending = false;  // (never begun: the emulator stopped before Begin, or the start did not reach it)
+      a.cv.wait(lock, [&] { return !a.base_pending; });
+      ++w.counts["bases waited for at the next frame"];
+      w.counts["bases waited for: us"] +=
+          static_cast<u64>(std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count());
+    }
+    a.base_collect = false;
+    a.base_taken.reset();
+    const char* kind = a.second ? "N base on its thread (tenths of us)" : "S2 base on its thread (tenths of us)";
+    w.counts[kind] += static_cast<u64>(a.base_us * 10);
+    a.base_us = 0;
+    if (!a.base_forward_ok)
+      ++s_r.second_forward_failed;
+    Worker& x = s_ws[k];
+    if (!a.base_pages.empty())
+    {
+      // (the pages Forward wrote differ from the game's: the slot's next start takes them again)
+      std::vector<u32> both;
+      std::set_union(x.pending.begin(), x.pending.end(), a.base_pages.begin(), a.base_pages.end(),
+                     std::back_inserter(both));
+      x.pending = std::move(both);
+      a.base_pages.clear();
+    }
+  }
 }
 
 // The worker's thread at W's network hook (S2): the step just run's checksum, its undo entry, then the job's news:
@@ -769,7 +883,7 @@ namespace fzgx::net
 {
 using namespace fzgx::rollback_worker;
 
-void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from, int slot);
+void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from, int slot, bool defer = false);
 
 // Before the session's restore from `step` to `run_from` (CheckPredictions): a job when the rollback is deep enough.
 void WorkerPrepare(Guest& g, Session& s, u32 step, u32 run_from)
@@ -816,7 +930,7 @@ void WorkerPrepare(Guest& g, Session& s, u32 step, u32 run_from)
 // game's log's taken by either slot's start, each slot's pending set), the memory outside the log and the locked
 // cache whole, the window; rewound by the game's log. Its log started again when the game's was (a new race). The
 // pages copied (for the log line).
-std::size_t TakeTheGame(Guest& g, Session& s, u32 step, u32 run_from, int slot)
+std::size_t TakeTheGame(Guest& g, Session& s, u32 step, u32 run_from, int slot, bool defer = false)
 {
   Worker& x = s_ws[slot];
   if (w.mode.empty())
@@ -930,11 +1044,15 @@ std::size_t TakeTheGame(Guest& g, Session& s, u32 step, u32 run_from, int slot)
     copied = &w.counts["pages: above the log copied"];
     take(net::STATE_END - RAM, ram_size - (net::STATE_END - RAM));
   }
+  const bool deferred = defer && x.log.Active() && x.log.Region() == region && x.game_starts == s.rollback.Starts();
   {
     const Timed timed{"us start: cache and window"};
     if (host.Scratch() != nullptr)
       std::memcpy(x.memory->cache.data(), host.Scratch(), host.ScratchSize());
-    x.window.Restore(Data().Snapshot());
+    if (deferred)
+      s_as[slot].base_window_taken = Data().Snapshot();  // (restored into W's window on its thread, TakeBase)
+    else
+      x.window.Restore(Data().Snapshot());
   }
   x.primed = true;
   // W's log starts again whenever the game's does (each race, and a new region): its shadow of the pages neither log
@@ -943,7 +1061,18 @@ std::size_t TakeTheGame(Guest& g, Session& s, u32 step, u32 run_from, int slot)
   if (x.log.Active() && (x.log.Region() != region || x.game_starts != s.rollback.Starts()))
     x.log.Stop();
   x.region = region;
-  // rewound by the game's log, and the worker's log's moment before R
+  // rewound by the game's log, and the worker's log's moment before R; deferred (study section 22): the entries
+  // and watched pages taken for the worker's thread, which rewinds there (a log that starts afresh, the slot's first
+  // job of a race, is started here on the rewound memory as ever: its start may write the log's lines)
+  Async& a = s_as[slot];
+  a.base_deferred = deferred && x.log.Active();
+  a.base_taken.reset();
+  if (a.base_deferred)
+  {
+    const Timed timed{"us start: the log's entries taken"};
+    a.base_taken = s.rollback.Take(step, run_from);
+    return pages.size();
+  }
   {
     const Timed timed{"us start: Apply"};
     s.rollback.Apply(*x.g, step, run_from);
@@ -958,14 +1087,21 @@ std::size_t TakeTheGame(Guest& g, Session& s, u32 step, u32 run_from, int slot)
 
 // W as the memory before R: the game's (TakeTheGame), taken as the slot log's moment at R. Its log keeps
 // after-images when two workers run (a second job may start from it: study section 20.1).
-void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from, int slot)
+void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from, int slot, bool defer)
 {
   Worker& x = s_ws[slot];
-  const std::size_t pages = TakeTheGame(g, s, step, run_from, slot);
+  Async& a = s_as[slot];
+  const std::size_t pages = TakeTheGame(g, s, step, run_from, slot, defer);
   const Timed timed{"us start: Adopt"};
   x.keeps_after = Threaded() && Workers() == 2;
-  x.log.KeepAfter(x.keeps_after);
-  x.log.Adopt(*x.g, s.rollback, run_from);
+  a.base_keep_after = x.keeps_after;
+  a.base_at = run_from;
+  a.base_forward = -1;
+  if (!a.base_deferred)
+  {
+    x.log.KeepAfter(x.keeps_after);
+    x.log.Adopt(*x.g, s.rollback, run_from);
+  }
   if (x.jobs <= 2)
     Notice("fzgx: rollback worker: slot {} job {} from {} to {} prepared ({} pages taken, both logs)", slot, x.jobs,
            run_from, step, pages);
@@ -2005,7 +2141,7 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   const auto start = std::chrono::steady_clock::now();  // (after the wait, which idle_us counts)
   const TimedPhase phase{"S2 "};
   ++w.counts["S2 starts"];
-  PrepareMemory(g, s, step, wrong, k);
+  PrepareMemory(g, s, step, wrong, k, true);
   {
     const Timed timed{"start: tables and trace"};
     guard::TakeGeneration(k);  // (U1: the CPU core's code tables as the job starts)
@@ -2028,9 +2164,15 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
     a.seats = s.seats;
     a.at = wrong;
   }
+  if (!a.base_deferred)
   {
     const Timed timed{"us start: time words"};
     a.time_words = TimeWords(*s_ws[k].g, *s_ws[k].g);
+  }
+  {
+    const std::lock_guard lock(a.m);
+    a.base_pending = a.base_collect = true;  // (the base's rest and Begin's words: the worker's thread, TakeBase)
+    a.base_forward_ok = true;
   }
   a.moves = moves;
   a.perturb_at = NONE;
@@ -2142,7 +2284,7 @@ void StartSecond(Guest& g, Session& s, u32 step)
   Worker& x = s_ws[n];
   // the game's memory rewound to O's R, then O's after-images of R to c - 1 and its rows of those steps (O's worker
   // goes on: its steps below c and their after-images stand, under its log's mutex and O's)
-  TakeTheGame(g, s, step, a.from, n);
+  TakeTheGame(g, s, step, a.from, n, true);
   std::vector<u32> pages, sums;
   std::vector<net::Row> base;
   bool ok;
@@ -2156,14 +2298,19 @@ void StartSecond(Guest& g, Session& s, u32 step)
       // (O's checksums of those steps: its hooks to c have written them, and W writes none of them again)
       for (u32 t = a.from; t < c; ++t)
         sums.push_back(Rollback::KeptChecksum(*s_ws[o].g, t));
-      ok = s_ws[o].log.Forward(*x.g, a.from, c, &pages);
+      // (deferred: O's after-images of R to c - 1 stand until N's thread has written them, WaitBases; O's thread only
+      // adds later steps' meanwhile, and the game's thread asks it for nothing before then)
+      if (!b.base_deferred)
+        ok = s_ws[o].log.Forward(*x.g, a.from, c, &pages);
     }
   }
   if (!ok)
   {
     ++s_r.second_forward_failed;
-    return;  // (N's memory is the game's at R: the pages either log names later take it again)
+    b.base_taken.reset();
+    return;  // (N's memory is the game's at R, or deferred as the hook copied it: the pages either log names later take it again)
   }
+  if (!b.base_deferred)
   {
     const Timed timed{"start: pending pages"};
     // (the pages Forward wrote differ from the game's: the slot's next start takes them again)
@@ -2174,8 +2321,14 @@ void StartSecond(Guest& g, Session& s, u32 step)
   {
     const Timed timed{"start: Adopt"};
     x.keeps_after = true;  // (a third job may start from N's log once O is adopted)
-    x.log.KeepAfter(true);
-    x.log.Adopt(*x.g, s.rollback, c, &pages);
+    b.base_keep_after = true;
+    b.base_at = c;
+    b.base_forward = o;
+    if (!b.base_deferred)
+    {
+      x.log.KeepAfter(true);
+      x.log.Adopt(*x.g, s.rollback, c, &pages);
+    }
   }
   {
     const Timed timed{"start: tables and trace"};
@@ -2198,9 +2351,15 @@ void StartSecond(Guest& g, Session& s, u32 step)
     b.base_rows = std::move(base);
     b.base_sums = std::move(sums);
   }
+  if (!b.base_deferred)
   {
     const Timed timed{"us start: time words"};
     b.time_words = TimeWords(*x.g, *x.g);
+  }
+  {
+    const std::lock_guard lock(b.m);
+    b.base_pending = b.base_collect = true;  // (the base's rest and Begin's words: N's thread, TakeBase)
+    b.base_forward_ok = true;
   }
   b.moves = 0;
   b.perturb_at = NONE;
@@ -2227,8 +2386,9 @@ void StartSecond(Guest& g, Session& s, u32 step)
   }
   if (s_r.second_starts <= 3)
     Notice("fzgx: rollback worker S6: the second worker's job {} (slot {}) from {} at {} (depth {}), its base the job "
-           "from {}'s state there ({} pages forward; {} usable threads, workers {})",
-           s_r.second_starts, n, c, step, step - c, a.from, pages.size(), s_r.threads_seen, s_r.workers_seen);
+           "from {}'s state there ({} pages forward{}; {} usable threads, workers {})",
+           s_r.second_starts, n, c, step, step - c, a.from, pages.size(), b.base_deferred ? " here, the rest on its thread" : "",
+           s_r.threads_seen, s_r.workers_seen);
 }
 
 // Steps below `known` become final; not the open jobs' (their entries and checksums are the workers' to give).
@@ -2246,6 +2406,7 @@ u32 WorkerKnown(u32 known)
 // The game stops: the jobs stopped (the adapter joins the threads after) and the S2 line.
 void WorkerQuiesce()
 {
+  WaitBases();
   if (const int n = Newer(); n >= 0)
     CloseNewer(n, true);
   for (int k = 0; k < SLOTS; ++k)
