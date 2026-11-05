@@ -199,13 +199,29 @@ std::shared_ptr<const Rollback::Taken> Rollback::Take(u32 from, u32 t) const
   taken->size = m->shadow.size();
   taken->scratch = !m->scratch_shadow.empty();
   taken->kept = m->kept;
+  taken->log = m.get();
   for (u32 k = from; k-- > t;)
   {
     if (const auto it = m->undo.find(k); it != m->undo.end())
+    {
       taken->entries.push_back(&it->second);
+      taken->ids.emplace_back(k, it->second.serial);
+    }
   }
   taken->watched = m->watched;
   return taken;
+}
+
+bool Rollback::Stands(const Taken& taken)
+{
+  // every entry taken is still in its log, the same node, not written since (the log's thread only)
+  for (std::size_t k = 0; k < taken.ids.size(); ++k)
+  {
+    const auto it = taken.log->undo.find(taken.ids[k].first);
+    if (it == taken.log->undo.end() || &it->second != taken.entries[k] || it->second.serial != taken.ids[k].second)
+      return false;
+  }
+  return true;
 }
 
 void Rollback::Apply(Guest& g, const Taken& taken)

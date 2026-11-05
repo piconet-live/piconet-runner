@@ -36,6 +36,7 @@ void TestTheSpareListsAreBounded();
 void TestTheWorkersTakeOver();
 void TestTheSecondWorkersBase();
 void TestTheWorkersBaseTaken();
+void TestTheWorkersBaseHeld();
 void TestRollbackMomentsPerLog();
 void TestTheWorkersDefault();
 void TestTheWorkersLogStartsWithTheRace();
@@ -498,6 +499,7 @@ int main(int argc, char** argv)
   TestTheWorkersTakeOver();
   TestTheSecondWorkersBase();
   TestTheWorkersBaseTaken();
+  TestTheWorkersBaseHeld();
   TestRollbackMomentsPerLog();
   TestTheWorkersDefault();
   TestTheWorkersLogStartsWithTheRace();

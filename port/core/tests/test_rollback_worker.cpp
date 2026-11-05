@@ -489,6 +489,62 @@ void TestTheWorkersBaseTaken()
   wb.Stop();
 }
 
+// A start's Take in a held frame (study section 22.5): the hold restores the game's log by one step (RestoreTo(L,
+// L - 1)), which erases the entry of L - 1 that the Take holds. The base is made before that restore (BasesHere) and
+// equals the one made at the hook; a Take whose entry was erased, or written again by the step run again, no longer
+// stands (Begin then refuses its base); a restore above the Take's steps (the step run ahead) leaves it standing.
+void TestTheWorkersBaseHeld()
+{
+  BEGIN_TEST();
+  TestHost host, a_host, b_host;
+  ModData data, a_data, b_data;
+  Guest g(host, data), ga(a_host, a_data), gb(b_host, b_data);
+  std::mt19937 rng(20261106);
+  FakeGame(host, g, rng);
+  const u32 first = (MODULE + net::DATA) & ~(net::PAGE - 1), size = net::STATE_END - first;
+  net::Rollback live;
+  live.Start(g);
+  constexpr u32 R = 150, L = 160;
+  for (u32 step = 0; step < L; ++step)
+  {
+    live.SaveStep(g, step, step % 3 == 0);
+    Poke(g, host, first, size, step, 0);
+  }
+  live.SaveStep(g, L, true);
+  a_host.ram = b_host.ram = host.ram;
+  a_data.Restore(data.Snapshot());
+  b_data.Restore(data.Snapshot());
+  net::Rollback wa(false), wb(false);
+  wa.Start(ga);
+  wb.Start(gb);
+  live.Apply(ga, L, R);  // A: at the hook, as before section 22
+  wa.Adopt(ga, live, R);
+  const auto taken = live.Take(L, R);
+  CHECK(taken->ids.size() == L - R && taken->ids.front().first == L - 1);
+  CHECK(net::Rollback::Stands(*taken));
+  // B: the held frame's order: the base made, then the restore
+  net::Rollback::Apply(gb, *taken);
+  wb.Adopt(gb, *taken, R);
+  live.RestoreTo(g, L, L - 1);
+  CHECK(!net::Rollback::Stands(*taken));  // (the entry of L - 1 is gone: a base made after this would read it)
+  CHECK(a_host.ram == b_host.ram);
+  CHECK(wa.WatchedPages() == wb.WatchedPages() && wa.Moments() == wb.Moments() && wa.TakeDirty() == wb.TakeDirty());
+  // the step run again: its entry written anew (perhaps in the same node), and the Take still does not stand
+  Poke(g, host, first, size, L - 1, 0);
+  live.SaveStep(g, L, true);
+  CHECK(!net::Rollback::Stands(*taken));
+  // a Take at the next hook, then the step run ahead and put back (above the Take's steps): it stands
+  const auto next = live.Take(L, R);
+  CHECK(net::Rollback::Stands(*next));
+  Poke(g, host, first, size, L, 0);
+  live.SaveStep(g, L + 1, true);
+  live.RestoreTo(g, L + 1, L);
+  CHECK(net::Rollback::Stands(*next));
+  live.Stop();
+  wa.Stop();
+  wb.Stop();
+}
+
 // The logs' own counts, the memories' counts, and the comparison of entries.
 void TestRollbackMomentsPerLog()
 {

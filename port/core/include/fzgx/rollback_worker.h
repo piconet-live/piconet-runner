@@ -116,6 +116,10 @@ bool TakeBase(int slot);
 // The game's thread, before it touches the game's log or a job again (each frame's hook, the stop): the bases begun
 // are done, waiting for a worker's thread that is still making one, and their results taken.
 void WaitBases();
+// The game's thread, at a hook that restores the game's log after a start in it (a held frame, schedule.cpp): the
+// bases taken at this hook and not yet begun are made now, on this thread, as before section 22 (a restore erases the
+// entries a start's Take holds).
+void BasesHere();
 // The calling thread's worker's data window (slot 0's on the game's thread): the context's slow accesses to the window
 // are served from it.
 ModData& Window();

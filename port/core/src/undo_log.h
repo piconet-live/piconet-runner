@@ -31,6 +31,7 @@ struct Undo
   Blocks scratch;  // the same of the locked cache
   bool has_rng = false;
   std::array<u8, 4> rng{};
+  u64 serial = 0;  // the log's count of stores when this entry was last written (Rollback::Stands)
 };
 
 // The whole-memory comparisons of the undo tracking (PreStep), split over this thread and worker threads: the job is
@@ -204,6 +205,7 @@ struct Tracking
   std::unique_ptr<ScanPool> scan_pool;
   std::vector<ScanPart> scan_parts;  // a place for each piece of a whole-memory comparison
   u32 save_again = 0xFFFFFFFF;  // Rollback::SaveAgain's step
+  u64 serials = 0;              // the entries' stores so far (each entry's serial: Rollback::Stands)
   bool after_frame_step = false;  // the previous tracked step was a displayed frame's own
   // How a first write to a page not watched is found (Debug::undo_log; undo_guard.cpp). Scan: every page compared
   // before a frame's own step and the step after it. Guard: every page not watched write-protected once the learning
@@ -344,6 +346,8 @@ struct Rollback::Taken
   bool scratch = false;                // the log tracks the locked cache
   std::vector<std::pair<u32, u32>> kept;
   std::vector<const Undo*> entries;    // the entries of steps `from` - 1 down to t, in that order (those the log holds)
+  std::vector<std::pair<u32, u64>> ids;  // ... their steps and serials (Rollback::Stands)
+  const Tracking* log = nullptr;       // the log they are in
   std::vector<u8> watched;             // per page: watched at the Take
 };
 // undo_moments.cpp (rollback.h, "two moments"): the entries of steps `from` - 1 down to t applied to the memory

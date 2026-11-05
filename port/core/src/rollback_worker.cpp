@@ -216,6 +216,7 @@ struct Async
   u32 base_at = 0;              // the step the slot's log's moment is taken before (R; N's c)
   int base_forward = -1;        // N: O's slot, whose after-images of base_from .. base_at - 1 go over the rewind
   bool base_forward_ok = true;
+  bool base_refused = false;    // Begin found the game's log changed under the Take (never seen): no base, no step
   std::vector<u32> base_pages;  // N: the pages Forward wrote (the game's thread puts them into the slot's pending)
   std::vector<u8> base_window_taken;  // the game's window when its memory was taken (TakeTheGame)
   std::vector<u8> base_window;  // Begin's: the game's window at the hook
@@ -483,6 +484,11 @@ bool Begin(int slot, Memory* memory)
     const auto start = std::chrono::steady_clock::now();
     // (W's words of this hook are written on its thread, after its base: TakeBase, study section 22)
     Data().SnapshotInto(&a.base_window);
+    if (a.base_deferred && a.base_pending && !Rollback::Stands(*a.base_taken))
+    {
+      const std::lock_guard lock(a.m);
+      a.base_refused = true;  // (the thread makes no base and runs no step: TakeBase)
+    }
     {
       const std::lock_guard lock(a.m);
       a.ran.clear();
@@ -524,6 +530,24 @@ bool Begin(int slot, Memory* memory)
   return true;
 }
 
+// The base's part taken at the start's hook (the deferred one): onto W's memory and log, in the hook's old order. The
+// worker's thread before its first step (TakeBase), or the game's thread at the hook itself before the game's log is
+// restored there (BasesHere). False: Forward failed.
+bool MakeBase(int slot, std::vector<u32>* pages, std::vector<u32>* time_words)
+{
+  Async& a = s_as[slot];
+  Worker& x = s_ws[slot];
+  Guest& gw = *x.g;
+  x.window.Restore(a.base_window_taken);
+  Rollback::Apply(gw, *a.base_taken);
+  if (a.base_forward >= 0 && !s_ws[a.base_forward].log.Forward(gw, a.base_from, a.base_at, pages))
+    return false;
+  x.log.KeepAfter(a.base_keep_after);
+  x.log.Adopt(gw, *a.base_taken, a.base_at, a.base_forward >= 0 ? pages : nullptr);
+  *time_words = TimeWords(gw, gw);
+  return true;
+}
+
 // The worker's thread, before its job's first step (study section 22): what the start's hook took becomes W's base
 // there, in the order the hook did it before: the game's window as its memory was taken, the rewind by the game's
 // log's entries to R (Apply), for N O's after-images of R to c - 1 (Forward), the log's moment (KeepAfter, Adopt), the
@@ -541,21 +565,10 @@ bool TakeBase(int slot)
       return !a.stop && !a.ended;
   }
   const auto start = std::chrono::steady_clock::now();
-  bool ok = true;
+  bool ok = a.base_forward_ok && !a.base_refused;  // (made at the hook already: BasesHere's Forward)
   std::vector<u32> pages, time_words;
-  if (a.base_deferred)
-  {
-    x.window.Restore(a.base_window_taken);
-    Rollback::Apply(gw, *a.base_taken);
-    if (a.base_forward >= 0)
-      ok = s_ws[a.base_forward].log.Forward(gw, a.base_from, a.base_at, &pages);
-    if (ok)
-    {
-      x.log.KeepAfter(a.base_keep_after);
-      x.log.Adopt(gw, *a.base_taken, a.base_at, a.base_forward >= 0 ? &pages : nullptr);
-      time_words = TimeWords(gw, gw);
-    }
-  }
+  if (a.base_deferred && ok)
+    ok = MakeBase(slot, &pages, &time_words);
   if (ok)
   {
     x.window.Restore(a.base_window);
@@ -573,19 +586,48 @@ bool TakeBase(int slot)
   }
   const std::lock_guard lock(a.m);
   if (a.base_deferred)
+  {
     a.time_words = std::move(time_words);
-  a.base_pages = std::move(pages);
-  a.base_forward_ok = ok;
+    a.base_pages = std::move(pages);
+  }
+  a.base_forward_ok = ok || a.base_refused;
   a.base_us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
   a.base_pending = false;
   if (!ok && !a.ended)
   {
-    a.why = "the older job's after-images to its step were not kept (the second job's base)";
+    a.why = a.base_refused ? "the game's log changed under the job's base before it began"
+                           : "the older job's after-images to its step were not kept (the second job's base)";
     a.ended = true;
   }
   a.left = std::chrono::steady_clock::now();
   a.cv.notify_all();
   return ok && !a.stop && !a.ended;
+}
+
+// The game's thread, at a hook that restores the game's log after a start (CatchUpOrHold's held frame, schedule.cpp:
+// RestoreTo(step, step - 1) erases the entry of step - 1, which a start's Take holds): each base taken at this hook
+// and not yet begun is made here, now, as the hook made it before study section 22 (the worker's thread then writes
+// only Begin's words).
+void BasesHere()
+{
+  for (int k = 0; k < SLOTS; ++k)
+  {
+    Async& a = s_as[k];
+    if (!a.base_deferred || !a.base_pending || a.begun)
+      continue;
+    const auto start = std::chrono::steady_clock::now();
+    std::vector<u32> pages, time_words;
+    const bool ok = MakeBase(k, &pages, &time_words);
+    const std::lock_guard lock(a.m);
+    a.time_words = std::move(time_words);
+    a.base_pages = std::move(pages);
+    a.base_forward_ok = ok;
+    a.base_deferred = false;
+    a.base_taken.reset();
+    ++w.counts[a.second ? "N bases made at the hook (a held frame)" : "S2 bases made at the hook (a held frame)"];
+    w.counts[a.second ? "N bases made at the hook: tenths of us" : "S2 bases made at the hook: tenths of us"] +=
+        static_cast<u64>(std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() * 10);
+  }
 }
 
 // The game's thread, before it touches either log or a job (each frame's hook, the stop): every base begun is done
@@ -603,7 +645,18 @@ void WaitBases()
     {
       const auto start = std::chrono::steady_clock::now();
       if (!a.running)
-        a.base_pending = false;  // (never begun: the emulator stopped before Begin, or the start did not reach it)
+      {
+        // never begun (Begin sets running before it wakes the thread, which clears it after the base): the emulator
+        // stopped before Begin. Anything else is a start whose Begin did not come at its hook; its base was not made,
+        // so the job ends before its first step (never seen)
+        a.base_pending = false;
+        if (!s_closed && a.open && !a.ended)
+        {
+          a.why = "its base was not made at its hook";
+          a.ended = true;
+          ++w.counts["bases never begun at their hook"];
+        }
+      }
       a.cv.wait(lock, [&] { return !a.base_pending; });
       ++w.counts["bases waited for at the next frame"];
       w.counts["bases waited for: us"] +=
@@ -614,8 +667,11 @@ void WaitBases()
     const char* kind = a.second ? "N base on its thread (tenths of us)" : "S2 base on its thread (tenths of us)";
     w.counts[kind] += static_cast<u64>(a.base_us * 10);
     a.base_us = 0;
-    if (!a.base_forward_ok)
+    if (a.base_refused)
+      ++w.counts["bases refused: the game's log changed under the Take"];
+    else if (!a.base_forward_ok)
       ++s_r.second_forward_failed;
+    a.base_refused = false;
     Worker& x = s_ws[k];
     if (!a.base_pages.empty())
     {

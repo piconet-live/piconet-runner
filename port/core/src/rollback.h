@@ -171,12 +171,16 @@ public:
   // of this log, taken at the game's hook (Take: the entries of steps t to `from` - 1 by reference, the kept parts
   // and the pages watched now), and the work on the other memory done later from it, on the worker's thread, while
   // this log goes on. The entries must stay as they are until then: SaveStep only adds entries (a later step's), and
-  // the caller does no RestoreTo, Final at or above t, TakeOver, Rebase, Discard, Stop or Start on this log meanwhile.
+  // the caller does no RestoreTo below `from`, Final above t, TakeOver, Rebase, Discard, Stop or Start on this log
+  // meanwhile (Stands checks the entries).
   // Apply(g, taken) is Apply(g, from, t) onto a memory other than this log's own; Adopt(g, taken, ...) is Adopt with
   // this log's pages watched at the Take.
   struct Taken;
   std::shared_ptr<const Taken> Take(u32 from, u32 t) const;
   static void Apply(Guest& g, const Taken& taken);
+  // The entries taken still stand: none erased or written again since the Take (a RestoreTo to below `from`, a
+  // SaveStep of a step in it run again). Read on the log's own thread only.
+  static bool Stands(const Taken& taken);
   void Adopt(Guest& g, const Taken& other, u32 step, const std::vector<u32>* also = nullptr);
   // The memory as it is now is this log's moment before `step`, a moment of the log's own race (a key of it taken,
   // TakeKey): the entries from `step` on are dropped, and with `keep_below` those below it stay, so a RestoreTo from
