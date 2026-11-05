@@ -278,7 +278,8 @@ struct Rule
   // with O, closed with O running (their row back to the chain), ended alone; O's adoptions clean as far as N
   // carried them; the starts barred, by reason; the workers and usable threads at the last start weighed
   u64 second_starts = 0, second_adopted = 0, second_same_hook = 0, second_stopped = 0, second_back = 0,
-      second_fell = 0, older_through = 0, second_forward_failed = 0;
+      second_fell = 0, older_through = 0, second_forward_failed = 0, second_checked = 0, second_at_stop = 0,
+      second_restarted = 0;
   std::map<std::string, u64> second_barred;
   u32 workers_seen = 0;
   unsigned threads_seen = 0;
@@ -342,24 +343,33 @@ void Outside(u32 region, u32 ram_size, Each&& each)
 }
 }  // namespace
 
-std::string ModeFor(const std::string& key, const char* env, unsigned cores)
+std::string ModeFor(const std::string& key, unsigned cores)
 {
   if (!key.empty())
     return key;
-  if (env != nullptr && (std::string_view(env) == "off" || std::string_view(env) == "on"))
-    return env;
   return cores >= LEAST_CORES ? "on" : "off";
+}
+
+std::string ModeSaid(const std::string& key, unsigned cores)
+{
+  if (!key.empty())
+    return std::format("fzgx: rollback worker: \"{}\" mode, the launch file's test key \"debug.rollbackWorker\" "
+                       "({} hardware threads)", key, cores);
+  if (cores < LEAST_CORES)
+    return std::format("fzgx: rollback worker: off: this PC has {} hardware threads and the worker needs {}; this "
+                       "game's rollbacks run sync on the game's thread", cores, LEAST_CORES);
+  return std::format("fzgx: rollback worker: on ({} hardware threads): deep rollbacks run on the worker, a second "
+                     "worker where the process may use {} threads", cores, pair::LEAST_THREADS);
 }
 
 const std::string& Mode()
 {
-  static const char* const env = std::getenv("FZGX_ROLLBACK_WORKER");
   static const unsigned cores = std::thread::hardware_concurrency();
   thread_local std::string key, mode;  // (the options' mode, and what it gave)
   if (mode.empty() || key != TheOptions().debug.worker_mode)
   {
     key = TheOptions().debug.worker_mode;
-    mode = ModeFor(key, env, cores);
+    mode = ModeFor(key, cores);
   }
   return mode;
 }
@@ -380,15 +390,13 @@ bool Measuring()
   return Threaded() || Mode() == "sync";
 }
 
-// The workers this game runs now (study section 20.2): the launch file's "workers", else FZGX_ROLLBACK_WORKERS, else
-// 2 from 6 usable threads (the adapter's UsableThreads: the hardware's count and the process's affinity, read again at
+// The workers this game runs now (study section 20.2): the test key's "workers", else 2 from 6 usable threads (the adapter's UsableThreads: the hardware's count and the process's affinity, read again at
 // each start, so a pinning after the launch turns the second off).
 u32 Workers()
 {
-  static const char* const env = std::getenv("FZGX_ROLLBACK_WORKERS");
   const unsigned threads = s_usable_threads != nullptr ? s_usable_threads() : std::thread::hardware_concurrency();
   s_r.threads_seen = threads;
-  return s_r.workers_seen = pair::WorkersFor(TheOptions().debug.worker_workers, env, threads);
+  return s_r.workers_seen = pair::WorkersFor(TheOptions().debug.worker_workers, threads);
 }
 
 // S3's "async-check": every adoption is compared word for word with the sync rollback from its R instead.
@@ -1565,6 +1573,7 @@ u32 CheckJob(int k, u32 step)
   }
   CloseJob(k, nullptr);
   ++s_r.moves_adopted[a.moves];
+  s_r.second_checked += a.second;  // (a second job ended here: compared like every other, counted in the S6 line)
   const u32 check_from = SyncFrom(a.from);
   ChainEnds();
   s_r.check_pending = true;
@@ -1786,6 +1795,7 @@ bool WorkerTakes(Session& s, u32 step, u32& wrong)
   }
   if (n >= 0)
     CloseNewer(n, true);
+  s_r.second_restarted += a.second;  // (a second job that became the older one, stopped to start again)
   CloseJob(o, "a correction below the job's start");
   s_r.restart_moves = a.moves + 1;  // (the job that may start from `wrong` now inherits them)
   wrong = std::min(wrong, std::exchange(s_r.owed, NONE));
@@ -2145,7 +2155,10 @@ void WorkerQuiesce()
   for (int k = 0; k < SLOTS; ++k)
   {
     if (s_as[k].open)
+    {
+      s_r.second_at_stop += s_as[k].second;  // (a second job that became the older one, open at the stop)
       CloseJob(k, "the game stopped");
+    }
   }
   s_r.owed = NONE;
   s_r.late_since = ~u64{0};  // (frame_no runs on across races: a stale one would be a delay of the race before)
@@ -2242,11 +2255,12 @@ void WorkerStop()
       bars += std::format(" [{}: {}]", text, n);
     Notice("fzgx: rollback worker S6: the second worker: {} usable threads, workers {} at the last start weighed; "
            "second jobs started {} ({:.0f} us on the game's thread), adopted {} ({} in the older job's hook), stopped "
-           "with the older job {}, closed with it running (the row back to the chain) {}, run sync alone {}, forward "
-           "failed {}; older jobs clean as far as the second carried them {}; starts barred:{}; slot 1 {} jobs "
-           "prepared, a step {:.2f} ms",
+           "with the older job {}, closed with it running (the row back to the chain) {}, run sync alone {}, compared "
+           "in async-check {}, stopped for a correction below it {}, open at the game's stop {}, forward failed {}; older jobs clean as far as the second "
+           "carried them {}; starts barred:{}; slot 1 {} jobs prepared, a step {:.2f} ms",
            r.threads_seen, r.workers_seen, r.second_starts, r.second_start_us, r.second_adopted, r.second_same_hook,
-           r.second_stopped, r.second_back, r.second_fell, r.second_forward_failed, r.older_through,
+           r.second_stopped, r.second_back, r.second_fell, r.second_checked, r.second_restarted, r.second_at_stop,
+           r.second_forward_failed, r.older_through,
            bars.empty() ? std::string(" none") : bars, s_ws[1].jobs, s_as[1].r_ms);
   }
   if (AsyncCheck())

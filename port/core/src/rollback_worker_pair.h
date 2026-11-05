@@ -15,10 +15,10 @@ constexpr u32 NONE = 0xFFFFFFFF;
 // usable hardware threads (study section 20.2)
 constexpr unsigned LEAST_THREADS = 6;
 
-// The workers this game runs (1 or 2): the launch file's "workers" when it names 1 or 2 (`key`, 0: none), else
-// FZGX_ROLLBACK_WORKERS's "1" or "2" (`env`, nullptr when unset; another value is not taken), else 2 from
-// LEAST_THREADS usable threads (`threads`: the hardware's count, and on Windows the process's affinity mask), else 1.
-u32 WorkersFor(u32 key, const char* env, unsigned threads);
+// The workers this game runs (1 or 2): the launch file's test key "workers" when it names 1 or 2 (`key`, 0: none),
+// else 2 from LEAST_THREADS usable threads (`threads`: the hardware's count, and on Windows the process's affinity
+// mask), else 1. (The FZGX_ROLLBACK_WORKERS variable is gone with the old path's retirement, study section 21.)
+u32 WorkersFor(u32 key, unsigned threads);
 
 // What N's start asks of the moment (the game's thread, at the hook): the open job O and the slot N would take.
 struct SecondView

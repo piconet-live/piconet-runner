@@ -90,8 +90,8 @@ struct Debug
   // "trace" mode is refused
   std::string partial_mode;
   // "rollbackWorker": the deep-rollback worker (fzgx/rollback_worker.h): "off", "compare", "check", "sync", "on" or
-  // "async-check", alone or as {"mode", "depth"} (the least depth a job takes, 7 by default); empty (not named): "on"
-  // with at least 4 hardware threads unless FZGX_ROLLBACK_WORKER=off (rollback_worker::ModeFor)
+  // "async-check", alone or as {"mode", "depth"} (the least depth a job takes, 7 by default); tests only. Empty (not
+  // named, every player's start): "on" with at least 4 hardware threads, sync below (rollback_worker::ModeFor)
   std::string worker_mode;
   u32 worker_depth = 7;
   std::string worker_rule = "fit";  // "rule": "fit" (S2: sync when the frame fits) or "always" (tests: every job async)
@@ -117,7 +117,7 @@ struct Debug
                                                    // W's first measured step at or past spikeAt (a spike: section 19)
   u32 worker_from = 422;  // "from": the first step a job may go back to (the countdown's end; tests: earlier)
   // "workers": 1 or 2, the second worker forced off or on (tests; research/study-rollback-second-core.md section 20.2);
-  // 0: FZGX_ROLLBACK_WORKERS's, else 2 from 6 usable hardware threads
+  // 0: 2 from 6 usable hardware threads
   u32 worker_workers = 0;
   std::string worker_start = "changed";  // "start": "changed" (only pages that differ copied into W) or "whole" (S2's)
   std::string partial_log;

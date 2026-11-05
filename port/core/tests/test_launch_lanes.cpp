@@ -56,14 +56,17 @@ void TestThePartialRollbackKeys()
   CHECK(Refused(with(R"({"mode": "check", "depth": 3})"), "\"debug.partialRollback.depth\" is not a setting"));
 }
 
-// "debug.rollbackWorker": the deep-rollback worker (fzgx/rollback_worker.h); not named, the mode stays empty (on by default: ModeFor): a mode
-// alone or {"mode", "depth"}.
+// "debug.rollbackWorker": the deep-rollback worker's test key (fzgx/rollback_worker.h); not named, the mode stays empty
+// (every player's start: on from 4 hardware threads, ModeFor): a mode alone or {"mode", "depth"}.
 void TestTheRollbackWorkerKeys()
 {
   const auto with = [](const std::string& value) { return R"({"about": "x", "debug": {"rollbackWorker": )" + value + "}}"; };
   Options o;
   CHECK(!ParseLaunchFile(R"({"about": "x"})", &o) && o.debug.worker_mode.empty() && o.debug.worker_depth == 7);
-  CHECK(!ParseLaunchFile(with(R"("off")"), &o) && o.debug.worker_mode == "off" && DebugSettingsOn(o.debug).empty());
+  // (tests only since the old path's retirement: "off" is a test setting like every other mode)
+  CHECK(!ParseLaunchFile(with(R"("off")"), &o) && o.debug.worker_mode == "off" &&
+        DebugSettingsOn(o.debug) == std::vector<std::string>{"debug.rollbackWorker"});
+  CHECK(!ParseLaunchFile(R"({"about": "x"})", &o) && DebugSettingsOn(o.debug).empty());
   CHECK(!ParseLaunchFile(with(R"("check")"), &o) && o.debug.worker_mode == "check" &&
         DebugSettingsOn(o.debug) == std::vector<std::string>{"debug.rollbackWorker"});
   CHECK(!ParseLaunchFile(with(R"({"mode": "compare", "depth": 3})"), &o) && o.debug.worker_mode == "compare" &&

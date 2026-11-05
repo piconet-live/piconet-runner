@@ -515,21 +515,24 @@ void TestTheWorkersLogStartsWithTheRace()
   CHECK(host.log.empty() && game_host.log.empty());
 }
 
-// The worker's mode (S3's default): the launch file's when it names one, else FZGX_ROLLBACK_WORKER's "off" or "on",
-// else on from 4 hardware threads.
+// The worker's mode (every player's race since the old path's retirement, study section 21): the launch file's test
+// key when it names one, else on from 4 hardware threads and sync ("off") below; no variable turns it off. The start's
+// line says which and why.
 void TestTheWorkersDefault()
 {
   using fzgx::rollback_worker::ModeFor;
-  CHECK(ModeFor("", nullptr, 16) == "on");
-  CHECK(ModeFor("", nullptr, 4) == "on");
-  CHECK(ModeFor("", nullptr, 3) == "off");
-  CHECK(ModeFor("", nullptr, 0) == "off");  // (hardware_concurrency unknown)
-  CHECK(ModeFor("", "off", 16) == "off");
-  CHECK(ModeFor("", "on", 2) == "on");
-  CHECK(ModeFor("", "yes", 16) == "on" && ModeFor("", "", 2) == "off");  // (another value is not taken)
-  CHECK(ModeFor("off", "on", 16) == "off");
-  CHECK(ModeFor("on", "off", 2) == "on");
-  CHECK(ModeFor("async-check", nullptr, 16) == "async-check");
+  using fzgx::rollback_worker::ModeSaid;
+  CHECK(ModeFor("", 16) == "on");
+  CHECK(ModeFor("", 4) == "on");
+  CHECK(ModeFor("", 3) == "off");
+  CHECK(ModeFor("", 0) == "off");  // (hardware_concurrency unknown)
+  CHECK(ModeFor("off", 16) == "off" && ModeFor("sync", 16) == "sync");  // (the tests' reference)
+  CHECK(ModeFor("on", 2) == "on");
+  CHECK(ModeFor("async-check", 16) == "async-check");
+  CHECK(ModeSaid("", 16).starts_with("fzgx: rollback worker: on (16 hardware threads)"));
+  CHECK(ModeSaid("", 2) == "fzgx: rollback worker: off: this PC has 2 hardware threads and the worker needs 4; this "
+                           "game's rollbacks run sync on the game's thread");
+  CHECK(ModeSaid("sync", 16).find("\"sync\" mode, the launch file's test key") != std::string::npos);
 }
 
 // The words an adoption keeps come from one table (rollback_worker_kept.cpp), held here to the list of the study's
@@ -782,13 +785,11 @@ void TestTheWorkersPair()
   namespace pair = fzgx::rollback_worker::pair;
   using pair::Fate;
   using pair::NONE;
-  // the workers: the launch file's, else FZGX_ROLLBACK_WORKERS's, else 2 from 6 usable threads (an affinity of 4: 1)
-  CHECK(pair::WorkersFor(0, nullptr, 16) == 2 && pair::WorkersFor(0, nullptr, 6) == 2);
-  CHECK(pair::WorkersFor(0, nullptr, 5) == 1 && pair::WorkersFor(0, nullptr, 4) == 1 && pair::WorkersFor(0, nullptr, 0) == 1);
-  CHECK(pair::WorkersFor(0, "1", 16) == 1 && pair::WorkersFor(0, "2", 4) == 2);
-  CHECK(pair::WorkersFor(0, "3", 4) == 1 && pair::WorkersFor(0, "", 16) == 2 && pair::WorkersFor(0, "on", 16) == 2);
-  CHECK(pair::WorkersFor(1, "2", 16) == 1 && pair::WorkersFor(2, "1", 2) == 2);
-  CHECK(pair::WorkersFor(3, nullptr, 2) == 1);  // (another value is not taken)
+  // the workers: the test key's, else 2 from 6 usable threads (an affinity of 4: 1)
+  CHECK(pair::WorkersFor(0, 16) == 2 && pair::WorkersFor(0, 6) == 2);
+  CHECK(pair::WorkersFor(0, 5) == 1 && pair::WorkersFor(0, 4) == 1 && pair::WorkersFor(0, 0) == 1);
+  CHECK(pair::WorkersFor(1, 16) == 1 && pair::WorkersFor(2, 2) == 2);
+  CHECK(pair::WorkersFor(3, 2) == 1 && pair::WorkersFor(3, 16) == 2);  // (another value is not taken)
 
   // N's start: one job O open and begun, its late row c with R < c, O's worker past c, the slot idle, the pace good
   pair::SecondView v;

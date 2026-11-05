@@ -18,10 +18,12 @@
 #include "adapter_internal.h"
 #include "controllers.h"
 #include "fzgx/replay_info.h"
+#include "fzgx/rollback_worker.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <thread>
 
 #include "Common/RunSettings.h"
 
@@ -141,6 +143,9 @@ void ReportSettings()
                                             "to the race's start, End to the newest step buffered, . and , step one "
                                             "frame, [ and ] change the racer (the race view); the mouse held on the "
                                             "bar scrubs, a click jumps");
+  // how this start's deep rollbacks run (study section 21): on the worker, or sync below its thread minimum and why
+  s_core_host.Log(fzgx::LogLevel::Notice, fzgx::rollback_worker::ModeSaid(o.debug.worker_mode,
+                                                                          std::thread::hardware_concurrency()));
   if (o.controller_setup)
     s_core_host.Log(fzgx::LogLevel::Notice, "fzgx: controller setup: this start opens the game's own controller options once "
                                             "the title stands, and closes the game when the player leaves them");

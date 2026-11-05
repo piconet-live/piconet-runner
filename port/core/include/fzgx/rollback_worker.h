@@ -1,8 +1,10 @@
 // The deep-rollback worker, stage S1 (research/study-rollback-second-core.md, sections 1 to 3 and 10): a deep
 // rollback's steps run again by a second CPU context over a private memory W, with a Rollback log of its own, on the
-// game's thread for now (the thread is S2). The mode is the launch file's "debug.rollbackWorker", else
-// FZGX_ROLLBACK_WORKER, else "on" from 4 hardware threads (ModeFor); with it "off" nothing here runs and nothing the
-// game computes changes:
+// game's thread for now (the thread is S2). Every player's race runs "on" from 4 hardware threads, the old sync path
+// retired for players (study section 21): no setting, launch key or variable a player's start has turns it off, and
+// below 4 threads the rollbacks run sync, as the start's log says (ModeSaid). The launch file's test part
+// ("debug.rollbackWorker", tests only) names another mode; with "off" nothing here runs and nothing the game computes
+// changes (the sync path, kept as the tests' reference and as the fall-back for a job the worker gives up):
 //   - "compare": every rollback at least `depth` steps deep (7 by default) is run on W first: at the frame's network
 //     hook, before the restore, W takes the pages of the game's memory either log has seen change since the last job
 //     (Rollback::TakeDirty) and the memory outside the log whole, is rewound to the rollback's step R by the game's
@@ -39,8 +41,8 @@
 // memory, a log, a context and a thread. With one job O open past a row of it that turned out late (c, R < c), a
 // second job N starts on the free slot from c, its base the game's log to R and then O's after-images of R to c - 1
 // (Rollback::Forward, O's worker running on); O is adopted first, N once O is closed; O's end without an adoption
-// stops N. Only where the process may use 6 hardware threads (UsableThreads), or forced by "workers" or
-// FZGX_ROLLBACK_WORKERS; it backs off first on a slow pace. Its line is "rollback worker S6".
+// stops N. Only where the process may use 6 hardware threads (UsableThreads), or forced by the test key's "workers";
+// it backs off first on a slow pace. Its line is "rollback worker S6".
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -51,12 +53,15 @@
 
 namespace fzgx::rollback_worker
 {
-// The worker's mode: the launch file's "debug.rollbackWorker" when it names one; else FZGX_ROLLBACK_WORKER ("off" or
-// "on"; another value is not taken); else "on" with at least 4 hardware threads and "off" below (S3, the default
-// since 4 November 2026: the study's section 13). `key` the launch file's mode ("" when it names none), `env` the
-// variable (nullptr when unset), `cores` std::thread::hardware_concurrency().
-std::string ModeFor(const std::string& key, const char* env, unsigned cores);
-// This game's: ModeFor of its options, its environment and its machine.
+// The worker's mode: the launch file's "debug.rollbackWorker" when it names one (tests only: "off" and "sync" run the
+// sync path, the reference); else "on" with at least 4 hardware threads and "off" below (every player's race since
+// the old path's retirement, study section 21; the FZGX_ROLLBACK_WORKER variable that could turn it off is gone).
+// `key` the launch file's mode ("" when it names none), `cores` std::thread::hardware_concurrency().
+std::string ModeFor(const std::string& key, unsigned cores);
+// The start's log line on the mode (the runner's ReportSettings): what ModeFor gives and why; below the thread minimum
+// it says the PC's count and that rollbacks run sync.
+std::string ModeSaid(const std::string& key, unsigned cores);
+// This game's: ModeFor of its options and its machine.
 const std::string& Mode();
 // The switch is on (compare, check, sync or on).
 bool On();

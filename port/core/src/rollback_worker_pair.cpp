@@ -3,16 +3,12 @@
 
 #include "rollback_worker_pair.h"
 
-#include <string_view>
-
 namespace fzgx::rollback_worker::pair
 {
-u32 WorkersFor(u32 key, const char* env, unsigned threads)
+u32 WorkersFor(u32 key, unsigned threads)
 {
   if (key == 1 || key == 2)
     return key;
-  if (env != nullptr && (std::string_view(env) == "1" || std::string_view(env) == "2"))
-    return env[0] == '1' ? 1 : 2;
   return threads >= LEAST_THREADS ? 2 : 1;
 }
 
