@@ -62,6 +62,7 @@ Verdict Pace::Watch(const Now& now, std::vector<float>& window)
   }
   window.clear();
   const u64 at_start = std::exchange(window_behind, now.behind);
+  last_behind = now.behind - at_start;
   window_barred = now.barred_late;
   window_at = now.s;
   rate_high = std::max(rate_high, step_ms);

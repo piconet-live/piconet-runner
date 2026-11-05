@@ -7,6 +7,7 @@
 #include "rollback_worker_guard.h"
 #include "rollback_worker_kept.h"
 #include "rollback_worker_pace.h"
+#include "rollback_worker_pair.h"
 #include "undo_log.h"
 
 namespace
@@ -769,4 +770,106 @@ void TestTheWorkersPace()
   t += pace::WINDOW_S + 0.01;
   now.s = t;
   CHECK(q.Watch(now, window) == Verdict::NONE && window.empty());
+}
+
+// The two workers' rules (study section 20.2 to 20.4, rollback_worker_pair.cpp): how many workers a PC runs; when N
+// starts from O's log; the order of the adoptions (O first, N only once O is closed); the cascade (O's end without an
+// adoption stops N; N's end with O open sends its row back to the chain, with O adopted it runs sync alone); O clean as
+// far as N carries it; a step owed returned only when no job is left open.
+void TestTheWorkersPair()
+{
+  BEGIN_TEST();
+  namespace pair = fzgx::rollback_worker::pair;
+  using pair::Fate;
+  using pair::NONE;
+  // the workers: the launch file's, else FZGX_ROLLBACK_WORKERS's, else 2 from 6 usable threads (an affinity of 4: 1)
+  CHECK(pair::WorkersFor(0, nullptr, 16) == 2 && pair::WorkersFor(0, nullptr, 6) == 2);
+  CHECK(pair::WorkersFor(0, nullptr, 5) == 1 && pair::WorkersFor(0, nullptr, 4) == 1 && pair::WorkersFor(0, nullptr, 0) == 1);
+  CHECK(pair::WorkersFor(0, "1", 16) == 1 && pair::WorkersFor(0, "2", 4) == 2);
+  CHECK(pair::WorkersFor(0, "3", 4) == 1 && pair::WorkersFor(0, "", 16) == 2 && pair::WorkersFor(0, "on", 16) == 2);
+  CHECK(pair::WorkersFor(1, "2", 16) == 1 && pair::WorkersFor(2, "1", 2) == 2);
+  CHECK(pair::WorkersFor(3, nullptr, 2) == 1);  // (another value is not taken)
+
+  // N's start: one job O open and begun, its late row c with R < c, O's worker past c, the slot idle, the pace good
+  pair::SecondView v;
+  v.workers = 2;
+  v.older_open = true;
+  v.slot_idle = true;
+  v.after_images = true;
+  v.from = 500;
+  v.late = 505;
+  v.at = 509;
+  v.taken = 510;
+  v.window_ms = 2.5;
+  v.slow_us = 6000;
+  CHECK(pair::SecondBar(v) == nullptr);
+  const auto barred = [&](auto change) {
+    pair::SecondView x = v;
+    change(x);
+    return pair::SecondBar(x) != nullptr;
+  };
+  CHECK(barred([](pair::SecondView& x) { x.workers = 1; }));            // fewer than 6 usable threads
+  CHECK(barred([](pair::SecondView& x) { x.older_open = false; }));     // no job, or it ended
+  CHECK(barred([](pair::SecondView& x) { x.newer_open = true; }));      // never three timelines at once
+  CHECK(barred([](pair::SecondView& x) { x.late = NONE; }));            // no late row
+  CHECK(barred([](pair::SecondView& x) { x.late = 500; }));             // c must be past R
+  CHECK(barred([](pair::SecondView& x) { x.late = 510; }));             // O's worker has not saved step c
+  CHECK(barred([](pair::SecondView& x) { x.taken = 505; }));
+  CHECK(!barred([](pair::SecondView& x) { x.late = 509; }));            // (c at the step O's worker stands at)
+  CHECK(barred([](pair::SecondView& x) { x.older_below = true; }));     // O's own base is stale
+  CHECK(barred([](pair::SecondView& x) { x.after_images = false; }));
+  CHECK(barred([](pair::SecondView& x) { x.slot_idle = false; }));      // never a wait for a running worker
+  CHECK(barred([](pair::SecondView& x) { x.window_ms = 6.0; }));        // the pace: W2 backs off first
+  CHECK(!barred([](pair::SecondView& x) { x.window_ms = 5.9; }));
+  CHECK(!barred([](pair::SecondView& x) { x.window_ms = 9; x.slow_us = 0; }));  // ("slowStepUs" 0: no pace bar)
+  CHECK(barred([](pair::SecondView& x) { x.window_barred = true; }));   // W's estimate barred its starts
+  CHECK(barred([](pair::SecondView& x) { x.window_behind = 1; }));      // a catch-up in the last window
+
+  // the order and the cascade
+  const pair::JobView none{}, runs{true, false, false}, ends{true, true, false}, ready{true, false, true};
+  const auto order = [](pair::JobView o, pair::JobView n, Fate fo, Fate fn) {
+    const pair::Plan p = pair::Order(o, n);
+    return p.older == fo && p.newer == fn;
+  };
+  CHECK(order(none, none, Fate::NONE, Fate::NONE));
+  CHECK(order(runs, none, Fate::RUNS, Fate::NONE));
+  CHECK(order(ready, none, Fate::ADOPT, Fate::NONE));
+  CHECK(order(ends, none, Fate::FALL, Fate::NONE));
+  // O first: N parked first waits; N adopted in O's hook only after O's
+  CHECK(order(runs, ready, Fate::RUNS, Fate::RUNS));
+  CHECK(order(ready, ready, Fate::ADOPT, Fate::ADOPT));
+  CHECK(order(ready, runs, Fate::ADOPT, Fate::RUNS));
+  // O's end without an adoption stops N (its base is O's), however N stands
+  CHECK(order(ends, runs, Fate::FALL, Fate::STOP));
+  CHECK(order(ends, ready, Fate::FALL, Fate::STOP));
+  CHECK(order(ends, ends, Fate::FALL, Fate::STOP));
+  // N's end: with O open its row goes back to the chain; with O adopted it is the single job's sync from its R
+  CHECK(order(runs, ends, Fate::RUNS, Fate::BACK));
+  CHECK(order(ready, ends, Fate::ADOPT, Fate::FALL));
+
+  // O clean as far as N carries it: its stale rows all at or above c, nothing below its R
+  CHECK(pair::CleanThroughNewer(NONE, 505, false));
+  CHECK(pair::CleanThroughNewer(505, 505, false) && pair::CleanThroughNewer(507, 505, false));
+  CHECK(!pair::CleanThroughNewer(504, 505, false));
+  CHECK(!pair::CleanThroughNewer(507, 505, true));
+
+  // owed: returned only when no job is left open after the frame's adoptions
+  CHECK(pair::OwedNow(503, false) == 503);
+  CHECK(pair::OwedNow(503, true) == NONE);
+  CHECK(pair::OwedNow(NONE, false) == NONE);
+
+  // the pace's catch-ups in the last window that ended (W2's bar): one in it, then none in the next
+  namespace pace = fzgx::rollback_worker::pace;
+  pace::Pace p;
+  std::vector<float> window;
+  pace::Now now;
+  now.limit_us = 6000;
+  CHECK(p.Watch(now, window) == pace::Verdict::NONE);
+  now.s = pace::WINDOW_S + 0.01;
+  now.behind = 1;
+  window.assign(pace::WINDOW, 3.0f);
+  CHECK(p.Watch(now, window) == pace::Verdict::NONE && p.last_behind == 1 && p.step_ms == 3);
+  now.s += pace::WINDOW_S + 0.01;
+  window.assign(pace::WINDOW, 3.0f);
+  CHECK(p.Watch(now, window) == pace::Verdict::NONE && p.last_behind == 0);
 }

@@ -52,6 +52,8 @@ struct Pace
   double step_ms = 0;    // the last window's step (for a SWITCH's line)
   std::size_t step_n = 0;  // its steps (0: a barred window, the estimate's)
   bool new_race = false;   // (a RETRY's: a new race, not the time)
+  u64 last_behind = 0;     // catch-ups (and starts barred late) in the last window that ended (the second worker's
+                           // bar, study section 20.2)
 
   // At every frame. `window`: the worker's step times since the window's start (the caller holds the mutex that
   // guards it), emptied when a window ends. A window ends after WINDOW_S with WINDOW steps (their median is W's
