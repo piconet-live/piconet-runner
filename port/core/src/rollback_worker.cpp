@@ -482,7 +482,7 @@ bool Begin(int slot, Memory* memory)
     // further steps kept high; N's ring holds O's rows from O's R to N's c (study section 20.1)
     const auto start = std::chrono::steady_clock::now();
     // (W's words of this hook are written on its thread, after its base: TakeBase, study section 22)
-    a.base_window = Data().Snapshot();
+    Data().SnapshotInto(&a.base_window);
     {
       const std::lock_guard lock(a.m);
       a.ran.clear();
@@ -1050,7 +1050,7 @@ std::size_t TakeTheGame(Guest& g, Session& s, u32 step, u32 run_from, int slot, 
     if (host.Scratch() != nullptr)
       std::memcpy(x.memory->cache.data(), host.Scratch(), host.ScratchSize());
     if (deferred)
-      s_as[slot].base_window_taken = Data().Snapshot();  // (restored into W's window on its thread, TakeBase)
+      Data().SnapshotInto(&s_as[slot].base_window_taken);  // (restored into W's window on its thread, TakeBase)
     else
       x.window.Restore(Data().Snapshot());
   }
