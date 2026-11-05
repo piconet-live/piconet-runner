@@ -619,7 +619,10 @@ void RunRollbackWorker(CPUState* cpu)
     }
     if (x.memory.threaded)
     {
+      const auto start = std::chrono::steady_clock::now();
       StartThreaded(slot, cpu);
+      rw::Count("both: StartThreaded (tenths of us)",
+                static_cast<u64>(std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() * 10));
       continue;
     }
     if (slot != 0)

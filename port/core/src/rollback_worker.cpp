@@ -299,15 +299,26 @@ enum Kind
 const char* const KIND_NAMES[Rule::KINDS] = {"plain", "shallow", "deep sync", "job start", "job open", "adoption"};
 void (*s_forget)(u32 step) = nullptr;
 
-// A part of a job's cost on the game's thread, summed in microseconds for the last line.
+// A part of a job's cost on the game's thread, summed in microseconds for the last line, under the kind of start it
+// belongs to (s_phase: "S2 " a job's start, "N " a second job's, "A " an adoption; "" S1's and the rest).
+const char* s_phase = "";
+struct TimedPhase
+{
+  const char* before;
+  explicit TimedPhase(const char* now) : before(std::exchange(s_phase, now)) {}
+  ~TimedPhase() { s_phase = before; }
+};
 struct Timed
 {
   const char* what;
   std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
   ~Timed()
   {
-    w.counts[what] += static_cast<u64>(
-        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
+    const auto us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
+    if (*s_phase == 0)
+      w.counts[what] += static_cast<u64>(us);
+    else
+      w.counts[std::string(s_phase) + what] += static_cast<u64>(us * 10);  // (tenths of a microsecond)
   }
 };
 
@@ -487,7 +498,9 @@ bool Begin(int slot, Memory* memory)
     memory->cache = x.memory->cache.data();
     memory->cache_size = static_cast<u32>(x.memory->cache.size());
     memory->threaded = true;
-    s_r.begin_us += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
+    const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
+    s_r.begin_us += us;
+    w.counts[a.second ? "N begin (Begin)" : "S2 begin (Begin)"] += static_cast<u64>(us * 10);
     return true;
   }
   if (slot != 0 || w.job != Job::READY)
@@ -1640,11 +1653,21 @@ void AdoptJob(int k, Guest& g, Session& s, u32 step, bool clean, bool through)
   Worker& x = s_ws[k];
   const u32 from = a.from;
   const auto start = std::chrono::steady_clock::now();
+  const TimedPhase phase{"A "};
+  ++w.counts["A adoptions"];
   Guest& gw = *x.g;
-  const std::vector<u32> keep = KeptWords(g, gw, k);
+  std::vector<u32> keep;
+  {
+    const Timed timed{"kept words"};
+    keep = KeptWords(g, gw, k);
+  }
   {
     const std::lock_guard lock(a.m);  // (the worker waits at A's hook)
-    s.rollback.TakeOver(g, x.log, gw, from, step, &keep);
+    {
+      const Timed timed{"TakeOver"};
+      s.rollback.TakeOver(g, x.log, gw, from, step, &keep);
+    }
+    const Timed timed{"trace, used rows and forget"};
     mode::TraceJob(true, k);  // (U4: W's mode trace lines are the adopted runs: written now, in order)
     for (u32 t = from; t < step; ++t)
     {
@@ -1980,12 +2003,18 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   s_r.slow += r >= FIELD_MS - MARGIN_MS;
   WaitIdle(k);
   const auto start = std::chrono::steady_clock::now();  // (after the wait, which idle_us counts)
+  const TimedPhase phase{"S2 "};
+  ++w.counts["S2 starts"];
   PrepareMemory(g, s, step, wrong, k);
-  guard::TakeGeneration(k);  // (U1: the CPU core's code tables as the job starts)
-  mode::TraceJob(false, k);  // (U4: W's mode trace lines are this job's from here)
+  {
+    const Timed timed{"start: tables and trace"};
+    guard::TakeGeneration(k);  // (U1: the CPU core's code tables as the job starts)
+    mode::TraceJob(false, k);  // (U4: W's mode trace lines are this job's from here)
+  }
   s_older = k;
   Async& a = s_as[k];
   {
+    const Timed timed{"start: the job's words"};
     const std::lock_guard lock(a.m);
     a.from = wrong;
     a.target = wrong;
@@ -2108,6 +2137,8 @@ void StartSecond(Guest& g, Session& s, u32 step)
   }
   a.second_tried = true;
   const auto start = std::chrono::steady_clock::now();
+  const TimedPhase phase{"N "};
+  ++w.counts["N starts"];
   Worker& x = s_ws[n];
   // the game's memory rewound to O's R, then O's after-images of R to c - 1 and its rows of those steps (O's worker
   // goes on: its steps below c and their after-images stand, under its log's mutex and O's)
@@ -2116,6 +2147,7 @@ void StartSecond(Guest& g, Session& s, u32 step)
   std::vector<net::Row> base;
   bool ok;
   {
+    const Timed timed{"start: O's rows, sums and Forward"};
     const std::lock_guard lock(a.m);
     ok = !a.ended && a.at >= c && a.ran.size() >= c - a.from;
     if (ok)
@@ -2133,17 +2165,25 @@ void StartSecond(Guest& g, Session& s, u32 step)
     return;  // (N's memory is the game's at R: the pages either log names later take it again)
   }
   {
+    const Timed timed{"start: pending pages"};
     // (the pages Forward wrote differ from the game's: the slot's next start takes them again)
     std::vector<u32> both;
     std::set_union(x.pending.begin(), x.pending.end(), pages.begin(), pages.end(), std::back_inserter(both));
     x.pending = std::move(both);
   }
-  x.keeps_after = true;  // (a third job may start from N's log once O is adopted)
-  x.log.KeepAfter(true);
-  x.log.Adopt(*x.g, s.rollback, c, &pages);
-  guard::TakeGeneration(n);
-  mode::TraceJob(false, n);
   {
+    const Timed timed{"start: Adopt"};
+    x.keeps_after = true;  // (a third job may start from N's log once O is adopted)
+    x.log.KeepAfter(true);
+    x.log.Adopt(*x.g, s.rollback, c, &pages);
+  }
+  {
+    const Timed timed{"start: tables and trace"};
+    guard::TakeGeneration(n);
+    mode::TraceJob(false, n);
+  }
+  {
+    const Timed timed{"start: the job's words"};
     const std::lock_guard lock(b.m);
     b.from = c;
     b.target = c;
@@ -2181,7 +2221,10 @@ void StartSecond(Guest& g, Session& s, u32 step)
   s_r.d_sum += step - c;
   s_r.second_start_us += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
   // the rows of N's steps to the next frame's hook, as O's were published in this hook
-  PublishRows(n, s, std::max(a.target, c + 1));
+  {
+    const Timed timed{"start: rows published (after the start's sum)"};
+    PublishRows(n, s, std::max(a.target, c + 1));
+  }
   if (s_r.second_starts <= 3)
     Notice("fzgx: rollback worker S6: the second worker's job {} (slot {}) from {} at {} (depth {}), its base the job "
            "from {}'s state there ({} pages forward; {} usable threads, workers {})",
