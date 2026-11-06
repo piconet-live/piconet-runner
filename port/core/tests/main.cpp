@@ -10,6 +10,8 @@
 #include <thread>
 #include <unistd.h>
 
+// test_alerts.cpp
+void TestAlerts();
 // test_hfr.cpp
 void TestTheRefreshesBetweenTwoSteps();
 void TestTheClassicHudMoves();
@@ -484,6 +486,7 @@ int main(int argc, char** argv)
     return SaveOptionsOf(argv[2]);
   TestGuestMemory();
   TestHelpers();
+  TestAlerts();
   TestTheUndoLogAndItsGuard();
   TestAnotherThreadsWriteUnderRollback();
   TestTheLockedCacheInTheUndoLog();
