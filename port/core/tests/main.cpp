@@ -226,7 +226,7 @@ void TestWaitsRunInTheBlock();
 void TestTheLanguageVectorRuns();
 void TestGameStartComesFirst();
 void TestTheRaceWordsRun();
-void TestStartTogetherKeepsEveryPairApart();
+void TestStartGapZeroKeepsEveryPairApart();
 void TestTheKnockoutEndsWithItsPlaces();
 void TestARaceThatWaitsRanksTheOut();
 void TestTheLivesLibraryRuns();
@@ -614,7 +614,7 @@ int main(int argc, char** argv)
   TestTheLanguageVectorRuns();
   TestGameStartComesFirst();
   TestTheRaceWordsRun();
-  TestStartTogetherKeepsEveryPairApart();
+  TestStartGapZeroKeepsEveryPairApart();
   TestTheKnockoutEndsWithItsPlaces();
   TestARaceThatWaitsRanksTheOut();
   TestTheLobbysRestoreStaysOut();

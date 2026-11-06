@@ -117,6 +117,7 @@ constexpr u32 StatBaseAt(u32 seat, u32 i)
                          : STATS_TWO + seat * STAT_TWO + STAT_TWO_BASE + 4 * (i - STATS_FIRST);
 }
 constexpr float MOST_SPEED = 9000.0f;
+constexpr float MOST_START_GAP = 10000.0f;  // start_gap's metres at most (modes.toml)
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
               WAIT_RECORDS + modes::WAITS * WAIT <= 4 * PAGE && 4 * modes::TEAM_WORDS == 0x80 &&
@@ -224,7 +225,11 @@ struct Package
   bool time_gaps = false;              // the compiler's: a rule reads a time gap: the block's gap page is kept (mode_gap.h)
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
-  bool start_together = false;      // start_together: every machine on slot 0, every no-contact row on from before step 0
+  // start_gap: the metres between the grid's slots round the lap (0: every machine on slot 0's spot, every no-contact row
+  // on from before step 0); start_gap_even: the lap shared out among the machines (the image divides at the grid).
+  // Neither: the game's own grid.
+  std::optional<float> start_gap;
+  bool start_gap_even = false;
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
   bool cpus_allowed = false;        // `cpus on`: a player gone is driven by the AI; left out, their seat retires
   bool solo = false, pause = false, save_state = false;

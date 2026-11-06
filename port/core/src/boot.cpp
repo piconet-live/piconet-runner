@@ -9,6 +9,7 @@
 #include "fzgx/runahead.h"
 #include "mode_hud.h"
 
+#include <bit>
 #include <cstring>
 #include <string_view>
 
@@ -286,6 +287,9 @@ void Prepare(ModData& data)
     data.Write(layout::MODES + 4, 0, 4);
     data.Write(layout::MODE_HUD, m->game_mode ? mode::hud::WindowFlags(*m->game_mode) : 0, 4);
     data.Write(layout::MODE_HUD + 8, 0, 4);  // (the story's pictures not loaded yet: sites_modehud.py mode_story)
+    // start_gap's metres for the grid (sites_grid.py grid_spread); 0.0 with even or no gap
+    data.Write(layout::MODE_HUD + mode::hud::WINDOW_START_GAP,
+               m->game_mode && m->game_mode->start_gap ? std::bit_cast<u32>(*m->game_mode->start_gap) : 0, 4);
     {
       std::array<u8, mode::hud::WINDOW_TITLE_SIZE> title{};
       if (m->game_mode)

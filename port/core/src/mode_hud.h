@@ -76,13 +76,16 @@ constexpr u8 COLOURED = modes::LOOK_COUNT;
 static_assert(WINDOW_TINTS + 30 * 4 <= 0x100);
 // ROLLING: rolling_start: the machines' tasks run from the countdown's first step (the site at main.rel 0x34988).
 constexpr u32 POINTS_PAGE = 1, STORY_PICTURES = 2, POINTS_ONLY = 4, ROLLING = 8;
-// TOGETHER: start_together: the grid's placing puts every machine on slot 0 (sites_grid.py grid_place).
-constexpr u32 TOGETHER = 32;
+// SAME_SPOT: start_gap 0: the grid's placing puts every machine on slot 0 (sites_grid.py grid_place).
+constexpr u32 SAME_SPOT = 32;
 // GHOST_TASK: the code asks the look ghost or GHOST_GAP: the race's set-up makes the ghost task (sites_ghostdraw.py ghost_make).
 constexpr u32 GHOST_TASK = 64;
 // (128 was HUD_MODERN, the retired `hud modern`'s: unused.)
 // HUD_CLEAN: `hud clean`: the core's own (clean_picture.cpp: no CHECK sign, no name tags); no site reads it.
 constexpr u32 HUD_CLEAN = 256;
+// SPREAD: start_gap above 0 or even: after the game places each slot, the story's own mid-course placement moves it round
+// the lap by the gap word (WINDOW_START_GAP) (sites_grid.py grid_spread).
+constexpr u32 SPREAD = 512;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
@@ -109,11 +112,15 @@ constexpr u32 WINDOW_GHOSTS = 0x180;
 // lap length x laps - distance, the metres again. +0x27C: OBJECTS's of + 1 (0: the course's own count) and +0x280 of - n,
 // what the image's sites give the drawer's two count calls (sites_modehud.py mode_objects).
 constexpr u32 WINDOW_DISTANCE = 0x270, WINDOW_OBJECTS = 0x27C;
+// +0x290: under SPREAD, the gap between slots, binary32 metres; 0.0: even (the lap length over the machines). Written at
+// the boot, read at the race's set-up (sites_grid.py grid_spread).
+constexpr u32 WINDOW_START_GAP = 0x290;
 constexpr u32 STANDIN_P = WINDOW_DISTANCE - 0xF8, STANDIN_R = WINDOW_DISTANCE + 8 - 4;
 static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WINDOW_TAG_TEXTS &&
               WINDOW_TAG_TEXTS + modes::TAG_TEXTS * WINDOW_TAG_TEXT <= WINDOW_GHOSTS &&
               WINDOW_GHOSTS + 30 * 8 <= WINDOW_DISTANCE && WINDOW_DISTANCE + 12 <= WINDOW_OBJECTS &&
-              WINDOW_OBJECTS + 8 <= 0x700);  // (0x700: RACE, the next in the window)
+              WINDOW_OBJECTS + 8 <= WINDOW_START_GAP && WINDOW_START_GAP + 4 <= 0x300 &&
+              WINDOW_OBJECTS + 8 <= 0x700);  // (0x300: hud_move.cpp's word)  // (0x700: RACE, the next in the window)
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
 // modes::PART_*: LEADER_GAP the gap popup's own bit (fn_1_15EFEC's test, GAP_PART below), which needs no story picture; the drawers fn_1_CF5B0 (TIMER), fn_1_CDC8C (DISTANCE, SPEED_GAUGE, OBJECTS) and fn_1_CEB38 (the

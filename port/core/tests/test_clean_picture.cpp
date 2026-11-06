@@ -54,8 +54,8 @@ void TestTheCleanPicture()
   // the word: the clean vector's package says it, and its window flags have HUD_CLEAN; a mode without it has not
   const std::optional<mode::Package> clean = Vector("clean.mode.json");
   CHECK(clean.has_value() && clean->hud_clean && (hud::WindowFlags(*clean) & hud::HUD_CLEAN) != 0);
-  const std::optional<mode::Package> together = Vector("together.mode.json");
-  CHECK(together.has_value() && !together->hud_clean && (hud::WindowFlags(*together) & hud::HUD_CLEAN) == 0);
+  const std::optional<mode::Package> same = Vector("gap_same.mode.json");
+  CHECK(same.has_value() && !same->hud_clean && (hud::WindowFlags(*same) & hud::HUD_CLEAN) == 0);
 
   TestHost host;
   ModData data;
@@ -63,7 +63,7 @@ void TestTheCleanPicture()
   Init(host, Options{});
   // off (a mode's other flags, no HUD_CLEAN): nothing is written
   Shown(g);
-  g.Write32(layout::MODE_HUD + hud::WINDOW_FLAGS, hud::TOGETHER | hud::GHOST_TASK);
+  g.Write32(layout::MODE_HUD + hud::WINDOW_FLAGS, hud::SAME_SPOT | hud::GHOST_TASK);
   clean_picture::Frame(g);
   CHECK(g.Read32(game::CHECK_GAP_AT) == std::bit_cast<u32>(-10.0f) && g.Read8(boot::NAMES) == 'A' &&
         g.Read8(layout::MODE_HUD + hud::WINDOW_TAGS) == 3 && g.Read32(layout::MODE_HUD + hud::WINDOW_RANK) == 0);
