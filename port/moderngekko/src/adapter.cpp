@@ -368,6 +368,7 @@ void NativeField()
   StartWatches();
   fzgx::board::Field();  // the launcher's status board: a plain start's heartbeat, the phase, the mailbox
   fzgx::EnsurePatched();
+  fzgx::PlainField();  // a plain start (offline play): the launcher's picture settings, as a race has them (core.h)
   FollowScreenOption();
   fzgx::ControllerSetupTick();
   PanelField();  // the load's progress, and the panel's meter moving (panel.cpp)
@@ -421,10 +422,11 @@ void BeforeBoot(StaticRecompModuleSource& source)
       ApplyRaceSettings();
     else
       ShowPicture(false);  // a plain start: the logos are 4:3 pictures; the game's own option takes over
-    // Every picture: the patch list again if a saved state brought stock words back; the picture's shape; and in a
-    // plain start whose launch file asks for the game's controller options, the watch that opens them and stops
-    // the game when the player leaves them (a plain start has no frame tick: its mode word is 0, and the mode
-    // machine's routine then makes no host call). The frame tick itself is the host call from the mode machine's
+    // Every picture: the patch list again if a saved state brought stock words back; in a plain start the launcher's
+    // picture settings (fzgx::PlainField); the picture's shape; and in a plain start whose launch file asks for the
+    // game's controller options, the watch that opens them and stops the game when the player leaves them (a plain
+    // start has no frame tick of its own: its mode word is 0, and the mode machine's routine then makes the host call
+    // only with PLAIN_DRAW set, for high refresh). The frame tick itself is the host call from the mode machine's
     // routine, once a game frame on the main thread.
     hooks.frame = [](const Core::CPUThreadGuard&) { NativeField(); };
     char text[200];

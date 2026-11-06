@@ -434,6 +434,11 @@ bool LoadField();
 // Every picture of a plain start: with Options::controller_setup, the watch that opens the game's own controller
 // options and stops the game when the player leaves them (options_screen.cpp). One test of a flag without it.
 void ControllerSetupTick();
+// Every field of a plain start (offline play) in the native form, on the game's thread, before the picture follows the
+// screen option: the launcher's settings a race applies, for the picture only (boot.cpp PlainField: the game's screen
+// option, true widescreen, PLAIN_DRAW for high refresh), where the game stands for the renderer (Host::Scene), and the
+// player's pad for the launcher's Inputs window. Nothing in a race or a replay (FrameTick does it there).
+void PlainField();
 // The game's own screen option as the game holds it now (Options, Screen Mode: from the player's save, or from a
 // race's set-up): true for Wide Screen, false for Normal. No value while the game has not loaded main.rel, or holds
 // something else there. The picture's shape follows it. Needs Init; reads only.

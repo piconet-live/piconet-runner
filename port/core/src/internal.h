@@ -38,6 +38,9 @@ const std::vector<Patch>& Patches();
 void Prepare(ModData& data);
 PatchReport ApplyPatches(Guest& g);
 void OnFrame(Guest& g);
+// A plain start's own words, every field: the game's screen option and true widescreen's word from the launch file, and
+// PLAIN_DRAW (high refresh's frame tick and drawing asks). The picture only.
+void PlainField(Guest& g);
 // main.rel's header as the game holds it now: the head of the system's module list when that is main.rel (by its
 // module number) with its data in main memory after it; 0 while none is linked, or another module is at the head.
 u32 MainRel(const Guest& g);
@@ -86,8 +89,9 @@ void StepsDone(Guest& g);
 // Our course map (minimap_frame.cpp), at every game frame of a race or replay start.
 void MinimapFrame(Guest& g);
 // "Show inputs" (minimap_frame.cpp), once a game frame: the local pad onto the status board (the launcher's Inputs
-// window); nothing without a board. Reads only: nothing a step uses.
-void InputsFrame(Guest& g);
+// window); nothing without a board. Reads only: nothing a step uses. `plain`: a plain start's (offline play), from
+// every field (core.cpp PlainField): port 1's pad as the game reads it, in every mode, the menus too.
+void InputsFrame(Guest& g, bool plain = false);
 // The racer this game's picture follows (the spectator controls', the image's own spectating, else the stand-in
 // seat), and the seat whose driver this game's player is: none (-1) for a spectator, a watcher, a replay, or a racer
 // the image spectates for (minimap_frame.cpp; the game mode's displays, mode_hud.cpp).

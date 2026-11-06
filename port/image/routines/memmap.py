@@ -235,6 +235,9 @@ DRAW_SKIP = _facts.DRAW_SKIP     # the host's, written when the image asks: not 
 TRUE_ASPECT = _facts.TRUE_ASPECT  # the host's, for the picture only (sites_view.py): 0, the game's own Wide Screen; a
                                  # float's bits, true widescreen at that aspect (the launcher's: 16/9): the race view
                                  # keeps Normal's whole vertical view, and the aspect getter gives this aspect
+PLAIN_DRAW = _facts.PLAIN_DRAW    # the host's, in a plain start only (offline play), for the picture only: not 0, the
+                                 # frame tick (sites.py mode_machine) and the two DRAW_ASK stores (sites_present.py) are
+                                 # made as in a race, for high refresh's pictures between; nothing else of a race is on
 # The spectator's choices (frame_spectate.py) and the racing view's scratch (raceview.py). The image's own, for the
 # picture only: no rollback puts them back, the checksum does not cover them, and the race's tasks read none.
 # `speccontrols` writes the choices once a displayed frame, on entry, from this game's pad; `specstep` writes them
@@ -293,8 +296,8 @@ assert FINISH_COUNT + 4 == RESULTS_KEEP and RESULTS_CAMERA + 4 == DRAW_ASK and D
 # them back, the checksum does not cover them; the step wrapper writes both before every step of a race.
 SIM_GENERATOR = _facts.SIM_GENERATOR              # the word the race's draws step (seeded before every step)
 SIM_GENERATOR_SHIFT = _facts.SIM_GENERATOR_SHIFT  # 0 (the draws take 0x801A63C0) or SIM_GENERATOR - 0x801A63C0
-assert TRUE_ASPECT + 4 <= SIM_GENERATOR and SIM_GENERATOR + 4 == SIM_GENERATOR_SHIFT
-assert SIM_GENERATOR_SHIFT + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
+assert TRUE_ASPECT + 4 <= SIM_GENERATOR and SIM_GENERATOR + 4 == SIM_GENERATOR_SHIFT and SIM_GENERATOR_SHIFT + 4 == PLAIN_DRAW
+assert PLAIN_DRAW + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
 hi = lambda a: (a >> 16) & 0xFFFF
 lo = lambda a: a & 0xFFFF
 # A story stage's name (the core writes it, port/core/src/boot.cpp; the protocol's courses.toml): the course intro's

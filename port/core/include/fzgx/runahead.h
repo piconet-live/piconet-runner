@@ -58,6 +58,9 @@ struct RedrawRequest
 void Start(std::function<void(float fraction)> between, std::function<void(u32 step)> ran,
            std::function<void(const RedrawRequest&)> redraw, std::function<u64()> written);
 bool On();
+// A plain start (offline play) may have pictures between: on, without a step ahead, with the renderer's redraw. The core
+// then sets the image's PLAIN_DRAW (boot.cpp PlainField), and the frame tick and DRAW_ASK come as in a race.
+bool PlainDraw();
 // The frame tick, after the core's own: true when pictures between will be made this pass (Next gives the calls).
 bool Begin();
 // The next call; `returned` the last call's r3. False: this pass's work is done.

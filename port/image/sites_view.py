@@ -26,7 +26,10 @@ float's bits: true widescreen at that aspect. Two sites:
   so the aspect is a parameter of the race view and not the game's 16:9 constant. The launcher writes 16/9, the
   getter's own value to the bit, so at 16:9 nothing that reads the aspect sees another number. The routine uses
   r0, r12 and CR field 0, dead after the site (0xA7014 loads r0 and returns).
-In a plain start (mode word 0) both do what the game does, whatever the word holds."""
+The word alone decides, in a race or a playback and in a plain start (offline play) alike: the host writes it in
+both, from the launch file's trueWidescreen, and 0 (every site as the game) wherever the option is off; in a plain
+start only while the game's screen option is Wide Screen (port/core/src/boot.cpp PlainField). `test` (the mode
+word's) is not used here since 2026-11-06."""
 import memmap
 
 VIEW_SITE = (0x61F4, 0xEF390032)       # fn_1_5948: `fmuls f25, f25, f0`, fovy times 0.8660254
@@ -41,8 +44,7 @@ def add(k, r, patch, stock, test, middle, complete):
     TEXT, C = k.TEXT, k.C
     site = TEXT + VIEW_SITE[0]
     word = stock(site, VIEW_SITE[1])
-    r.add("true_view", test + f"""    beq true_view_stock
-    lis 12, {C}
+    r.add("true_view", f"""    lis 12, {C}
     lwz 12, {TRUE_ASPECT}(12)
     cmpwi 12, 0
     bne true_view_back
@@ -58,8 +60,7 @@ true_view_back:
     word = stock(site, ASPECT_SITE[1])
     if complete:
         assert k.branch_target(word, site) == TEXT + ASPECT_RETURN
-    r.add("true_aspect", test + f"""    beq true_aspect_back
-    lis 12, {C}
+    r.add("true_aspect", f"""    lis 12, {C}
     lwz 0, {TRUE_ASPECT}(12)
     cmpwi 0, 0
     beq true_aspect_back

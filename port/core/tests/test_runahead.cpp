@@ -173,3 +173,123 @@ void TestHighRefreshWithNoStepAhead()
   CHECK(!runahead::On());
   net::s_session.reset();
 }
+
+// Offline play (a plain start: no match, no replay, no session): high refresh's pictures between come in the game's own
+// races by the game's words alone (MD_GAME, the race's phase, one screen, the chase camera; the race clock as the step),
+// from the frame tick and DRAW_ASK the image makes there only with PLAIN_DRAW, which the core sets each field while the
+// pictures between may be drawn (PlainField); with them, the game's screen option and true widescreen's word follow the
+// launch file. Nothing of the game's simulation is written.
+void TestHighRefreshInAPlainStart()
+{
+  BEGIN_TEST();
+  TestHost host;
+  Options options;
+  CHECK(!ParseLaunchFile(R"({"about": "offline play", "widescreen": true, "trueWidescreen": true})", &options));
+  CHECK(options.widescreen && options.true_widescreen);
+  Init(host, options);
+  CHECK(!Active());
+  Guest g(host, Data());
+  ARace(g);
+  LinkMainRel(g);  // (main.rel at its pinned place: MODULE_POINTER is MAIN_REL again)
+  g.Write32(layout::CONTROL + 120, 0);  // none of the image's race words
+  g.Write16(game::GAME_MODE_AT, game::MODE_GAME);
+  g.Write8(B + 0xF75, 1);
+  // without high refresh: no PLAIN_DRAW; the screen option and true widescreen's word as the launch file says
+  runahead::Start(nullptr, nullptr, nullptr, nullptr);
+  g.Write32(MODULE + 0x229630, 0);  // the player's save said Normal
+  PlainField();
+  CHECK(g.Read32(layout::PLAIN_DRAW) == 0);
+  CHECK(g.Read32(MODULE + 0x229630) == 1);
+  float aspect;
+  {
+    const u32 v = g.Read32(layout::TRUE_ASPECT);
+    std::memcpy(&aspect, &v, 4);
+  }
+  CHECK(aspect == 16.0f / 9.0f);
+  runahead::Stop();
+  setenv("AURORA_RUNAHEAD", "240", 1);
+  setenv("AURORA_REDRAW", "1", 1);
+  u64 position = 700;
+  std::vector<runahead::RedrawRequest> asked;
+  runahead::Start([](float) {}, [](u32) {}, [&](const runahead::RedrawRequest& r) { asked.push_back(r); },
+                  [&] { return position; });
+  PlainField();
+  CHECK(g.Read32(layout::PLAIN_DRAW) == 1);
+  const auto tick = [&](u32 clock) {
+    g.Write32(game::RACE_CLOCK_AT, clock);
+    CHECK(!runahead::Begin());  // nothing runs at the tick
+  };
+  tick(40);
+  g.Write32(game::RACE_CLOCK_AT, 41);
+  runahead::TimeTheDrawing(1);
+  CHECK(asked.empty());  // no tick before the first
+  tick(41);
+  Float(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12, 3.0f);
+  g.Write32(game::RACE_CLOCK_AT, 42);
+  runahead::TimeTheDrawing(1);
+  CHECK(asked.size() == 1);
+  if (asked.size() == 1)
+    CHECK(asked[0].position == 700 && asked[0].pictures == 3 && std::fabs(asked[0].picture[0].machine[1][3] - 0.5f) < 1e-5f);
+  runahead::TimeTheDrawing(2);
+  // Versus with two screens, a pause, the menus: none
+  for (int k = 0; k < 3; ++k)
+  {
+    tick(42 + k);
+    if (k == 0)
+      g.Write8(B + 0xF75, 2);
+    else if (k == 1)
+      g.Write32(PAUSE_WORD, 1);
+    else
+      g.Write16(game::GAME_MODE_AT, 1);
+    g.Write32(game::RACE_CLOCK_AT, 43 + k);
+    runahead::TimeTheDrawing(1);
+    CHECK(asked.size() == 1);
+    g.Write8(B + 0xF75, 1);
+    g.Write32(PAUSE_WORD, 0);
+    g.Write16(game::GAME_MODE_AT, game::MODE_GAME);
+  }
+  CHECK(FloatAt(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12) == 3.0f);
+  runahead::Stop();
+  // the step ahead (AURORA_RUNAHEAD_AFTER=0) needs a race's undo log: no PLAIN_DRAW, nothing at the tick
+  setenv("AURORA_RUNAHEAD_AFTER", "0", 1);
+  runahead::Start([](float) {}, [](u32) {}, [&](const runahead::RedrawRequest& r) { asked.push_back(r); },
+                  [&] { return position; });
+  PlainField();
+  CHECK(g.Read32(layout::PLAIN_DRAW) == 0);
+  tick(60);
+  tick(61);
+  CHECK(!runahead::Inside());
+  runahead::Stop();
+  unsetenv("AURORA_RUNAHEAD_AFTER");
+  unsetenv("AURORA_RUNAHEAD");
+  unsetenv("AURORA_REDRAW");
+  // Widescreen off in the launcher: Normal in memory every field, whatever the save says (a save the game wrote with
+  // Wide Screen after the player changed an option in its own menu), and no true widescreen word
+  Options off;
+  CHECK(!ParseLaunchFile(R"({"about": "offline play", "widescreen": false})", &off));
+  Init(host, off);
+  runahead::Start(nullptr, nullptr, nullptr, nullptr);
+  g.Write32(MODULE + 0x229630, 1);  // the save said Wide Screen
+  g.Write32(layout::TRUE_ASPECT, 0x3FE38E39);  // (left from before)
+  PlainField();
+  CHECK(g.Read32(MODULE + 0x229630) == 0);
+  CHECK(g.Read32(layout::TRUE_ASPECT) == 0);
+  g.Write32(MODULE + 0x229630, 1);  // the game set it again (its menu): the next field puts it back
+  PlainField();
+  CHECK(g.Read32(MODULE + 0x229630) == 0);
+  runahead::Stop();
+  // the start that opens the game's own controller options keeps the save's option, either way, and no true
+  // widescreen word
+  Options setup;
+  CHECK(!ParseLaunchFile(R"({"about": "the game's controller options", "controllerSetup": true})", &setup));
+  Init(host, setup);
+  runahead::Start(nullptr, nullptr, nullptr, nullptr);
+  for (u32 saved : {0u, 1u})
+  {
+    g.Write32(MODULE + 0x229630, saved);
+    PlainField();
+    CHECK(g.Read32(MODULE + 0x229630) == saved);
+    CHECK(g.Read32(layout::TRUE_ASPECT) == 0);
+  }
+  runahead::Stop();
+}

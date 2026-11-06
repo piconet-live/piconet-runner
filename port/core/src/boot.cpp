@@ -6,6 +6,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "files.h"
+#include "fzgx/runahead.h"
 #include "mode_hud.h"
 
 #include <cstring>
@@ -372,6 +373,45 @@ void OnFrame(Guest& g)
   g.CopyTo(COURSE_NAME, course_name.data(), course_name.size());
   g.CopyTo(IMAGE, m->image.data(), m->image.size());
   Notice("fzgx: mod image ({} bytes) and race values written", m->image.size());
+}
+
+// A plain start (offline play), every field of the native form: the launcher's picture settings, as a race has them
+// (OnFrame), for the picture only. The game's own screen option is set to the launch file's "widescreen" (1 Wide Screen,
+// 0 Normal; a file without the key leaves the player's own) every field once main.rel is linked: a plain start reads the player's options from their saved game some
+// seconds into the boot, and this takes the place of what that load wrote, as a race's set-up does. The save itself is
+// not written here; the game writes the option with the rest when it saves its options (the options screen, a cup's
+// end), and it then holds the launcher's choice. Not in a start that opens the game's own controller options, which
+// saves what the player had. True widescreen's word (sites_view.py) while the game is in Wide Screen; and PLAIN_DRAW
+// while high refresh may draw pictures between, so that the image makes the frame tick and asks at the drawing.
+void PlainField(Guest& g)
+{
+  const Options& o = TheOptions();
+  const u32 module = MainRel(g);
+  // the screen option as the launch file says, on or off, every field, as a race does: a save the game wrote with
+  // another option (the player changed one in the game's own menu) never decides; the start that opens the game's
+  // own controller options keeps the save's, and true widescreen's word stays 0 there
+  const bool set = module != 0 && !o.controller_setup;
+  if (set)
+    g.Write32(module + SCREEN_OPTION, o.widescreen ? 1 : 0);
+  const std::optional<bool> wide = Widescreen(g);
+  const u32 aspect = set && wide.value_or(false) ? TrueAspectWord(o) : 0;
+  g.Write32(TRUE_ASPECT, aspect);
+  const bool draw = runahead::PlainDraw();
+  g.Write32(layout::PLAIN_DRAW, draw ? 1 : 0);
+  // the log, once each: what offline play was given of the launcher's settings
+  static bool said_screen = false, said_draw = false;
+  if (set && !said_screen)
+  {
+    said_screen = true;
+    Notice("fzgx: offline play: the game's screen option is {} in memory every picture (the launch file's \"widescreen\"){}",
+           o.widescreen ? "Wide Screen" : "Normal", aspect != 0 ? ", with true widescreen's race view" : "");
+  }
+  if (draw && !said_draw)
+  {
+    said_draw = true;
+    Notice("fzgx: offline play: high refresh's pictures between in the game's own races (PLAIN_DRAW: the frame tick and "
+           "the drawing's asks; one screen, the chase camera)");
+  }
 }
 
 void PaintMachines(Guest& g)

@@ -170,9 +170,10 @@ class Bundle(unittest.TestCase):
         # every start; a plain word; tests its own word (smooth.py); reached only after mine_shown, which tests it;
         # the simulation's own generator (sites_generator.py), whose shift word is 0 in a plain start: the stock word
         # the ghost task's making: at the race's set-up, by the window's flag word, zero without a mode (boot.cpp);
-        # the points page's word in the game's own switch, which no stock path reaches in its race type (sites_modehud.py)
+        # the points page's word in the game's own switch, which no stock path reaches in its race type (sites_modehud.py);
+        # true widescreen's two sites, whose own word decides in a plain start too and is 0 wherever it is off (sites_view.py)
         untested = {"linked", "pin", "smooth_hook", "mine_fade", "simgen_cpu", "simgen_hazard", "ghost_make",
-                    "mode_points_free"}
+                    "mode_points_free", "true_view", "true_aspect"}
         for address, p in self.patches.items():
             # a `bl mode_sort` first, which tests the mode's own flag word (sites_modehud.py), and then the stock call
             if p["what"] in untested or p["what"].startswith(("mode_sort_", "mode_clock_")):

@@ -21,6 +21,7 @@ void TestAPassOfPicturesBetween();
 void TestTheGuessesForward();
 // test_runahead.cpp
 void TestHighRefreshWithNoStepAhead();
+void TestHighRefreshInAPlainStart();
 // test_guest.cpp
 void TestGuestMemory();
 void TestHelpers();
@@ -462,6 +463,7 @@ void TestTheHighRefreshRate()
   TestAPassOfPicturesBetween();
   TestTheGuessesForward();
   TestHighRefreshWithNoStepAhead();
+  TestHighRefreshInAPlainStart();
 }
 
 // When a picture is shown (test_place.cpp's, test_screen.cpp's) and the pictures between two steps (test_hfr.cpp's)

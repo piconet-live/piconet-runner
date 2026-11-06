@@ -256,6 +256,34 @@ void BeforeTheGameStarts()
     s_host->LoadPace(true);
 }
 
+namespace
+{
+// Where the game stands, for the host's presenter (Host::Scene): on any change of the mode, the phase or the course.
+void TellScene(Guest& g)
+{
+  if (g.Ram(net::MODULE_POINTER, 4) && g.Read32(net::MODULE_POINTER) == layout::MAIN_REL)
+  {
+    static u32 told[3] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
+    const u32 now[3] = {g.Read16(game::GAME_MODE_AT), g.Read16(game::PHASE_AT), g.Read32(table::RACE_COURSE_AT)};
+    if (now[0] != told[0] || now[1] != told[1] || now[2] != told[2])
+    {
+      std::copy(std::begin(now), std::end(now), std::begin(told));
+      s_host->Scene(panel::Racing(now[0], now[1]), panel::SceneWords(now[0], now[1], now[2]));
+    }
+  }
+}
+}  // namespace
+
+void PlainField()
+{
+  if (!s_host || boot::IsActive() || rollback_worker::OnW())
+    return;
+  Guest g(*s_host, Data());
+  boot::PlainField(g);
+  TellScene(g);
+  net::InputsFrame(g, true);
+}
+
 void FrameTick()
 {
   if (!Active())
@@ -268,18 +296,10 @@ void FrameTick()
   net::PresentTick(g);
   net::MinimapFrame(g);
   net::InputsFrame(g);
-  // where the game stands, for the host's presenter (Host::Scene): on any change of the mode, the phase or the course
+  // the game's step, for the host's presenter (Host::Step: its lines and pacing), in our races as before
   if (g.Ram(net::MODULE_POINTER, 4) && g.Read32(net::MODULE_POINTER) == layout::MAIN_REL)
-  {
     s_host->Step(g.Read32(net::STEP));
-    static u32 told[3] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
-    const u32 now[3] = {g.Read16(game::GAME_MODE_AT), g.Read16(game::PHASE_AT), g.Read32(table::RACE_COURSE_AT)};
-    if (now[0] != told[0] || now[1] != told[1] || now[2] != told[2])
-    {
-      std::copy(std::begin(now), std::end(now), std::begin(told));
-      s_host->Scene(panel::Racing(now[0], now[1]), panel::SceneWords(now[0], now[1], now[2]));
-    }
-  }
+  TellScene(g);
   // the panel comes down when the course is loaded (one load of a flag once it is down)
   panel::Board& board = panel::TheBoard();
   if (board.Now() == panel::Shows::Loading && g.Ram(net::MODULE_POINTER, 4) &&
@@ -307,6 +327,13 @@ void WindowWritten(u32 address, u64 value)
   if (address == layout::DRAW_ASK)
   {
     Guest g(*s_host, Data());
+    // a plain start (offline play) with PLAIN_DRAW, the one way the image stores here outside a race: the drawing's
+    // times and high refresh's request alone; nothing of a race
+    if (!boot::IsActive() && g.Read32(layout::PLAIN_DRAW) != 0)
+    {
+      runahead::TimeTheDrawing(static_cast<u32>(value));
+      return;
+    }
     if (value == 1)
     {
       mode::hud::Hud(g);  // the game mode's displays: after the frame routine's HUD passes, before the drawing
