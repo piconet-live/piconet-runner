@@ -18,6 +18,7 @@
 
 #include "adapter.h"
 #include "adapter_internal.h"
+#include "alerts.h"
 #include "controllers.h"
 #include "fzgx/replay_info.h"
 #include "fzgx/rollback_worker.h"
@@ -42,6 +43,8 @@ const char* Usage()
 
 bool TakeArgument(const std::string& argument, const std::function<const char*()>& value)
 {
+  // every start of the port's (a game, the controller helper, the pipeline build): no alert of the emulator's is a box
+  AlertsToTheLog();
   if (argument == "--config")
   {
     // The argument is in the system's code page (the runner's own options, --fzgx-log and the user folder are

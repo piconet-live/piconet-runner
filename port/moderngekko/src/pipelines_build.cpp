@@ -23,6 +23,7 @@
 
 #include "adapter.h"
 #include "adapter_internal.h"
+#include "alerts.h"
 
 #include "fzgx/loglines.h"
 #include "fzgx/mod_files.h"
@@ -211,6 +212,7 @@ bool PipelineBuildAsked()
 void RunPipelineBuild(const RunnerOptions& asked)
 {
   const auto t0 = std::chrono::steady_clock::now();
+  NoSystemBoxes();
   std::error_code e;
   std::filesystem::create_directories(asked.user_folder / "Logs", e);
   ErrorsInto(asked.user_folder / "Logs" / "pipelines.log");
