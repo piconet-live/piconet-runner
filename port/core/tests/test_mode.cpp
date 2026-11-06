@@ -1081,14 +1081,20 @@ void TestPracticeIsAMode()
   if (!p)
     return;
   CHECK(p->solo && p->pause && p->save_state && p->rewind == practice::WINDOW && p->resume_countdown == practice::COUNTDOWN);
-  CHECK(p->laps == 0u && p->board.empty() && !p->restore && p->params.size() == 2 && p->params[0] == 0 && p->params[1] == 0);
-  // the page's Laps row: the second parameter, resolved into the mode's laps before the race
+  CHECK(p->laps == 0u && p->board.empty() && !p->restore && p->params.size() == 3 && p->params[0] == 0 && p->params[1] == 0 &&
+        p->params[2] == 60);
+  // the page's Laps row: the first parameter, resolved into the mode's laps before the race
   picojson::value counted = Vector("practice.mode.json");
-  counted.get<picojson::object>()["params"].get<picojson::array>()[1] = picojson::value(7.0);
+  counted.get<picojson::object>()["params"].get<picojson::array>()[0] = picojson::value(7.0);
   const std::optional<mode::Package> seven = mode::Read(counted, &why);
   CHECK(seven && seven->laps == 7u);
-  counted.get<picojson::object>()["params"].get<picojson::array>()[1] = picojson::value(100.0);
+  counted.get<picojson::object>()["params"].get<picojson::array>()[0] = picojson::value(100.0);
   CHECK(!mode::Read(counted, &why));
+  // the page's Resume countdown row: the third parameter, in steps (3 s), resolved into the mode's resume countdown
+  picojson::value resumed = Vector("practice.mode.json");
+  resumed.get<picojson::object>()["params"].get<picojson::array>()[2] = picojson::value(180.0);
+  const std::optional<mode::Package> three = mode::Read(resumed, &why);
+  CHECK(three && three->resume_countdown == 180u);
   const std::optional<mode::Package> over = mode::Read(Vector("overdrive.mode.json"), &why);
   CHECK(over && !over->solo && !over->pause && over->rewind == 0 && over->board.empty());
 
