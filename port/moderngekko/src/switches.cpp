@@ -6,6 +6,8 @@
 // (port/core/src/files_launch.cpp) into the one settings struct, fzgx::Options, here and nowhere else.
 // `--fzgx-log FILE` is no setting of a start: it says where the runner's own output goes from the first line on, the
 // launch file's refusal included.
+// `--build-pipelines` starts no game either: with the offline game's launch file, Aurora compiles the look's shaders and
+// the program ends (pipelines_build.cpp, run from Prepare).
 // The adapter reads no environment variable, and in a start with a launch file neither does the emulator's side for
 // any test setting of its own (the pad script, the pokes, the probe, the logs, the CPU core's switches, the JIT):
 // naming the launch file tells it so (RunSettings::RuleByLaunchFile, forks/recompcore/2-port), and what the file's
@@ -34,7 +36,8 @@ const char* Usage()
   return "       [--config <launch file: this start's settings, JSON (protocol/formats.md section 2)>]\n"
          "       [--fzgx-log <file for the runner's standard output and error; the 19 runs before are kept>]\n"
          "       [--controllers <user folder>: no game; the launcher's Controller page talks to it (controllers.h)]\n"
-         "       [--replay-info <replay file>: no game; what the file holds, as JSON (fzgx/replay_info.h)]\n";
+         "       [--replay-info <replay file>: no game; what the file holds, as JSON (fzgx/replay_info.h)]\n"
+         "       [--build-pipelines: no game; Aurora compiles the look's shaders for the launch file's settings (pipelines_build.cpp)]\n";
 }
 
 bool TakeArgument(const std::string& argument, const std::function<const char*()>& value)
@@ -57,6 +60,12 @@ bool TakeArgument(const std::string& argument, const std::function<const char*()
   }
   if (argument == "--controllers")
     RunControllerHelper(std::filesystem::path(value()));  // no game is started: the program ends in there
+  if (argument == "--build-pipelines")
+  {
+    // no game: Aurora's pipeline build (pipelines_build.cpp), run by Prepare once --game, --user-dir and --config are read
+    AskPipelineBuild();
+    return true;
+  }
   if (argument == "--replay-info")
   {
     // no game is started: the file's parts and its header, printed, and the program ends

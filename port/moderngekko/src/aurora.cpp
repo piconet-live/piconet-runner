@@ -26,8 +26,6 @@
 
 namespace fzgx_port
 {
-namespace
-{
 std::filesystem::path RunnerFolder()
 {
 #ifdef _WIN32
@@ -40,6 +38,8 @@ std::filesystem::path RunnerFolder()
 #endif
 }
 
+namespace
+{
 std::string Utf8(const std::filesystem::path& p)
 {
   const std::u8string s = p.u8string();
@@ -74,6 +74,11 @@ u32 AskedScale(const fzgx::Options& o)
   return o.aurora_size == "2" ? 2 : o.aurora_size == "3" ? 3 : o.aurora_size == "4" ? 4 : 0;
 }
 }  // namespace
+
+void SetAuroraSwitches(const fzgx::Options& o)
+{
+  SetSwitches(o);
+}
 
 void StartAurora()
 {

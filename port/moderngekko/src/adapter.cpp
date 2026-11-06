@@ -313,6 +313,8 @@ std::optional<std::string> Prepare(const RunnerOptions& asked)
   const std::filesystem::path& user_folder = asked.user_folder;
   s_state.game_root = game_root;
   s_state.user_folder = user_folder;
+  if (PipelineBuildAsked())
+    RunPipelineBuild(asked);  // no game: the program ends in there
   std::error_code ec;
   std::filesystem::create_directories(user_folder / "Logs", ec);
   // (the log of the start before stays as fzgx.1.log; one a game still holds is not emptied: a file beside it)
