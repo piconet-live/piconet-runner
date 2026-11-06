@@ -28,6 +28,7 @@
 #include "Core/HostHooks.h"
 #include "Core/PowerPC/StaticRecomp/StaticRecompModuleSource.h"
 
+#include "adapter.h"
 #include "fzgx/board.h"
 #include "fzgx/core.h"
 
@@ -174,6 +175,15 @@ void StopDrawnFrames();
 // aurora.cpp: Aurora as the presenter (the launch file's "debug.renderer"), its data folder and its line at the stop.
 void StartAurora();
 void StopAurora();
+// aurora.cpp: the folder of the runner's program (Aurora's libraries are beside it); the Aurora switches the launch file's
+// settings bring, as a game's start sets them (the pipeline build sets the same)
+std::filesystem::path RunnerFolder();
+void SetAuroraSwitches(const fzgx::Options& o);
+// pipelines_build.cpp: --build-pipelines (switches.cpp) asks for the pipeline build in place of a game; Prepare runs it
+// once the runner's options are read, and the program ends in it
+void AskPipelineBuild();
+bool PipelineBuildAsked();
+[[noreturn]] void RunPipelineBuild(const RunnerOptions& asked);
 // freeze_watch.cpp: a thread that says in the log when a race's game stands still, and where (fzgx/freeze.h),
 // and the emulator's lines (below): both start at the game's first picture (StartWatches, from the picture's hook:
 // one flag read a picture after the first), so that a boot that fails has started neither. Every way the game is

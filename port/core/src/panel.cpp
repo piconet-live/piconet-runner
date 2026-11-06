@@ -4,6 +4,7 @@
 #include "fzgx/panel.h"
 
 #include <algorithm>
+#include <cstdio>
 
 namespace fzgx::panel
 {
@@ -47,6 +48,18 @@ void Begin(Board& board, bool until_race, bool until_live)
 bool CourseShown(u32 mode, u32 phase)
 {
   return mode == MODE_GAME && phase >= PHASE_INTRO && phase <= PHASE_RACE;
+}
+
+bool Racing(u32 mode, u32 phase)
+{
+  return mode == MODE_GAME && phase == PHASE_RACE;
+}
+
+std::string SceneWords(u32 mode, u32 phase, u32 course)
+{
+  char text[64];
+  std::snprintf(text, sizeof text, "mode %u, phase 0x%02X, course %u", mode, phase, course);
+  return text;
 }
 
 bool Frame(Board& board, u32 mode, u32 phase)

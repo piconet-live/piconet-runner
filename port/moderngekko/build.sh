@@ -32,6 +32,6 @@ if [ -n "${OUT:-}" ]; then
   [ ! -f "$W/ModernGekko/build/moderngekko-run.map" ] || cp "$W/ModernGekko/build/moderngekko-run.map" "$K/"
   # Aurora (debug.renderer "aurora"): aurora-present.dll and the libraries it loads, when the aurora target put them
   # beside the runner (port/build/cmake/AuroraCopy.cmake); the runner loads them from its own folder
-  for f in "$W"/ModernGekko/build/*.dll; do [ ! -f "$f" ] || cp "$f" "$K/"; done
+  for f in "$W"/ModernGekko/build/*.dll "$W"/ModernGekko/build/initial_pipeline_cache.db; do [ ! -f "$f" ] || cp "$f" "$K/"; done
   echo "kept: $K/moderngekko-run.exe"
 fi
