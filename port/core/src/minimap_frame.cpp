@@ -25,6 +25,7 @@
 // Picture only: what is read changes nothing, and the one word written is drawing's.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "board_net.h"
 #include "net_internal.h"
 #include "net_modes.h"
 #include "out_test.h"
@@ -175,7 +176,7 @@ void ModeDots(Guest& g, mm::Racers& racers, u32 you)
     racers[i].present = present[i], racers[i].colour = colour[i];
 }
 
-// What decides whether the map shows, and with it "Show inputs".
+// What decides whether the map shows.
 mm::Seen SeenNow(Guest& g, u32 module, u32 phase)
 {
   const Session* s = s_session.get();
@@ -250,37 +251,32 @@ void MinimapFrame(Guest& g)
   Tell(show);
 }
 
-// "Show inputs": the local player's pad while the map shows and this game has a driver of its own. A racer followed in
-// a replay or a watched race has none to show: its record holds the game's actions after that player's own bindings
-// (steering, pitch, strafe, pedals, action bits), not a pad's buttons, triggers and C-stick.
+// "Show inputs" (the launcher's Inputs window): the local player's pad onto the status board, from the course intro on,
+// while this game has a driver of its own (a race or a practice); held 0 otherwise. A racer followed in a replay or a
+// watched race has none to show: its record holds the game's actions after that player's own bindings (steering,
+// pitch, strafe, pedals, action bits), not a pad's buttons, triggers and C-stick. Reads only, and only with a board.
 void InputsFrame(Guest& g)
 {
-  if (!TheOptions().show_inputs)
+  if (!board::Taken())
     return;
-  static InputsShow last;
-  InputsShow show;
+  board::LocalPad pad;
   if (g.Ram(MODULE_POINTER, 4) && g.Read32(MODULE_POINTER) == layout::MAIN_REL)
   {
     const u32 module = layout::MAIN_REL;
-    const u32 phase = g.Read16(module + PHASE);
-    if (phase >= COURSE_INTRO && mm::Shows(SeenNow(g, module, phase)) && OwnSeat(g) != 0xFFFFFFFF)
+    if (g.Read16(module + PHASE) >= COURSE_INTRO && OwnSeat(g) != 0xFFFFFFFF)
     {
-      const u32 pad = module + PAD_STATUS;
-      show.on = true;
-      show.buttons = static_cast<std::uint16_t>(g.Read16(pad));
-      show.stick_x = static_cast<std::int8_t>(g.Read8(pad + 2));
-      show.stick_y = static_cast<std::int8_t>(g.Read8(pad + 3));
-      show.cstick_x = static_cast<std::int8_t>(g.Read8(pad + 4));
-      show.cstick_y = static_cast<std::int8_t>(g.Read8(pad + 5));
-      show.l = g.Read8(pad + 6);
-      show.r = g.Read8(pad + 7);
+      const u32 at = module + PAD_STATUS;
+      pad.held = 1;
+      pad.buttons = g.Read16(at);
+      pad.stick_x = static_cast<std::int8_t>(g.Read8(at + 2));
+      pad.stick_y = static_cast<std::int8_t>(g.Read8(at + 3));
+      pad.c_stick_x = static_cast<std::int8_t>(g.Read8(at + 4));
+      pad.c_stick_y = static_cast<std::int8_t>(g.Read8(at + 5));
+      pad.l = g.Read8(at + 6);
+      pad.r = g.Read8(at + 7);
     }
   }
-  if (show != last)
-  {
-    last = show;
-    TheHost().ShowInputs(show);
-  }
+  board::PutLocalPad(pad);
 }
 
 // The racer the picture follows (see the head).

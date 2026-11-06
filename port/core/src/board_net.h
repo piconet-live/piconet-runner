@@ -47,6 +47,9 @@ bool ModeHeadWritten();
 void PutModeHead(const ModeHead& head);
 void PutModeValues(ModeValues& values);
 void ResetRace();
+// The local player's pad for the launcher's Inputs window (minimap_frame.cpp InputsFrame), each game frame: written
+// with the next serial only when it differs from the last written (its serial aside).
+void PutLocalPad(const LocalPad& pad);
 
 // The mapping (board_map.cpp): the file's bytes in this process, or none.
 class Mapping
