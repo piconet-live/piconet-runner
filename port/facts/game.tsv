@@ -244,6 +244,8 @@ CAR_DATA_MAPPED	game	0x23800000		u32		port/core/src/stat_pack.cpp:45	the address
 # ---- machine
 MACHINES	machine	=REL_BSS + 0x6D838	MAIN_REL	ptr		port/core/src/rollback.h:32	the pointer to the machines' blocks, MACHINE_SIZE bytes each, racer order
 MACHINE_COUNT	machine	=REL_BSS + 0x6D84A	MAIN_REL	u32		port/core/src/rollback.h:33	the number of machines in the race (a byte)
+CAR_SHADOWS	machine	=REL_BSS + 0x6D844	MAIN_REL	ptr		port/core/src/game_shadow.cpp:22	the pointer to the machines' drop-shadow records (CarShadow, CAR_SHADOW_SIZE bytes each, racer order; made by car.c fn_1_82724): +0 flags, bit 0x4 set by car_shadow_calc fn_1_56D4C every frame; read by the drawing only (game_shadow.h)
+CAR_SHADOW_SIZE	machine	0x4C		u32		port/core/src/game_shadow.cpp:22	bytes of one machine's drop-shadow record (fn_1_82724 allocates racers x 0x4C; CarDisp indexes it by racer x 0x4C)
 MACHINE_SIZE	machine	0x620		u32		port/core/src/checksum.cpp:43	bytes of one machine's block
 MACHINE_PROGRESS	machine	0x49C	MACHINES	ptr		port/core/src/checksum.cpp:57	in a machine's block: the pointer to its progress record
 PROGRESS_SIZE	machine	0x1FC		u32		port/core/src/checksum.cpp:42	bytes of a progress record

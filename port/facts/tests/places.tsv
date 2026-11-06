@@ -531,3 +531,5 @@ MACHINE_FLAG_TIME_OVER	port/facts/machine-state.csv	re	"flags \([^"]*\btime over
 MACHINE_FLAGS2_PIT	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) used a pit	1
 MACHINE_FLAGS2_STEPPED	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) stepped this frame	1
 MACHINE_FLAGS2_FALLEN	port/facts/machine-state.csv	re	"flags 2 \([^"]*\b(0x[0-9A-F]+) destroyed/out of contact	1
+CAR_SHADOWS	port/core/src/game_shadow.cpp	use	game::CAR_SHADOWS_AT	1
+CAR_SHADOW_SIZE	port/core/src/game_shadow.cpp	use	game::CAR_SHADOW_SIZE	2

@@ -7,6 +7,7 @@
 #include "mode_hud.h"
 #include "hud_move.h"
 #include "clean_picture.h"
+#include "game_shadow.h"
 
 #include "fzgx/freeze.h"
 #include "fzgx/panel.h"
@@ -331,6 +332,8 @@ void WindowWritten(u32 address, u64 value)
     // times and high refresh's request alone; nothing of a race
     if (!boot::IsActive() && g.Read32(layout::PLAIN_DRAW) != 0)
     {
+      if (value == 1)
+        game_shadow::Frame(g, s_options.aurora_ray_tracing);  // with rays on, no game drop shadow (game_shadow.h)
       runahead::TimeTheDrawing(static_cast<u32>(value));
       return;
     }
@@ -340,6 +343,7 @@ void WindowWritten(u32 address, u64 value)
       hud_move::Frame(g);  // the classic HUD's moves: the window's word the image's sites test
       mode::hud::Board(g);  // and its values, for the launcher
       clean_picture::Frame(g);  // `hud clean`: after the mode's pass, whose tag bytes it takes off
+      game_shadow::Frame(g, s_options.aurora_ray_tracing);  // with rays on, no game drop shadow (game_shadow.h)
     }
     net::PresentAsked(g, static_cast<u32>(value));
     runahead::TimeTheDrawing(static_cast<u32>(value));

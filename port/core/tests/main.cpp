@@ -233,6 +233,7 @@ void TestTheLivesLibraryRuns();
 void TestCpuModeEighteen();
 void TestTheDisplayWordsRun();
 void TestTheCleanPicture();
+void TestTheGameShadowWithRays();
 void TestTheGhostWords();
 void TestThePreparedInterpreterIsThePlainOne();
 void TestTheLobbysRestoreStaysOut();
@@ -621,6 +622,7 @@ int main(int argc, char** argv)
   TestCpuModeEighteen();
   TestTheDisplayWordsRun();
   TestTheCleanPicture();
+  TestTheGameShadowWithRays();
   TestTheGhostWords();
   TestThePreparedInterpreterIsThePlainOne();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);
