@@ -298,6 +298,7 @@ void RunPipelineBuild(const RunnerOptions& asked)
   });
 
   double shown = 0;
+  auto told = std::chrono::steady_clock::now();
   AuroraBuildProgress p{};
   for (;;)
   {
@@ -318,9 +319,20 @@ void RunPipelineBuild(const RunnerOptions& asked)
     }
     if (p.state == 2 && fed)
       break;
-    // the files read by Aurora's plan, which follows the compiles (it takes a file only while few wait): 99% at most until done
+    // the share of the files Aurora's plan has read (it reads ahead of the compiles) times the share of the pipelines it asked
+    // for that are compiled: the second is most of the time once the disc is read. 99% at most until done; never backwards
     const double read = total != 0 ? static_cast<double>(std::min(p.bytes_read, total)) / static_cast<double>(total) : 0.0;
-    const double now = std::min(0.99, read * 0.99);
+    const double asked = static_cast<double>(p.compiled + p.waiting);
+    const double made = asked > 0 ? static_cast<double>(p.compiled) / asked : 0.0;
+    const double now = std::min(0.99, read * made * 0.99);
+    const auto at = std::chrono::steady_clock::now();
+    if (at - told >= std::chrono::seconds(10))
+    {
+      told = at;
+      std::fprintf(stderr, "fzgx: pipeline build: %.0f s, %.0f%% of the files read, %llu shaders, %llu pipelines compiled, %llu waiting\n",
+                   std::chrono::duration<double>(at - t0).count(), read * 100, static_cast<unsigned long long>(p.shaders),
+                   static_cast<unsigned long long>(p.compiled), static_cast<unsigned long long>(p.waiting));
+    }
     if (now > shown + 0.001)
     {
       shown = now;
