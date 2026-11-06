@@ -866,44 +866,39 @@ void TestTheLivesLibraryRuns()
     run();
   };
   CHECK(left(0) == 3 && number(0) == 3 + 1);
-  // a fall, restored: costs nothing
+  // every wreck the game restores costs one (Death Race's lives): a fall, at its restore's start, once
   SetFlags(g, 0, 0x800);
   run();
-  restore(0);
-  CHECK(left(0) == 3 && number(0) == 3 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
-  // a breakdown, restored: costs nothing
-  SetFlags(g, 0, 0x80);
-  run();
-  restore(0);
-  CHECK(left(0) == 3 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
-  // an explosion costs one, once
-  Explode(g, 0);
-  run();
-  CHECK(left(0) == 2 && number(0) == 2 + 1 && (g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1));
+  CHECK(left(0) == 3);
   restore(0);
   CHECK(left(0) == 2 && number(0) == 2 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
-  // the one that leaves one life: still restored (the flag stays until the restore has begun and reaches its exit)
-  Explode(g, 0);
+  // an explosion of another seat: one, once, however many steps its restore runs
+  Explode(g, 2);
   run();
-  CHECK(left(0) == 1 && (g.Read32(BLOCK + mode::RESPAWN) & 1) && (g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1));
+  restore(2);
+  CHECK(left(2) == 2 && number(2) == 2 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 4));
+  // a breakdown, the one that leaves one life: still restored (the flag stays until the restore reaches its exit)
+  SetFlags(g, 0, 0x80);
+  run();
+  CHECK(left(0) == 2 && (g.Read32(BLOCK + mode::RESPAWN) & 1) && (g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1));
   g.Write16(MachineAt(0) + 0x214, 120);
   run();
-  CHECK(!(g.Read32(BLOCK + mode::RESPAWN) & 1));
+  CHECK(left(0) == 1 && !(g.Read32(BLOCK + mode::RESPAWN) & 1));
   CHECK(g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1);                 // kept through the wreck
   g.Write16(MachineAt(0) + 0x214, 20);
   run();
   CHECK(!(g.Read32(MachineAt(0) + game::MACHINE_FLAGS) & 1));              // off at its exit
   g.Write16(MachineAt(0) + 0x214, 0);
   SetFlags(g, 0, 0, 0x800 | 0x80 | 0x00800000);
-  g.Write32(MachineAt(0) + 0x58C, g.Read32(MachineAt(0) + 0x58C) & ~0x10u);
   run();
   CHECK(left(0) == 1 && number(0) == 1 + 1);
-  // the last: out, nothing shown, the count at 0; an explosion after the out takes it no lower
+  // the last wreck: nothing restores it; out, nothing shown, the count at 0; a run after the out takes it no lower
   Explode(g, 0);
   run();
   CHECK(left(0) == 0 && number(0) == 0);
   run();
   CHECK(left(0) == 0 && number(0) == 0);
+  CHECK(left(2) == 2 && (g.Read32(BLOCK + mode::RESPAWN) & 4));
   // a finished seat keeps its flag whatever the words say
   SetFlags(g, 1, 0x10000);
   g.Write32(BLOCK + mode::RESPAWN, 0x4);
@@ -1736,8 +1731,11 @@ void TestTheHeldWords()
   CHECK(g.Read32(BLOCK + mode::RESPAWN) == 3);
   Explode(g, 1);
   run();
-  CHECK(g.Read32(BLOCK + mode::SeatWord(1, 0)) == 3);
+  CHECK(g.Read32(BLOCK + mode::SeatWord(1, 0)) == 4);                    // a life goes when its restore begins
   CHECK((g.Read32(BLOCK + mode::RECORDS + 1 * mode::RECORD) & mode::BOOST_OFF) != 0);
+  g.Write16(MachineAt(1) + 0x214, 120);
+  run();
+  CHECK(g.Read32(BLOCK + mode::SeatWord(1, 0)) == 3);
   run();
   run();
   CHECK((g.Read32(BLOCK + mode::RECORDS + 1 * mode::RECORD) & mode::BOOST_OFF) != 0);   // to the race's end
