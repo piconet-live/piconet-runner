@@ -5,6 +5,7 @@
 
 #include "adapter.h"
 #include "adapter_internal.h"
+#include "VideoCommon/AuroraPresent.h"
 #include "lanes.h"
 #include "lanes_census.h"
 
@@ -150,6 +151,12 @@ public:
 
   // The panel before a race changed at the start gate (panel.cpp): a present of its own, queued.
   void PanelChanged() override { PresentPanel(); }
+
+  // Where the game stands (core.cpp's frame tick): Aurora compiles nothing ahead while the race runs.
+  void Scene(bool racing, const std::string& where) override
+  {
+    VideoCommon::AuroraPresent::Scene(racing, where);
+  }
 
   // The replay scrubber (replay_bar.cpp, replay_host.cpp): its keys, a scrub on the bar, what the bar shows; its
   // undo log's packer; the process's memory for a playback's last lines.

@@ -71,6 +71,11 @@ void Begin(Board& board, bool until_race = false, bool until_live = false);
 // own (0x29).
 bool CourseShown(u32 mode, u32 phase);
 constexpr u32 PHASE_INTRO = 0x27;
+// Whether the race runs (Host::Scene): the mode is the race's and its phase the race's own (0x29: the countdown and the race,
+// up to the results). The load, the course intro and the results are not.
+bool Racing(u32 mode, u32 phase);
+// The words Host::Scene gives with it: "mode 2, phase 0x29, course 11"
+std::string SceneWords(u32 mode, u32 phase, u32 course);
 // A frame of such a start, with the game's mode word and the phase word of its race mode: the course is loaded
 // once the mode is the race's or the replay's and its phase is the course intro's or a later one of the race (the
 // start gate holds on the intro's last frame, so every race passes it). From then on the game draws the course,

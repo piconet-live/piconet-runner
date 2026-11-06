@@ -137,6 +137,10 @@ void Host::LoadPace(bool)
 {
 }
 
+void Host::Scene(bool, const std::string&)
+{
+}
+
 void Host::CodeChanged(u32, u32)
 {
 }

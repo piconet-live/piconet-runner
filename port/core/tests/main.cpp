@@ -95,6 +95,7 @@ void TestAGameThatStandsStillIsReported();
 void TestAStopWhileTheGameStands();
 void TestTheSummaryLineSaysAFreeze();
 // test_panel.cpp
+void TestTheRaceScene();
 void TestWhatThePanelShows();
 void TestThePanelHeldToTheRace();
 void TestThePanelHeldUntilLive();
@@ -354,6 +355,7 @@ void TestThePanelBeforeARace()
   TestThePanelsLines();
   TestThePanelFromAStartToTheCourse();
   TestThePanelAtTheStartGate();
+  TestTheRaceScene();
 }
 
 // The hits and lunges a rollback reveals (test_hits.cpp): each shown once, never what a frame already showed.
