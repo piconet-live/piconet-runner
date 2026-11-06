@@ -241,6 +241,7 @@ GAME_ID	game	'GFZE01'		str	game.id	port/core/src/files.h:31	the disc this is for
 CAR_DATA	game	0x81554000		u32		port/core/src/stat_pack.cpp:27	the car data as the game holds it while it runs: its loader (main.rel fn_1_95C, before the first frame) takes CAR_DATA_SIZE bytes below the top of the arena, the same place in every boot (read in a JIT race's saved state and a native playback's memory dump)
 CAR_DATA_SIZE	game	0x6000		u32		port/core/src/stat_pack.cpp:43	bytes of the loaded car data: the file's 21,658 and what the loader leaves after them
 CAR_DATA_MAPPED	game	0x23800000		u32		port/core/src/stat_pack.cpp:45	the address the game maps the loaded car data at and reads it by (fn_1_82EDC: addis 0x2380); a block's word 0 holds its name's address there, which is how the core knows the table stands
+BURNERS	game	=REL_BSS + 0x6EA04	MAIN_REL	ptr		port/moderngekko/src/marks.cpp:55	the pointer to the burners' pool (burner.c lbl_1_bss_6EA04): fn_1_986A4 hands out its records (0x4AC bytes each, 120 from +0x80), fn_1_983CC one for each nozzle in a machine's .fmi; read by the drawing only (marks.cpp)
 # ---- machine
 MACHINES	machine	=REL_BSS + 0x6D838	MAIN_REL	ptr		port/core/src/rollback.h:32	the pointer to the machines' blocks, MACHINE_SIZE bytes each, racer order
 MACHINE_COUNT	machine	=REL_BSS + 0x6D84A	MAIN_REL	u32		port/core/src/rollback.h:33	the number of machines in the race (a byte)

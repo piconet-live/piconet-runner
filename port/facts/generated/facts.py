@@ -353,6 +353,8 @@ GAME_ID = "GFZE01"  # the disc this is for: F-Zero GX, NTSC-U
 CAR_DATA = 0x81554000  # the car data as the game holds it while it runs: its loader (main.rel fn_1_95C, before the first frame) takes CAR_DATA_SIZE bytes below the top of the arena, the same place in every boot (read in a JIT race's saved state and a native playback's memory dump)
 CAR_DATA_SIZE = 0x6000  # bytes of the loaded car data: the file's 21,658 and what the loader leaves after them
 CAR_DATA_MAPPED = 0x23800000  # the address the game maps the loaded car data at and reads it by (fn_1_82EDC: addis 0x2380); a block's word 0 holds its name's address there, which is how the core knows the table stands
+BURNERS = 0x00228A44  # the pointer to the burners' pool (burner.c lbl_1_bss_6EA04): fn_1_986A4 hands out its records (0x4AC bytes each, 120 from +0x80), fn_1_983CC one for each nozzle in a machine's .fmi; read by the drawing only (marks.cpp)
+BURNERS_AT = 0x803E30A4
 
 # ---- machine
 MACHINES = 0x00227878  # the pointer to the machines' blocks, MACHINE_SIZE bytes each, racer order
