@@ -27,8 +27,9 @@ struct Switch
 std::span<const Switch> HighRefreshSet();
 
 // Ray tracing's tested set ("auroraRayTracing"): the owner's set of 0.6.0's build c (v060c-rtx.cmd, 2026-11-03), the
-// matte look with AURORA_RT_GLOW_HALF=2 and the look fixes AURORA_RT_LIGHT_OWN, _GLOW_WIDE, _BEFORE_LATEST and
-// _SHADER_CACHE, build d's translucent sheets (AURORA_RT_SHEETS), and effect cards in the game's own range (AURORA_RT_CARDS).
+// matte look with AURORA_RT_GLOW_HALF=2 and the look fixes AURORA_RT_GLOW_WIDE, _BEFORE_LATEST and _SHADER_CACHE (build
+// c's fourth, a light's own body, is the game's draw marks now, always on), build d's translucent sheets
+// (AURORA_RT_SHEETS), and effect cards in the game's own range (AURORA_RT_CARDS).
 // A GPU without DirectX 12 ray tracing (DXR 1.1) shows the game's own picture: Aurora says "[rt] live pass off" in its log.
 std::span<const Switch> RayTracingSet();
 
