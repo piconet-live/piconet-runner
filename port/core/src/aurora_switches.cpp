@@ -12,7 +12,7 @@ namespace
 constexpr Switch HIGH_REFRESH_SET[] = {
     {"AURORA_REDRAW", "1"},          {"AURORA_REDRAW_BUNDLES", "1"},  {"AURORA_PACE", "1"},
     {"AURORA_PRESENT_OVERLAP", "1"}, {"AURORA_PRESENT_SLOTS", "1"},   {"AURORA_REDRAW_SKIP_OFFSCREEN", "1"},
-    {"AURORA_PRESENT_FIFO", "1"},
+    {"AURORA_PRESENT_FIFO", "1"},    {"AURORA_PACE_EVEN", "1"},
 };
 
 // v060c-rtx.cmd's order, less its SDL_JOYSTICK_HIDAPI_GAMECUBE (the controller adapter's, no picture's)
