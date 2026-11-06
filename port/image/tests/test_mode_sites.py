@@ -134,7 +134,7 @@ class ThePairGate(Build):
 
 
 class ThePreload(Build):
-    """The block is taken on the black frame before the start gate; under start_together it comes with every
+    """The block is taken on the black frame before the start gate; under start_gap 0 it comes with every
     no-contact row on, before the race's first contact pass."""
     BLOCK_AT = 0x80A01000
 
@@ -177,7 +177,7 @@ class ThePreload(Build):
         return get(memory, self.BLOCK_AT + memmap.MODE_NC + 4 * seat)
 
     def test_the_block_comes_zeroed_whatever_the_mode(self):
-        for flags in (memmap.MODE_ROLLING, memmap.MODE_TOGETHER):
+        for flags in (memmap.MODE_ROLLING, memmap.MODE_SAME_SPOT, memmap.MODE_SPREAD):
             memory = self.preload(flags)
             self.assertEqual({memory[a] for a in range(self.BLOCK_AT, self.BLOCK_AT + memmap.MODE_BLOCK)}, {0})
 

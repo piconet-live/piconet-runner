@@ -376,17 +376,17 @@ float RealAt(Guest& g, u32 at)
 constexpr u32 R = MODULE + 0x1BDC70, CM = MODULE + 0x227860;
 }  // namespace
 
-// start_together: the image's preload wrote the rows before the first contact pass (test_mode_sites.py); the first run
-// keeps them, a seat reads as a ghost in that run's own rules, and their OR stands for the next step's pair gate.
-void TestStartTogetherKeepsEveryPairApart()
+// start_gap 0: the first run (game_start, before the first contact pass) writes every no-contact row, a seat reads as a
+// ghost in that run's own rules, and their OR stands for the next step's pair gate; start_gap even writes none.
+void TestStartGapZeroKeepsEveryPairApart()
 {
   BEGIN_TEST();
   std::string why;
-  const std::optional<mode::Package> p = mode::Read(Vector("together.mode.json"), &why);
+  const std::optional<mode::Package> p = mode::Read(Vector("gap_same.mode.json"), &why);
   CHECK(p.has_value());
   if (!p)
     return;
-  CHECK(p->start_together && !p->contact_off);
+  CHECK(p->start_gap == 0.0f && !p->start_gap_even && !p->contact_off);
   TestHost host;
   ModData data;
   Guest g(host, data);
@@ -398,6 +398,23 @@ void TestStartTogetherKeepsEveryPairApart()
   for (u32 seat = 0; seat < 30; ++seat)
     CHECK(g.Read32(BLOCK + mode::NC + 4 * seat) == 0xFFFFFFFF);
   CHECK(g.Read32(BLOCK + mode::NC_ANY) == 0xFFFFFFFF);
+  // spread round the lap: the machines are apart, so contact stays the game's
+  {
+    const std::optional<mode::Package> spread = mode::Read(Vector("gap_spread.mode.json"), &why);
+    CHECK(spread.has_value() && spread->start_gap_even && !spread->start_gap);
+    if (!spread)
+      return;
+    TestHost host2;
+    ModData data2;
+    Guest g2(host2, data2);
+    FakeModeRace(g2, 30, 0);
+    g2.Write16(MODULE + game::PHASE, game::PHASE_RACE - 1);
+    mode::Run(g2, *spread, BLOCK, MODULE);
+    CHECK(g2.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
+    for (u32 seat = 0; seat < 30; ++seat)
+      CHECK(g2.Read32(BLOCK + mode::NC + 4 * seat) == 0);
+    CHECK(g2.Read32(BLOCK + mode::NC_ANY) == 0);
+  }
 }
 
 // The race words vector on thirty seats through the countdown and past GO: its setup words act at the first run

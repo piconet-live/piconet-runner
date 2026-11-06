@@ -435,15 +435,16 @@ void TestTheDisplayWordsRun()
     const std::optional<mode::Package> race = mode::Read(v, &why);
     CHECK(race.has_value() && hud::WindowFlags(*race) == (hud::STORY_PICTURES | hud::POINTS_PAGE | hud::ROLLING));
   }
-  // start_together: its one flag, read by the image's placing and preload
+  // start_gap: 0 its one flag SAME_SPOT, read by the image's slot site; even SPREAD, read by the image's move
+  for (const auto& [name, flags] : {std::pair{"gap_same.mode.json", hud::SAME_SPOT}, std::pair{"gap_spread.mode.json", hud::SPREAD}})
   {
-    std::ifstream file(ProtocolFile("protocol/tests/vectors/modes") / "together.mode.json");
+    std::ifstream file(ProtocolFile("protocol/tests/vectors/modes") / name);
     std::stringstream text;
     text << file.rdbuf();
     picojson::value v;
     picojson::parse(v, text.str());
     std::string why;
-    const std::optional<mode::Package> together = mode::Read(v, &why);
-    CHECK(together.has_value() && together->start_together && hud::WindowFlags(*together) == hud::TOGETHER);
+    const std::optional<mode::Package> gap = mode::Read(v, &why);
+    CHECK(gap.has_value() && hud::WindowFlags(*gap) == flags);
   }
 }

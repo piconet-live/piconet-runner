@@ -261,9 +261,18 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.race_waits = true;
         }
-        else if (id == modes::SETUP_STARTTOGETHER)
+        else if (id == modes::SETUP_STARTGAP)
         {
-          p.start_together = true;
+          const float v = std::bit_cast<float>(arg(0));
+          if (setup_args.size() != 1 || !(v >= 0.0f && v <= MOST_START_GAP) || p.start_gap_even)
+            return Fail(why, "has a start gap outside 0 to 10000 m, or two");
+          p.start_gap = v;
+        }
+        else if (id == modes::SETUP_STARTGAPEVEN)
+        {
+          if (p.start_gap)
+            return Fail(why, "has two start gaps");
+          p.start_gap_even = true;
         }
         else if (id == modes::SETUP_TIMEGAPS)
         {

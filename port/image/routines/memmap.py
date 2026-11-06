@@ -315,7 +315,8 @@ assert ICONS + 2 * 30 * 4 <= COURSE_NAME and COURSE_NAME + NAME_SIZE <= RACE
 # from the mode's block, the image reads them in the drawing and at the race's set-up (the flags). Not read by a step.
 MODE_HUD = _facts.MODE_HUD
 MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
-MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_TOGETHER, MODE_GHOST_TASK = 1, 2, 4, 8, 32, 64
+MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_SAME_SPOT, MODE_GHOST_TASK = 1, 2, 4, 8, 32, 64
+MODE_SPREAD = 512                        # start_gap above 0 or even (mode_hud.h SPREAD; sites_grid.py grid_spread)
 MODE_HUD_RANK = MODE_HUD + 8             # not 0: the viewed racer's RANK is hidden, the rank icons with it (mode_hud.h)
 MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
 MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
@@ -327,8 +328,9 @@ MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HU
 # seat the machine's draw sets aside for this frame's ghost task: +0 its car (the task clears it), +4 its level of detail
 MODE_HUD_SILENT, MODE_HUD_GAP, MODE_HUD_GHOSTS = MODE_HUD + 0xCC, MODE_HUD + 0xD0, MODE_HUD + 0x180
 MODE_HUD_OBJECTS = MODE_HUD + 0x27C  # OBJECTS's of + 1 (0: the course's own) and of - n (mode_hud.h WINDOW_OBJECTS)
+MODE_HUD_START_GAP = MODE_HUD + 0x290  # start_gap's metres, binary32; 0.0 under SPREAD: even (mode_hud.h WINDOW_START_GAP)
 MODE_HUD_MOVE = MODE_HUD + 0x300     # not 0: the classic HUD's moves are on, the sites of sites_hudmove.py call the host; bit 2: the faces board hidden (hud_move.cpp)
-assert MODE_HUD_OBJECTS + 8 <= MODE_HUD_MOVE and MODE_HUD_MOVE + 4 <= RACE
+assert MODE_HUD_OBJECTS + 8 <= MODE_HUD_START_GAP and MODE_HUD_START_GAP + 4 <= MODE_HUD_MOVE and MODE_HUD_MOVE + 4 <= RACE
 assert MODE_HUD_GHOSTS + 30 * 8 <= MODE_HUD + 0x270 and MODE_HUD_OBJECTS + 8 <= RACE  # (0x270: the DISTANCE stand-ins)
 assert MODE_HUD_GAP + 0x14 <= MODE_HUD_TAGS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= MODE_HUD_GHOSTS and MODE_HUD_GHOSTS + 30 * 8 <= RACE
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE

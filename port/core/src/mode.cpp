@@ -2183,7 +2183,7 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
 {
   const u32 count = m.Count();
   const u32 all = count >= 32 ? ~0u : (1u << count) - 1;
-  if (p.contact_off || p.start_together)
+  if (p.contact_off || (p.start_gap && *p.start_gap == 0.0f))
     for (u32 seat = 0; seat < count; ++seat)
       g.Write32(block + NC + 4 * seat, 0xFFFFFFFFu);
   if (p.restore.value_or(false))
