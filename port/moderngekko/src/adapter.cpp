@@ -158,6 +158,9 @@ public:
     VideoCommon::AuroraPresent::Scene(racing, where);
   }
 
+  // The game's step (core.cpp's frame tick): Aurora's event lines say it.
+  void Step(fzgx::u32 step) override { VideoCommon::AuroraPresent::Step(step); }
+
   // The replay scrubber (replay_bar.cpp, replay_host.cpp): its keys, a scrub on the bar, what the bar shows; its
   // undo log's packer; the process's memory for a playback's last lines.
   fzgx::u32 ReplayKeys() override { return TakeReplayKeys(); }

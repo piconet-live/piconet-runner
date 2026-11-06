@@ -271,6 +271,7 @@ void FrameTick()
   // where the game stands, for the host's presenter (Host::Scene): on any change of the mode, the phase or the course
   if (g.Ram(net::MODULE_POINTER, 4) && g.Read32(net::MODULE_POINTER) == layout::MAIN_REL)
   {
+    s_host->Step(g.Read32(net::STEP));
     static u32 told[3] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
     const u32 now[3] = {g.Read16(game::GAME_MODE_AT), g.Read16(game::PHASE_AT), g.Read32(table::RACE_COURSE_AT)};
     if (now[0] != told[0] || now[1] != told[1] || now[2] != told[2])

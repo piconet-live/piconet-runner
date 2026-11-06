@@ -137,6 +137,10 @@ void Host::Scene(bool, const std::string&)
 {
 }
 
+void Host::Step(u32)
+{
+}
+
 void Host::CodeChanged(u32, u32)
 {
 }
