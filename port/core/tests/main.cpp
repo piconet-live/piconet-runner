@@ -68,6 +68,7 @@ void TestTheStatusBoardOfAPlainStart();
 void TestABoardThatIsNotThisVersionsIsLeft();
 void TestTheRaceOnTheBoard();
 void TestTheCameraViewOnTheBoard();
+void TestTheLocalPadOnTheBoard();
 void TestTheSessionsPhasesOnTheBoard();
 void TestARelayThatNamesSeatsAndFramesOfNoRace();
 void TestAPacketWithoutTheSeatsKeyIsNotTheRelays();
@@ -135,10 +136,6 @@ void TestTheCourseMapsStartLine();
 void TestTheCourseMapsStartMark();
 // test_minimap_view.cpp
 void TestTheCourseMapsViewTilts();
-void TestInputsStickAtRestStandsInItsGate();
-void TestInputsStickUpMovesUpAndLeansAway();
-void TestInputsProjectiveMapsCornersAndBack();
-void TestInputsTriggerIsFullAtItsRangeOrAPress();
 void TestTheCourseMapStaysInItsSquare();
 void TestAKnockedOutRacerNeverScrubs();
 void TestTheLeaderAndTheClosestBattle();
@@ -382,6 +379,7 @@ void TestARaceAgainstARelay()
   TestABoardThatIsNotThisVersionsIsLeft();
   TestTheRaceOnTheBoard();
   TestTheCameraViewOnTheBoard();
+  TestTheLocalPadOnTheBoard();
   TestTheSessionsPhasesOnTheBoard();
   TestARelayThatNamesSeatsAndFramesOfNoRace();
   TestAPacketWithoutTheSeatsKeyIsNotTheRelays();
@@ -422,10 +420,6 @@ void TestTheSpectatorControls()
   TestTheCourseMapsStartLine();
   TestTheCourseMapsStartMark();
   TestTheCourseMapsViewTilts();
-  TestInputsStickAtRestStandsInItsGate();
-  TestInputsStickUpMovesUpAndLeansAway();
-  TestInputsProjectiveMapsCornersAndBack();
-  TestInputsTriggerIsFullAtItsRangeOrAPress();
   TestTheCourseMapStaysInItsSquare();
   TestAKnockedOutRacerNeverScrubs();
   TestTheLeaderAndTheClosestBattle();

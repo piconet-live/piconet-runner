@@ -77,7 +77,7 @@ void TestTheStatusBoardOfAPlainStart()
   Options o;
   o.board = path;
   Init(host, o);
-  CHECK(board::Taken() && host.notices.find("fzgx: board: taken (game.board, version 4)") != std::string::npos);
+  CHECK(board::Taken() && host.notices.find("fzgx: board: taken (game.board, version 5)") != std::string::npos);
   {
     Seen s(path);
     CHECK(s.view().HeaderRunnerVersion() == board::VERSION && s.view().HeaderRunnerPid() == board::ProcessId() &&
@@ -142,7 +142,7 @@ void TestABoardThatIsNotThisVersionsIsLeft()
   o.board = MakeBoard(dir, board::VERSION + 1);
   Init(host, o);
   CHECK(!board::Taken() && host.log.find("fzgx: board: game.board refused: the launcher's layout is another version (its "
-                                         "version 5, this game's 4") != std::string::npos);
+                                         "version 6, this game's 5") != std::string::npos);
   CHECK(Seen(o.board).view().HeaderRunnerVersion() == board::VERSION);
   board::Field();
   board::Stopped(board::StopReason::Escape);
@@ -251,6 +251,55 @@ void TestTheCameraViewOnTheBoard()
   CHECK((said == std::vector<std::pair<u32, u32>>{{2, 0}, {3, 2}, {1, 3}}));
   Shutdown();
   board::Close();
+}
+
+// The local player's pad for the launcher's Inputs window (minimap_frame.cpp InputsFrame): the game's PADStatus from
+// the course intro on while this game has a driver of its own, held 0 otherwise; written only when it changed.
+void TestTheLocalPadOnTheBoard()
+{
+  const std::string dir = Temp();
+  const std::string path = MakeBoard(dir);
+  TestHost host;
+  Options o;
+  o.board = path;
+  Init(host, o);
+  Guest g(host, Data());
+  const auto seen = [&] {
+    board::LocalPad p;
+    CHECK(Seen(path).view().ReadLocalPad(&p));
+    return p;
+  };
+  CHECK(seen().serial == 0);
+  net::InputsFrame(g);  // no race module: no pad, said once
+  CHECK(seen().serial == 1 && seen().held == 0);
+  LinkMainRel(g);
+  constexpr u32 PAD = 0x1BA040 + 0x998;  // main.rel's .bss, PADStatus of port 0 (minimap_frame.cpp PAD_STATUS)
+  g.Write16(MODULE + PAD, 0x0110);       // A and Z
+  g.Write8(MODULE + PAD + 2, static_cast<u8>(-72)), g.Write8(MODULE + PAD + 3, 40);
+  g.Write8(MODULE + PAD + 4, 59), g.Write8(MODULE + PAD + 5, static_cast<u8>(-3));
+  g.Write8(MODULE + PAD + 6, 150), g.Write8(MODULE + PAD + 7, 12);
+  g.Write16(MODULE + net::PHASE, 0x26);  // before the course intro: still none
+  net::InputsFrame(g);
+  CHECK(seen().serial == 1);
+  g.Write16(MODULE + net::PHASE, 0x27);  // the course intro: the player's pad
+  net::InputsFrame(g);
+  board::LocalPad p = seen();
+  CHECK(p.serial == 2 && p.held == 1 && p.buttons == 0x0110 && p.stick_x == -72 && p.stick_y == 40 && p.c_stick_x == 59 &&
+        p.c_stick_y == -3 && p.l == 150 && p.r == 12);
+  net::InputsFrame(g);  // the same pad: not written again
+  CHECK(seen().serial == 2);
+  g.Write16(MODULE + PAD, 0x1000);  // Start
+  net::InputsFrame(g);
+  CHECK(seen().serial == 3 && seen().buttons == 0x1000);
+  g.Write32(net::SEAT_SLOT + 4, 0xFFFFFFFF);  // no seat of this game's own (a replay, a watched race): none
+  net::InputsFrame(g);
+  p = seen();
+  CHECK(p.serial == 4 && p.held == 0 && p.buttons == 0 && p.stick_x == 0);
+  Shutdown();
+  board::Close();
+  // without a board nothing is read or written
+  net::InputsFrame(g);
+  CHECK(seen().serial == 4);
 }
 
 // Where the session is, as the board's phase says it.
