@@ -33,10 +33,19 @@ at the grid (the compiler cannot know a lap's length). fn_1_214C4 turns d into a
 below 0, on a lap too short for the machines' 19 m, to the lap's end, still behind the line); the lane is k mod 3: -0.25, 0,
 +0.25 of the road's width (fn_1_207DC's offset is a fraction of the frame's width +0x68, on a cylinder or pipe round
 it); fn_1_85F90 then finds the spot's checkpoint, puts the machine on the floor through the restore's spot finder
-fn_1_892FC and calls fn_1_23500, whose fn_1_22F90 (M, 1) clears the track caches M+0x488..+0x49C and whose first
-progress pass seeds the checkpoint, distance and laps from the spot (P+0x11C = -1, P+0x118 = 0, as on the grid). The
-gap word 0.0 is `even`. Every machine so starts as a grid machine does, behind the line: P+0x11C -1, P+0x118 0, P+0xF8 =
-its lap distance less a lap, so its first crossing of the line is its start and counts no lap. Nothing on a course without
+fn_1_892FC and calls fn_1_23500, whose fn_1_22F90 (M, 1) clears the track caches M+0x488..+0x49C and the progress
+record (P+0x11C = -1, P+0x118 = 0, as on the grid). That first progress pass finds its checkpoint with fn_1_20994, the
+first checkpoint from the line whose slab holds the point: right on the grid, but away from the line often a stretch
+beside it (Drift Highway, game test 2026-11-06: 17 of 30 seats got the start straight's, distance = -z). The in-race
+search then found the right one two steps on, a forward jump the skip limit (fn_1_8A1B4 0x8A398, gain above 1000 m)
+destroyed four machines for, and a CPU turned round. So the routine then seeds the record as the restore does,
+from the spot's own checkpoint: P+0x140 its checkpoint, +0x144 its fraction, +0x148 the machine's position M+0x7C
+(what fn_1_85F90 and fn_1_892FC write before the clear), fn_1_23640 (P, 0), the light reset (clears P+0..+0x116 only:
+the laps and the spot stay; P+0x80 = 0 and the branch's checkpoint -1, so the pass seeds from P+0x140, 0x8A2DC), and
+fn_1_8A190 (M, 1), the pass in its seeding form (no skip test). Then the flags as story action 13 leaves them: those
+after the game's placing, with the move's 0x400. The gap word 0.0 is `even`. Every machine so starts as a grid
+machine does, behind the line: P+0x11C -1, P+0x118 0, P+0xF8 = its lap distance less a lap, so its first crossing of
+the line is its start and counts no lap. Nothing on a course without
 laps (header +0x7D) or without a course header: those keep the game's grid. The machine and its start speed come in
 r3 and f1 (the loop's r27 and f30), k is the loop's r28 (kept across the calls by every callee); the routine keeps its
 values in a frame of its own and uses r0, r3, r4, r11, r12, f0 to f4 and cr0 beyond the calls, all dead after a call
@@ -55,6 +64,8 @@ PLACE, PLACE_KNOWN = 0x85BF4, 0x7F83E378          # fn_1_85934: mr r3, r28, the 
 SPREAD = 0x85C0C                                   # fn_1_85934: bl fn_1_85F70, the machine placed (fn_1_23500)
 PLACE_CAR, SLOT_POINT, AT_DISTANCE = 0x85F70, 0x20994, 0x214C4     # fn_1_85F70; fn_1_20994; fn_1_214C4
 COURSE_FRAME, WORK, ON_ROAD, PUT_RACER = 0x17920, 0x14F04, 0x207DC, 0x85F90   # fn_1_17920, fn_1_14F04, fn_1_207DC, fn_1_85F90
+LIGHT_RESET, SEED = 0x23640, 0x8A190              # fn_1_23640 (P, 0): the progress record but its laps and spot; fn_1_8A190 (M, 1)
+PROGRESS, SPOT = 0x49C, 0x140                      # M+0x49C the progress record P; P+0x140 checkpoint, +0x144 fraction, +0x148 position
 HEADER = memmap.REL_BSS + 0x3BE0                   # the loaded course's header (lbl_1_bss_3BE0)
 MACHINES = memmap.REL_BSS + 0x6D820 + 0x2A         # the race's machines (a byte), fn_1_85934's count
 SLOT_0_Z = 0x41980000                              # 19.0: fn_1_85C58's base, slot 0's point (0, 0, 19)
@@ -152,6 +163,9 @@ place_stock:
     stw 3, 0x20(1)
     stfs 1, 0x24(1)
     @bl {FN(PLACE_CAR)}
+    lwz 12, 0x20(1)
+    lwz 0, 0(12)
+    stw 0, 0x38(1)
     li 0, 0
     stw 0, 0x10(1)
     stw 0, 0x14(1)
@@ -227,6 +241,32 @@ spread_modded:
     lfs 3, 0x14(1)
     lfs 4, 0x18(1)
     @bl {FN(PUT_RACER)}
+    lwz 12, 0x20(1)
+    lwz 3, {PROGRESS:#x}(12)
+    cmpwi 3, 0
+    beq spread_flags
+    lwz 0, 0x28(1)
+    stw 0, {SPOT:#x}(3)
+    lwz 0, 0x1C(1)
+    stw 0, {SPOT + 4:#x}(3)
+    lwz 0, 0x7C(12)
+    stw 0, {SPOT + 8:#x}(3)
+    lwz 0, 0x80(12)
+    stw 0, {SPOT + 12:#x}(3)
+    lwz 0, 0x84(12)
+    stw 0, {SPOT + 16:#x}(3)
+    li 4, 0
+    @bl {FN(LIGHT_RESET)}
+    lwz 3, 0x20(1)
+    li 4, 1
+    @bl {FN(SEED)}
+spread_flags:
+    lwz 12, 0x20(1)
+    lwz 0, 0(12)
+    rlwinm 0, 0, 0, 21, 21
+    lwz 11, 0x38(1)
+    or 0, 0, 11
+    stw 0, 0(12)
     addi 1, 1, 0x40
     @b {at + 4:#x}
 spread_stock:

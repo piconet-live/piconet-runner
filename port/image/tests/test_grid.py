@@ -85,12 +85,17 @@ def bits(x):
     return struct.unpack(">I", struct.pack(">f", x))[0]
 
 
+def single_of(word):
+    return struct.unpack(">f", struct.pack(">I", word))[0]
+
+
 def single(x):
     return struct.unpack(">f", struct.pack(">f", x))[0]
 
 
 HEADER_AT, TABLE_AT, SEGS_AT, LAP_AT, WORK_AT, CAR = 0x80D00000, 0x80D10000, 0x80D20000, 0x80D30000, 0x80F00000, 0x80E00000
 CHECKPOINTS, LAP, CP0, T0, LO, HI = 100, 3000.0, 99, 0.62, 2950.0, 3000.0
+PROGRESS_AT, FLAGS, MOVED_FLAGS = 0x80E10000, 0x04000600, 0x84000502    # the machine's progress record; its flags
 
 
 def spread_race(flags=memmap.MODE_SPREAD, gap=None, mode=1, laps=True, header=True, n=30):
@@ -110,6 +115,7 @@ def spread_race(flags=memmap.MODE_SPREAD, gap=None, mode=1, laps=True, header=Tr
     put(memory, SEGS_AT + 0x40, bits(LO))
     put(memory, SEGS_AT + 0x44, bits(HI))
     put(memory, sites_grid.MACHINES, n, 1)
+    put(memory, CAR + sites_grid.PROGRESS, PROGRESS_AT)
     return memory
 
 
@@ -141,8 +147,18 @@ class TheSpreadStart(Build):
                     put(cpu.mem, cpu.r[4] + 4 * i, bits(v))
             elif address == F(sites_grid.PUT_RACER):
                 calls.append(("put_racer", cpu.r[3], cpu.r[4], f[1], f[2], f[3], f[4]))
+                for i, v in enumerate((11.0, 21.0, 31.0)):                 # where the floor put it
+                    put(cpu.mem, cpu.r[3] + 0x7C + 4 * i, bits(v))
+                put(cpu.mem, cpu.r[3], MOVED_FLAGS)                         # what the moving left in its flags
+                put(cpu.mem, PROGRESS_AT + sites_grid.SPOT, 7)             # the whole-course search's checkpoint
+            elif address == F(sites_grid.LIGHT_RESET):
+                spot = [get(cpu.mem, cpu.r[3] + sites_grid.SPOT + 4 * i) for i in range(5)]
+                calls.append(("light_reset", cpu.r[3], cpu.r[4], spot[0], [single_of(w) for w in spot[1:]]))
+            elif address == F(sites_grid.SEED):
+                calls.append(("seed", cpu.r[3], cpu.r[4]))
             elif address == F(sites_grid.PLACE_CAR):
                 calls.append(("place_car", cpu.r[3], f[1]))
+                put(cpu.mem, cpu.r[3], FLAGS)
             else:
                 calls.append(("left", address))
             for i in range(14):                                      # the callee's volatile registers
@@ -155,7 +171,21 @@ class TheSpreadStart(Build):
         m.r[3], m.f[1], m.r[28], m.r[1] = CAR, speed, k, STACK
         m.run(self.symbols["grid_spread"])
         self.assertEqual(m.r[1], STACK)
+        if any(c[0] == "put_racer" for c in calls):   # story action 13's: the flags before the move, its 0x400 now
+            self.assertEqual(get(m.mem, CAR), FLAGS | MOVED_FLAGS & 0x400)
         return calls
+
+    def test_the_spot_is_seeded_from_its_own_checkpoint_not_a_whole_course_search(self):
+        # fn_1_85F90's fn_1_23500 clears the record and seeds it with fn_1_20994, the first checkpoint from the line
+        # whose slab holds the spot: far from the line, a stretch beside it. The light reset keeps laps and spot.
+        calls = self.spread(spread_race(), 12)
+        self.assertEqual([c[0] for c in calls[-4:]], ["put_racer", "light_reset", "seed", "left"])
+
+    def test_without_a_progress_record_only_the_flags_are_put_back(self):
+        memory = spread_race()
+        put(memory, CAR + sites_grid.PROGRESS, 0)
+        calls = self.spread(memory, 3)
+        self.assertEqual([c[0] for c in calls[-2:]], ["put_racer", "left"])
 
     def test_the_site_is_the_machines_placing(self):
         at = TEXT + sites_grid.SPREAD
@@ -174,7 +204,9 @@ class TheSpreadStart(Build):
         lane = (-0.25, 0.0, 0.25)[k % 3]
         return [("place_car", CAR, 3.5), ("slot_point", [0, 0, sites_grid.SLOT_0_Z]), ("at_distance", d, CP0),
                 ("course_frame", 41, 0, 0.25), ("work",), ("on_road", WORK_AT + 0x400, lane),
-                ("put_racer", CAR, 41, 3.5, 10.0, 20.0, 30.0), ("left", TEXT + sites_grid.SPREAD + 4)]
+                ("put_racer", CAR, 41, 3.5, 10.0, 20.0, 30.0),
+                ("light_reset", PROGRESS_AT, 0, 41, [0.25, 11.0, 21.0, 31.0]), ("seed", CAR, 1),
+                ("left", TEXT + sites_grid.SPREAD + 4)]
 
     def test_a_gap_in_metres_moves_slot_k_k_gaps_back_in_its_lane(self):
         for k in (0, 1, 2, 7, 29):
