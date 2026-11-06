@@ -244,8 +244,6 @@ struct Options
   std::string about;         // "about": what the start is for, in its author's words
   std::string bundle_dir;    // "bundle": the mod bundle: mod.bin, manifest.json, patches.json (the fork's kind: codes.txt)
   bool widescreen = true;    // "widescreen": the game's own 16:9 mode
-  bool widescreen_said = false;  // the file has "widescreen": a plain start (offline play) then sets the game's screen
-                                 // option to it (boot.cpp PlainField); without it the player's saved option stands
   bool true_widescreen = false;  // "trueWidescreen": in a race or a playback, the 16:9 view keeps the whole vertical
                                  // view of Normal and widens the sides (image: sites_view.py); needs "widescreen"
   std::string window_name;   // "windowName": the name in the game window's strip, as the launcher gives it (the

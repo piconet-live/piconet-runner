@@ -185,7 +185,7 @@ void TestHighRefreshInAPlainStart()
   TestHost host;
   Options options;
   CHECK(!ParseLaunchFile(R"({"about": "offline play", "widescreen": true, "trueWidescreen": true})", &options));
-  CHECK(options.widescreen_said && options.true_widescreen);
+  CHECK(options.widescreen && options.true_widescreen);
   Init(host, options);
   CHECK(!Active());
   Guest g(host, Data());
@@ -263,14 +263,33 @@ void TestHighRefreshInAPlainStart()
   unsetenv("AURORA_RUNAHEAD_AFTER");
   unsetenv("AURORA_RUNAHEAD");
   unsetenv("AURORA_REDRAW");
-  // a launch file without "widescreen" leaves the player's own option; Normal: no true widescreen word
-  Options own;
-  CHECK(!ParseLaunchFile(R"({"about": "offline play"})", &own));
-  CHECK(!own.widescreen_said);
-  Init(host, own);
+  // Widescreen off in the launcher: Normal in memory every field, whatever the save says (a save the game wrote with
+  // Wide Screen after the player changed an option in its own menu), and no true widescreen word
+  Options off;
+  CHECK(!ParseLaunchFile(R"({"about": "offline play", "widescreen": false})", &off));
+  Init(host, off);
   runahead::Start(nullptr, nullptr, nullptr, nullptr);
-  g.Write32(MODULE + 0x229630, 0);
+  g.Write32(MODULE + 0x229630, 1);  // the save said Wide Screen
+  g.Write32(layout::TRUE_ASPECT, 0x3FE38E39);  // (left from before)
   PlainField();
-  CHECK(g.Read32(MODULE + 0x229630) == 0 && g.Read32(layout::TRUE_ASPECT) == 0);
+  CHECK(g.Read32(MODULE + 0x229630) == 0);
+  CHECK(g.Read32(layout::TRUE_ASPECT) == 0);
+  g.Write32(MODULE + 0x229630, 1);  // the game set it again (its menu): the next field puts it back
+  PlainField();
+  CHECK(g.Read32(MODULE + 0x229630) == 0);
+  runahead::Stop();
+  // the start that opens the game's own controller options keeps the save's option, either way, and no true
+  // widescreen word
+  Options setup;
+  CHECK(!ParseLaunchFile(R"({"about": "the game's controller options", "controllerSetup": true})", &setup));
+  Init(host, setup);
+  runahead::Start(nullptr, nullptr, nullptr, nullptr);
+  for (u32 saved : {0u, 1u})
+  {
+    g.Write32(MODULE + 0x229630, saved);
+    PlainField();
+    CHECK(g.Read32(MODULE + 0x229630) == saved);
+    CHECK(g.Read32(layout::TRUE_ASPECT) == 0);
+  }
   runahead::Stop();
 }

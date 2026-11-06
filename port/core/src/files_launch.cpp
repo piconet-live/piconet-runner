@@ -258,7 +258,6 @@ std::optional<std::string> ParseLaunchFile(const std::string& text, Options* out
   std::string problem;
   Part file(root.get<picojson::object>(), "", &problem);
   launch_file::ReadFile(file, &o);
-  o.widescreen_said = root.get<picojson::object>().count("widescreen") != 0;
   if (o.true_widescreen && !o.widescreen)
     file.Refuse("trueWidescreen", "is true with \"widescreen\": false: true widescreen is a way of the game's 16:9 mode");
   if (o.window_name.size() > launch_file::WINDOW_NAME_MOST_BYTES)

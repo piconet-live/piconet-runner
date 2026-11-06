@@ -387,11 +387,14 @@ void PlainField(Guest& g)
 {
   const Options& o = TheOptions();
   const u32 module = MainRel(g);
-  const bool set = module != 0 && o.widescreen_said && !o.controller_setup;
+  // the screen option as the launch file says, on or off, every field, as a race does: a save the game wrote with
+  // another option (the player changed one in the game's own menu) never decides; the start that opens the game's
+  // own controller options keeps the save's, and true widescreen's word stays 0 there
+  const bool set = module != 0 && !o.controller_setup;
   if (set)
     g.Write32(module + SCREEN_OPTION, o.widescreen ? 1 : 0);
   const std::optional<bool> wide = Widescreen(g);
-  const u32 aspect = wide.value_or(false) ? TrueAspectWord(o) : 0;
+  const u32 aspect = set && wide.value_or(false) ? TrueAspectWord(o) : 0;
   g.Write32(TRUE_ASPECT, aspect);
   const bool draw = runahead::PlainDraw();
   g.Write32(layout::PLAIN_DRAW, draw ? 1 : 0);
