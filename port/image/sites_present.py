@@ -28,7 +28,11 @@ copy before, is still clear for this frame's drawing.
 
 Every routine uses r11, r12 and CR field 0 only, each dead after its site (liveness.py proves it at the site; a run
 of calls skipped lands on a call or a `lbz`/`cmplwi` that writes them again before reading). No step reads either
-word, no rollback puts them back."""
+word, no rollback puts them back.
+
+A plain start (offline play) with the host's memmap.PLAIN_DRAW set (high refresh): `present_draw` stores DRAW_ASK = 1
+and makes the stock call, `present_depth` stores DRAW_ASK = 2 after the stock read-back; nothing is ever skipped there
+(the host's answer is not read), and the tail and the copy are stock. PLAIN_DRAW 0: every site stock, as before."""
 import memmap
 
 # (site in main.rel .text, the call's target, where a skip goes on, name)
@@ -57,8 +61,8 @@ def add(k, r, patch, stock, middle, draw_next=None):
     routine of another site at 0x37C18 that a frame that draws goes on to in place of the stock call (sites_hfr.py's
     `hfr`, which makes the call itself and comes back after the site)."""
     TEXT, C, branch = k.TEXT, k.C, k.branch
-    MODE, ASK, SKIP = (memmap.MODE - memmap.CONTROL, memmap.DRAW_ASK - memmap.CONTROL,
-                       memmap.DRAW_SKIP - memmap.CONTROL)
+    MODE, ASK, SKIP, PLAIN = (memmap.MODE - memmap.CONTROL, memmap.DRAW_ASK - memmap.CONTROL,
+                              memmap.DRAW_SKIP - memmap.CONTROL, memmap.PLAIN_DRAW - memmap.CONTROL)
 
     def head(name, ask=None):
         """r12 the control block; to `name`_stock in a plain start; DRAW_ASK stored; cr0 eq when not skipping."""
@@ -80,8 +84,17 @@ def add(k, r, patch, stock, middle, draw_next=None):
 
     at, target, back, epilogue = (TEXT + x for x in DRAW)
     drawn = f"    @b {draw_next}\n" if draw_next else f"    @bl {target:#x}\n    @b {back:#x}\n"
-    site(at, target, "present_draw", head("present_draw", 1) + f"""    @bl {TEXT + SOUND:#x}
+    # a plain start goes to present_draw_plain: with the host's PLAIN_DRAW set (offline play at high refresh) it stores
+    # DRAW_ASK = 1 and never skips; else the stock call
+    site(at, target, "present_draw", head("present_draw", 1).replace(
+        "    beq present_draw_stock\n", "    beq present_draw_plain\n", 1) + f"""    @bl {TEXT + SOUND:#x}
     @b {epilogue:#x}
+present_draw_plain:
+    lwz 11, {PLAIN}(12)
+    cmpwi 11, 0
+    beq present_draw_stock
+    li 11, 1
+    stw 11, {ASK}(12)
 present_draw_stock:
 """ + drawn)
     for offset, call, resume, name in TAIL:
@@ -110,6 +123,13 @@ present_depth_asked:
     @b {at + 4:#x}
 present_depth_stock:
     @bl {target:#x}
+    lis 12, {C}
+    lwz 11, {PLAIN}(12)
+    cmpwi 11, 0
+    beq present_depth_plain
+    li 11, 2
+    stw 11, {ASK}(12)
+present_depth_plain:
     @b {at + 4:#x}
 """)
     at, target = COPY

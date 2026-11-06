@@ -56,10 +56,13 @@ def add(k, r, patch, stock, complete, codes, hooks, mute):
     FN_407C, FN_C7224 = TEXT + 0x407C, TEXT + 0xC7224
     SEED, CAMERA = TEXT + 0xF47AC, (TEXT + 0xAA84, TEXT + 0xAC08)
     test = f"    lis 12, {C}\n    lwz 12, {MODE}(12)\n    cmpwi 12, 0\n"
+    PLAIN = memmap.PLAIN_DRAW - memmap.CONTROL
 
-    # --- the mode machine's start (fn_1_ECC, every game frame on the main thread). A plain start: nothing. A race (a
-    # replay plays as the race): the host's frame tick, the two codes Gecko ran every frame (C0: the seat routines
-    # installed as the game's hooks; the shuffle word held until the race), then the fork's boot routine of a race.
+    # --- the mode machine's start (fn_1_ECC, every game frame on the main thread). A plain start: nothing, or with the
+    # host's PLAIN_DRAW set (offline play at high refresh) the host's frame tick alone. A race (a replay plays as the
+    # race): the host's frame tick, the two codes Gecko ran every frame (C0: the seat routines installed as the game's
+    # hooks; the shuffle word held until the race), then the fork's boot routine of a race. r0, r12 and CR field 0 are
+    # free at a function's first instruction.
     inserts = {name: {a: w for kind, a, w in rows if kind == "insert"} for name, rows in codes.items()}
     first = stock(ECC, 0x9421FFF0)
     assert inserts["race"][ECC][-1] == first, "the boot routine ends with the instruction it replaced"
@@ -81,6 +84,20 @@ def add(k, r, patch, stock, complete, codes, hooks, mute):
     addi 1, 1, 0x90
     b boot_race
 mm_stock:
+    lis 12, {C}
+    lwz 12, {PLAIN}(12)
+    cmpwi 12, 0
+    beq mm_plain
+    stwu 1, -0x90(1)
+    mflr 0
+    stw 0, 0x94(1)
+    stmw 3, 0x14(1)
+    @bl host_tick
+    lmw 3, 0x14(1)
+    lwz 0, 0x94(1)
+    mtlr 0
+    addi 1, 1, 0x90
+mm_plain:
     .long {first:#010x}
     @b {ECC + 4:#x}
 mm_seats:
