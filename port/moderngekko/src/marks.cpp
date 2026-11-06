@@ -1,5 +1,5 @@
 // The draw marks (the host call HOST_MARK, port/image/sites_marks.py): at the game's own draw sites the image tells which
-// machine's body or burner (which one) the next draws are; the emulator's Aurora feed puts the mark at that place of the command stream
+// machine's body or burner (which one, and its star) the next draws are; the emulator's Aurora feed puts the mark at that place of the command stream
 // it hands Aurora (VideoCommon/AuroraPresent: NoteMark), so every draw Aurora keeps carries the object the game drew it for
 // (GXRuntime's aurora_present.h AURORA_TAG_*). The drawing only: guest memory is read, never written, and no register
 // changes.
@@ -19,9 +19,9 @@ namespace fzgx_port
 namespace
 {
 // sites_marks.py's operations
-constexpr u32 BODY = 1, BURNER = 2, END = 3;
+constexpr u32 BODY = 1, BURNER = 2, END = 3, STAR = 4, STAR_END = 5;
 // aurora_present.h: 1 + the machine in bits 0-7, the kind in bits 8-15, for a burner 1 + its record's slot in bits 16-23
-constexpr u32 TAG_BODY = 1, TAG_BURNER = 2;
+constexpr u32 TAG_BODY = 1, TAG_BURNER = 2, TAG_STAR = 3;
 constexpr u32 SEATS = 30;
 // the car object's machine block (fn_1_84860: obj +0x32C); a burner draw node's record (+8) and its machine block (+0x48)
 constexpr u32 CAR_MACHINE = 0x32C, NODE_RECORD = 8, RECORD_MACHINE = 0x48;
@@ -74,6 +74,12 @@ void MarkCall(u32 op, u32 arg)
     const u32 record = Read32(arg + NODE_RECORD);
     if (const u32 m = Machine(Read32(record + RECORD_MACHINE)))
       tag = BurnerSlot(record) << 16 | TAG_BURNER << 8 | m;  // which of the machine's burners: a light each (Aurora rt_rules.hpp light_picks)
+  }
+  else if (op == STAR || op == STAR_END)
+  {
+    // inside the burner's draw, its star's two sprites (arg: the Burner record), then the burner's mark again
+    if (const u32 m = Machine(Read32(arg + RECORD_MACHINE)))
+      tag = BurnerSlot(arg) << 16 | (op == STAR ? TAG_STAR : TAG_BURNER) << 8 | m;
   }
   VideoCommon::AuroraPresent::NoteMark(tag);  // (END, or an object of no machine: none)
 }
