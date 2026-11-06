@@ -159,8 +159,9 @@ bool NeedsStoryPictures(const std::vector<u8>& code);
 // Whether the package's code uses show_clock: the timed rule from the race's start, with the game's count off.
 bool UsesClock(const Package& p);
 
-// What the HUD pass asks of the race, read from the block for one viewer (`viewed`: the racer the picture follows;
-// `own`: the seat whose own look applies, or none): pure, for the tests.
+// What the HUD pass asks of the race, read from the block for one viewer (`viewed`: the racer the picture follows, whose
+// seat.own_look applies: the local seat while it races, the racer followed by a spectator, a watched race or a playback,
+// so a racer is drawn as its own driver sees it to whoever follows it): pure, for the tests.
 // GHOST_GAP's source (Time Attack's fn_1_F0E00): per seat, the step each bucket of the course's distance was first reached.
 // Host memory, written once a frame by the HUD pass: outside the block, the undo log and the checksum, and no step reads
 // it (the rollback presentation rule). A rollback rewrites what it sees: an entry later than the frame's step is dropped when the
@@ -208,7 +209,7 @@ struct Frame
   bool objects_fed = false;          // the viewed racer's OBJECTS shows the mode's n/of...
   u32 objects_shown = 0, objects_of = 0;  // ...these
 };
-Frame Read(const Guest& g, u32 block, u32 viewed, u32 own);
+Frame Read(const Guest& g, u32 block, u32 viewed);
 
 // The mode's HUD pass: once a frame, as the frame's drawing begins (after the frame routine's `hudstate` and
 // `spechud`), for the racer this game's picture follows. Nothing without a mode.

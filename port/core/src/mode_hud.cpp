@@ -286,14 +286,15 @@ void ShowFault(Guest& g, const Package& p, bool broken)
     g.Write8(layout::MODE_HUD + WINDOW_TITLE + k, k < title.size() ? static_cast<u8>(title[k]) : 0);
 }
 
-Frame Read(const Guest& g, u32 block, u32 viewed, u32 own)
+Frame Read(const Guest& g, u32 block, u32 viewed)
 {
   Frame f;
   for (u32 seat = 0; seat < SEATS; ++seat)
   {
     const u32 r = Seat(block, seat);
+    // the followed racer as its driver sees it (you race: you; you watch: whoever the picture follows), the rest by seat.look
     const u8 own_look = g.Read8(r + OWN_LOOK);
-    const u8 look = seat == own && own_look != 0 ? own_look - 1 : g.Read8(r + LOOK);
+    const u8 look = seat == viewed && own_look != 0 ? own_look - 1 : g.Read8(r + LOOK);
     f.looks[seat] = look < LOOK_COUNT ? look : static_cast<u8>(LOOK_NORMAL);
     f.colours[seat] = g.Read32(r + COLOUR);
     f.tags[seat] = g.Read8(block + TAGS_AT + seat);
@@ -439,7 +440,7 @@ void Hud(Guest& g)
            g.Read32(layout::MODE_HUD + WINDOW_FLAGS));
   }
   const u32 viewed = net::ViewedRacer(g);
-  const Frame f = Read(g, block, viewed, net::OwnSeat(g));
+  const Frame f = Read(g, block, viewed);
   // the part mask: the mode's parts over what the HUD's owners wrote this frame (hudstate, spechud, the game's own
   // when the machine is out or finished: 0 stays 0, the HUD is off). Every story part the mode does not show is off:
   // the default mask has them on.
