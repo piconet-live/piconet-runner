@@ -6,6 +6,7 @@
 // frame.cpp, frame_paint.cpp (frame.h): the game window's frame, a strip in the launcher's look;
 // panel.cpp: the panel over the picture before a race;
 // taskbar.cpp: the game window under the launcher's taskbar button, and its icon;
+// marks.cpp: the draw marks for Aurora (which machine's body or burner a draw is);
 // lanes*.cpp (lanes.h): the machines' task as a host call, for the per-machine rollback; copies.cpp: frame-buffer
 // copies under a rollback; rumble.cpp: the motors held still while the player does not drive;
 // adapter.cpp: the core's host, the files the adapter opens (the log file, the game folder's, the native module) and
@@ -77,6 +78,9 @@ extern State s_state;
 // The core's host (adapter.cpp). Not named s_host: the Windows socket headers define that name as a macro, and a file
 // that includes them after this header then reads every use of it as something else.
 extern fzgx::Host& s_core_host;
+
+// marks.cpp: the draw marks' host call (HOST_MARK): r3 the operation, r4 its argument
+void MarkCall(u32 op, u32 arg);
 
 // host.cpp: the emulator's settings for the game, a race, the picture, the reference configuration
 void ApplyGameSettings();

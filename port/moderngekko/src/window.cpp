@@ -1,5 +1,5 @@
 // The mod's data window and the host calls: what the emulator is given so that the image's data lives in this
-// process and the game's calls to the host's five addresses arrive in the core.
+// process and the game's calls to the host's seven addresses arrive in the core.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "adapter_internal.h"
@@ -120,6 +120,10 @@ bool HostCall(CPUState* cpu, u32 address, void*)
     else if (address == table::HOST_HUD)
     {
       fzgx::HudMoveCall(cpu->gpr[3], cpu->gpr[4]);  // the classic HUD's moves (port/image/sites_hudmove.py): drawing only
+    }
+    else if (address == table::HOST_MARK)
+    {
+      MarkCall(cpu->gpr[3], cpu->gpr[4]);  // the draw marks for Aurora (marks.cpp, port/image/sites_marks.py): drawing only
     }
     cpu->pc = cpu->lr;
     return true;

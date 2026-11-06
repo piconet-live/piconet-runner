@@ -55,8 +55,7 @@ constexpr Switch RAY_TRACING_SET[] = {
     {"AURORA_RT_FLARE", "1"},
     {"AURORA_RT_GLOW_GAIN", "1.4"},
     {"AURORA_RT_GLOW_HALF", "2"},
-    // the look fixes of build c (recompcore gxr/240-nocircle)
-    {"AURORA_RT_LIGHT_OWN", "1"},
+    // the look fixes of build c (recompcore gxr/240-nocircle; its light's own body is the game's draw marks since fix/game-tags, no switch)
     {"AURORA_RT_GLOW_WIDE", "1"},
     {"AURORA_RT_SHADER_CACHE", "1"},
     {"AURORA_RT_BEFORE_LATEST", "1"},

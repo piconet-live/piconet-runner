@@ -287,6 +287,7 @@ HOST_LINKED = _facts.HOST_LINKED  # main.rel is linked and none of its code has 
 HOST_HFR = _facts.HOST_HFR        # the drawn frames between two steps (sites_hfr.py): r3 the operation, r4 its frame
 HOST_MODE = _facts.HOST_MODE      # the mode point (sites_mode.py): the game mode's rules, once a step
 HOST_HUD = _facts.HOST_HUD        # the classic HUD's moves (sites_hudmove.py): r3 the operation, r4 its part
+HOST_MARK = _facts.HOST_MARK      # the draw marks (sites_marks.py): r3 the operation, r4 its argument
 REL = _facts.MAIN_REL       # main.rel's module header in every boot (the pin: main.dol 0x80005940, fze.sample.rel)
 REL_TEXT = _facts.REL_TEXT_AT
 REL_BSS = _facts.REL_BSS_AT

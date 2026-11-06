@@ -104,7 +104,8 @@ HOST_LINKED = 0x81860008  # host call: main.rel is linked and none of its code h
 HOST_HFR = 0x8186000C  # host call: the drawn frames between two steps (high refresh rate), from fn_1_37AA8's draw half
 HOST_MODE = 0x81860010  # host call: the mode point, once a step after the race pass's callbacks (sites_mode.py): the game mode's rules run
 HOST_HUD = 0x81860014  # host call: the classic HUD's moves (sites_hudmove.py): r3 the operation, r4 its part; the drawing only
-HOSTCALLS_END = 0x81860018  # the first address after the six host calls
+HOST_MARK = 0x81860018  # host call: the draw marks (sites_marks.py): r3 the operation, r4 its argument; which machine's body or burner the next draws are, for Aurora; the drawing only
+HOSTCALLS_END = 0x8186001C  # the first address after the seven host calls
 
 # ---- control
 EXTRA_STEPS = 8  # steps the frame routine runs in this displayed frame after the first; counts down
@@ -358,6 +359,9 @@ MACHINES = 0x00227878  # the pointer to the machines' blocks, MACHINE_SIZE bytes
 MACHINES_AT = 0x803E1ED8
 MACHINE_COUNT = 0x0022788A  # the number of machines in the race (a byte)
 MACHINE_COUNT_AT = 0x803E1EEA
+CAR_SHADOWS = 0x00227884  # the pointer to the machines' drop-shadow records (CarShadow, CAR_SHADOW_SIZE bytes each, racer order; made by car.c fn_1_82724): +0 flags, bit 0x4 set by car_shadow_calc fn_1_56D4C every frame; read by the drawing only (game_shadow.h)
+CAR_SHADOWS_AT = 0x803E1EE4
+CAR_SHADOW_SIZE = 0x4C  # bytes of one machine's drop-shadow record (fn_1_82724 allocates racers x 0x4C; CarDisp indexes it by racer x 0x4C)
 MACHINE_SIZE = 0x620  # bytes of one machine's block
 MACHINE_PROGRESS = 0x49C  # in a machine's block: the pointer to its progress record
 PROGRESS_SIZE = 0x1FC  # bytes of a progress record
