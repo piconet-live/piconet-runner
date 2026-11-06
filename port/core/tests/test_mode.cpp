@@ -1512,12 +1512,14 @@ void TestTheStatsPage()
     for (u32 i = mode::STATS_FIRST; i < mode::STAT_GRIP_WINDOW; ++i)
       g.Write32(machine(seat) + mode::STAT_FIELDS[i], std::bit_cast<u32>(0.5f));
     g.Write8(machine(seat) + 0x477, 7);
+    // boost energy's field: the seat's constants record (the host's, GX Unleashed's 0.15)
+    g.Write32(table::SEAT_CONSTANTS_AT + seat * table::SEAT_CONSTANT + table::SEAT_ENERGY_USE, std::bit_cast<u32>(0.15f));
   }
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(g.Read32(BLOCK + mode::END) == 0);
   const auto value = [&](u32 seat, u32 i) { return std::bit_cast<float>(g.Read32(BLOCK + mode::StatValueAt(seat, i))); };
   const auto base = [&](u32 seat, u32 i) { return std::bit_cast<float>(g.Read32(BLOCK + mode::StatBaseAt(seat, i))); };
-  constexpr u32 PAGE_BITS = ((1u << mode::STAT_FIELDS.size()) - 1) & ~((1u << mode::STATS_FIRST) - 1);
+  constexpr u32 PAGE_BITS = ((1u << mode::STAT_COUNT) - 1) & ~((1u << mode::STATS_FIRST) - 1);
   CHECK(g.Read32(BLOCK + mode::STATS) == PAGE_BITS && g.Read32(BLOCK + mode::STATS + mode::STAT) == PAGE_BITS);
   CHECK(g.Read32(BLOCK + mode::BLOCK) == g.Read32(BLOCK + mode::RUNS) && g.Read32(BLOCK + mode::STATS_ON) == 1);
   CHECK(value(0, 10) == 1.5f && value(0, 11) == 0.25f && value(0, 12) == 0.125f && value(0, 13) == 20.0f &&
@@ -1530,6 +1532,11 @@ void TestTheStatsPage()
   CHECK(value(1, 10) == 10.0f && value(1, 11) == 3.5f && value(1, 12) == 2.2f && value(1, 13) == 300.0f &&
         value(1, 14) == 1000.0f && value(1, 15) == 19.0f && value(1, 16) == 0.7f);
   CHECK(g.Read32(BLOCK + mode::StatValueAt(1, mode::STAT_GRIP_WINDOW)) == 255);
+  // boost energy: half the pack's on seat 0, its base the pack's; 10 held to the constant's 1.7 on seat 1; the seats'
+  // record stays the host's, and no machine field holds it
+  CHECK(value(0, mode::STAT_BOOST_ENERGY) == 0.15f * 0.5f && base(0, mode::STAT_BOOST_ENERGY) == 0.15f);
+  CHECK(value(1, mode::STAT_BOOST_ENERGY) == 1.7f && base(1, mode::STAT_BOOST_ENERGY) == 0.15f);
+  CHECK(g.Read32(table::SEAT_CONSTANTS_AT + table::SEAT_ENERGY_USE) == std::bit_cast<u32>(0.15f));
   // a package that writes them without the word: a mode error, and nothing past the block
   mode::Package q = *p;
   q.stats_page = false;

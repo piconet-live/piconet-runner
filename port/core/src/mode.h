@@ -104,12 +104,16 @@ static_assert(NO_CAP + 4 <= 7 * PAGE && 7 * PAGE <= BLOCK);
 // turn_decel, grip_window. The first record's bits say for them too (bit i), so a mode that writes none has no other
 // byte changed. A stat from bit STATS_FIRST on keeps its value and its base on the stats page, a record of STAT_TWO a
 // seat. grip_window's field is a byte: its value is the whole number and the wrapper stores the low byte; its base is a real.
+// After the machine's fields, bit STAT_BOOST_ENERGY (seat.stat.boost_energy, on the stats page): no machine field, so not
+// in STAT_FIELDS and never the wrapper's; its field is the seat's constants record's BoostEnergyUse (the seats' block,
+// table::SEAT_CONSTANTS_AT, which the host writes before the race and no step writes), and while its bit is set the
+// image's seat_energy (sites_seats.py, fn_1_26F34 0x27420) loads the value from the stats page in its place.
 constexpr std::array<u32, 18> STAT_FIELDS = {0x8,  0x220, 0x22C, 0xC,  0x14, 0x1C, 0x23C, 0x230, 0x234,
                                              0x30, 0x24,  0x28,  0x10, 0x20, 0x18, 0x2C,  0x238, 0x477};
-constexpr u32 STATS_FIRST = 10, STAT_GRIP_WINDOW = 17;
+constexpr u32 STATS_FIRST = 10, STAT_GRIP_WINDOW = 17, STAT_BOOST_ENERGY = 18, STAT_COUNT = 19;
 constexpr u32 STATS_TWO = BLOCK + 0x10, STAT_TWO = 0x80, STAT_TWO_BASE = 0x40;
-static_assert(STATS_TWO + 30 * STAT_TWO <= BLOCK_WITH_STATS && (STAT_FIELDS.size() - STATS_FIRST) * 4 <= STAT_TWO_BASE &&
-              STAT_FIELDS.size() <= 32 && STAT_FIELDS[STAT_GRIP_WINDOW] == 0x477);
+static_assert(STATS_TWO + 30 * STAT_TWO <= BLOCK_WITH_STATS && (STAT_COUNT - STATS_FIRST) * 4 <= STAT_TWO_BASE &&
+              STAT_COUNT <= 32 && STAT_FIELDS[STAT_GRIP_WINDOW] == 0x477 && STAT_BOOST_ENERGY == STAT_FIELDS.size());
 constexpr u32 StatValueAt(u32 seat, u32 i)
 {
   return i < STATS_FIRST ? STATS + seat * STAT + STAT_VALUES + 4 * i : STATS_TWO + seat * STAT_TWO + 4 * (i - STATS_FIRST);

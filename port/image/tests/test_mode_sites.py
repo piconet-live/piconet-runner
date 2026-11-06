@@ -561,6 +561,13 @@ class TheRuleHookWrapper(Build):
             changed = {i: 0x40000000 + i}
             self.assert_fields(self.stats(1 << i, changed, rebuilt), changed, rebuilt)
 
+    def test_the_boost_energy_bit_writes_no_machine_field(self):
+        # seat.stat.boost_energy (bit 18) has no machine field: the wrapper leaves every field the game's, alone or with others
+        rebuilt = {field: 0x3F000000 + n for n, field in enumerate(standin_inputs.STAT_FIELDS)}
+        self.assert_fields(self.stats(1 << 18, {18: 0x3D99999A}, rebuilt), {}, rebuilt)
+        changed = {2: 0x40000000, 12: 0x40400000}
+        self.assert_fields(self.stats(1 << 2 | 1 << 12 | 1 << 18, {**changed, 18: 0x3D99999A}, rebuilt), changed, rebuilt)
+
     def test_the_byte_stat_keeps_its_neighbours(self):
         at = self.M + standin_inputs.BYTE_FIELD
         i = standin_inputs.STAT_FIELDS.index(standin_inputs.BYTE_FIELD)
