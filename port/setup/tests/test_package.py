@@ -66,6 +66,11 @@ class Parts(unittest.TestCase):
             "bundle": {n: sha1(read(self.at("parts", "bundle", n))) for n in ("mod.bin", "patches.json", "manifest.json")}}))
         write(self.at("parts", "runner", "moderngekko-run.exe"), b"MZ the runner")
         self.manifest("parts/runner/build-manifest.json", self.built("runner", "moderngekko-run.exe"))
+        # Aurora beside the runner, as its build keeps it: the library, what it loads, its pipeline seed (and a map that stays out)
+        for name in ("aurora-present.dll", "webgpu_dawn.dll", "SDL3.dll"):
+            write(self.at("parts", "aurora", name), b"MZ " + name.encode())
+        write(self.at("parts", "aurora", "initial_pipeline_cache.db"), b"SQLite format 3\x00 the seed")
+        write(self.at("parts", "aurora", "moderngekko-run.map"), b"a map")
         for name in ("msvcp140.dll", "msvcp140_atomic_wait.dll", "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll"):
             write(self.at("parts", "vcrt", name), b"MZ " + name.encode())
         for name in ("SairaCondensed-ExtraBold.ttf", "SairaCondensed-SemiBold.ttf", "SairaSemiCondensed-Regular.ttf", "OFL.txt", "Another.ttf"):
@@ -113,7 +118,7 @@ class Parts(unittest.TestCase):
              "runner": self.at("parts", "runner", "moderngekko-run.exe"), "runner-commit": self.runner_commit[:8],
              "module": self.at("parts", "module", "gGFZE01_recomp.dll"), "bundle": self.at("parts", "bundle"),
              "sys": self.at("parts", "Sys"), "sys-source": self.at("emulator"), "vcrt": self.at("parts", "vcrt"),
-             "fonts": self.at("parts", "fonts"),
+             "fonts": self.at("parts", "fonts"), "aurora": self.at("parts", "aurora"),
              "launcher": self.at("launcher"), "program": self.at("program.exe"), "program-name": "Testnet Launcher",
              "program-folder": "app", "marker": "portable-copy.txt",
              "identity-without": "windows",          # these parts are made up on a PC with no Windows side asked (the PATH above)
@@ -149,6 +154,7 @@ class ACopy(Parts):
             "recomp/fzgx/mod.bin", "recomp/fzgx/manifest.json", "recomp/fzgx/patches.json", "recomp/fzgx/same-race.json",
             "recomp/Sys/GameSettings/GFZ.ini", "recomp/Sys/Themes/Clean/icon.png",
             "recomp/MSVCP140.dll", "recomp/MSVCP140_ATOMIC_WAIT.dll", "recomp/VCRUNTIME140.dll", "recomp/VCRUNTIME140_1.dll",
+            "recomp/aurora-present.dll", "recomp/webgpu_dawn.dll", "recomp/SDL3.dll", "recomp/initial_pipeline_cache.db",   # Aurora, with its seed
             "recomp/Fonts/SairaCondensed-ExtraBold.ttf", "recomp/Fonts/SairaCondensed-SemiBold.ttf",       # the strip's three,
             "recomp/Fonts/SairaSemiCondensed-Regular.ttf", "recomp/Fonts/OFL.txt",                    # and their licence
             "recomp/m-overlay-LICENSE.txt",                                                           # the inputs art's
@@ -429,6 +435,18 @@ class PartsThatBelongTogether(Parts):
         os.remove(self.at("parts", "vcrt", "vcruntime140_1.dll"))
         self.refused("the VC runtime's VCRUNTIME140_1.dll is not there", self.at("parts", "vcrt", "VCRUNTIME140_1.dll"))
 
+
+    def test_aurora_without_its_pipeline_seed(self):
+        os.remove(self.at("parts", "aurora", "initial_pipeline_cache.db"))
+        self.refused("Aurora's initial_pipeline_cache.db is not there", self.at("parts", "aurora", "initial_pipeline_cache.db"))
+
+    def test_aurora_without_its_library(self):
+        os.remove(self.at("parts", "aurora", "aurora-present.dll"))
+        self.refused("Aurora's aurora-present.dll is not there", self.at("parts", "aurora", "aurora-present.dll"))
+
+    def test_a_seed_that_is_no_sqlite_file(self):
+        write(self.at("parts", "aurora", "initial_pipeline_cache.db"), b"not a database")
+        self.refused("Aurora's pipeline seed is no SQLite file", self.at("parts", "aurora", "initial_pipeline_cache.db"))
 
     def test_the_inputs_arts_licence_that_is_missing(self):
         notice = self.at("repo", "port", "moderngekko", "art", "inputs", "LICENSE.txt")
