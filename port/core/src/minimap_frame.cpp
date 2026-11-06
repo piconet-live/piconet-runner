@@ -255,7 +255,7 @@ void MinimapFrame(Guest& g)
 // while this game has a driver of its own (a race or a practice); held 0 otherwise. A racer followed in a replay or a
 // watched race has none to show: its record holds the game's actions after that player's own bindings (steering,
 // pitch, strafe, pedals, action bits), not a pad's buttons, triggers and C-stick. Reads only, and only with a board.
-void InputsFrame(Guest& g)
+void InputsFrame(Guest& g, bool plain)
 {
   if (!board::Taken())
     return;
@@ -263,7 +263,8 @@ void InputsFrame(Guest& g)
   if (g.Ram(MODULE_POINTER, 4) && g.Read32(MODULE_POINTER) == layout::MAIN_REL)
   {
     const u32 module = layout::MAIN_REL;
-    if (g.Read16(module + PHASE) >= COURSE_INTRO && OwnSeat(g) != 0xFFFFFFFF)
+    // a plain start (offline play): the player's controller in port 1 as the game reads it, in every mode and menu
+    if (plain || (g.Read16(module + PHASE) >= COURSE_INTRO && OwnSeat(g) != 0xFFFFFFFF))
     {
       const u32 at = module + PAD_STATUS;
       pad.held = 1;

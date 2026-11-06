@@ -545,6 +545,25 @@ bool InTheRace(Guest& g, net::Session& ss)
            g.Read32(layout::DRAW_SKIP) != 0 || !g.Ram(object, 0x50) || (g.Read32(object) >> 31) != 0 || g.Read8(object + 0x49) > 1);
 }
 
+// A plain start (offline play: Grand Prix, Time Attack, Practice, Versus, the story's chapters): no race of ours, no
+// session, and none of the image's race words. The same frame by the game's own words: MD_GAME in the race's phase, not
+// paused, one screen (.bss 0xF75: Versus with two to four players has more, and the pictures between correct one camera),
+// and the chase camera. The step is the game's race clock (one more after every step of the race, before the drawing).
+constexpr u32 SCREENS = B + 0xF75;
+bool InThePlainRace(Guest& g)
+{
+  const u32 object = g.Read32(CAMERA_OBJECT);
+  return g.Read16(game::GAME_MODE_AT) == game::MODE_GAME && g.Read16(game::PHASE_AT) == 0x29 && g.Read8(SCREENS) == 1 &&
+         g.Read32(PAUSE_WORD) == 0 && g.Ram(object, 0x50) && (g.Read32(object) >> 31) == 0 && g.Read8(object + 0x49) <= 1;
+}
+
+// A plain start's pictures between: only without a step ahead (AURORA_RUNAHEAD_AFTER, with the renderer's redraw), which
+// runs nothing of the game's again and writes nothing of its memory. The step ahead needs a race's undo log and rows.
+bool PlainOn()
+{
+  return s.on && s.after && s.redrawing && !boot::IsActive();
+}
+
 // The rows step t runs with, as NormalStep will write them: a live game's own record is its pad now, unless its input
 // delay has it waiting already.
 net::Row RowAhead(Guest& g, net::Session& ss, u32 t)
@@ -870,6 +889,11 @@ bool On()
   return s.on;
 }
 
+bool PlainDraw()
+{
+  return s.on && s.after && s.redrawing;
+}
+
 bool Inside()
 {
   return s.inside;
@@ -886,14 +910,16 @@ bool Begin()
     return false;
   net::Session* ss = net::s_session.get();
   Guest g(TheHost(), Data());
-  if (ss == nullptr || !g.Ram(net::MODULE_POINTER, 4) || g.Read32(net::MODULE_POINTER) != layout::MAIN_REL)
+  // (a plain start: the frame tick only when PLAIN_DRAW asked for it, boot.cpp PlainField)
+  const bool plain = ss == nullptr && PlainOn();
+  if ((ss == nullptr && !plain) || !g.Ram(net::MODULE_POINTER, 4) || g.Read32(net::MODULE_POINTER) != layout::MAIN_REL)
     return false;
   PlaceTheTick(Tick::now());
-  const u32 step = g.Read32(net::STEP);
+  const u32 step = g.Read32(plain ? game::RACE_CLOCK_AT : net::STEP);
   const bool consecutive = step == s.last_step + 1;
   s.last_step = step;
   s.after_armed = false;
-  if (!consecutive || !InTheRace(g, *ss))
+  if (!consecutive || !(plain ? InThePlainRace(g) : InTheRace(g, *ss)))
   {
     ++s.stats.none_state;
     s.after_good = false;
@@ -1223,10 +1249,11 @@ void AtTheDrawing()
   s.after_armed = false;
   net::Session* ss = net::s_session.get();
   Guest g(TheHost(), Data());
-  if (ss == nullptr)
+  const bool plain = ss == nullptr && PlainOn();
+  if (ss == nullptr && !plain)
     return;
   const auto now = Tick::now();
-  const u32 step = g.Read32(net::STEP);
+  const u32 step = g.Read32(plain ? game::RACE_CLOCK_AT : net::STEP);
   const u32 steps = step - s.after_tick_step;
   ++s.stats.after_steps[std::min<u32>(steps, 4)];
   const double ask_ms = Ms(now - s.pass_at);
@@ -1249,7 +1276,7 @@ void AtTheDrawing()
       ++s.stats.request_count;
     }
   }
-  if (steps == 0 || steps > 30 || !InTheRace(g, *ss))
+  if (steps == 0 || steps > 30 || !(plain ? InThePlainRace(g) : InTheRace(g, *ss)))
   {
     (steps == 0 ? s.stats.after_no_step : s.stats.after_off) += 1;
     return;
