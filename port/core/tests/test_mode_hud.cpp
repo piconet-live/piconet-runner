@@ -120,8 +120,8 @@ void TestTheModeTagWords()
   CHECK(hud::IsDisplay(modes::ACTION_TAG) && hud::IsDisplay(modes::ACTION_TAGOFF));
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_TAG, 3, 2));
   CHECK(g.Read8(BLOCK + hud::TAGS_AT + 3) == 2);
-  CHECK(hud::Read(g, BLOCK, 0, 0).tags[3] == 2);
-  CHECK(hud::Read(g, BLOCK, 0, 0).tags[2] == 0 && hud::Read(g, BLOCK, 0, 0).tags[4] == 0);
+  CHECK(hud::Read(g, BLOCK, 0).tags[3] == 2);
+  CHECK(hud::Read(g, BLOCK, 0).tags[2] == 0 && hud::Read(g, BLOCK, 0).tags[4] == 0);
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_TAG, 4, modes::TAG_TEXTS));
   CHECK(g.Read8(BLOCK + hud::TAGS_AT + 4) == modes::TAG_TEXTS);
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_TAG, 4, modes::TAG_TEXTS + 1));
@@ -149,17 +149,17 @@ void TestTheGhostWords()
   // the look's defaults are Time Attack's: yellow (a word of 0) and no voice, the viewed racer always heard
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATLOOK, 3, modes::LOOK_GHOST));
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATLOOK, 4, modes::LOOK_GHOST));
-  hud::Frame f = hud::Read(g, BLOCK, 4, 4);
+  hud::Frame f = hud::Read(g, BLOCK, 4);
   CHECK(f.ghost_tints[3] == 0 && f.silent == 1u << 3);
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATGHOSTTINT, 3, 0x80FF80FF));
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATGHOSTSOUND, 3, 1));
-  f = hud::Read(g, BLOCK, 4, 4);
+  f = hud::Read(g, BLOCK, 4);
   CHECK(f.ghost_tints[3] == 0x80FF80FF && f.silent == 0);
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_SEATGHOSTSOUND, 3, 0));
-  CHECK(hud::Read(g, BLOCK, 4, 4).silent == 1u << 3);
-  CHECK(!hud::Read(g, BLOCK, 4, 4).ghost_gap);
+  CHECK(hud::Read(g, BLOCK, 4).silent == 1u << 3);
+  CHECK(!hud::Read(g, BLOCK, 4).ghost_gap);
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOW, 4, modes::PART_GHOST_GAP));
-  CHECK(hud::Read(g, BLOCK, 4, 4).ghost_gap);
+  CHECK(hud::Read(g, BLOCK, 4).ghost_gap);
   // a stock race's parts are untouched by the part: it has no bit
   CHECK(hud::PART_BITS[modes::PART_GHOST_GAP] == 0 && hud::PART_BITS[modes::PART_RANK] == 0x20000000);
 
@@ -235,28 +235,30 @@ void TestTheDisplayWordsRun()
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(g.Read8(Record(OUT_SEAT) + hud::BANNER) == 0);
 
-  // a player in seat 1 (a ghost to everyone, solid to itself); a spectator following seat 1 (no own seat)
-  const hud::Frame player = hud::Read(g, BLOCK, 1, 1), watcher = hud::Read(g, BLOCK, 1, 0xFFFFFFFF);
+  // a player in seat 1 (a ghost to everyone, solid to itself); a spectator, a watched race or a playback following
+  // seat 4: seat 4 as its driver sees it, solid, and seat 1 a ghost again; following no racer, everyone by seat.look
+  const hud::Frame player = hud::Read(g, BLOCK, 1), watcher = hud::Read(g, BLOCK, 4), nobody = hud::Read(g, BLOCK, 0xFFFFFFFF);
   CHECK(player.parts == hud::PART_BITS[modes::PART_TIMER] && player.digit == 0);
   CHECK(player.looks[1] == modes::LOOK_NORMAL && player.looks[4] == modes::LOOK_GHOST && player.looks[0] == modes::LOOK_NORMAL);
-  CHECK(watcher.looks[1] == modes::LOOK_GHOST && watcher.looks[4] == modes::LOOK_GHOST);
+  CHECK(watcher.looks[4] == modes::LOOK_NORMAL && watcher.looks[1] == modes::LOOK_GHOST && watcher.looks[0] == modes::LOOK_NORMAL);
+  CHECK(nobody.looks[1] == modes::LOOK_GHOST && nobody.looks[4] == modes::LOOK_GHOST);
   // the danger zone's count (the race side's: mode.h DANGER, 60 x seconds + 60 down to 60): the big digit and the
   // warning, the count as the story's digit value (179: the digit 2); the sheet's last digit, 3, at most; none once
   // done or at 60
   const u32 d = BLOCK + mode::DANGER + 16 * 1;
   g.Write32(d + 12, mode::DANGER_ON | mode::DANGER_ARMED);
   g.Write32(d + 8, 179);
-  const hud::Frame danger = hud::Read(g, BLOCK, 1, 1);
+  const hud::Frame danger = hud::Read(g, BLOCK, 1);
   CHECK(danger.parts == (hud::PART_BITS[modes::PART_TIMER] | hud::PART_BITS[modes::PART_DIGIT] |
                          hud::PART_BITS[modes::PART_WARNING]));
   CHECK(danger.digit == 179);
   g.Write32(d + 8, 600);
-  CHECK(hud::Read(g, BLOCK, 1, 1).digit == 239);
+  CHECK(hud::Read(g, BLOCK, 1).digit == 239);
   g.Write32(d + 8, 60);
-  CHECK(hud::Read(g, BLOCK, 1, 1).parts == hud::PART_BITS[modes::PART_TIMER]);
+  CHECK(hud::Read(g, BLOCK, 1).parts == hud::PART_BITS[modes::PART_TIMER]);
   g.Write32(d + 8, 179);
   g.Write32(d + 12, mode::DANGER_ON | mode::DANGER_DONE);
-  CHECK(hud::Read(g, BLOCK, 1, 1).parts == hud::PART_BITS[modes::PART_TIMER]);
+  CHECK(hud::Read(g, BLOCK, 1).parts == hud::PART_BITS[modes::PART_TIMER]);
   g.Write32(d + 12, 0);
   g.Write32(d + 8, 0);
 
@@ -328,17 +330,17 @@ void TestTheDisplayWordsRun()
     CHECK(std::bit_cast<float>(g.Read32(BLOCK + hud::STORY + 2 * hud::STORY_RECORD + hud::STORY_METRES)) == 777.0f);
     // held to the five digits, and nothing below 0
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(250000.0f)));
-    CHECK(hud::Read(g, BLOCK, 1, 1).metres == hud::DISTANCE_MOST);
+    CHECK(hud::Read(g, BLOCK, 1).metres == hud::DISTANCE_MOST);
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(-5.0f)));
-    CHECK(hud::Read(g, BLOCK, 1, 1).distance_fed && hud::Read(g, BLOCK, 1, 1).metres == 0.0f);
+    CHECK(hud::Read(g, BLOCK, 1).distance_fed && hud::Read(g, BLOCK, 1).metres == 0.0f);
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, 0x7FC00000));
-    CHECK(hud::Read(g, BLOCK, 1, 1).metres == 0.0f);
+    CHECK(hud::Read(g, BLOCK, 1).metres == 0.0f);
     // off: the racer's own again
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCEOFF, 1, 0));
     hud::Hud(g);
     CHECK(g.Read32(MODULE + net::BSS + 0x84 + 8) == PROGRESS + game::PROGRESS_SIZE);
     CHECK(g.Read32(MODULE + net::BSS + 0x84 + 0xC) == MODULE + net::BSS + 0x3C30);
-    CHECK(!hud::Read(g, BLOCK, 1, 1).distance_fed);
+    CHECK(!hud::Read(g, BLOCK, 1).distance_fed);
     // show_objects: of + 1 and of - n in the window for the image's two count sites, two digits each, n at most of
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWOBJECTS, 1, 3, 5));
     hud::Hud(g);
