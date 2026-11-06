@@ -62,7 +62,7 @@ struct AuroraBuildConfig
 struct AuroraBuildProgress
 {
   std::uint32_t state;  // 0 starting, 1 compiling, 2 done, 3 failed
-  std::uint64_t bytes_read, compiled, waiting, shaders;
+  std::uint64_t bytes_read, compiled, waiting, shaders, asked, left;
 };
 
 bool s_asked = false;
@@ -319,19 +319,24 @@ void RunPipelineBuild(const RunnerOptions& asked)
     }
     if (p.state == 2 && fed)
       break;
-    // the share of the files Aurora's plan has read (it reads ahead of the compiles) times the share of the pipelines it asked
-    // for that are compiled: the second is most of the time once the disc is read. 99% at most until done; never backwards
+    // the share of the files Aurora's plan has read (it reads ahead of the compiles) times the share of its forms asked for
+    // (it asks a few at a time, as the compiles take them: most of the build, once the disc is read) times the share of
+    // the asked pipelines compiled. 99% at most until done; never backwards
     const double read = total != 0 ? static_cast<double>(std::min(p.bytes_read, total)) / static_cast<double>(total) : 0.0;
-    const double asked = static_cast<double>(p.compiled + p.waiting);
-    const double made = asked > 0 ? static_cast<double>(p.compiled) / asked : 0.0;
-    const double now = std::min(0.99, read * made * 0.99);
+    const double forms = static_cast<double>(p.asked + p.left);
+    const double asked = forms > 0 ? static_cast<double>(p.asked) / forms : 0.0;
+    const double pipelines = static_cast<double>(p.compiled + p.waiting);
+    const double made = pipelines > 0 ? static_cast<double>(p.compiled) / pipelines : 0.0;
+    const double now = std::min(0.99, read * asked * made * 0.99);
     const auto at = std::chrono::steady_clock::now();
     if (at - told >= std::chrono::seconds(10))
     {
       told = at;
-      std::fprintf(stderr, "fzgx: pipeline build: %.0f s, %.0f%% of the files read, %llu shaders, %llu pipelines compiled, %llu waiting\n",
-                   std::chrono::duration<double>(at - t0).count(), read * 100, static_cast<unsigned long long>(p.shaders),
-                   static_cast<unsigned long long>(p.compiled), static_cast<unsigned long long>(p.waiting));
+      std::fprintf(stderr, "fzgx: pipeline build: %.0f s, %.0f%% of the files read, %llu shaders, forms %llu asked %llu left, "
+                   "%llu pipelines compiled, %llu waiting\n", std::chrono::duration<double>(at - t0).count(), read * 100,
+                   static_cast<unsigned long long>(p.shaders), static_cast<unsigned long long>(p.asked),
+                   static_cast<unsigned long long>(p.left), static_cast<unsigned long long>(p.compiled),
+                   static_cast<unsigned long long>(p.waiting));
     }
     if (now > shown + 0.001)
     {
