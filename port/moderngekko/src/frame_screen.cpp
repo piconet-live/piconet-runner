@@ -24,6 +24,8 @@
 
 #include "Common/WindowFrame.h"
 
+#include "Common/RunSettings.h"
+
 #include "fzgx/place.h"
 
 namespace fzgx_port::frame
@@ -49,6 +51,13 @@ std::string UserFolder()
 {
   const std::u8string folder = s_state.user_folder.u8string();
   return std::string(folder.begin(), folder.end());
+}
+
+// A test's window that never takes the foreground (the launch file's debug.windowNoActivate; DolphinNoGUI's
+// PlatformWin32.cpp makes it WS_EX_NOACTIVATE at the bottom of the z-order)
+bool NoActivate()
+{
+  return RunSettings::Get("FZGX_WINDOW_NOACTIVATE") != nullptr;
 }
 
 // Maximised, or minimised from maximised (it comes back so).
@@ -92,9 +101,11 @@ void SetFullscreen(HWND window, bool on)
     s_screen.windowed_style = GetWindowLongPtrW(window, GWL_STYLE);
     s_screen.full = true;
     SetWindowLongPtrW(window, GWL_STYLE, s_screen.windowed_style & ~static_cast<LONG_PTR>(WS_OVERLAPPEDWINDOW));
+    // (a test's window that never takes the foreground, FZGX_WINDOW_NOACTIVATE: laid over the monitor where it is in
+    // the z-order, not activated)
     SetWindowPos(window, HWND_TOP, monitor.rcMonitor.left, monitor.rcMonitor.top,
                  monitor.rcMonitor.right - monitor.rcMonitor.left, monitor.rcMonitor.bottom - monitor.rcMonitor.top,
-                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED | (NoActivate() ? SWP_NOACTIVATE | SWP_NOZORDER : 0));
   }
   else
   {
@@ -190,7 +201,8 @@ bool RestorePlace(HWND window, int strip_height)
                SWP_NOZORDER | SWP_NOACTIVATE);
   // maximised and full screen once the window is shown: the messages wait in its queue until then, and the last
   // of them says that both were acted on
-  if (kept->maximized)
+  // (SC_MAXIMIZE activates the window: not for one that never takes the foreground)
+  if (kept->maximized && !NoActivate())
     PostMessageW(window, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
   if (kept->fullscreen)
     PostMessageW(window, WM_COMMAND, WindowFrame::TOGGLE_FULLSCREEN, 0);
