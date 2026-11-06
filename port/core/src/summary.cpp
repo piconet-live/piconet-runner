@@ -88,7 +88,11 @@ void RaceSummary::Frame(Phase now_in, Time now, double behind, u32 step, u32 inp
   if (!begun || now_in > phase)
   {
     if (now_in >= Race && race_inputs_from == 0xFFFFFFFF)
+    {
       race_inputs_from = input_step;
+      // (the presenter's step-stamped lines, Aurora's, then say a race time: (step - this) / 60 s)
+      Notice("fzgx: race clock: the race phase begins at step {}", step);
+    }
     if (now_in == After)
       after_inputs_from = input_step;
     phase = now_in;
