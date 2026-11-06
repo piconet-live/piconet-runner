@@ -94,7 +94,10 @@ constexpr u32 C_FACTOR = 0, C_CAP = 4, C_KNOCK = 8, C_WALL = 12, C_BOUNCE = 16, 
 constexpr u32 CLOCK_SHOWN = COMBAT + 40, CLOCK_EARNED = COMBAT + 44;  // time_bonus: what the mode wrote to the timer, and what the game added
 constexpr u32 POINTS_TABLE = COMBAT + 48;  // points_table's by place, a word each
 constexpr u32 BOOST_OFF_SEATS = POINTS_TABLE + 30 * 4;  // boost s off's, a bit a seat, to the race's end
-static_assert(BOOST_OFF_SEATS + 4 <= BLOCK);
+// damage_cap off: the cap fn_1_24F10 loads for a player's hit (sites_combat.py combat_cap), the largest real, so the game's own
+// compare keeps the hit whole; 0, the game's cap (every race that does not say damage_cap off)
+constexpr u32 NO_CAP = BOOST_OFF_SEATS + 4;
+static_assert(NO_CAP + 4 <= 7 * PAGE && 7 * PAGE <= BLOCK);
 // By the bit: M's field, in the order of modes.toml's seat.stat.* (port/image/routines/standin_inputs.py STAT_FIELDS is
 // this list, and its test holds the two equal): weight, accel, max_speed, grip, turn, strafe, drag, boost_strength,
 // boost_length, body; then the stats page's: drift_rotation_resistance, drift_friction, turn_tension, turn_reaction, strafe_turn, drift_accel,
@@ -219,6 +222,7 @@ struct Package
   u32 time_bonus = 0;               // time_bonus's steps, 0 none
   std::array<std::optional<u32>, 4> combat{};  // damage, knockback, wall_damage, wall_bounce: binary32 bits
   bool spin_off = false, side_off = false, spin_immune = false;
+  bool no_cap = false;              // damage_cap off: a player's hit is not held to fn_1_24F10's 20
   std::optional<u16> max_energy;    // max_energy: every seat's M+0x5DA and M+0x184 at game_start; none, the game's
   bool stats_page = false;          // the compiler's stats_page: the block has the stats page, its last (a rule writes one of its stats)
   bool time_gaps = false;              // the compiler's: a rule reads a time gap: the block's gap page is kept (mode_gap.h)

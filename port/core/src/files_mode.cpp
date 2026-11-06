@@ -234,6 +234,12 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
           (id == modes::SETUP_SPINATTACKS ? p.spin_off : id == modes::SETUP_SIDEATTACKS ? p.side_off : p.spin_immune) =
               id == modes::SETUP_SPINIMMUNITY ? arg(0) != 0 : arg(0) == 0;
         }
+        else if (id == modes::SETUP_DAMAGECAP)
+        {
+          if (setup_args.size() != 1 || (arg(0) != 0 && arg(0) != 1))
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          p.no_cap = arg(0) == 0;
+        }
         else if (id == modes::SETUP_TIMEBONUS)
         {
           if (setup_args.size() != 1 || arg(0) < 0 || arg(0) > 120)

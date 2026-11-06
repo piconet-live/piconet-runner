@@ -90,6 +90,10 @@ MODE_COMBAT_FACTOR, MODE_COMBAT_CAP, MODE_COMBAT_KNOCK, MODE_COMBAT_WALL, MODE_C
 MODE_COMBAT_SPIN, MODE_COMBAT_SIDE, MODE_COMBAT_IMMUNE, MODE_COMBAT_ONE = 20, 24, 28, 32
 MODE_COMBAT_SIZE = 36
 assert MODE_COMBAT + MODE_COMBAT_SIZE <= MODE_BLOCK
+# damage_cap off (mode.h NO_CAP, after the points table and boost s off's seats): the cap fn_1_24F10 loads for a player, the
+# largest real; 0, the game's 20
+MODE_NO_CAP = MODE_COMBAT + 48 + 30 * 4 + 4
+assert MODE_NO_CAP == 0x6FEC and MODE_NO_CAP + 4 <= 0x7000
 assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_MOVE <= MODE_ROLL_SAVE
 # The race's setup (written by the Dolphin fork from the match file before the game reaches the race; the built-in
 # codes read it, boot-to-race/racecodes.py): 'FZRC', then words: +4 course, +8 port 0's machine, +12 CPU opponents
