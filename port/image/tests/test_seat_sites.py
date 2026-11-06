@@ -72,6 +72,29 @@ class TheSeatsOwn(Build):
             m, left = self.leave("seat_speed_cap", memory, {30: MACHINE}, floats=True)
             self.assertEqual((left, m.f[0]), ([TEXT + 0x29574], 1000.0 + seat))
 
+    def test_a_modes_boost_energy_goes_before_the_seats_own(self):
+        # the mode's block (memmap.MODES +4): a seat whose stat record has the boost energy bit loads the stats page's
+        # value; another bit, another seat's bit or no mode: the seat's own (its pack's)
+        block = 0x80E00000
+        bit = 1 << sites_seats.BOOST_ENERGY_BIT
+        for seat, record, mode_block, want in ((13, bit, block, 0.075), (13, bit | 1 << 17, block, 0.075),
+                                               (13, 1 << 17, block, 0.1 + 13), (13, 0, block, 0.1 + 13),
+                                               (13, bit, 0, 0.1 + 13), (0, bit, block, 0.075), (29, bit, block, 0.075)):
+            memory = seats()
+            put(memory, MACHINE + 4, seat, 2)
+            put(memory, memmap.MODES + 4, mode_block)
+            put(memory, block + memmap.MODE_STATS + seat * memmap.MODE_STAT, record)
+            put(memory, block + memmap.MODE_STATS + (seat ^ 1) * memmap.MODE_STAT, bit)
+            page = block + memmap.MODE_STATS_TWO + (seat << memmap.MODE_STAT_TWO_SHIFT)
+            put(memory, page + 4 * (sites_seats.BOOST_ENERGY_BIT - memmap.MODE_STATS_FIRST), struct.unpack(">I", struct.pack(">f", 0.075))[0])
+            m, left = self.leave("seat_energy", memory, {30: MACHINE}, floats=True)
+            self.assertEqual((left, m.f[1]), ([TEXT + 0x27424], struct.unpack(">f", struct.pack(">f", want))[0]), (seat, record, mode_block))
+
+    def test_the_boost_energy_bit_is_the_cores(self):
+        with open(os.path.join(here, "..", "..", "core", "src", "mode.h")) as file:
+            header = file.read()
+        self.assertIn(f"STAT_BOOST_ENERGY = {sites_seats.BOOST_ENERGY_BIT},", header)
+
 
 if __name__ == "__main__":
     unittest.main()

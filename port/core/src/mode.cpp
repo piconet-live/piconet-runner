@@ -13,6 +13,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mode.h"
+#include "const_ranges.h"
 #include "mode_gap.h"
 #include "mode_hud.h"
 
@@ -381,23 +382,33 @@ constexpr StatRange RangeAt(u8 at, double scale = 1.0)
 }
 // (grip_window: the byte +0x48 of the car data, any whole number a byte holds; the pack's rule for that word speaks of the
 // second byte, so it is not this one's)
-constexpr std::array<StatRange, STAT_FIELDS.size()> STAT_RANGES = {
+// (boost_energy: the pack constant BoostEnergyUse's range, protocol/stats.toml [[constant]])
+constexpr StatRange ConstantRange(const char* name)
+{
+  const consts::Constant& c = consts::Named(name, consts::Kind::Number32);
+  return {static_cast<float>(c.low), static_cast<float>(c.high)};
+}
+constexpr std::array<StatRange, STAT_COUNT> STAT_RANGES = {
     RangeAt(0x04), RangeAt(0x08), RangeAt(0x0C), RangeAt(0x10), RangeAt(0x20), RangeAt(0x28),
     RangeAt(0x40), RangeAt(0x34, 0.57), RangeAt(0x38), RangeAt(0x44),
-    RangeAt(0x30), RangeAt(0x14), RangeAt(0x18), RangeAt(0x2C), RangeAt(0x24), RangeAt(0x1C), RangeAt(0x3C), {0.0f, 255.0f}};
+    RangeAt(0x30), RangeAt(0x14), RangeAt(0x18), RangeAt(0x2C), RangeAt(0x24), RangeAt(0x1C), RangeAt(0x3C), {0.0f, 255.0f},
+    ConstantRange("BoostEnergyUse")};
 static_assert(STAT_RANGES[0].low == 1.0f && STAT_RANGES[9].high == 13.0f && STAT_RANGES[8].high < 4.26f &&
               STAT_RANGES[10].high == 10.0f && STAT_RANGES[11].high == 3.5f && STAT_RANGES[12].high == 2.2f &&
               STAT_RANGES[13].high == 300.0f && STAT_RANGES[14].high == 1000.0f && STAT_RANGES[15].high == 19.0f &&
-              STAT_RANGES[16].high == 0.7f);
+              STAT_RANGES[16].high == 0.7f && STAT_RANGES[STAT_BOOST_ENERGY].low == 0.0f && STAT_RANGES[STAT_BOOST_ENERGY].high == 1.7f);
 static_assert(SEAT_STATBODY - SEAT_STATWEIGHT == STATS_FIRST - 1 && SEAT_STATBASEBODY - SEAT_STATBASEWEIGHT == STATS_FIRST - 1 &&
               ACTION_SEATSTATBODY - ACTION_SEATSTATWEIGHT == STATS_FIRST - 1 &&
               SEAT_STATGRIPWINDOW - SEAT_STATDRIFTROTATIONRESISTANCE == STAT_GRIP_WINDOW - STATS_FIRST &&
               SEAT_STATBASEGRIPWINDOW - SEAT_STATBASEDRIFTROTATIONRESISTANCE == STAT_GRIP_WINDOW - STATS_FIRST &&
-              ACTION_SEATSTATGRIPWINDOW - ACTION_SEATSTATDRIFTROTATIONRESISTANCE == STAT_GRIP_WINDOW - STATS_FIRST);
+              ACTION_SEATSTATGRIPWINDOW - ACTION_SEATSTATDRIFTROTATIONRESISTANCE == STAT_GRIP_WINDOW - STATS_FIRST &&
+              SEAT_STATBASEBOOSTENERGY == SEAT_STATBOOSTENERGY + 1);
 
-// A stat's field as a real's bits (grip_window's is a byte, its whole number).
-u32 StatField(Mem& g, u32 machine, u32 i)
+// A stat's field as a real's bits (grip_window's is a byte, its whole number; boost_energy's, the seat's constants record).
+u32 StatField(Mem& g, u32 machine, u32 seat, u32 i)
 {
+  if (i == STAT_BOOST_ENERGY)
+    return g.Read32(table::SEAT_CONSTANTS_AT + seat * table::SEAT_CONSTANT + table::SEAT_ENERGY_USE);
   return i == STAT_GRIP_WINDOW ? std::bit_cast<u32>(static_cast<float>(g.Read8(machine + STAT_FIELDS[i])))
                              : g.Read32(machine + STAT_FIELDS[i]);
 }
@@ -843,6 +854,14 @@ private:
     // (read where a word asks for them: reading has no effect on anything)
     const auto Flags = [&] { return m_g.Read32(m + game::MACHINE_FLAGS); };
     const auto Progress = [&] { return m_g.Read32(m + game::MACHINE_PROGRESS); };
+    if (id == SEAT_STATBOOSTENERGY || id == SEAT_STATBASEBOOSTENERGY)
+    {
+      // no machine field: this step's value is the mode's while its bit is set (what seat_energy loads), else the seat's
+      // pack value, which is also the seat's own
+      const bool set = m_g.Read32(m_block + STATS + seat * STAT) >> STAT_BOOST_ENERGY & 1;
+      return set ? m_g.Read32(m_block + (id == SEAT_STATBOOSTENERGY ? StatValueAt(seat, STAT_BOOST_ENERGY) : StatBaseAt(seat, STAT_BOOST_ENERGY)))
+                 : StatField(m_g, m, seat, STAT_BOOST_ENERGY);
+    }
     if ((id >= SEAT_STATWEIGHT && id <= SEAT_STATBASEBODY) || (id >= SEAT_STATDRIFTROTATIONRESISTANCE && id <= SEAT_STATBASEGRIPWINDOW))
     {
       // this step's value is the machine's field; the machine's own, the field too until the mode changes it
@@ -851,7 +870,7 @@ private:
       const u32 i = page ? STATS_FIRST + id - (own ? SEAT_STATBASEDRIFTROTATIONRESISTANCE : SEAT_STATDRIFTROTATIONRESISTANCE)
                          : id - (own ? SEAT_STATBASEWEIGHT : SEAT_STATWEIGHT);
       return own && (m_g.Read32(m_block + STATS + seat * STAT) >> i & 1) ? m_g.Read32(m_block + StatBaseAt(seat, i))
-                                                                         : StatField(m_g, m, i);
+                                                                         : StatField(m_g, m, seat, i);
     }
     switch (id)
     {
@@ -1926,16 +1945,19 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
       case ACTION_SEATSTATDRIFTACCEL:
       case ACTION_SEATSTATTURNDECEL:
       case ACTION_SEATSTATGRIPWINDOW:
+      case ACTION_SEATSTATBOOSTENERGY:
       {
         if (!Finite(a.value[0]))
           return m.Fail(FAULT_REAL);
-        const u32 i = a.id >= ACTION_SEATSTATDRIFTROTATIONRESISTANCE ? STATS_FIRST + a.id - ACTION_SEATSTATDRIFTROTATIONRESISTANCE : a.id - ACTION_SEATSTATWEIGHT;
+        const u32 i = a.id == ACTION_SEATSTATBOOSTENERGY                ? STAT_BOOST_ENERGY
+                      : a.id >= ACTION_SEATSTATDRIFTROTATIONRESISTANCE ? STATS_FIRST + a.id - ACTION_SEATSTATDRIFTROTATIONRESISTANCE
+                                                                       : a.id - ACTION_SEATSTATWEIGHT;
         // a package that writes the stats page's stats without the compiler's word: its block has no such page
         if (i >= STATS_FIRST && !p.stats_page)
           return m.Fail(FAULT_CODE);
         const u32 stat = block + STATS + seat * STAT, changed = g.Read32(stat);
         const float v = std::clamp(Real(a.value[0]), STAT_RANGES[i].low, STAT_RANGES[i].high) + 0.0f;  // (-0 as 0)
-        const u32 field = StatField(g, machine, i);
+        const u32 field = StatField(g, machine, seat, i);
         if (!(changed >> i & 1))
           g.Write32(block + StatBaseAt(seat, i), field);
         if (i == STAT_GRIP_WINDOW)

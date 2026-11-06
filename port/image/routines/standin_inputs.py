@@ -25,7 +25,9 @@ ROLL_ACCEL = 0x3F19999A   # 0.6: the game's own accelerator before GO (.rodata 0
 ROLL_AT = memmap.MODE_ROLL_SAVE
 assert memmap.MODE_SEAT == 1 << MODE_SEAT_SHIFT and memmap.lo(memmap.MODES) + 4 < 0x8000
 assert memmap.MODE_ROLL == 8 and ROLL_AT + 4 < 0x8000
-# M's field of each stat, by its bit in the stat record (port/core/src/mode.h STAT_FIELDS; the image's test holds them equal)
+# M's field of each stat, by its bit in the stat record (port/core/src/mode.h STAT_FIELDS; the image's test holds them equal).
+# The bit after them, seat.stat.boost_energy's (mode.h STAT_BOOST_ENERGY), has no machine field: the page's test below
+# stops at the last field's bit, and sites_seats.py's seat_energy reads that value itself.
 STAT_FIELDS = (0x8, 0x220, 0x22C, 0xC, 0x14, 0x1C, 0x23C, 0x230, 0x234, 0x30, 0x24, 0x28, 0x10, 0x20, 0x18, 0x2C, 0x238, 0x477)
 BYTE_FIELD = 0x477        # the grip window (byte), a byte: the record holds its whole number
 FIRST_TWO = memmap.MODE_STATS_FIRST
