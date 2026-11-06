@@ -316,6 +316,20 @@ class TheCombatSites(Build):
         m, _ = self.run_site("combat_cap", memmap.MODE_COMBAT_CAP, bits(40.0), lr=TEXT + 0x24AD0, regs={6: self.R}, stored=stored)
         self.assertEqual(m.f[0], 20.0)
 
+    def test_no_cap_loads_the_largest_real_for_every_caller(self):
+        # damage_cap off: the game's compare (f3 against f0) then keeps every hit whole, and the routine goes on at the compare
+        biggest = struct.unpack(">f", struct.pack(">I", 0x7F7FFFFF))[0]
+        stored = {self.R + 0x178: bits(20.0), BLOCK + memmap.MODE_NO_CAP: 0x7F7FFFFF}
+        for lr in [TEXT + call + 4 for call in sites_combat.CONTACT_CALLS] + [TEXT + 0x24AD0]:
+            for scaled in (None, memmap.MODE_COMBAT_CAP):
+                m, back = self.run_site("combat_cap", scaled, bits(40.0), lr=lr, regs={6: self.R}, stored=stored)
+                self.assertEqual((m.f[0], back), (biggest, TEXT + sites_combat.CAP + 4))
+        # the word 0 is the game's, and without a mode the word is not read
+        m, _ = self.run_site("combat_cap", lr=TEXT + 0x24AD0, regs={6: self.R}, stored={self.R + 0x178: bits(20.0)})
+        self.assertEqual(m.f[0], 20.0)
+        m, _ = self.run_site("combat_cap", mode=False, lr=TEXT + 0x24AD0, regs={6: self.R}, stored=stored)
+        self.assertEqual(m.f[0], 20.0)
+
     def test_knockback_scales_both_machines_scales(self):
         stored = {self.R + 0x94: bits(7.0)}
         m, _ = self.run_site("combat_knock", memmap.MODE_COMBAT_KNOCK, bits(3.0), regs={24: self.R}, floats={31: 1.5, 30: 2.0}, stored=stored)

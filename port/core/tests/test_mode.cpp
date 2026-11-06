@@ -1642,6 +1642,7 @@ void TestTheCombatWords()
   CHECK(real(mode::C_DAMAGE) == 2.0f && real(mode::C_FACTOR) == 0.002f * 2.0f && real(mode::C_CAP) == 40.0f);
   CHECK(real(mode::C_KNOCK) == 3.0f && real(mode::C_WALL) == 0.5f && real(mode::C_BOUNCE) == 10.0f && real(mode::C_ONE) == 1.0f);
   CHECK(word(mode::C_SPIN_OFF) == 1 && word(mode::C_SIDE_OFF) == 1 && word(mode::C_IMMUNE) == 1);
+  CHECK(g.Read32(BLOCK + mode::NO_CAP) == 0x7F7FFFFF);   // damage_cap off: the largest real, which no hit is above
   // the game's four bonuses in place; a bonus the game adds to the timer is earned, and moves the end
   constexpr u32 R = 0x1BDC70;
   CHECK(g.Read16(MODULE + R + 0x13FA) == 600 && g.Read16(MODULE + R + 0x1400) == 600);

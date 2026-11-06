@@ -7,7 +7,7 @@ Native form only: the fork's image does not have it. sites.py calls add() after 
 | Site | Where | What the game did | Now, with the word |
 |---|---|---|---|
 | `combat_factor_a`, `_b` | fn_1_239C4 0x24588, 0x24674, a pair's damage (`lfs f0, 0x128(r31)`: 0.002, .rodata 0x968, read nowhere else) | 0.002 | 0.002 x race.damage |
-| `combat_cap` | fn_1_24F10 0x24F50, a hit's cap for a player (`lfs f0, 0x178(r6)`: 20, .rodata 0x9B8, which nine loads share) | 20 | 20 x race.damage, when the caller is a contact's (the two calls in fn_1_239C4: fn_1_24F10 is a leaf, so the link register still names its caller) |
+| `combat_cap` | fn_1_24F10 0x24F50, a hit's cap for a player (`lfs f0, 0x178(r6)`: 20, .rodata 0x9B8, which nine loads share) | 20 | `damage_cap off` (the block's NO_CAP, memmap.MODE_NO_CAP, not 0): the largest real for every caller, so the game's own compare and branch keep the hit whole and the 1.01 x max energy cap after it stays; otherwise 20 x race.damage, when the caller is a contact's (the two calls in fn_1_239C4: fn_1_24F10 is a leaf, so the link register still names its caller) |
 | `combat_knock` | fn_1_239C4 0x242DC, after the pair's scales are chosen (f31, f30: 1.0, 1.5 attacking, 2.2) | the scales | each x race.knockback |
 | `combat_wall` | fn_1_266A8 0x269D4, a wall's damage (`fmuls f3, f28, f0`: x body) | the damage | x race.wall_damage, before the cap. The condition in cr0 is live here: this routine tests with cr7 |
 | `combat_bounce` | fn_1_266A8 0x26BC4, all three branches of the bounce's e joined (f1) | e | 1 + race.wall_bounce x (e - 1) |
@@ -73,7 +73,17 @@ def add(k, r, patch, stock, test, la):
     calls = "".join(la(0, TEXT + call + 4) + """    cmplw 12, 0
     beq combat_cap_contact
 """ for call in CONTACT_CALLS)
-    site("combat_cap", CAP, CAP_KNOWN, lambda word, at: tested("combat_cap_stock", guarded(memmap.MODE_COMBAT_CAP, "combat_cap_stock") + "    mflr 12\n" + calls + f"""    b combat_cap_stock
+    # damage_cap off first, for every caller: the block's NO_CAP is the largest real, which no hit is above
+    nocap = base() + f"""    cmplwi 12, 0
+    beq combat_cap_stock
+    lwz 12, {memmap.MODE_NO_CAP:#x}(12)
+    cmpwi 12, 0
+    beq combat_cap_scaled
+""" + base() + f"""    lfs 0, {memmap.MODE_NO_CAP:#x}(12)
+    @b {TEXT + CAP + 4:#x}
+combat_cap_scaled:
+"""
+    site("combat_cap", CAP, CAP_KNOWN, lambda word, at: tested("combat_cap_stock", nocap + guarded(memmap.MODE_COMBAT_CAP, "combat_cap_stock") + "    mflr 12\n" + calls + f"""    b combat_cap_stock
 combat_cap_contact:
 """ + base() + f"""    lfs 0, {C + memmap.MODE_COMBAT_CAP:#x}(12)
     @b {at + 4:#x}

@@ -2221,6 +2221,7 @@ void Begin(Machine& m, Mem& g, const Package& p, u32 block, u32 module)
   g.Write32(block + COMBAT + C_SPIN_OFF, p.spin_off);
   g.Write32(block + COMBAT + C_SIDE_OFF, p.side_off);
   g.Write32(block + COMBAT + C_IMMUNE, p.spin_immune);
+  g.Write32(block + NO_CAP, p.no_cap ? 0x7F7FFFFFu : 0);   // FLT_MAX: no hit is above it
   for (u32 k = 0; k < p.points_table.size(); ++k)
     g.Write32(block + POINTS_TABLE + 4 * k, p.points_table[k]);
   if (p.rolling)
