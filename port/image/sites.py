@@ -5,7 +5,7 @@ the inserts at a function's first instruction (seats, sound queue, rumble), the 
 were calls (frame routine, name tags, chase camera, main.rel linked), the results screen's pictures, the hand-back
 monitors' pictures (sites_monitors.py),
 the cameras' own words (sites_camera.py), the drawn transform's readers (sites_drawn.py), the shadows' place (sites_shadow.py), the effects' draws
-(sites_effects.py), the seats' custom machines (sites_custom.py) and their pilots (sites_pilot.py), the portraits' mark (sites_faces.py), mines that come back
+(sites_effects.py), the draw marks for Aurora (sites_marks.py), the seats' custom machines (sites_custom.py) and their pilots (sites_pilot.py), the portraits' mark (sites_faces.py), mines that come back
 (sites_mines.py), the leader's gap popup started in the step (sites_leadergap.py), the game mode's block, mode point, speed hold and a seat's own Restore (sites_mode.py), computer drivers at their own pace (sites_cpu.py), the simulation's own generator (sites_generator.py), the dash plate's and the energy boost's length as data (sites_dash.py), the energy meter under a mode's max energy (sites_energy.py), the machine setting's curve as data
 (sites_curve.py), a
 stat pack a seat (sites_seats.py), the start grid (sites_grid.py), true widescreen's view (sites_view.py), the frames
@@ -34,6 +34,7 @@ import sites_mode
 import sites_modehud
 import sites_hudmove
 import sites_ghostdraw
+import sites_marks
 import sites_monitors
 import sites_pilot
 import sites_present
@@ -484,6 +485,7 @@ rl_disc:
     sites_modehud.add(k, r, patch, stock, test, la, middle)
     sites_hudmove.add(k, r, patch, stock, la, middle)
     sites_ghostdraw.add(k, r, patch, stock, test, la, middle)
+    sites_marks.add(k, r, patch, stock, middle)
     sites_cpu.add(k, r, patch, stock, test, middle, complete)
     sites_generator.add(k, r, patch, stock, test, middle)
     sites_leadergap.add(k, r, patch, stock, test, middle)

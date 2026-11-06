@@ -94,6 +94,7 @@ HOST_LINKED	memmap.py	py	HOST_LINKED
 HOST_HFR	memmap.py	py	HOST_HFR	
 HOST_MODE	memmap.py	py	HOST_MODE	
 HOST_HUD	memmap.py	py	HOST_HUD	
+HOST_MARK	memmap.py	py	HOST_MARK	
 EXTRA_STEPS_AT	port/core/src/rollback.cpp	cxx	EXTRA_STEPS	
 EXTRA_STEPS	port/core/src/session.cpp	re	g\.Read32\(CONTROL \+ (8)\)	1
 RESIMULATING_AT	port/core/src/rollback.cpp	cxx	RESIMULATING	

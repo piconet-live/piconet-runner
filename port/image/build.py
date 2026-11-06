@@ -198,6 +198,7 @@ def build(out, rel_file=None, dol_file=None, given_commit=None):
 
     symbols = {"host_net": memmap.HOST_NET, "host_tick": memmap.HOST_TICK, "host_linked": memmap.HOST_LINKED,
                "host_hfr": memmap.HOST_HFR, "host_mode": memmap.HOST_MODE, "host_hud": memmap.HOST_HUD,
+               "host_mark": memmap.HOST_MARK,
                "seat_slot": layout["slot"], "seat_routine": layout["routine"], "race_over": layout["over"],
                "rank_refs": layout["refs"], "frame_routine": layout["frame"], "name_tags": layout["tags"]}
     r = Routines(base, symbols)
