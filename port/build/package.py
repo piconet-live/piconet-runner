@@ -7,7 +7,7 @@ player-copy/); and folders: the published launcher in its own (the program runs 
 tells the launcher that it is a copy and keeps its data here); recomp/ with the runner, the native module, Aurora (the picture: aurora-present.dll, the
 libraries it loads and its pipeline seed, initial_pipeline_cache.db, which always travels with it), the image
 bundle (fzgx/), the emulator's Sys folder as real files, the four VC runtime files and the font files the game
-window's strip is drawn in (Fonts/, with their licence) and m-overlay's licence for the "Show inputs" pictures; and source/, the builds' manifests, which name the commit
+window's strip is drawn in (Fonts/, with their licence); and source/, the builds' manifests, which name the commit
 and tree of every source tree the runner and the module were built from, with this script's own record. The runner
 is GPL code: the read-me points to its source, the public repositories at this release's tag (SOURCE_LINE).
 
@@ -56,8 +56,6 @@ BUNDLE_FILES = ("mod.bin", "manifest.json", "patches.json")     # with same-race
 VC_RUNTIME = ("MSVCP140.dll", "MSVCP140_ATOMIC_WAIT.dll", "VCRUNTIME140.dll", "VCRUNTIME140_1.dll")
 # the game window: the three files port/core/include/fzgx/strip.h names (the strip and the overlays), and the licence they travel with
 FONT_FILES = ("SairaCondensed-ExtraBold.ttf", "SairaCondensed-SemiBold.ttf", "SairaSemiCondensed-Regular.ttf", "OFL.txt")
-# the "Show inputs" pictures are m-overlay's (MIT): its notice goes with the runner that holds them
-INPUTS_ART_NOTICE, INPUTS_ART_NOTICE_TO = "port/moderngekko/art/inputs/LICENSE.txt", "recomp/m-overlay-LICENSE.txt"
 # Aurora, the picture (the only renderer since 0.6.0): its library, every library of its folder (as AuroraCopy.cmake puts
 # them beside the runner: Dawn, SDL3, the shader compiler) and its pipeline seed, which Aurora reads from the runner's folder
 AURORA_LIBRARY, AURORA_SEED = "aurora-present.dll", "initial_pipeline_cache.db"
@@ -239,7 +237,6 @@ def parts(a, plan):
             raise Refused("the VC runtime's file is no Windows library", os.path.join(a.vcrt, name))
     for name in FONT_FILES:
         plan.add("recomp/Fonts/" + name, "the game window's fonts", real_file(os.path.join(a.fonts, name), "the game window's " + name))
-    plan.add(INPUTS_ART_NOTICE_TO, "the runner's licences", real_file(os.path.join(a.repository, *INPUTS_ART_NOTICE.split("/")), "m-overlay's licence"))
     records = {}
     for part, at in (("runner", runner_at), ("module", module_at)):      # as the build wrote it, but for the PC's and its user's names
         with open(at, "rb") as f:
