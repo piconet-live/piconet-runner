@@ -35,18 +35,18 @@ Frame Rewind::Next(const Pad& pad)
   m_buttons = pad.buttons;
   Frame frame;
   // D-pad right saves the moment on screen: the front while racing, the position while paused or counting down
-  if (Pressed(BUTTON_RIGHT))
+  if (m_words.save && Pressed(BUTTON_RIGHT))
   {
     m_save = Position();
     ++m_counts.saves;
     frame.saved = true;
   }
-  else if (Pressed(BUTTON_LEFT) && m_save)
+  else if (m_words.save && Pressed(BUTTON_LEFT) && m_save)
   {
     Load();
     frame.loaded = true;
   }
-  else if (Pressed(BUTTON_START))
+  else if (m_words.pause && Pressed(BUTTON_START))
   {
     switch (m_mode)
     {
@@ -57,7 +57,7 @@ Frame Rewind::Next(const Pad& pad)
       break;
     case Mode::Paused:
       m_mode = Mode::Countdown;
-      m_countdown = COUNTDOWN;
+      m_countdown = m_words.countdown;
       break;
     case Mode::Countdown:  // Start in the countdown stands again where it was
       m_mode = Mode::Paused;
@@ -70,7 +70,7 @@ Frame Rewind::Next(const Pad& pad)
     const double moved = m_position + ScrubSpeed(pad.stick_x);
     m_position = std::clamp(moved, static_cast<double>(Oldest()), static_cast<double>(m_front));
   }
-  if (m_mode == Mode::Countdown && !frame.loaded && m_countdown > 0 && --m_countdown == 0)
+  if (m_mode == Mode::Countdown && !frame.loaded && (m_countdown == 0 || --m_countdown == 0))
   {
     const u32 at = Position();
     m_mode = Mode::Racing;
@@ -89,7 +89,7 @@ void Rewind::Load()
 {
   m_position = *m_save;
   m_mode = Mode::Countdown;
-  m_countdown = COUNTDOWN;
+  m_countdown = m_words.countdown;
   ++m_counts.loads;
 }
 
@@ -113,11 +113,12 @@ void Rewind::Ran(u32 step)
   Expire();
 }
 
-// What fell out of the minute: the save, once the race has run a minute past it; the keys before the one the
+// What fell out of the buffer: the save, once the race has run the reach past it; the keys before the one the
 // oldest moment is reached from.
 void Rewind::Expire()
 {
   const u32 oldest = Oldest();
+  m_gone = oldest;
   if (m_save && *m_save < oldest)
   {
     m_save.reset();

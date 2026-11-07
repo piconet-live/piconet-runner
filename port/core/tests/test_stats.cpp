@@ -249,7 +249,7 @@ void TestAStatPackInARecording()
   };
   const std::string with = recorded(Stats(ThePack(), "Rec Pack")), without = recorded("");
   // (a race from a match has no rubber band since 0.4.0, so its recording is version 7 with a pack or without)
-  CHECK(with.compare(0, 6, std::string("FZRP\0\7", 6)) == 0 && without.compare(0, 6, std::string("FZRP\0\7", 6)) == 0);
+  CHECK(with.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0 && without.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0);
   CHECK(Says(with, std::string("\"fingerprint\":\"") + THE_PACKS_FINGERPRINT + "\"") && Says(with, "\"name\":\"Rec Pack\"") &&
         Says(with, "\"values\":\"BgRFHYAABkgDAQAAKFy") && !Says(without, "stats"));
   // read back: version 3 with the pack, version 2 without; the other two are refused, and so is a pack that is none
@@ -278,10 +278,10 @@ void TestAStatPackInARecording()
   CHECK(Says(played(4, ""), "a version 4 replay names no custom machine, and version 4 is a race with one: refused"));
   CHECK(Says(played(5, ""), "a version 5 replay names no mine rule, and version 5 is a race with one: refused"));
   CHECK(Says(played(8, ""), "is a compact replay (version 8) that does not read"));  // (a recording's layout under 8)
-  CHECK(Says(played(9, ""), "is not a version 2, 3, 4, 5, 6, 7 or 8 replay file"));
+  CHECK(Says(played(10, ""), "is not a version 2, 3, 4, 5, 6, 7, 8 or 9 replay file"));
   CHECK(Says(played(7, ""), "names no start grid and has the rubber band, and version 7 is a race of 0.4.0's set-up"));
   CHECK(Says(played(6, ""), "names no pack a seat, and version 6 is a race with one"));
-  CHECK(Says(played(1, ""), "is not a version 2, 3, 4, 5, 6, 7 or 8 replay file"));
+  CHECK(Says(played(1, ""), "is not a version 2, 3, 4, 5, 6, 7, 8 or 9 replay file"));
   std::filesystem::remove_all(dir);
 }
 

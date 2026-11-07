@@ -244,7 +244,7 @@ void TestARecordingRoundTrip()
   CHECK(ReadFileToString(dir + "/r.fzrp", all) && all.size() > 4 && all.substr(all.size() - 4) == "FZRS");
   CHECK(all.find("\"results\":[{\"seat\":0,") != std::string::npos);
   WriteText(dir + "/bad.fzrp", "FZRP");
-  CHECK(!net::ReadRecording(dir + "/bad.fzrp", &back) && host.log.find("not a version 2, 3, 4, 5, 6, 7 or 8 replay") != std::string::npos);
+  CHECK(!net::ReadRecording(dir + "/bad.fzrp", &back) && host.log.find("not a version 2, 3, 4, 5, 6, 7, 8 or 9 replay") != std::string::npos);
   // At the recording's end it is made compact (version 8): read back, the same rows, every checksum compares (the
   // whole word every 60th step and at the last, the folded byte between), the results the same.
   CHECK(net::CompactReplay(dir + "/r.fzrp"));

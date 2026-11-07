@@ -173,5 +173,6 @@ void RefuseRemovedKeys(Part& p);  // pacedLoad, drawSkipOff, hitShowOff, spectat
 void ReadLanesOff(Part& p);  // the file's "lanes": 0 only (the multicore physics is parked on branch parked/lanes)
 void ReadStandStill(Part& p, Debug* d, std::string* problem);
 void ReadPartialKeys(Part& p, Debug* d, std::string* problem);
+void ReadWorkerKeys(Part& p, Debug* d, std::string* problem);
 void ReadEmulatorSide(Part& p, Debug* d);
 }  // namespace fzgx::launch

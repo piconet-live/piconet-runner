@@ -13,6 +13,7 @@
 
 #include "game_facts.h"
 #include "internal.h"
+#include "mode.h"
 #include "picojson.h"
 #include "race_rules.g.h"   // the host's rules the games apply (protocol/rules.toml): their words
 #include "replay_file.g.h"  // the replay file (protocol/replay.toml): its versions
@@ -27,13 +28,16 @@ constexpr u32 NAMES = table::NAMES;    // 30 x 32 bytes, NUL-terminated, seat or
 constexpr u32 NAME_SIZE = 32;
 constexpr u32 RACE = table::RACE;      // 'FZRC', then words: +4 course, +8 port 0's machine, +12 CPU opponents,
                                        // +16 laps, +20 race type, +24 shuffle, +28 CPU seed; +32 30 machine bytes
-constexpr u32 RACE_SIZE = 1280;
+constexpr u32 RACE_SIZE = 1640;
 // the seats' custom machines (garage-built): 30 entries of 32 bytes, seat order (memmap.py RACE_CUSTOM). +0 a word,
 // 0xC0000000 when the seat races its own parts; +4, +12, +20 the body's, cockpit's and booster's part id (a byte)
 // and +8, +16, +24 each part's colour word (red, green, blue, the material byte): a garage record's three part
 // entries; +28 the pilot (the stock machine 0-40 whose pilot drives it). A custom seat's machine is CUSTOM_MACHINE.
 constexpr u32 RACE_CUSTOM = 320, CUSTOM_ENTRY = 32;
 constexpr u32 CUSTOM_MACHINE = 0x32;
+// the seats' boost trail colours: 30 entries of three words, seat order (memmap.py RACE_TRAILS): XX 0x01RRGGBB, 0 the game's own. Picture only: no step reads them.
+constexpr u32 RACE_TRAILS = 1280, TRAIL_ENTRY = 12;
+static_assert(RACE_CUSTOM + 30 * CUSTOM_ENTRY == RACE_TRAILS && RACE_TRAILS + 30 * TRAIL_ENTRY == RACE_SIZE);
 // the host's rules the games apply (protocol/rules.toml: their words, ranges and reader, race_rules.g.h): the CPU
 // level, boost from the start, restore, the race's end for everyone so long after the first finish (in steps; the
 // image's raceend.py; 0: no such end), a mine's coming back so long after it went off (in steps; the image's
@@ -65,6 +69,12 @@ static_assert(MINE_REGEN_STEP_MS * STEPS_A_SECOND % 1000 == 0 && RACE_FLOW + 4 <
 // header's "rubberBand" (none: 1, every recording made before 0.4.0, which plays as it was raced).
 constexpr u32 RACE_RUBBER_BAND_ON = 100;
 static_assert(RACE_GRID + 30 <= RACE_RUBBER_BAND_ON && RACE_RUBBER_BAND_ON + 4 <= RACE_CPULEVEL);
+// the simulation's own generator: a word, 1 the race's random draws (the computer drivers' scripted driver, the hazard
+// objects) take a word of their own that the image seeds before every step, 0 they take the executable's 0x801A63C0,
+// which the effects and cameras draw from too (the image's sites_generator.py). A race or practice from a match is 1;
+// a replay's is its header's "simGenerator" (none: 0, every recording made before it, which plays as it was raced).
+constexpr u32 RACE_SIM_GENERATOR = 104;
+static_assert(RACE_RUBBER_BAND_ON + 4 <= RACE_SIM_GENERATOR && RACE_SIM_GENERATOR + 4 <= RACE_CPULEVEL);
 constexpr const char* GAME_ID = "GFZE01";  // the disc this core is for (NTSC-U)
 // What a race can be made of. A match is the coordinator's word and a replay is a file somebody sent: their numbers
 // go to the game's own set-up routines, which check nothing (a machine or a course the disc does not hold, a seat
@@ -135,6 +145,9 @@ struct Match
   std::vector<StatPack> packs;
   std::array<int, 30> seat_pack = MakeNoStock();
   std::vector<u8> seat_block;  // the seats' block as written before the boot (const_pack.cpp SeatBlock): its rows off
+  // The race's game mode ("setup.mode": protocol/formats.md section 9; mode.h): its package, read and checked. None:
+  // the race of the host's rules. A mode's setup words win over the match's (its laps are the race's).
+  std::optional<mode::Package> game_mode;
 };
 
 // The mod bundle's files (the launch file's "bundle"). Two kinds: the fork's (mod.bin, codes.txt: Gecko codes, the reference
@@ -192,7 +205,7 @@ bool OfVersion7(const Match& m);
 bool PacksOfSetup(const picojson::object& setup, const std::string& path, std::vector<StatPack>* out);
 // A pack's fingerprint, from its values as they travel (6 bytes an entry).
 std::string StatFingerprint(const std::vector<u8>& values);
-// A recording's version is one this core plays (2 to 7: replay.toml's versions, each the same file under another
+// A recording's version is one this core plays (2 to 7 and 9: replay.toml's versions, each the same file under another
 // number; a compact file, version 8, is read as the recording it was made of: files_replay.cpp ReadReplayFile).
 constexpr bool PlayedVersion(u32 version)
 {

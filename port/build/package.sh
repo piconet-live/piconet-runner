@@ -6,12 +6,15 @@
 # that holds everything else of the launcher; the marker in that folder tells the launcher it is a copy, so it keeps
 # its data in the copy without a command line (Launcher.Core Install, which names the folder and the marker).
 # Every part is named; none is "whatever is in the work folder today":
-#   STACK=<name>            the server stack the copy belongs to (its name, as the launcher shows it)
+#   KIND=test|public        a test build (its launcher says TEST BUILD; the default, so a slip is never the players')
+#                           or the players' build
+#   STACK=<name>            the server stack the copy belongs to, by default the one for KIND: test, or live for public
 #   STACK_ADDRESS=<address> that stack's server, wss://HOST/PATH: the launcher's official server. No default: the
 #                           copy connects where whoever makes it points it (the private release path takes the
 #                           name and address from the service's deploy/fly/stacks.py)
-#   KIND=test|public        a test build (its launcher says TEST BUILD) or the players' build
 #   RUNNER=<file>           moderngekko-run.exe, with its build-manifest.json beside it
+#   AURORA=<folder>         Aurora: aurora-present.dll, the libraries it loads and its pipeline seed
+#                           (initial_pipeline_cache.db); by default the runner's own folder, where its build puts them
 #   RUNNER_COMMIT=<commit>  the commit of this repository the runner was built from (7 digits or more): its
 #                           manifest must name it, and source/forks is taken from it
 #   MODULE=cg-NAME          the native module, <work>/work/mod-cg-NAME (or the .dll's path), manifest beside it
@@ -43,9 +46,9 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 . port/setup/lib.sh; W=${PORT_WORK:-$PORT_WORK_DEFAULT}
-: "${STACK:?package: name the server stack the copy belongs to, STACK=NAME}"
+KIND=${KIND:-test}
+[ "$KIND" = public ] && STACK=${STACK:-live} || STACK=${STACK:-test}
 : "${STACK_ADDRESS:?package: name the stack's server, STACK_ADDRESS=wss://HOST/PATH}"
-: "${KIND:?package: say what the copy is, KIND=test or KIND=public}"
 : "${RUNNER:?package: name the runner, RUNNER=<moderngekko-run.exe with its build-manifest.json beside it>}"
 : "${RUNNER_COMMIT:?package: name the commit the runner was built from, RUNNER_COMMIT=<commit>}"
 : "${MODULE:?package: name the module, MODULE=cg-NAME}"
@@ -54,6 +57,7 @@ cd "$(git rev-parse --show-toplevel)"
 : "${SYS_SOURCE:?package: name the emulator\'s source tree, SYS_SOURCE=<tree>}"
 : "${VCRT:?package: name the folder with the four VC runtime files, VCRT=<folder>}"
 case "$MODULE" in */*) module=$MODULE ;; *) module=$W/work/mod-$MODULE/gGFZE01_recomp.dll ;; esac
+AURORA=${AURORA:-$(dirname "$RUNNER")}
 source port/setup/app.sh
 name=$(sed -n 's/.*const string DisplayName = "\([^"]*\)".*/\1/p' "$APP_LAUNCHER/Branding.cs")    # the one place that holds it
 said() { sed -n "s/.*const string $1 = \"\([^\"]*\)\".*/\1/p" "$2"; }       # a name as the launcher's source has it
@@ -67,7 +71,8 @@ launcher=$(pin REPO_LAUNCHER) && tools=$(pin REPO_TOOLS) || { echo "package: por
 launcher=$(cd "$launcher" 2> /dev/null && pwd) || { echo "package: no launcher checkout at pins.tsv REPO_LAUNCHER ($(pin REPO_LAUNCHER))" >&2; exit 1; }
 # the launcher is published from its own checkout, whose commit names the copy (package.py --launcher-repository)
 parts=(--name "$name" --stack "$STACK" --repository "$PWD" --launcher-repository "$launcher" --work "$COPIES" --runner "$RUNNER" --runner-commit "$RUNNER_COMMIT"
-       --module "$module" --bundle "$BUNDLE" --sys "$SYS" --sys-source "$SYS_SOURCE" --vcrt "$VCRT" --fonts "$PWD/$APP_FONTS")
+       --module "$module" --bundle "$BUNDLE" --sys "$SYS" --sys-source "$SYS_SOURCE" --vcrt "$VCRT" --fonts "$PWD/$APP_FONTS"
+       --aurora "$AURORA")
 [ -z "${OLD_REPLAYS_REFUSED:-}" ] || parts+=(--old-replays-refused)
 # Whose names no copy may hold, beside the two checkouts' and SYS_SOURCE's git users, which package.py asks itself: the
 # users of the work folder's other trees and of piconet-tools, whose disc reader the launcher is built with (pins.tsv

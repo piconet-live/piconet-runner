@@ -44,6 +44,7 @@ constexpr u32 LEARN_STEPS = 120;
 // The pages of a piece of a whole-memory comparison (ScanPool): about 20 us of hashing, 73 pieces of 18.6 MiB.
 constexpr u32 SCAN_PIECE = 64;
 constexpr u32 BLOCK = 32;
+constexpr u32 LET_GO_EACH = 128;  // entries a jump dropped (Tracking::letting_go) let go before each step, at most
 // the undo log keeps whole blocks: the locked cache's kept part must be whole blocks to stay out of every entry
 static_assert(SCRATCH_KEPT % BLOCK == 0 && SCRATCH_KEPT_END % BLOCK == 0 && SCRATCH_KEPT < SCRATCH_KEPT_END);
 
@@ -151,11 +152,48 @@ void CompareEveryPage(Guest& g, Tracking& s, u32 t, bool learning, Undo& entry)
     }
   }
 }
+// Rollback::KeepAfter: the memory is the moment after step `step` (its entry just logged), so the entry's
+// after-images are the memory's content at the entry's own blocks, read here. Made outside the mutex, moved in
+// under it (Forward may be reading on another thread).
+void KeepAfterImage(Guest& g, Tracking& s, u32 step, const Undo& entry)
+{
+  const u8* live = g.Ram(s.region, s.shadow.size());
+  const u8* scratch = s.scratch_shadow.empty() ? nullptr : g.GetHost().Scratch();
+  Undo image;
+  image.blocks.resize(entry.blocks.size());
+  for (std::size_t i = 0; i < entry.blocks.size(); ++i)
+  {
+    image.blocks[i].first = entry.blocks[i].first;
+    std::memcpy(image.blocks[i].second.data(), live + entry.blocks[i].first, BLOCK);
+  }
+  for (const auto& block : entry.scratch)
+  {
+    if (scratch == nullptr)
+      break;
+    auto& to = image.scratch.emplace_back();
+    to.first = block.first;
+    std::memcpy(to.second.data(), scratch + block.first, BLOCK);
+  }
+  if (entry.has_rng)
+  {
+    image.has_rng = true;
+    g.CopyFrom(image.rng.data(), DOL_RNG, 4);
+  }
+  const std::lock_guard lock(s.after_mutex);
+  s.after[step] = std::move(image);
+}
 }  // namespace
 
 void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
 {
   const auto started = Clock::now();
+  for (u32 n = 0; n < LET_GO_EACH && !s.letting_go.empty(); ++n)
+  {
+    Undo& gone = s.letting_go.back();
+    s.letting_go_bytes -= EntryBytes(gone);
+    DropEntry(s, gone);
+    s.letting_go.pop_back();
+  }
   u8* live = g.Ram(s.region, s.shadow.size());
   u8* rng = g.Ram(DOL_RNG, 4);
   u8* shadow = s.shadow.data();
@@ -218,6 +256,8 @@ void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
     std::memcpy(s.shadow_rng.data(), rng, 4);
   }
   s.blocks_logged += static_cast<u32>(entry.blocks.size() + entry.scratch.size());
+  for (const auto& block : entry.blocks)
+    Dirty(s, block.first);
 #ifdef FZGX_HOST_TIMERS
   NotePages(learning ? 0 : frame_step ? 1 : full ? 2 : 3, entry);
 #endif
@@ -226,9 +266,26 @@ void PreStep(Guest& g, Tracking& s, u32 t, bool frame_step)
     FZGX_TIME(UndoStore);
     Undo& kept = s.undo[t - 1];  // (an entry there already is replaced: its lists go to the spare ones)
     s.undo_bytes -= EntryBytes(kept);
-    DropEntry(s, kept);
-    kept = std::move(entry);
+    if (s.save_again == t)
+    {
+      // a restore goes through an entry's blocks from its last to its first, so the older content, first, wins
+      kept.blocks.insert(kept.blocks.end(), entry.blocks.begin(), entry.blocks.end());
+      kept.scratch.insert(kept.scratch.end(), entry.scratch.begin(), entry.scratch.end());
+      if (!kept.has_rng && entry.has_rng)
+      {
+        kept.has_rng = true;
+        kept.rng = entry.rng;
+      }
+    }
+    else
+    {
+      DropEntry(s, kept);
+      kept = std::move(entry);
+    }
+    kept.serial = ++s.serials;
     s.undo_bytes += EntryBytes(kept);
+    if (s.keep_after)
+      KeepAfterImage(g, s, t - 1, kept);
   }
   s.track_us += std::chrono::duration<double, std::micro>(Clock::now() - started).count();
 }
@@ -256,6 +313,7 @@ void Restore(Guest& g, Tracking& s, u32 from, u32 t)
     {
       std::memcpy(live + b->first, b->second.data(), BLOCK);
       std::memcpy(s.shadow.data() + b->first, b->second.data(), BLOCK);
+      Dirty(s, b->first);
     }
     if (s.way == Tracking::Way::Both)
       CheckRestored(g, s, it->second.blocks);
@@ -271,6 +329,7 @@ void Restore(Guest& g, Tracking& s, u32 from, u32 t)
     }
     EraseEntry(s, it);
   }
+  DropAfter(s, t);  // (the after-images go with the entries)
   u32 at = 0;
   for (const auto& [off, len] : s.kept)
   {
@@ -449,13 +508,17 @@ void StartTracking(Guest& g, Tracking& s)
       a = end;
     }
   }
-  TellPutBack(&s, PutBack(g, s));
+  if (s.tells)
+    TellPutBack(&s, PutBack(g, s));
+  s.dirty.assign(s.shadow.size() / PAGE, 0);
+  s.all_dirty = true;
   s.watched_list.clear();
   s.keep_watching = false;
   s.tracked_steps = 0;
   OpenUndoTrace(s);
   s.first_step = s.final_below = 0;
   s.undo_bytes = 0;
+  DropAfter(s, 0);
   s.keys.clear();
   s.key_bytes = 0;
   s.units.clear();

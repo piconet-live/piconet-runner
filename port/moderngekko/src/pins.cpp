@@ -141,9 +141,11 @@ void PinConsole()
   Stock(Config::MAIN_ENABLE_DEBUGGING);
   Stock(Config::MAIN_PAUSE_ON_PANIC);
   Stock(Config::MAIN_PAUSE_ON_FOCUS_LOST);
-  // an alert of the emulator's is a line of its log and no message box: a box holds the game until somebody answers
-  // it, while the race goes on for everybody else (the launcher writes the same into a new user folder)
-  Set(Config::MAIN_USE_PANIC_HANDLERS, false);
+  // every alert of the emulator's goes to the runner's handler, which writes it into the log and shows no box (alerts.cpp,
+  // fzgx/alerts.h: a box holds the game until somebody answers it, while the race goes on for everybody else). The
+  // emulator's stock value, on: off, the emulator gives a panic no handler at all and the line was lost (the launcher
+  // writes the same into the user folder)
+  Stock(Config::MAIN_USE_PANIC_HANDLERS);
 }
 
 // The picture's settings that reach back into what the game reads: copies of the frame buffer into its memory, its

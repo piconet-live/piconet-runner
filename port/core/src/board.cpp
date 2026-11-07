@@ -36,6 +36,9 @@ struct Board
   u32 watch_beat = 0;                     // the watching thread's
   Status status;                          // as last written (the game's thread's)
   bool fields_beat = false;               // a plain start: every picture beats
+  bool mode_head = false;                 // the game mode's head is written (the game's thread's)
+  u32 mode_serial = 0;                    // the game mode's values written (the game's thread's)
+  LocalPad pad;                           // the local pad as last written (the game's thread's; serial 0: none yet)
 };
 
 Board& The()
@@ -181,6 +184,9 @@ void Close()
   s.watch_beat = 0;
   s.status = {};
   s.fields_beat = false;
+  s.mode_head = false;
+  s.mode_serial = 0;
+  s.pad = {};
 }
 
 bool Taken()
@@ -264,6 +270,45 @@ void PutSnapshot(const Snapshot& snapshot)
 {
   if (The().view)
     The().view->WriteSnapshot(snapshot);
+}
+
+bool ModeHeadWritten()
+{
+  return The().mode_head;
+}
+
+void PutModeHead(const ModeHead& head)
+{
+  Board& s = The();
+  if (!s.view)
+    return;
+  s.view->WriteModeHead(head);
+  s.mode_head = true;
+}
+
+void PutModeValues(ModeValues& values)
+{
+  Board& s = The();
+  if (!s.view)
+    return;
+  values.serial = ++s.mode_serial;
+  s.view->WriteModeValues(values);
+}
+
+void PutLocalPad(const LocalPad& pad)
+{
+  Board& s = The();
+  if (!s.view)
+    return;
+  LocalPad& was = s.pad;
+  if (was.serial != 0 && was.held == pad.held && was.buttons == pad.buttons && was.stick_x == pad.stick_x &&
+      was.stick_y == pad.stick_y && was.c_stick_x == pad.c_stick_x && was.c_stick_y == pad.c_stick_y && was.l == pad.l &&
+      was.r == pad.r)
+    return;
+  const u32 serial = was.serial + 1;
+  was = pad;
+  was.serial = serial;
+  s.view->WriteLocalPad(was);
 }
 
 bool LauncherStopped()

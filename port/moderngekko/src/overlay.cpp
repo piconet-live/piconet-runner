@@ -7,9 +7,14 @@
 
 #include "overlay.h"
 
+#include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <string>
+
+#include "VideoCommon/AbstractGfx.h"
+#include "VideoCommon/RenderState.h"
 
 #include "fzgx/strip.h"
 
@@ -99,6 +104,22 @@ float Pieces(ImFont* font, float size, const char* text, float x, Draw draw)
 }
 }  // namespace
 
+void SmoothSampling(ImDrawList* list)
+{
+  // (the on-screen drawing stops at a list with no vertices: this callback must not be all a list holds)
+  if (list->VtxBuffer.Size == 0)
+  {
+    list->PrimReserve(6, 4);
+    list->PrimRect(ImVec2(0, 0), ImVec2(0, 0), 0);
+  }
+  list->AddCallback([](const ImDrawList*, const ImDrawCmd*) { if (g_gfx) g_gfx->SetSamplerState(0, RenderState::GetLinearSamplerState()); }, nullptr);
+}
+
+void NearestSampling(ImDrawList* list)
+{
+  list->AddCallback([](const ImDrawList*, const ImDrawCmd*) { if (g_gfx) g_gfx->SetSamplerState(0, RenderState::GetPointSamplerState()); }, nullptr);
+}
+
 const Fonts& TheFonts()
 {
   static Fonts fonts;
@@ -109,6 +130,23 @@ const Fonts& TheFonts()
     fonts.body = Load(fzgx::strip::TEXT_FONT);
     fonts.semi = Load(fzgx::strip::FIGURE_FONT);
     fonts.display = Load(fzgx::strip::DISPLAY_FONT);
+    // for a mode's texts: what Saira lacks comes from the system's Segoe UI, if there (Greek, Cyrillic, more of Latin), and from its
+    // Yu Gothic (kana, kanji): glyphs of a merged font load when first drawn
+    if (fonts.display != nullptr)
+      if (const char* windows = std::getenv("WINDIR"))
+        for (const char* file : {"segoeui.ttf", "YuGothM.ttc"})
+        {
+          const std::filesystem::path path = std::filesystem::path(windows) / "Fonts" / file;
+          std::error_code e;
+          if (!std::filesystem::is_regular_file(path, e))
+            continue;
+          ImFontConfig config;
+          config.MergeMode = true;
+          config.DstFont = fonts.display;
+          std::snprintf(config.Name, sizeof(config.Name), "%s", file);
+          const std::u8string name = path.u8string();
+          ImGui::GetIO().Fonts->AddFontFromFileTTF(reinterpret_cast<const char*>(name.c_str()), 16.0f, &config);
+        }
   }
   return fonts;
 }
@@ -124,6 +162,8 @@ float Width(const Type& type, const char* text)
 void Draw(ImDrawList* list, const Type& type, float x, float top, ImU32 colour, const char* text, const ImVec4* clip)
 {
   ImFont* font = FontOf(type);
+  if (type.lean)
+    SmoothSampling(list);
   const int first = list->VtxBuffer.Size;
   const ImVec2 at(x, top);
   if (!type.tabular)
@@ -140,6 +180,32 @@ void Draw(ImDrawList* list, const Type& type, float x, float top, ImU32 colour, 
   {
     ImDrawVert& v = list->VtxBuffer[i];
     v.pos.x += (foot - v.pos.y) * LEAN;
+  }
+  NearestSampling(list);
+}
+void DrawOutlined(ImDrawList* list, const Type& type, float x, float baseline, ImU32 colour, ImU32 outline_colour, float outline, float shear, const char* text)
+{
+  ImFont* font = FontOf(type);
+  const float top = baseline - font->GetFontBaked(type.size)->Ascent;
+  const int first = list->VtxBuffer.Size;
+  const auto put = [&](float left, float y, ImU32 c) {
+    if (!type.tabular)
+      list->AddText(font, type.size, ImVec2(left, y), c, text);
+    else
+      Pieces(font, type.size, text, left, [&](const char* begin, const char* end, float at) { list->AddText(font, type.size, ImVec2(at, y), c, begin, end); });
+  };
+  // the outline: the text stamped around a circle, round as a stroke's join; more stamps the wider it is
+  const int stamps = outline < 2.5f ? 8 : outline < 5 ? 12 : 16;
+  for (int i = 0; i < stamps; ++i)
+  {
+    const float turn = 6.2831853f * static_cast<float>(i) / static_cast<float>(stamps);
+    put(x + std::cos(turn) * outline, top + std::sin(turn) * outline, outline_colour);
+  }
+  put(x, top, colour);
+  for (int i = first; i < list->VtxBuffer.Size; ++i)
+  {
+    ImDrawVert& v = list->VtxBuffer[i];
+    v.pos.x += (baseline - v.pos.y) * shear;
   }
 }
 }  // namespace fzgx_port::overlay

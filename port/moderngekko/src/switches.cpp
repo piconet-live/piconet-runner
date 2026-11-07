@@ -6,6 +6,8 @@
 // (port/core/src/files_launch.cpp) into the one settings struct, fzgx::Options, here and nowhere else.
 // `--fzgx-log FILE` is no setting of a start: it says where the runner's own output goes from the first line on, the
 // launch file's refusal included.
+// `--build-pipelines` starts no game either: with the offline game's launch file, Aurora compiles the look's shaders and
+// the program ends (pipelines_build.cpp, run from Prepare).
 // The adapter reads no environment variable, and in a start with a launch file neither does the emulator's side for
 // any test setting of its own (the pad script, the pokes, the probe, the logs, the CPU core's switches, the JIT):
 // naming the launch file tells it so (RunSettings::RuleByLaunchFile, forks/recompcore/2-port), and what the file's
@@ -16,12 +18,15 @@
 
 #include "adapter.h"
 #include "adapter_internal.h"
+#include "alerts.h"
 #include "controllers.h"
 #include "fzgx/replay_info.h"
+#include "fzgx/rollback_worker.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <thread>
 
 #include "Common/RunSettings.h"
 
@@ -32,11 +37,14 @@ const char* Usage()
   return "       [--config <launch file: this start's settings, JSON (protocol/formats.md section 2)>]\n"
          "       [--fzgx-log <file for the runner's standard output and error; the 19 runs before are kept>]\n"
          "       [--controllers <user folder>: no game; the launcher's Controller page talks to it (controllers.h)]\n"
-         "       [--replay-info <replay file>: no game; what the file holds, as JSON (fzgx/replay_info.h)]\n";
+         "       [--replay-info <replay file>: no game; what the file holds, as JSON (fzgx/replay_info.h)]\n"
+         "       [--build-pipelines: no game; Aurora compiles the look's shaders for the launch file's settings (pipelines_build.cpp)]\n";
 }
 
 bool TakeArgument(const std::string& argument, const std::function<const char*()>& value)
 {
+  // every start of the port's (a game, the controller helper, the pipeline build): no alert of the emulator's is a box
+  AlertsToTheLog();
   if (argument == "--config")
   {
     // The argument is in the system's code page (the runner's own options, --fzgx-log and the user folder are
@@ -55,6 +63,12 @@ bool TakeArgument(const std::string& argument, const std::function<const char*()
   }
   if (argument == "--controllers")
     RunControllerHelper(std::filesystem::path(value()));  // no game is started: the program ends in there
+  if (argument == "--build-pipelines")
+  {
+    // no game: Aurora's pipeline build (pipelines_build.cpp), run by Prepare once --game, --user-dir and --config are read
+    AskPipelineBuild();
+    return true;
+  }
   if (argument == "--replay-info")
   {
     // no game is started: the file's parts and its header, printed, and the program ends
@@ -141,6 +155,9 @@ void ReportSettings()
                                             "to the race's start, End to the newest step buffered, . and , step one "
                                             "frame, [ and ] change the racer (the race view); the mouse held on the "
                                             "bar scrubs, a click jumps");
+  // how this start's deep rollbacks run (study section 21): on the worker, or sync below its thread minimum and why
+  s_core_host.Log(fzgx::LogLevel::Notice, fzgx::rollback_worker::ModeSaid(o.debug.worker_mode,
+                                                                          std::thread::hardware_concurrency()));
   if (o.controller_setup)
     s_core_host.Log(fzgx::LogLevel::Notice, "fzgx: controller setup: this start opens the game's own controller options once "
                                             "the title stands, and closes the game when the player leaves them");

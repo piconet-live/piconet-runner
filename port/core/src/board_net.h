@@ -42,7 +42,14 @@ void Camera(u32 view, u32 before);
 bool LauncherStopped();
 // board.cpp's side for board_race.cpp: the snapshot onto the board; and forgetting a race's counts (Open).
 void PutSnapshot(const Snapshot& snapshot);
+// A game mode's blocks (mode_board.cpp): its head, once a start; its values, each with the next serial.
+bool ModeHeadWritten();
+void PutModeHead(const ModeHead& head);
+void PutModeValues(ModeValues& values);
 void ResetRace();
+// The local player's pad for the launcher's Inputs window (minimap_frame.cpp InputsFrame), each game frame: written
+// with the next serial only when it differs from the last written (its serial aside).
+void PutLocalPad(const LocalPad& pad);
 
 // The mapping (board_map.cpp): the file's bytes in this process, or none.
 class Mapping

@@ -32,7 +32,7 @@ TABLE = memmap.RACE + memmap.RACE_CUSTOM
 RECORD = memmap.CUSTOM_RECORD                  # entry - RECORD: the record's address made up for an entry
 FAKE_LOW = TABLE - RECORD                      # the first entry's
 BODY, COCKPIT, BOOSTER, PILOT = 4, 12, 20, 28  # an entry's bytes
-assert RECORD == 0x81A0 and ENTRY == 32 and SEATS * ENTRY <= 0x400 and TABLE + SEATS * ENTRY == memmap.RACE + memmap.RACE_SIZE
+assert RECORD == 0x81A0 and ENTRY == 32 and SEATS * ENTRY <= 0x400 and TABLE + SEATS * ENTRY == memmap.RACE + memmap.RACE_TRAILS
 
 
 def lookup(seat, none):

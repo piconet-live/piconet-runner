@@ -60,7 +60,8 @@ constexpr std::chrono::seconds RESULTS_LEAVE{30};
 constexpr std::chrono::seconds RESULTS_LEAVE_GRACE{3};
 // How long the race's own results page (the first, results state 0) stands before a racer's game passes it by itself
 // with an A, to every racer's page, whose RESULTS_LEAVE then runs (the owner, 28 October: "First page gets a timer of
-// 15s"; session.cpp PassTheFirstResultsPageInTime). Pressed again every RESULTS_LEAVE_GRACE while the page stays.
+// 15s"; session.cpp PassTheFirstResultsPageInTime), and each of a mode's two points pages after it. Pressed again
+// every RESULTS_LEAVE_GRACE while the page stays.
 constexpr std::chrono::seconds RESULTS_FIRST_PAGE{15};
 // The image's count of displayed race frames the local seat has been out (knocked out or retired; not finished),
 // after which, at 180, it watches the leader (frame_spectate.py `spectate`); it stays at 180 from there.
@@ -319,6 +320,7 @@ struct Session
   Clock::time_point leavable_at{};  // when every racer's results page was first seen (LeaveTheResultsInTime)
   bool leave_pressed = false;       // the A of the results' own leave was pressed for the player
   bool first_page_seen = false;     // the race's own results page was seen standing (PassTheFirstResultsPageInTime)
+  u8 first_page_state = 0;          // which page that was: 0 the first; 3 and 4 a mode's VS RESULTS and VS TOTAL RANKING
   Clock::time_point first_page_at{};  // when it was first seen, then when the A of its pass was last pressed
   u32 first_page_presses = 0;       // the As pressed for the player on that page
   u32 stands_done = 0;  // tests ("debug.standStill"): how many of its stands were made (freeze.cpp)
@@ -462,10 +464,29 @@ Row RowFor(const Session& s, u32 t);
 void WriteRow(Guest& g, const Session& s, u32 t, const Row& row);
 void ChecksumPrevious(Guest& g, Session& s, bool extra);
 void ExtraStep(Guest& g, Session& s);
+// The deep-rollback worker (rollback_worker.cpp, fzgx/rollback_worker.h): a job's start before the restore, W
+// checked after it, the job opened when the frame runs every step to L, and compared at the hook of L.
+void WorkerPrepare(Guest& g, Session& s, u32 step, u32 run_from);
+void WorkerAfterRestore(Guest& g, Session& s);
+void WorkerOpen(Guest& g, Session& s, u32 run_from, u32 extra, bool held);
+// S2, the worker's thread (debug.rollbackWorker "on"; "sync" measures the same frames with none): at the predictions'
+// check, an adoption or the step a job given up goes back to; the search's end below an open job; a correction the
+// open job takes; the rule that starts a job; the final steps held at an open job's R; the stop.
+std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool check);
+u32 WorkerSearchTo(u32 arrived);
+// (WorkerTakes: false when it stopped the job for a correction below its R, "restarts" allowing; `wrong` then the lowest
+// step owed)
+bool WorkerTakes(Session& s, u32 step, u32& wrong);
+bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong);
+u32 WorkerKnown(u32 known);
+void WorkerQuiesce();
+void WorkerStop();
+void WorkerCompare(Guest& g, Session& s, u32 t);
 void CloseFrameWork(Session& s, bool flush);
 
 // frame.cpp
 void NormalStep(Guest& g, Session& s);
+void SendInputBeforeRunAhead(Guest& g, Session& s, u32 step);
 
 // frame_report.cpp: a race frame's accounts (NormalStep's)
 void TakeLastFramesWork(Guest& g, Session& s, u32 step, Clock::time_point frame_now);

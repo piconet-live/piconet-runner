@@ -3,6 +3,7 @@
 // its machines did and holds the end as the image does (FakeRace::holds_end).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <fstream>
 #include "harness.h"
 
 namespace
@@ -316,6 +317,38 @@ void TestTheFinishLimitInTheRaceBlock()
     }
     else
       CHECK(host.log.find(word == -1 ? "flow or rubber band is not a number in its range" : "or no rubber band, which only version 7 does") != std::string::npos);
+    Shutdown();
+  }
+  // the simulation's own generator (files.h RACE_SIM_GENERATOR): a recording without the key drew from the
+  // executable's word (before it) and plays so, whatever its version; one that says true is version 9 and no other is
+  // (0.6); a key that is not true or false is refused
+  const auto version_is = [&](u8 version)
+  {
+    std::string file;
+    {
+      std::ifstream in(options.play_file, std::ios::binary);
+      file.assign(std::istreambuf_iterator<char>(in), {});
+    }
+    file[5] = static_cast<char>(version);
+    std::ofstream(options.play_file, std::ios::binary).write(file.data(), static_cast<std::streamsize>(file.size()));
+  };
+  struct Sim { const char* key; u8 version; int word; };
+  for (const Sim& t : {Sim{"", 2, 0}, Sim{", \"simGenerator\": false", 2, 0}, Sim{", \"simGenerator\": true", 9, 1},
+                       Sim{", \"simGenerator\": true", 2, -2}, Sim{"", 9, -3}, Sim{", \"simGenerator\": 1", 2, -1}})
+  {
+    WriteReplay(options.play_file, {1, 0}, "", std::string(", \"flow\": 1") + t.key);
+    version_is(t.version);
+    host.log.clear();
+    Init(host, options);
+    CHECK(Active() == (t.word >= 0));
+    if (t.word >= 0)
+    {
+      FrameTick();
+      CHECK(Data().Read(layout::RACE_SIM_GENERATOR_AT, 4) == static_cast<u32>(t.word));
+    }
+    else
+      CHECK(host.log.find(t.word == -1 ? "or its generator is not true or false" : t.word == -2 ? "which only version 9 does"
+                                                                                               : "and version 9 is a race of one") != std::string::npos);
     Shutdown();
   }
   Init(host, Options{});

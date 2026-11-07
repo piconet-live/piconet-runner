@@ -4,6 +4,8 @@
 
 #include "net_internal.h"
 
+#include "fzgx/rollback_worker.h"
+
 #include <algorithm>
 #include <chrono>
 
@@ -173,6 +175,9 @@ FrameSteps CatchUpOrHold(Guest& g, Session& s, u32 step, bool settle, bool check
     if (run_from == step)
     {
       run_from = step - 1;
+      // (a worker's start at this hook holds the game's log's entries to its R, step - 1's among them: its base is
+      // made now, before the restore erases that entry: study section 22.5)
+      rollback_worker::BasesHere();
       s.rollback.RestoreTo(g, step, run_from);
     }
   }

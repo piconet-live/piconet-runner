@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "controllers.h"
+#include "alerts.h"
 
 #include <algorithm>
 #include <atomic>
@@ -103,10 +104,17 @@ bool AdapterWanted(const Helper& h)
 // input and less every write: the settings are loaded and never saved (the program leaves by std::_Exit, so the
 // settings layer's own save at its end never runs either). The native adapter is not opened here: only when the
 // launcher asks (AskAdapter), so a start that only wants the list of devices takes it from nobody.
+// The Wii's settings (SYSCONF) are not read: the base layer reads them through an IOS kernel of its own on the user
+// folder's NAND (BaseConfigLoader LoadFromSYSCONF), whose file system empties and makes again its /tmp and so writes
+// Wii/fst.bin, at every load and reload (FSCore's constructor; HostFileSystem::SaveFst, by the one temporary name
+// fst.bin.xxx in every process). A game or a second helper doing the same at that moment failed its rename:
+// "IOS_FS: Failed to rename temporary FST file", in a box (2026-11-06). Taken as the game's own (the emulator's word for
+// "the running title holds SYSCONF"), they are never read here: no setting of the controllers is in them.
 void StartInput(const std::filesystem::path& user_folder)
 {
   UICommon::SetUserDirectory(PathToString(user_folder));
   Config::Init();
+  ConfigLoaders::TransferSYSCONFControlToGuest();  // (never given back: the helper ends by std::_Exit)
   Config::AddLayer(ConfigLoaders::GenerateBaseConfigLoader());
   SConfig::Init();
   WindowSystemInfo wsi;
@@ -305,6 +313,7 @@ void WaitForDevices()
 
 void RunControllerHelper(const std::filesystem::path& user_folder)
 {
+  NoSystemBoxes();  // (and no alert of the emulator's is a box: TakeArgument)
   Helper h;
   StartInput(user_folder);
   ReadKinds(h);

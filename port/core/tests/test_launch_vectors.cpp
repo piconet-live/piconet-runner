@@ -94,6 +94,9 @@ void TestALaunchFileOfTheLaunchers()
   // the live race went to a UDP listener until the status board (0.3.0): the key is gone, and refused as unknown
   CHECK(ParseLaunchFile(race.substr(0, race.size() - 1) + R"(, "live": "127.0.0.1:47000"}})", &o)
             .value_or("").find("match.live") != std::string::npos);
+  // "Show inputs" drew a controller over the picture until 0.6.0's Inputs window (the status board's LocalPad, written
+  // in every start with a board): the key is gone, and refused as unknown
+  CHECK(ParseLaunchFile(race + R"(, "showInputs": true})", &o).value_or("").find("showInputs") != std::string::npos);
   // a launcher started with a launch file of its own: "autopilot", "testLagMs" and the members of its "game"
   CHECK(!ParseLaunchFile(race + R"(, "debug": {"rollbackLog":"rb.csv","jitterMs":8,"autopilot":true,"testLagMs":50}})", &o));
   CHECK(o.debug.autopilot && o.debug.lag_ms == 50 && o.debug.jitter_ms == 8 && o.debug.rollback_log == "rb.csv" &&

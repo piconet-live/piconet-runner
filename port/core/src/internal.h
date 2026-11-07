@@ -12,6 +12,9 @@
 namespace fzgx
 {
 Host& TheHost();
+// The host from any thread, the rollback worker's included (its memory's Log and PageHash, the two host calls W's
+// allowlist has: study section 17). TheHost() on W's thread is off limits (rollback_worker::OffLimits).
+Host& TheHostAnyThread();
 const Options& TheOptions();
 
 // boot.cpp, apart from IsNative, Patches and ApplyPatches (files_bundle.cpp) and StartReplay (replay.cpp). What the file readers give each other and boot.cpp is in files.h.
@@ -35,6 +38,9 @@ const std::vector<Patch>& Patches();
 void Prepare(ModData& data);
 PatchReport ApplyPatches(Guest& g);
 void OnFrame(Guest& g);
+// A plain start's own words, every field: the game's screen option and true widescreen's word from the launch file, and
+// PLAIN_DRAW (high refresh's frame tick and drawing asks). The picture only.
+void PlainField(Guest& g);
 // main.rel's header as the game holds it now: the head of the system's module list when that is main.rel (by its
 // module number) with its data in main memory after it; 0 while none is linked, or another module is at the head.
 u32 MainRel(const Guest& g);
@@ -82,12 +88,25 @@ void SetExitCode(int code);
 void StepsDone(Guest& g);
 // Our course map (minimap_frame.cpp), at every game frame of a race or replay start.
 void MinimapFrame(Guest& g);
+// "Show inputs" (minimap_frame.cpp), once a game frame: the local pad onto the status board (the launcher's Inputs
+// window); nothing without a board. Reads only: nothing a step uses. `plain`: a plain start's (offline play), from
+// every field (core.cpp PlainField): port 1's pad as the game reads it, in every mode, the menus too.
+void InputsFrame(Guest& g, bool plain = false);
+// The racer this game's picture follows (the spectator controls', the image's own spectating, else the stand-in
+// seat), and the seat whose driver this game's player is: none (-1) for a spectator, a watcher, a replay, or a racer
+// the image spectates for (minimap_frame.cpp; the game mode's displays, mode_hud.cpp).
+u32 ViewedRacer(Guest& g);
+u32 OwnSeat(Guest& g);
 void MinimapSummary();  // its line in the log, at the end
 // A late frame's drawing skipped (present.cpp): the frame tick; NormalStep's word that the frame is a race frame
 // that may skip; the image's store into DRAW_ASK (WindowWritten); the session's end (its line in the log).
 void PresentTick(Guest& g);
 void PresentRaceFrame();
 void PresentAsked(Guest& g, u32 value);
+// The race frames the late-frame skip found would be late, so far; the last drawn race frame's time from its tick to
+// its drawing's end (-1: none since the last ask). For the deep-rollback worker's rule and its frame counts.
+u32 PresentLateFrames();
+double PresentLastBusyMs();
 void PresentEnd();
 }  // namespace net
 

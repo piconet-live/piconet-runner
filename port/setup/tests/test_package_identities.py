@@ -375,6 +375,34 @@ class TheGamesOwnNames(unittest.TestCase):
     def test_a_list_that_cannot_be_read_or_is_short_refuses(self):
         with self.assertRaises(ValueError):
             identities.game_names(root=os.path.join(here, "no-such-folder"))
+        with self.assertRaises(ValueError):
+            identities.stand_in_pilots(root=os.path.join(here, "no-such-folder"), pilots=["Pico"])
+
+    def test_the_stand_in_pilot_passes_only_as_a_whole_literal_of_its_own_spelling(self):
+        """The launcher's made-up lobby has a racer "PICO" beside a git user pico@...: the game's pilot in the list's
+        capitals. It passes as that literal; the guard stays whole around it."""
+        sought, _ = identities.searches([("git's user.email", "pico@quillfeather.example"),
+                                         ("the Windows user's name", "Pico Quillfeather")])
+        game, stand_ins = identities.game_names(), identities.stand_in_pilots()
+        self.assertEqual(stand_ins, ("PICO",))           # MIRA, ZOE and SAM are no pilots' names, JODY is half of one
+        literal = lambda text: bytes([len(text.encode("utf-16-le")) + 1]) + text.encode("utf-16-le") + b"\x00"
+        found = lambda data: [kind for _, _, kind, _ in identities.scan([("app/Launcher.Core.dll", data, False)], sought, game, stand_ins)]
+        self.assertEqual(found(literal("PICO")), [])
+        self.assertNotEqual([k for _, _, k, _ in identities.scan([("app/x", literal("PICO"), False)], sought, game)], [])    # without the exemption
+        for other in (literal("pico"), literal("PICO the racer"), literal("by PICO"), b'{"author": "PICO"}', b"PICO\x00",
+                      "PICO".encode("utf-16-le"), b"made by PICO", literal("PICO@quillfeather.example")):
+            self.assertNotEqual(found(other), [], other)
+        self.assertIn("the Windows user's name", found(literal("PICO") + literal("PICO QUILLFEATHER")))
+
+    def test_a_stand_in_who_is_no_pilot_is_searched_and_a_list_without_racers_refuses(self):
+        sought, _ = identities.searches([("git's user.name", "Mira Quillfeather")])
+        stand_ins = identities.stand_in_pilots()
+        data = bytes([9]) + "MIRA".encode("utf-16-le") + b"\x00"
+        self.assertNotIn("MIRA", stand_ins)
+        self.assertNotEqual([k for _, _, k, _ in identities.scan([("app/x", data, False)], sought, (), stand_ins)], [])
+        with self.assertRaises(ValueError):
+            with mock.patch("builtins.open", mock.mock_open(read_data="class StandInLobby { }")):
+                identities.stand_in_pilots(pilots=["Pico"])
 
 
 if __name__ == "__main__":

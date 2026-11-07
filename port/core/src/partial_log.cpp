@@ -47,6 +47,6 @@ void PartialLine(const std::string& line)
 
 u32 RollbackMoments()
 {
-  return net::Rollback::Moments();
+  return net::Rollback::Moments(TheHost());  // (the game's memory: the worker's own moments are its memory's)
 }
 }  // namespace fzgx

@@ -52,7 +52,42 @@ void TheEntryInTheRaceBlock()
   const auto plain = SetUpOf(Custom(R"("body": 0, "cockpit": 25, "booster": 50, "pilot": 40)"));
   CHECK(plain.has_value() && Word(plain->race.data() + boot::RACE_CUSTOM + boot::CUSTOM_ENTRY + 8) == 0);
   // the whole block reaches the window: the entries are inside it
-  CHECK(boot::RACE_CUSTOM + 30 * boot::CUSTOM_ENTRY == boot::RACE_SIZE);
+  CHECK(boot::RACE_CUSTOM + 30 * boot::CUSTOM_ENTRY == boot::RACE_TRAILS);
+}
+
+// A seat's boost trail: three words of 0x01RRGGBB; picture only, so a bad colour is
+// the game's own, never a refused race.
+void TheTrailInTheRaceBlock()
+{
+  const auto entry = [](const std::optional<boot::Match>& m, int seat) { return m->race.data() + boot::RACE_TRAILS + seat * boot::TRAIL_ENTRY; };
+  const auto seat = [](const std::string& trail) { return R"({"seat": 0, "machine": 5, "trail": )" + trail + "}"; };
+  auto m = SetUpOf(seat(R"({"normal": {"r": 255, "g": 128, "b": 0}, "boost": {"r": 0, "g": 200, "b": 96}, "sparks": {"r": 200, "g": 0, "b": 16}})"));
+  CHECK(m.has_value());
+  if (!m)
+    return;
+  CHECK(Word(entry(m, 0)) == 0x01FF8000 && Word(entry(m, 0) + 4) == 0x0100C860 && Word(entry(m, 0) + 8) == 0x01C80010);
+  // one left out, the game's own; a seat with none, nothing at all
+  m = SetUpOf(std::string(R"({"seat": 0, "machine": 5, "trail": {"normal": {"r": 255, "g": 255, "b": 255}}}, )") + PLAIN);
+  CHECK(m.has_value() && Word(entry(m, 0)) == 0x01FFFFFF && Word(entry(m, 0) + 4) == 0 && Word(entry(m, 0) + 8) == 0);
+  for (u32 at = 0; m && at < boot::TRAIL_ENTRY; ++at)
+    CHECK(entry(m, 1)[at] == 0);
+  // dark ones are lifted to the least brightness, keeping their hue; black is a plain grey
+  const u32 l = limits::TRAIL_LEAST_BRIGHTNESS;
+  m = SetUpOf(seat(R"({"normal": {"r": 0, "g": 0, "b": 0}, "boost": {"r": 48, "g": 24, "b": 0}})"));
+  CHECK(m.has_value() && Word(entry(m, 0)) == (0x01000000 | l << 16 | l << 8 | l));
+  CHECK(m.has_value() && Word(entry(m, 0) + 4) == (0x01000000 | l << 16 | (l / 2) << 8));
+  // sparks left out follow the boost flame's colour (lifted as it is)
+  CHECK(m.has_value() && Word(entry(m, 0) + 8) == (0x01000000 | l << 16 | (l / 2) << 8));
+  m = SetUpOf(seat(R"({"boost": {"r": 0, "g": 200, "b": 96}, "sparks": {"r": 200, "g": 0, "b": 16}})"));
+  CHECK(m.has_value() && Word(entry(m, 0)) == 0 && Word(entry(m, 0) + 4) == 0x0100C860 && Word(entry(m, 0) + 8) == 0x01C80010);
+  m = SetUpOf(seat(R"({"boost": {"r": 0, "g": 200, "b": 96}})"));
+  CHECK(m.has_value() && Word(entry(m, 0)) == 0 && Word(entry(m, 0) + 8) == 0x0100C860);
+  // not a colour: the game's own, and the race still starts
+  for (const char* bad : {R"({"normal": {"r": 256, "g": 0, "b": 0}})", R"({"normal": {"r": 1, "g": 2}})", R"({"normal": 7})", "3"})
+  {
+    m = SetUpOf(seat(bad));
+    CHECK(m.has_value() && Word(entry(m, 0)) == 0);
+  }
 }
 
 void APartOfAnotherKindIsRefused()
@@ -148,6 +183,7 @@ void TestASeatsCustomMachine()
     TestHost host;   // (the refusals' log lines go to it: a game with no race)
     Init(host, Options{});
     TheEntryInTheRaceBlock();
+  TheTrailInTheRaceBlock();
     APartOfAnotherKindIsRefused();
     const std::string pack = std::string(R"(, "stats": {"name": "P", "fingerprint": ")") +
                              stat_packs::THE_PACKS_FINGERPRINT + R"(", "values": ")" + stat_packs::THE_PACKS_VALUES + R"("})";

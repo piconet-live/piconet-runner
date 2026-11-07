@@ -1,8 +1,8 @@
 // Practice with rewind: a solo race in the game's own Practice mode, with a rolling buffer of
-// the last minute. Start pauses; while paused the player scrubs back with the replay scrubber's bar or with the
+// the last five minutes. Start pauses; while paused the player scrubs back with the replay scrubber's bar or with the
 // stick; Start again resumes after a 1 s countdown, and resuming from an earlier moment branches: the later buffer
 // is dropped. One save, UnclePunch's way: D-pad right saves, D-pad left loads (with the countdown too). The save is a
-// mark on a step inside the buffer: once the race has run a minute past it, it is gone.
+// mark on a step inside the buffer: once the race has run five minutes past it, it is gone.
 //
 // This is the decision alone, as plain numbers with no game in it, so that the buffer's reach, the save's expiry,
 // the branch and the stick's curve are tested without one (tests/test_practice.cpp). The session that moves the
@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <utility>
@@ -25,8 +26,12 @@ using u16 = std::uint16_t;
 using u32 = std::uint32_t;
 using u8 = std::uint8_t;
 
-constexpr u32 WINDOW = 3600;     // the rewind's reach in steps: one minute at 60 steps a second
-constexpr u32 KEY_EVERY = 128;   // a whole copy of the race's memory every so many steps (the scrubber's)
+constexpr u32 WINDOW = 18000;    // the rewind's reach in steps: five minutes at 60 steps a second
+constexpr u32 MOST_REACH = 18000;  // the most a game mode's `rewind` may say (protocol modes.toml, setup word 27)
+// a whole copy of the race's memory every so many steps (as the scrubber keeps its front's): a long move runs at most
+// KEY_EVERY - 1 steps again, some 14 ms at 64 (a step run again: about 0.24 ms, Green Plant Spiral, alone; at 128 a
+// frame took 30 to 34 ms), and the keys take about 0.8 MiB each (some 220 MiB over five minutes)
+constexpr u32 KEY_EVERY = 64;
 constexpr u32 COUNTDOWN = 60;    // displayed frames between the resume and the race running on (1 s)
 
 // The pad as the game reads it (PADStatus, main.rel .bss 0x998: the buttons, then the stick): the player's own
@@ -50,6 +55,16 @@ constexpr int STICK_DEAD = 3;
 constexpr int STICK_FULL = 54;
 constexpr double SLOWEST = 0.25, HALF_TILT = 1.0, FASTEST = 8.0;
 double ScrubSpeed(int stick_x);
+
+// What a practice's game mode gives it (the setup words rewind, pause, save_state, resume_countdown; mode.h). As they
+// stand here: a practice with no game mode, today's words of practice.fzmode.
+struct Words
+{
+  u32 reach = WINDOW;         // the rewind's reach in steps; 0: no way back
+  bool pause = true;          // Start pauses
+  bool save = true;           // D-pad right saves, D-pad left loads
+  u32 countdown = COUNTDOWN;  // displayed frames between a resume or a load and the race running on
+};
 
 enum class Mode
 {
@@ -77,7 +92,7 @@ class Rewind
 {
 public:
   // `first`: the race's first step, the earliest any rewind reaches and the step keys are counted from
-  explicit Rewind(u32 first = 0) : m_first(first), m_front(first), m_position(first) {}
+  explicit Rewind(u32 first = 0, Words words = {}) : m_words(words), m_first(first), m_front(first), m_position(first) {}
 
   // A displayed frame, with the pad as it reads now: what the frame does.
   Frame Next(const Pad& pad);
@@ -89,15 +104,19 @@ public:
   Mode Now() const { return m_mode; }
   u32 First() const { return m_first; }
   u32 Front() const { return m_front; }  // every step below it has run
-  u32 Oldest() const { return m_front - m_first > WINDOW ? m_front - WINDOW : m_first; }  // the earliest moment
+  // the earliest moment: the reach back from the front, never below a moment that has already left the buffer (a
+  // branch moves the front back, but what fell out of the buffer before it stays out)
+  u32 Oldest() const { return std::max(m_gone, m_front - m_first > m_words.reach ? m_front - m_words.reach : m_first); }
+  const Words& Said() const { return m_words; }
   u32 Position() const;                  // the moment the picture shows (the front while racing)
   std::optional<u32> Save() const { return m_save; }
   u32 CountdownLeft() const { return m_countdown; }
   const Counts& Count() const { return m_counts; }
   u32 Misses() const { return m_misses; }
 
-  // Keys. A key is taken before a step that WantsKey; a move to the moment before `step` starts from KeyFor(step)
-  // and runs the steps from there (their inputs: the session's log). Keys that went out of the buffer, or past a
+  // Keys. A key is taken before a step that WantsKey; a long move to the moment before `step` starts from a key: back,
+  // from the one above it, through the undo log's entries; forwards, from KeyFor(step), running the steps from there
+  // (their inputs: the session's log; practice_session.cpp, Reach). Keys that went out of the buffer, or past a
   // branch, are handed out once by TakeDropped. Steps below FinalBelow can no longer change: the replay may write them.
   bool WantsKey(u32 step) const { return step >= m_first && (step - m_first) % KEY_EVERY == 0; }
   u32 KeyFor(u32 step) const { return step < m_first ? m_first : step - (step - m_first) % KEY_EVERY; }
@@ -110,7 +129,9 @@ private:
   void Load();
   bool Pressed(u16 button) const { return (m_buttons & button) != 0 && (m_before & button) == 0; }
 
+  Words m_words;
   u32 m_first, m_front;
+  u32 m_gone = 0;     // every moment below it has left the buffer for good
   double m_position;  // while paused or counting down: fractional, so slow scrubs move by quarters of a step
   Mode m_mode = Mode::Racing;
   u32 m_countdown = 0;

@@ -6,6 +6,7 @@
 // frame.cpp, frame_paint.cpp (frame.h): the game window's frame, a strip in the launcher's look;
 // panel.cpp: the panel over the picture before a race;
 // taskbar.cpp: the game window under the launcher's taskbar button, and its icon;
+// marks.cpp: the draw marks for Aurora (which machine's body or burner a draw is);
 // lanes*.cpp (lanes.h): the machines' task as a host call, for the per-machine rollback; copies.cpp: frame-buffer
 // copies under a rollback; rumble.cpp: the motors held still while the player does not drive;
 // adapter.cpp: the core's host, the files the adapter opens (the log file, the game folder's, the native module) and
@@ -28,6 +29,7 @@
 #include "Core/HostHooks.h"
 #include "Core/PowerPC/StaticRecomp/StaticRecompModuleSource.h"
 
+#include "adapter.h"
 #include "fzgx/board.h"
 #include "fzgx/core.h"
 
@@ -68,12 +70,17 @@ struct State
   void* next_user = nullptr;
   std::string engine;                     // "native" or "jit": what runs the game's code (BeforeBoot)
   std::future<std::string> module_sha1;   // the native module's, when this start records a replay
+  std::vector<fzgx::OverlayFile> mod_files;  // the mod pack's files this start reads in place of the disc's
+                                             // (ChooseModFiles: the launch file's "overlay" as the guard left it)
 };
 
 extern State s_state;
 // The core's host (adapter.cpp). Not named s_host: the Windows socket headers define that name as a macro, and a file
 // that includes them after this header then reads every use of it as something else.
 extern fzgx::Host& s_core_host;
+
+// marks.cpp: the draw marks' host call (HOST_MARK): r3 the operation, r4 its argument
+void MarkCall(u32 op, u32 arg);
 
 // host.cpp: the emulator's settings for the game, a race, the picture, the reference configuration
 void ApplyGameSettings();
@@ -108,6 +115,10 @@ void TakeHostCalls(StaticRecompModuleSource& source);
 // switches.cpp: a launch file was named (--config), so the adapter is in use; its settings read into s_state.options
 // (what is wrong with the file, or nothing); a line for the log that says which test settings are on
 bool InUse();
+// mod_files.cpp: the launch file's "overlay", chosen once in Prepare (each refusal and a summary in the log); and
+// where a file of the disc is read from, the pack's file when this start overlays it (Host::ReadGameFile)
+void ChooseModFiles();
+std::filesystem::path GameFilePath(const std::string& path);
 std::optional<std::string> ReadSettings();
 void ReportSettings();
 // the launch file's settings of the emulator's side, handed to it (Common/RunSettings.h)
@@ -149,8 +160,34 @@ fzgx::u32 TakePictureIntervals(fzgx::u32* out, fzgx::u32 most);
 // drawn_frames.cpp: the pictures between two steps (fzgx/hfr.h): the core's high refresh rate started with the
 // emulator's side (the GPU thread's re-draw, keyed by the command stream, and the display's rate), and its lines at
 // the stop.
+// run_ahead.cpp: the step run ahead's guest calls (fzgx/runahead.h)
+void StartRunAhead();
+void StopRunAhead();
+bool RunAheadAtTick(CPUState* cpu);
+void RunAheadReturned(CPUState* cpu);
+// The deep-rollback worker's CPU context (rollback_worker.cpp, fzgx/rollback_worker.h): after the network hook, a
+// job prepared there runs on its memory; at the stop, its line.
+void RunRollbackWorker(CPUState* cpu);
+// The mod loader intercepts guest functions (window.cpp): the rollback worker starts no job.
+bool InterceptionActive();
+void StopRollbackWorker();
+// Before the boot: at the emulator's stop (Core::Stop, before the CPU stops and Core::Shutdown unloads the native
+// module), the worker's thread leaves its job (rw::Close); AfterStop's StopRollbackWorker comes too late for that.
+void WatchStopForRollbackWorker();
 void StartDrawnFrames();
 void StopDrawnFrames();
+// aurora.cpp: Aurora as the presenter (the launch file's "debug.renderer"), its data folder and its line at the stop.
+void StartAurora();
+void StopAurora();
+// aurora.cpp: the folder of the runner's program (Aurora's libraries are beside it); the Aurora switches the launch file's
+// settings bring, as a game's start sets them (the pipeline build sets the same)
+std::filesystem::path RunnerFolder();
+void SetAuroraSwitches(const fzgx::Options& o);
+// pipelines_build.cpp: --build-pipelines (switches.cpp) asks for the pipeline build in place of a game; Prepare runs it
+// once the runner's options are read, and the program ends in it
+void AskPipelineBuild();
+bool PipelineBuildAsked();
+[[noreturn]] void RunPipelineBuild(const RunnerOptions& asked);
 // freeze_watch.cpp: a thread that says in the log when a race's game stands still, and where (fzgx/freeze.h),
 // and the emulator's lines (below): both start at the game's first picture (StartWatches, from the picture's hook:
 // one flag read a picture after the first), so that a boot that fails has started neither. Every way the game is

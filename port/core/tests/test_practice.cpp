@@ -72,16 +72,17 @@ void TestTheStickScrubsOnACurve()
 
 void TestTheRollingBuffer()
 {
-  Rewind r(0);
+  const Words minute{3600, true, true, COUNTDOWN};  // a minute's reach: the numbers below
+  Rewind r(0, minute);
   Race(r, 1000);
   CHECK(r.Front() == 1000 && r.Oldest() == 0 && r.TakeDropped().empty());
   Race(r, 4000);  // 5000 steps: the buffer holds the last minute
-  CHECK(r.Front() == 5000 && r.Oldest() == 5000 - WINDOW && r.FinalBelow() == 1400);
+  CHECK(r.Front() == 5000 && r.Oldest() == 5000 - 3600 && r.FinalBelow() == 1400);
   // keys before the one the oldest moment is reached from are let go, each once, in order
   const std::vector<u32> dropped = r.TakeDropped();
-  CHECK(r.KeyFor(1400) == 1280 && dropped.size() == 10 && dropped.front() == 0 && dropped.back() == 1152);
+  CHECK(r.KeyFor(1400) == 1344 && dropped.size() == 21 && dropped.front() == 0 && dropped.back() == 1280);
   CHECK(r.TakeDropped().empty());
-  CHECK(r.WantsKey(1280) && !r.WantsKey(1281) && r.KeyFor(1281) == 1280 && r.KeyFor(1279) == 1152);
+  CHECK(r.WantsKey(1344) && !r.WantsKey(1345) && r.KeyFor(1345) == 1344 && r.KeyFor(1343) == 1280);
   // paused, full tilt back for longer than a minute takes: the picture stops at the oldest moment, and forward at
   // the front
   CHECK(Press(r, BUTTON_START).step == 5000 && r.Now() == Mode::Paused && r.Count().pauses == 1);
@@ -106,7 +107,16 @@ void TestTheRollingBuffer()
   // a step the game says it ran while paused is not the race's: counted, nothing moves
   r.Ran(5000);
   CHECK(r.Misses() == 1 && r.Front() == 5000);
-  // a race shorter than a minute reaches back to its first step, not before it
+  // a resume from an earlier moment moves the front back but never the oldest moment: what has left the buffer
+  // (its undo entries final) stays out of it
+  r.Seek(2000);
+  Press(r, BUTTON_START);
+  CHECK(Hold(r, COUNTDOWN).branch || r.Count().branches == 1);
+  CHECK(r.Front() == 2000 && r.Oldest() == 1400 && r.FinalBelow() == 1400);
+  Race(r, 10);
+  Press(r, BUTTON_START);
+  CHECK(Hold(r, 100, -127).step == 1400 && r.Position() == 1400);
+  // a race shorter than the reach reaches back to its first step, not before it
   Rewind late(200);
   Race(late, 300);
   CHECK(late.Oldest() == 200 && late.KeyFor(100) == 200 && late.WantsKey(328) && !late.WantsKey(256));
@@ -152,9 +162,9 @@ void TestABranchOnResume()
   f = r.Next({});
   CHECK(f.run && f.branch && f.step == 1700 && r.Front() == 1700 && r.Now() == Mode::Racing);
   CHECK(r.Count().branches == 1 && !r.Save() && r.Count().saves_dropped == 1);
-  // keys after the branch point are let go (1792, 1920, 2048); 1664 still holds 1700's moment
+  // keys after the branch point are let go (1728 to 2048); 1664 still holds 1700's moment
   const std::vector<u32> dropped = r.TakeDropped();
-  CHECK(dropped == (std::vector<u32>{1792, 1920, 2048}));
+  CHECK(dropped == (std::vector<u32>{1728, 1792, 1856, 1920, 1984, 2048}));
   CHECK(r.KeyFor(1700) == 1664);
   r.Ran(f.step);
   Race(r, 99);
@@ -300,6 +310,46 @@ void TestTheRunKeptForTheReplay()
 }
 
 // The six above, in order (main.cpp).
+// The setup words: a shorter reach and countdown, no save, no pause, and no countdown at all.
+void TestAPracticesWords()
+{
+  BEGIN_TEST();
+  using namespace fzgx::practice;
+  const auto press = [](Rewind& r, u16 button) {
+    Pad down;
+    down.buttons = button;
+    const Frame f = r.Next(down);
+    r.Next(Pad{});
+    return f;
+  };
+  Rewind shorter(0, {120, true, true, 10});
+  for (u32 t = 0; t < 500; ++t)
+    shorter.Ran(t);
+  CHECK(shorter.Oldest() == 380);
+  CHECK(press(shorter, BUTTON_START).run == false && shorter.Now() == Mode::Paused);
+  press(shorter, BUTTON_START);
+  CHECK(shorter.Now() == Mode::Countdown && shorter.CountdownLeft() == 8);  // (two frames gone: the press and the release)
+
+  Rewind none(0, {0, false, false, 0});
+  for (u32 t = 0; t < 10; ++t)
+    none.Ran(t);
+  CHECK(none.Oldest() == 10 && none.FinalBelow() == 10);
+  CHECK(!press(none, BUTTON_RIGHT).saved && !none.Save());
+  press(none, BUTTON_START);
+  CHECK(none.Now() == Mode::Racing && none.Count().pauses == 0);
+
+  Rewind at_once(0, {120, true, true, 0});
+  for (u32 t = 0; t < 10; ++t)
+    at_once.Ran(t);
+  press(at_once, BUTTON_START);
+  CHECK(at_once.Now() == Mode::Paused);
+  Pad down;
+  down.buttons = BUTTON_START;
+  const Frame f = at_once.Next(down);
+  CHECK(at_once.Now() == Mode::Racing && f.run && !f.branch);
+  CHECK(Words{}.reach == WINDOW && Words{}.countdown == COUNTDOWN && Words{}.pause && Words{}.save);
+}
+
 void TestPracticeWithRewind()
 {
   TestTheStickScrubsOnACurve();
@@ -308,4 +358,5 @@ void TestPracticeWithRewind()
   TestABranchOnResume();
   TestALoadRunsTheCountdown();
   TestTheRunKeptForTheReplay();
+  TestAPracticesWords();
 }

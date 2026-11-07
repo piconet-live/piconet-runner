@@ -4,9 +4,10 @@ publishes the launcher and calls this, which checks every part before it writes 
 
 A copy is, at its top: one program, named as the application is, and the read-me (from the template in
 player-copy/); and folders: the published launcher in its own (the program runs it from there, and the marker in it
-tells the launcher that it is a copy and keeps its data here); recomp/ with the runner, the native module, the image
+tells the launcher that it is a copy and keeps its data here); recomp/ with the runner, the native module, Aurora (the picture: aurora-present.dll, the
+libraries it loads and its pipeline seed, initial_pipeline_cache.db, which always travels with it), the image
 bundle (fzgx/), the emulator's Sys folder as real files, the four VC runtime files and the font files the game
-window's strip is drawn in (Fonts/, with their licence); and source/, the builds' manifests, which name the commit
+window's strip is drawn in (Fonts/, with their licence) and m-overlay's licence for the "Show inputs" pictures; and source/, the builds' manifests, which name the commit
 and tree of every source tree the runner and the module were built from, with this script's own record. The runner
 is GPL code: the read-me points to its source, the public repositories at this release's tag (SOURCE_LINE).
 
@@ -18,6 +19,8 @@ What it refuses, each with the offending path:
     but the program and the read-me, and any folder at the top but the launcher's, recomp and source;
   - a launcher that was not made for the copy's stack: its own program must carry the stack's name, its address and
     whether it is a test build, as the copy is said to be (--stack-address, --stack-kind);
+  - an Aurora folder without aurora-present.dll or without its pipeline seed (initial_pipeline_cache.db, an SQLite
+    file), or with a library that is no Windows library;
   - a runner or module whose manifest is missing, not complete, or describes another file (SHA-1); a runner built
     from another commit than the one named; a module that was not built from this image; a bundle whose manifest
     names another image;
@@ -53,6 +56,11 @@ BUNDLE_FILES = ("mod.bin", "manifest.json", "patches.json")     # with same-race
 VC_RUNTIME = ("MSVCP140.dll", "MSVCP140_ATOMIC_WAIT.dll", "VCRUNTIME140.dll", "VCRUNTIME140_1.dll")
 # the game window: the three files port/core/include/fzgx/strip.h names (the strip and the overlays), and the licence they travel with
 FONT_FILES = ("SairaCondensed-ExtraBold.ttf", "SairaCondensed-SemiBold.ttf", "SairaSemiCondensed-Regular.ttf", "OFL.txt")
+# the "Show inputs" pictures are m-overlay's (MIT): its notice goes with the runner that holds them
+INPUTS_ART_NOTICE, INPUTS_ART_NOTICE_TO = "port/moderngekko/art/inputs/LICENSE.txt", "recomp/m-overlay-LICENSE.txt"
+# Aurora, the picture (the only renderer since 0.6.0): its library, every library of its folder (as AuroraCopy.cmake puts
+# them beside the runner: Dawn, SDL3, the shader compiler) and its pipeline seed, which Aurora reads from the runner's folder
+AURORA_LIBRARY, AURORA_SEED = "aurora-present.dll", "initial_pipeline_cache.db"
 SYS_IN_TREE = "Data/Sys"              # the emulator's Sys folder in its source tree
 LEFT_OUT = (".pdb",)                  # of the published launcher: two native libraries' debug symbols (100 MB)
 RECORD = "source/package-manifest.json"
@@ -223,6 +231,7 @@ def parts(a, plan):
         raise Refused("this image would refuse the replays of released builds (" + ", ".join(f"{v}, image {i[:8]}" for v, i in lost)
                       + "): play them back on it, add the rows, or OLD_REPLAYS_REFUSED=1 on purpose", table)
     emulator_sys(a, plan, runner["trees"]["recompcore"]["commit"])
+    aurora(a, plan)
     for name in VC_RUNTIME:
         found = [n for n in os.listdir(a.vcrt) if n.lower() == name.lower()] if os.path.isdir(a.vcrt) else []
         plan.add("recomp/" + name, "the VC runtime", real_file(os.path.join(a.vcrt, found[0] if found else name), "the VC runtime's " + name))
@@ -230,6 +239,7 @@ def parts(a, plan):
             raise Refused("the VC runtime's file is no Windows library", os.path.join(a.vcrt, name))
     for name in FONT_FILES:
         plan.add("recomp/Fonts/" + name, "the game window's fonts", real_file(os.path.join(a.fonts, name), "the game window's " + name))
+    plan.add(INPUTS_ART_NOTICE_TO, "the runner's licences", real_file(os.path.join(a.repository, *INPUTS_ART_NOTICE.split("/")), "m-overlay's licence"))
     records = {}
     for part, at in (("runner", runner_at), ("module", module_at)):      # as the build wrote it, but for the PC's and its user's names
         with open(at, "rb") as f:
@@ -244,6 +254,21 @@ def parts(a, plan):
             "vc_runtime": {n: plan.files["recomp/" + n]["sha1"] for n in VC_RUNTIME},
             "source": {"runner_commit": commit, "trees": {k: {"commit": t.get("commit"), "tree": t.get("tree")} for k, t in runner["trees"].items()}},
             "game_build": "/".join(x[:8] for x in (image_sha1, module_file["sha1"], runner_file["sha1"]))}
+
+
+def aurora(a, plan):
+    """Aurora beside the runner: aurora-present.dll, the other libraries of its folder, and the pipeline seed that goes with it."""
+    folder = a.aurora
+    for name in (AURORA_LIBRARY, AURORA_SEED):
+        real_file(os.path.join(folder, name), "Aurora's " + name)
+    taken = {RUNNER_FILE.lower(), MODULE_FILE.lower(), *(n.lower() for n in VC_RUNTIME)}   # the copy's own, from their own parts
+    for name in sorted(n for n in os.listdir(folder) if n.lower().endswith(".dll") and n.lower() not in taken):
+        plan.add("recomp/" + name, "Aurora", real_file(os.path.join(folder, name), "Aurora's " + name))
+        if plan.files["recomp/" + name]["head"][:2] != b"MZ":
+            raise Refused("Aurora's library is no Windows library", os.path.join(folder, name))
+    plan.add("recomp/" + AURORA_SEED, "Aurora", os.path.join(folder, AURORA_SEED))
+    if plan.files["recomp/" + AURORA_SEED]["head"][:16] != b"SQLite format 3\x00":
+        raise Refused("Aurora's pipeline seed is no SQLite file", os.path.join(folder, AURORA_SEED))
 
 
 def emulator_sys(a, plan, commit):
@@ -449,7 +474,7 @@ def package(a):
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     for option in ("name", "stack", "repository", "launcher-repository", "work", "runner", "runner-commit", "module",
-                   "bundle", "sys", "sys-source", "vcrt", "fonts"):
+                   "bundle", "sys", "sys-source", "vcrt", "fonts", "aurora"):
         p.add_argument("--" + option, required=True)
     for option in ("launcher", "program", "program-name", "program-folder", "marker", "stack-address", "stack-kind"):
         p.add_argument("--" + option)

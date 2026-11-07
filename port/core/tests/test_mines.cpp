@@ -75,9 +75,9 @@ void TestTheMineRuleInARecording()
   };
   const std::string with = recorded(MinesRule("200")), packed = recorded(MinesRule("200") + Stats(ThePack())),
                     without = recorded(MinesRule("0")), plain = recorded("");
-  // (since 0.4.0 a race from a match has no rubber band: every recording of one is version 7, the rule or not)
-  CHECK(with.compare(0, 6, std::string("FZRP\0\7", 6)) == 0 && packed.compare(0, 6, std::string("FZRP\0\7", 6)) == 0);
-  CHECK(without.compare(0, 6, std::string("FZRP\0\7", 6)) == 0 && plain.compare(0, 6, std::string("FZRP\0\7", 6)) == 0);
+  // (since 0.4.0 a race from a match has no rubber band: every recording of one is version 9, the rule or not)
+  CHECK(with.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0 && packed.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0);
+  CHECK(without.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0 && plain.compare(0, 6, std::string("FZRP\0\x09", 6)) == 0);
   CHECK(Says(with, "\"mineRegenMs\":200") && Says(packed, "\"fingerprint\":\""));
   // read back
   WriteABundle(dir);

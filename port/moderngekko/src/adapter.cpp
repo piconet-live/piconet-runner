@@ -5,7 +5,9 @@
 
 #include "adapter.h"
 #include "adapter_internal.h"
+#include "VideoCommon/AuroraPresent.h"
 #include "lanes.h"
+#include "lanes_census.h"
 
 #include <atomic>
 #include <cstdio>
@@ -150,6 +152,15 @@ public:
   // The panel before a race changed at the start gate (panel.cpp): a present of its own, queued.
   void PanelChanged() override { PresentPanel(); }
 
+  // Where the game stands (core.cpp's frame tick): Aurora compiles nothing ahead while the race runs.
+  void Scene(bool racing, const std::string& where) override
+  {
+    VideoCommon::AuroraPresent::Scene(racing, where);
+  }
+
+  // The game's step (core.cpp's frame tick): Aurora's event lines say it.
+  void Step(fzgx::u32 step) override { VideoCommon::AuroraPresent::Step(step); }
+
   // The replay scrubber (replay_bar.cpp, replay_host.cpp): its keys, a scrub on the bar, what the bar shows; its
   // undo log's packer; the process's memory for a playback's last lines.
   fzgx::u32 ReplayKeys() override { return TakeReplayKeys(); }
@@ -186,10 +197,10 @@ public:
     return std::string(folder.begin(), folder.end());
   }
 
-  // The game's files are an extracted tree (<game>/files), not a disc image.
+  // The game's files are an extracted tree (<game>/files), not a disc image; a file a mod pack overlays is the pack's.
   bool ReadGameFile(const std::string& path, std::vector<fzgx::u8>* out) override
   {
-    std::ifstream file(s_state.game_root / "files" / std::filesystem::path(path), std::ios::binary | std::ios::ate);
+    std::ifstream file(GameFilePath(path), std::ios::binary | std::ios::ate);
     if (!file)
       return false;
     out->resize(static_cast<std::size_t>(file.tellg()));
@@ -304,6 +315,8 @@ std::optional<std::string> Prepare(const RunnerOptions& asked)
   const std::filesystem::path& user_folder = asked.user_folder;
   s_state.game_root = game_root;
   s_state.user_folder = user_folder;
+  if (PipelineBuildAsked())
+    RunPipelineBuild(asked);  // no game: the program ends in there
   std::error_code ec;
   std::filesystem::create_directories(user_folder / "Logs", ec);
   // (the log of the start before stays as fzgx.1.log; one a game still holds is not emptied: a file beside it)
@@ -331,6 +344,7 @@ std::optional<std::string> Prepare(const RunnerOptions& asked)
   const bool race = !o.match.empty() || !o.play_file.empty();
   fzgx::Init(s_core_host, o);
   ReportSettings();
+  ChooseModFiles();
   if (race && !fzgx::Active())
     return "the race could not be set up from " + (o.match.empty() ? o.play_file : o.launch_file);
   // A saved state brings its own code (tests: "debug.forcePatches" writes the list over it); a boot runs the file's.
@@ -354,6 +368,7 @@ void NativeField()
   StartWatches();
   fzgx::board::Field();  // the launcher's status board: a plain start's heartbeat, the phase, the mailbox
   fzgx::EnsurePatched();
+  fzgx::PlainField();  // a plain start (offline play): the launcher's picture settings, as a race has them (core.h)
   FollowScreenOption();
   fzgx::ControllerSetupTick();
   PanelField();  // the load's progress, and the panel's meter moving (panel.cpp)
@@ -365,6 +380,7 @@ void BeforeBoot(StaticRecompModuleSource& source)
 {
   if (!InUse())
     return;
+  WatchStopForRollbackWorker();
   // The CPU core is the one the runner chose from this start's settings: the native module's, or the emulator's JIT
   // when the launch file's "debug.jit" asks for the reference. Set as the run's own value, which wins over a
   // settings file that names another core.
@@ -385,6 +401,8 @@ void BeforeBoot(StaticRecompModuleSource& source)
   }
   ApplyGameSettings();
   StartDrawnFrames();  // (before ApplyPresentation: the pictures' holds ask whether frames are drawn)
+  StartAurora();
+  StartRunAhead();
   ApplyPresentation();
   WatchPictures();
   HostHooks::Hooks& hooks = HostHooks::Get();
@@ -404,10 +422,11 @@ void BeforeBoot(StaticRecompModuleSource& source)
       ApplyRaceSettings();
     else
       ShowPicture(false);  // a plain start: the logos are 4:3 pictures; the game's own option takes over
-    // Every picture: the patch list again if a saved state brought stock words back; the picture's shape; and in a
-    // plain start whose launch file asks for the game's controller options, the watch that opens them and stops
-    // the game when the player leaves them (a plain start has no frame tick: its mode word is 0, and the mode
-    // machine's routine then makes no host call). The frame tick itself is the host call from the mode machine's
+    // Every picture: the patch list again if a saved state brought stock words back; in a plain start the launcher's
+    // picture settings (fzgx::PlainField); the picture's shape; and in a plain start whose launch file asks for the
+    // game's controller options, the watch that opens them and stops the game when the player leaves them (a plain
+    // start has no frame tick of its own: its mode word is 0, and the mode machine's routine then makes the host call
+    // only with PLAIN_DRAW set, for high refresh). The frame tick itself is the host call from the mode machine's
     // routine, once a game frame on the main thread.
     hooks.frame = [](const Core::CPUThreadGuard&) { NativeField(); };
     char text[200];
@@ -461,8 +480,12 @@ void AfterStop()
   ReportRumble();
   if (s_state.native)
     ReportWindow(true);
+  StopRunAhead();
+  StopAurora();
   StopDrawnFrames();
   StopWatchingPictures();
+  lanes::CensusStop();
+  StopRollbackWorker();
   lanes::Stop();
   LiftLoadPace(false);  // (a game closed while it loaded: the settings are the process's, put back all the same)
   fzgx::MemoryGone();   // (Core::Shutdown has let the game's memory go: the undo log's guard touches none of it)

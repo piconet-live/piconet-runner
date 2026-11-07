@@ -88,6 +88,7 @@ std::vector<std::string> DebugSettingsOn(const Debug& d)
   add(!d.late_seats.empty(), "lateSeats");
   add(d.late_noise != 0, "lateNoise");
   add(!d.partial_mode.empty() || !d.partial_log.empty() || !d.partial_guard, "partialRollback");
+  add(!d.worker_mode.empty(), "rollbackWorker");  // ("off" too: a player's start has no way to turn the worker off)
   add(d.skip_draws != 0, "skipDraws");
   add(d.buffer_share != 40, "bufferShare");
   add(d.buffer_steps != 0, "bufferSteps");
@@ -105,6 +106,11 @@ std::vector<std::string> DebugSettingsOn(const Debug& d)
   add(d.full_screen_without_focus, "fullScreenWithoutFocus");
   add(!d.relay.empty(), "relay (the core's own tests)");
   add(d.jit, "jit");
+  add(d.renderer != "dolphin", "renderer");
+  add(!d.aurora_shots.empty(), "auroraShots");
+  add(d.aurora_scale != 0, "auroraScale");
+  add(!d.aurora_log.empty(), "auroraLog");
+  add(!d.classic_hud_layout.empty(), "classicHudLayout");
   add(d.cheats, "cheats");
   add(d.mods, "mods");
   add(d.automation, "automation");

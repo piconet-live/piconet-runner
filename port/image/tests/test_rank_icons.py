@@ -32,9 +32,9 @@ class Run(Machine):
         return super().other(pc, w)
 
 
-def memory(mode=0, chase=7, tv=9, block=True, none=False, logs=0, counts=None):
+def memory(mode=0, chase=7, tv=9, block=True, none=False, logs=0, counts=None, rank_hidden=0):
     words = {0x800030C8: MODULE, CAMERA: BLOCK if block else 0, CHASE: RECORDS, LIVE: TV,
-             BLOCK: 0x80000000 if none else 0, memmap.IMAGE_LOGS: logs}
+             BLOCK: 0x80000000 if none else 0, memmap.IMAGE_LOGS: logs, memmap.MODE_HUD_RANK: rank_hidden}
     words.update(counts or {})
     m = {}
     for address, value in words.items():
@@ -83,6 +83,11 @@ class TheRankIcons(unittest.TestCase):
             self.assertTrue(self.held(7, site, chase=7)[0])
             self.assertFalse(self.held(LOCAL, site, chase=7)[0])
             self.assertFalse(self.held(3, site, chase=7)[0])
+
+    def test_a_mode_hiding_the_rank_holds_back_every_icon(self):
+        for site in (0, 1):
+            for racer in (3, 7, LOCAL):
+                self.assertTrue(self.held(racer, site, chase=7, rank_hidden=1)[0])
 
     def test_racing_holds_back_the_local_seat_alone(self):
         for racer in range(30):

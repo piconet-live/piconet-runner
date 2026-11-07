@@ -20,6 +20,12 @@ the game's own verdict (outtest.py), and a computer racer still racing, at rest 
 the host's rule the wait after the last player seat's finish holds as with it (the rule's end then never comes, and
 every player seat's finish counts); with it, as above.
 
+With a game mode (memmap.MODES +4, the mode's block: sites_mode.py) whose block's end word (memmap.MODE_END) is not
+0, the race is over at once: the mode ended it (a fault, D6 of the modes' design: "mode error"), with the results as
+they stand. A block whose race_waits word (memmap.MODE_WAITS) is not 0 has every seat counted as a player seat in the flow's
+test, so the last player out ends nothing: the mode's own end, or every machine finished or out. The word is the block's, so a rollback puts it back with the rest; nothing is latched. A mode whose block
+found no room in the heap (MODES +0 is 3) is a mode error from the start: never a race on the stock rules.
+
 What it reads, at a step boundary, and nothing else:
 - every machine's flags and, of a finished machine, its finish time (with the flow word, of an unfinished player
   seat what outtest.py reads: +0x58C, +0x17C, the rule word and the race type): the frames of its progress record's sum of
@@ -67,11 +73,24 @@ FINISHED_HI, OUT = memmap.MACHINE_FLAG_FINISHED >> 16, memmap.MACHINE_FLAG_BROKE
 assert memmap.hi(memmap.RACE) == memmap.hi(memmap.RACE + memmap.RACE_FLOW) and memmap.lo(memmap.RACE) < 0x7000
 assert memmap.hi(PLAYERS) == memmap.hi(memmap.IMAGE) and memmap.lo(PLAYERS) < 0x8000
 
+MODE_NO_ROOM = 3   # MODES +0: the race's mode had no room for its block (sites_mode.py): a mode error, the race over
+
 
 def clause(bss, prefix, yes, no, behind=None):
     p = prefix
     counted = f"    add 8, 8, {behind}\n" if behind is not None else ""
-    return f"""    lis 9, {memmap.hi(memmap.RACE)}
+    return f"""    lis 9, {memmap.hi(memmap.MODES)}
+    lwz 0, {memmap.lo(memmap.MODES)}(9)
+    cmpwi 0, {MODE_NO_ROOM}
+    beq {yes}
+    lwz 9, {memmap.lo(memmap.MODES) + 4}(9)
+    cmplwi 9, 0
+    beq {p}no_mode
+    lwz 0, {memmap.MODE_END}(9)
+    cmpwi 0, 0
+    bne {yes}
+{p}no_mode:
+    lis 9, {memmap.hi(memmap.RACE)}
     lwz 6, {memmap.lo(memmap.RACE) + memmap.RACE_FINISH_LIMIT}(9)
     lwz 12, {memmap.lo(memmap.RACE) + memmap.RACE_FLOW}(9)
     addis 10, {bss}, 7
@@ -112,7 +131,16 @@ def clause(bss, prefix, yes, no, behind=None):
     lis 7, {memmap.hi(PLAYERS)}
     lwz 8, {memmap.lo(PLAYERS)}(7)
     cmpwi 8, 0
-    bne {p}f_seats
+    bne {p}f_waits
+    li 8, -1
+{p}f_waits:
+    lis 9, {memmap.hi(memmap.MODES)}
+    lwz 9, {memmap.lo(memmap.MODES) + 4}(9)
+    cmplwi 9, 0
+    beq {p}f_seats
+    lwz 9, {memmap.MODE_WAITS}(9)
+    cmpwi 9, 0
+    beq {p}f_seats
     li 8, -1
 {p}f_seats:
     li 12, 0

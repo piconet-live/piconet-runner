@@ -285,3 +285,13 @@ void TestThePanelAtTheStartGate()
   Shutdown();
   Init(host, Options{});
 }
+
+// Where the game stands for the presenter (Host::Scene): racing only in the race's own phase of the race mode (the countdown and
+// the race), not in the load, the course intro or the results; the words name the three numbers.
+void TestTheRaceScene()
+{
+  CHECK(Racing(2, 0x29));
+  CHECK(!Racing(2, 0x27) && !Racing(2, 0x28) && !Racing(2, 0x2A) && !Racing(0xC, 0x29) && !Racing(10, 0x29));
+  CHECK(SceneWords(2, 0x29, 11) == "mode 2, phase 0x29, course 11");
+  CHECK(SceneWords(10, 0x2A, 0) == "mode 10, phase 0x2A, course 0");
+}

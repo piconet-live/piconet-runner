@@ -5,8 +5,8 @@ the inserts at a function's first instruction (seats, sound queue, rumble), the 
 were calls (frame routine, name tags, chase camera, main.rel linked), the results screen's pictures, the hand-back
 monitors' pictures (sites_monitors.py),
 the cameras' own words (sites_camera.py), the drawn transform's readers (sites_drawn.py), the shadows' place (sites_shadow.py), the effects' draws
-(sites_effects.py), the seats' custom machines (sites_custom.py) and their pilots (sites_pilot.py), mines that come back
-(sites_mines.py), computer drivers at their own pace (sites_cpu.py), the dash plate's and the energy boost's length as data (sites_dash.py), the machine setting's curve as data
+(sites_effects.py), the draw marks for Aurora (sites_marks.py), the seats' custom machines (sites_custom.py) and their pilots (sites_pilot.py), the portraits' mark (sites_faces.py), mines that come back
+(sites_mines.py), the leader's gap popup started in the step (sites_leadergap.py), the game mode's block, mode point, speed hold and a seat's own Restore (sites_mode.py), computer drivers at their own pace (sites_cpu.py), the simulation's own generator (sites_generator.py), the dash plate's and the energy boost's length as data (sites_dash.py), the energy meter under a mode's max energy (sites_energy.py), the machine setting's curve as data
 (sites_curve.py), a
 stat pack a seat (sites_seats.py), the start grid (sites_grid.py), true widescreen's view (sites_view.py), the frames
 drawn between two steps (sites_hfr.py), the countdown movie's request (sites_countdown.py), and the entry table.
@@ -17,13 +17,24 @@ import sites_camera
 import sites_countdown
 import sites_cpu
 import sites_curve
+import sites_generator
 import sites_custom
+import sites_trail
 import sites_dash
+import sites_energy
 import sites_drawn
 import sites_effects
+import sites_faces
 import sites_grid
+import sites_leadergap
 import sites_hfr
 import sites_mines
+import sites_combat
+import sites_mode
+import sites_modehud
+import sites_hudmove
+import sites_ghostdraw
+import sites_marks
 import sites_monitors
 import sites_pilot
 import sites_present
@@ -46,10 +57,13 @@ def add(k, r, patch, stock, complete, codes, hooks, mute):
     FN_407C, FN_C7224 = TEXT + 0x407C, TEXT + 0xC7224
     SEED, CAMERA = TEXT + 0xF47AC, (TEXT + 0xAA84, TEXT + 0xAC08)
     test = f"    lis 12, {C}\n    lwz 12, {MODE}(12)\n    cmpwi 12, 0\n"
+    PLAIN = memmap.PLAIN_DRAW - memmap.CONTROL
 
-    # --- the mode machine's start (fn_1_ECC, every game frame on the main thread). A plain start: nothing. A race (a
-    # replay plays as the race): the host's frame tick, the two codes Gecko ran every frame (C0: the seat routines
-    # installed as the game's hooks; the shuffle word held until the race), then the fork's boot routine of a race.
+    # --- the mode machine's start (fn_1_ECC, every game frame on the main thread). A plain start: nothing, or with the
+    # host's PLAIN_DRAW set (offline play at high refresh) the host's frame tick alone. A race (a replay plays as the
+    # race): the host's frame tick, the two codes Gecko ran every frame (C0: the seat routines installed as the game's
+    # hooks; the shuffle word held until the race), then the fork's boot routine of a race. r0, r12 and CR field 0 are
+    # free at a function's first instruction.
     inserts = {name: {a: w for kind, a, w in rows if kind == "insert"} for name, rows in codes.items()}
     first = stock(ECC, 0x9421FFF0)
     assert inserts["race"][ECC][-1] == first, "the boot routine ends with the instruction it replaced"
@@ -71,6 +85,20 @@ def add(k, r, patch, stock, complete, codes, hooks, mute):
     addi 1, 1, 0x90
     b boot_race
 mm_stock:
+    lis 12, {C}
+    lwz 12, {PLAIN}(12)
+    cmpwi 12, 0
+    beq mm_plain
+    stwu 1, -0x90(1)
+    mflr 0
+    stw 0, 0x94(1)
+    stmw 3, 0x14(1)
+    @bl host_tick
+    lmw 3, 0x14(1)
+    lwz 0, 0x94(1)
+    mtlr 0
+    addi 1, 1, 0x90
+mm_plain:
     .long {first:#010x}
     @b {ECC + 4:#x}
 mm_seats:
@@ -95,7 +123,11 @@ mm_seats:
     # --- inserts at a function's first instruction: in a plain start the instruction itself, then on
     entries = [("seats", "seats", TEXT + 0x3181C, 0x9421FFB0, "fn_1_3181C: the race block's machines over the game's list"),
                ("sound_queue", "mute", DOL_SOUND[0], DOL_SOUND[1], "fn_80067898 (the executable): no sound from a step simulated before"),
-               ("rumble", "mute", TEXT + 0xF7338, 0x9421FFE0, "fn_1_F7338: no rumble from a step simulated before")]
+               ("rumble", "mute", TEXT + 0xF7338, 0x9421FFE0, "fn_1_F7338: no rumble from a step simulated before"),
+               ("sound_update", "mute", TEXT + 0xA0978, 0x9421FFE0,
+                "fn_1_A0978: the machine sound update neither sends nor remembers in a step simulated before"),
+               ("lean_sound", "mute", TEXT + 0xA3654, 0x9421FFC0,
+                "fn_1_A3654: the lean sound neither sends nor remembers in a muted draw")]
     mute_inserts = {a: w for kind, a, w in mute if kind == "insert"}
     for name, source, site, known, what in entries:
         words = (mute_inserts if source == "mute" else inserts[source])[site]
@@ -128,6 +160,8 @@ cpu_seed_on:
     @b {FRAME_CALL + 4:#x}
 frame_on:
     @bl mines_preload
+    @bl mode_preload
+    @bl mode_story
     @bl results_preload
     @bl monitors_preload
     @bl frame_routine
@@ -440,12 +474,23 @@ rl_disc:
     sites_shadow.add(k, r, patch, stock, test, la, middle)
     sites_effects.add(k, r, patch, stock, test, la, middle)
     sites_custom.add(k, r, patch, stock, test, middle, complete)
+    sites_trail.add(k, r, patch, stock, test, middle)
     sites_pilot.add(k, r, patch, stock, test, middle, complete)
+    sites_faces.add(k, r, patch, stock, test, middle)
     sites_seats.add(k, r, patch, stock, test, middle)
     sites_grid.add(k, r, patch, stock, test, middle, complete)
     sites_mines.add(k, r, patch, stock, test, la, D, middle)
+    sites_mode.add(k, r, patch, stock, test, la, D, middle)
+    middle.extend(sites_combat.add(k, r, patch, stock, test, la))
+    sites_modehud.add(k, r, patch, stock, test, la, middle)
+    sites_hudmove.add(k, r, patch, stock, la, middle)
+    sites_ghostdraw.add(k, r, patch, stock, test, la, middle)
+    sites_marks.add(k, r, patch, stock, middle)
     sites_cpu.add(k, r, patch, stock, test, middle, complete)
+    sites_generator.add(k, r, patch, stock, test, middle)
+    sites_leadergap.add(k, r, patch, stock, test, middle)
     sites_dash.add(k, r, patch, stock, test, la, middle)
+    sites_energy.add(k, r, patch, stock, test, middle)
     sites_curve.add(k, r, patch, stock, test, middle)
     sites_present.add(k, r, patch, stock, middle, draw_next="hfr")   # one site with the hfr routine: 0x37C18
     sites_view.add(k, r, patch, stock, test, middle, complete)

@@ -89,6 +89,38 @@ struct Debug
   // live race's counts). The contact task always runs whole: a file asking for contact jobs ("contact") or the
   // "trace" mode is refused
   std::string partial_mode;
+  // "rollbackWorker": the deep-rollback worker (fzgx/rollback_worker.h): "off", "compare", "check", "sync", "on" or
+  // "async-check", alone or as {"mode", "depth"} (the least depth a job takes, 7 by default); tests only. Empty (not
+  // named, every player's start): "on" with at least 4 hardware threads, sync below (rollback_worker::ModeFor)
+  std::string worker_mode;
+  u32 worker_depth = 7;
+  std::string worker_rule = "fit";  // "rule": "fit" (S2: sync when the frame fits) or "always" (tests: every job async)
+  std::string worker_watch;  // "watch": a write watch on one word, "address[:first-last]" (tests, the trace module)
+  // "restarts": how many times a job may be stopped for a correction below its R and started again from there; past
+  // it the correction is the chain's: the job runs on, is adopted as it ran, and the next job starts from the
+  // correction (S4: 0, never restart mid-job; S3's key of the same name capped send-backs, after which the rollback
+  // ran sync)
+  u32 worker_restarts = 0;
+  u32 worker_perturb = 0;   // "perturb": tests, every n-th job W runs one wrong row (S4, the chain's own gate)
+  // "catchUp": S4's bound in steps (60, a second): when the open job's span (A - R) or its correction's delay (frames)
+  // passes it, the job stops and one sync rollback from its R catches up (a hitch, then the chain again). No job starts
+  // deeper than it, and none is adopted past 512 steps (the input and checksum rings hold 1024)
+  u32 worker_catch_up = 60;
+  // "slowStepUs": a worker whose step (its run and its undo entry) takes this long or longer by the median of a window
+  // of 240 steps and 1 s (6000 us), three windows in a row with 2 catch-ups in them, is too slow for the chain: the
+  // race's rollbacks run sync, and the worker is tried again 10 s later (or at a new race); 0: never
+  u32 worker_slow_us = 6000;
+  u32 worker_delay_us = 0;  // "delayUs": tests, W sleeps this long at every step (a slow PC's worker)
+  u32 worker_delay_from = 0, worker_delay_to = 0;  // "delayFrom", "delayTo": ... only at W's steps in [from, to) (to 0:
+                                                   // no end; a load for a while)
+  u32 worker_spike_at = 0, worker_spike_us = 0;    // "spikeAt", "spikeUs": tests, once, this much added to the time of
+                                                   // W's first measured step at or past spikeAt (a spike: section 19)
+  u32 worker_spike_slot = 2;  // "spikeSlot": 0 or 1, only that slot's worker spikes (2, unset: each worker's thread)
+  u32 worker_from = 422;  // "from": the first step a job may go back to (the countdown's end; tests: earlier)
+  // "workers": 1 or 2, the second worker forced off or on (tests; research/study-rollback-second-core.md section 20.2);
+  // 0: 2 from 6 usable hardware threads
+  u32 worker_workers = 0;
+  std::string worker_start = "changed";  // "start": "changed" (only pages that differ copied into W) or "whole" (S2's)
   std::string partial_log;
   u32 partial_from = 0, partial_to = 0;
   bool partial_widen = false;
@@ -163,6 +195,16 @@ struct Debug
   bool user_settings = false;  // "userSettings": the emulator's settings are the user folder's (Config/Dolphin.ini,
                                // GFX.ini: a test's speed limit, clock and the like); without it the runner sets every
                                // setting that decides what the game computes or how fast it runs, whatever they say
+  // "renderer": who draws the picture shown, "dolphin" (the emulator) or "aurora" (Aurora beside it, presentation
+  // only: aurora.cpp in the adapter); "auroraShots", "auroraLog": its test pictures (XFB copies, 1 the first) and its
+  // logs' file prefix
+  std::string renderer = "dolphin";
+  std::vector<u32> aurora_shots;
+  u32 aurora_scale = 0;  // "auroraScale": its render scale, 1 to 8; 0 (or none): the window's pixels (aurora.cpp in the adapter)
+  std::string aurora_log;
+  // "classicHudLayout": a layout file that moves, turns and mirrors the parts of the game's own race HUD (hud_move.h:
+  // drawing only); empty: the game's HUD as it is
+  std::string classic_hud_layout;
   std::vector<EmulatorSetting> emulator;  // every other key of the emulator's side that was given (files_launch.cpp
                                           // holds the table: "pad", "poke", "probe", "paceLog", ...)
 };
@@ -184,6 +226,15 @@ struct TaskbarGroup
   std::string name;     // what a pinned button is called
 };
 
+// One file of a mod pack the launch file names ("overlay"), read in place of the disc's (fzgx/mod_files.h).
+struct OverlayFile
+{
+  std::string disc;  // the path under the game folder's files/, with '/' ("stage/st05.tpl.lz"), as the file gave it
+  std::string from;  // the replacement's whole path on this computer
+  bool race_same = false;  // "raceSame": the launcher found the file's race fields equal to the disc's (a race file
+                           // is then taken online too)
+};
+
 // The settings of one start of the game: a launch file (--config FILE; protocol/formats.md section 2), read by
 // ReadLaunchFile and by nothing else.
 
@@ -199,6 +250,16 @@ struct Options
                              // runner has no name of its own); none: the strip shows no name
   WindowPicture window_name_picture;  // "windowNamePicture": the name as a picture, drawn in place of the text
   bool show_frame_rate = false;  // "showFrameRate": the game window's strip shows the frame rate (a player's setting)
+  // "renderer", "auroraSize", "auroraEdges", "auroraTextures", "auroraColourblind": Aurora, which the launcher names in
+  // every start since 0.6.0, and its settings
+  // (aurora.cpp in the adapter; the switches they bring: fzgx/aurora_switches.h). Empty or 0: left out
+  std::string picture_renderer;
+  std::string aurora_size;
+  u32 aurora_edges = 0;
+  u32 aurora_textures = 0;
+  std::string aurora_colourblind;
+  u32 aurora_high_refresh = 0;  // "auroraHighRefresh": pictures a second asked for; a step run ahead for those between
+  bool aurora_ray_tracing = false;  // "auroraRayTracing": ray tracing, its tested set of switches (fzgx/aurora_switches.h)
   bool rumble = true;        // "rumble": the player's controller may rumble (a player's setting); false: no rumble
                              // command reaches a pad in this start (the game still asks for it: RumbleAllowed)
   TaskbarGroup taskbar;      // "taskbar": the launcher's taskbar button, which the game window joins (a player's
@@ -252,6 +313,9 @@ struct Options
   bool controller_setup = false;  // "controllerSetup": a plain start that opens the game's own controller options
                                   // (Options, Controller) once the title stands, and stops the game when the
                                   // player leaves them; no test setting: a player's start may ask for it
+  // "overlay": a mod pack's files over the disc's, in the file's order, as the file gave them; which the runner takes
+  // is fzgx/mod_files.h's (mod_files::Choose). Empty: the disc as it is
+  std::vector<OverlayFile> overlay;
   // "lanes": 0 or no key (launchers write 0): the multicore physics is parked on branch parked/lanes; any other
   // count is refused
   Debug debug;               // "debug"; a file without one leaves every test setting off
@@ -370,12 +434,30 @@ bool LoadField();
 // Every picture of a plain start: with Options::controller_setup, the watch that opens the game's own controller
 // options and stops the game when the player leaves them (options_screen.cpp). One test of a flag without it.
 void ControllerSetupTick();
+// Every field of a plain start (offline play) in the native form, on the game's thread, before the picture follows the
+// screen option: the launcher's settings a race applies, for the picture only (boot.cpp PlainField: the game's screen
+// option, true widescreen, PLAIN_DRAW for high refresh), where the game stands for the renderer (Host::Scene), and the
+// player's pad for the launcher's Inputs window. Nothing in a race or a replay (FrameTick does it there).
+void PlainField();
 // The game's own screen option as the game holds it now (Options, Screen Mode: from the player's save, or from a
 // race's set-up): true for Wide Screen, false for Normal. No value while the game has not loaded main.rel, or holds
 // something else there. The picture's shape follows it. Needs Init; reads only.
 std::optional<bool> GameWidescreen();
 // The mod's network hook: before every simulation step and in every pass of the race-start gate's wait.
 void NetSync();
+// The race's game mode, once a step (the image's mode point, HOST_MODE: port/image/sites_mode.py): its rules run
+// (port/core/src/mode.h). Nothing to do without one.
+void ModeCall();
+// The classic HUD's moves (port/image/sites_hudmove.py, memmap.HOST_HUD): r3 the operation, r4 its part. Drawing only.
+void HudMoveCall(u32 op, u32 arg);
+// Seat `seat`'s record in the game mode's block (16 bytes, read by the machine's step: the per-machine rollback
+// compares it with the machine's records); 0 without a mode or before the block is taken.
+u32 ModeRecord(u32 seat);
+// Its move (16 bytes, read by the image's mode_speed) and its rolling start's saved steering (8 bytes, written and
+// read by the stand-in's rule hook wrapper): the per-machine rollback's records too; 0 without a mode.
+u32 ModeMove(u32 seat);
+u32 ModeRollSave(u32 seat);
+u32 ModeStat(u32 seat);
 // The game wrote a word of the data window (the native form: every access of it passes the host). The replay
 // scrubber takes one of them as a call: the frame routine's "the extra steps are done" (control block +12 set to
 // 0), which is the only moment the host has after a frame's last step and before its picture. The image's two

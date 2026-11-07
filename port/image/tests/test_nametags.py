@@ -54,6 +54,7 @@ class Race:
 
     def __init__(self, t, machines, cpu=(), ai=(), finished=(), session=1):
         self.t, self.mem, self.draws = t, {}, []
+        self.colours, self.depths, self.sizes = {}, {}, {}
         m = self.mem
         racers = max(machines) + 1
         put(m, 0x800030C8, MODULE); put(m, POINTER, MACHINES); m[COUNT] = racers
@@ -94,11 +95,16 @@ class Race:
                 cpu.write(cpu.r[4] + i, 1, byte)
         elif address == TEXT + 0x49514:
             self.colour = cpu.read(cpu.r[3], 4)
+        elif address == TEXT + 0x4954C:
+            self.depth = f[1]
+        elif address == TEXT + 0x4955C:
+            self.size = f[1]
         elif address == TEXT + 0x4A0D8:
             name, at = "", cpu.r[3]
             while cpu.read(at, 1):
                 name, at = name + chr(cpu.read(at, 1)), at + 1
             self.draws.append((name, (self.colour & 0xFF) / 255.0))
+            self.colours[name], self.depths[name], self.sizes[name] = self.colour, self.depth, self.size
 
     def frame(self):
         """One drawn frame: the tags drawn, {name: alpha}."""
@@ -110,6 +116,12 @@ class Race:
         self.t.assertEqual(outside, set(), "the tags write nothing but their stack and their state")
         self.mem = cpu.mem
         return dict(self.draws)
+
+    def draws_of(self, n):
+        """The names drawn in the n-th frame from now, a list (two tags may read alike)."""
+        for _ in range(n):
+            self.frame()
+        return [name for name, _ in self.draws]
 
     def frames(self, n):
         for _ in range(n - 1):
@@ -272,6 +284,120 @@ class TheNameTags(Build):
         self.rises(race, "P1")
         put(race.mem, STEP, 5000)                                          # a seek forward
         self.rises(race, "P1")
+
+
+    # a game mode's `tag`: the text from the window, on any seat, far, first, through walls
+    def tagged(self, race, seats, texts=("BOMB",)):
+        for i, text in enumerate(texts):
+            for j, c in enumerate(text.encode()):
+                race.mem[memmap.MODE_HUD_TAG_TEXTS + i * memmap.MODE_HUD_TAG_TEXT + j] = c
+        for seat in range(30):
+            race.mem[memmap.MODE_HUD_TAGS + seat] = seats.get(seat, 0)
+
+    def test_a_tag_shows_its_text_in_place_of_the_name(self):
+        race = Race(self, {1: (0.0, 10.0), 2: (2.0, 10.0)})
+        self.tagged(race, {1: 2}, ("BOMB", "RIVAL"))
+        self.assertEqual(set(race.frames(nametags.FADE_IN + 1)), {"RIVAL", "P2"})
+
+    def test_a_tag_on_any_seat(self):
+        # a CPU (no name, not a player seat), a seat the AI drives: all tagged; the plain CPU keeps none
+        race = Race(self, {1: (-3.0, 8.0), 2: (2.0, 8.0), 3: (0.0, 9.0)}, cpu=(1, 3), ai=(2,))
+        self.tagged(race, {1: 1, 2: 1})
+        self.assertEqual(sorted(race.draws_of(5)), ["BOMB", "BOMB"])
+
+    def test_a_tag_not_on_the_followed_racer(self):
+        race = Race(self, {1: (0.0, 10.0)})
+        self.tagged(race, {FOLLOWED: 1})
+        self.assertEqual(set(race.frames(3)), {"P1"})
+
+    def test_a_tag_reads_from_further_than_a_name(self):
+        z = nametags.TAG_NEAR - 10.0
+        race = Race(self, {1: (0.0, z), 2: (1.0, z)})
+        self.tagged(race, {1: 1})
+        shown = race.frames(nametags.FADE_IN + 1)
+        self.assertEqual(set(shown), {"BOMB"})                              # the name is past FAR
+        self.assertAlmostEqual(shown["BOMB"], 1.0, delta=1 / 255)           # full to TAG_NEAR
+        race.place({1: (0.0, nametags.TAG_FAR - 10.0)})
+        d2, near2, far2 = (nametags.TAG_FAR - 10.0) ** 2, nametags.TAG_NEAR ** 2, nametags.TAG_FAR ** 2
+        self.assertAlmostEqual(race.frame()["BOMB"], (far2 - d2) / (far2 - near2), delta=2 / 255)
+        race.place({1: (0.0, nametags.TAG_FAR + 1.0)})
+        self.assertEqual(race.frame(), {})                                  # past TAG_FAR
+
+    def test_tags_come_first_in_the_limit(self):
+        # the three names are closer and held; the tag, further, still takes a place at once
+        race = Race(self, {**self.pack(), 8: (race_x(8), 100.0)})
+        race.frames(5)
+        self.tagged(race, {8: 1})
+        shown = race.frame()
+        self.assertIn("BOMB", shown)
+        full = race.frames(nametags.FADE_OUT + 2)
+        self.assertEqual(set(full), {"BOMB", "P1", "P2"})
+
+    def test_a_tag_wins_the_overlap_over_a_closer_name(self):
+        race = Race(self, {1: (0.0, 10.0), 2: (0.1, 30.0)})
+        self.tagged(race, {2: 1})
+        shown = race.frames(nametags.FADE_OUT + nametags.FADE_IN + 2)
+        self.assertEqual(set(shown), {"BOMB"})
+
+    def test_a_tag_has_its_colour_and_a_name_stays_white(self):
+        race = Race(self, {1: (0.0, 10.0), 2: (2.0, 10.0)})
+        self.tagged(race, {1: 1})
+        race.frames(nametags.FADE_IN + 1)
+        self.assertEqual(race.colours["BOMB"] >> 8, nametags.TAG_COLOUR)
+        self.assertEqual(race.colours["P2"] >> 8, 0xFFFFFF)
+
+    def test_a_tag_draws_before_walls_and_a_name_behind_them(self):
+        race = Race(self, {1: (0.0, 50.0), 2: (2.0, 10.0)})
+        self.tagged(race, {1: 1})
+        race.frames(nametags.FADE_IN + 1)
+        self.assertAlmostEqual(race.depths["BOMB"], 90000.1 - 9000.0, delta=0.01)   # as a point 1 before the camera
+        self.assertAlmostEqual(race.depths["P2"], 90000.1 - 9000.0 / 10.0, delta=0.01)
+
+    def test_a_tag_is_larger_than_a_name(self):
+        race = Race(self, {1: (0.0, 10.0), 2: (2.0, 10.0)})
+        self.tagged(race, {1: 1})
+        race.frames(nametags.FADE_IN + 1)
+        self.assertAlmostEqual(race.sizes["BOMB"], 1.2, delta=0.001)
+        self.assertAlmostEqual(race.sizes["P2"], 1.0, delta=0.001)
+
+    def test_a_tag_going_off_fades_out_then_the_name_comes_back(self):
+        race = Race(self, {1: (0.0, 10.0)})
+        self.tagged(race, {1: 1})
+        race.frames(nametags.FADE_IN + 1)
+        self.tagged(race, {})
+        last = 1.0
+        for _ in range(nametags.FADE_LEAVE - 1):                            # the text it had, falling: never a pop
+            shown = race.frame()
+            self.assertEqual(set(shown), {"BOMB"})
+            self.assertLess(shown["BOMB"], last)
+            last = shown["BOMB"]
+        self.assertEqual(set(race.frames(nametags.FADE_IN + 2)), {"P1"})
+
+    def test_a_tag_on_a_finished_seat_fades_out_quickly(self):
+        race = Race(self, {1: (0.0, 10.0)}, cpu=(1,))
+        self.tagged(race, {1: 1})
+        race.frames(nametags.FADE_IN + 1)
+        put(race.mem, MACHINES + 1 * 0x620, 0x10000)
+        self.falls(race, "BOMB", nametags.FADE_LEAVE + 1)
+
+    def test_a_leaving_tag_leaves_the_seats_after_it_alone(self):
+        race = Race(self, {1: (-2.0, 10.0), 2: (2.0, 10.0)})
+        self.tagged(race, {1: 1})
+        race.frames(nametags.FADE_IN + 1)
+        put(race.mem, MACHINES + 1 * 0x620, 0x10000)
+        self.assertEqual(set(race.frame()), {"BOMB", "P2"})
+
+    def test_no_tags_draw_as_they_always_did(self):
+        # the same race with a window of zeros and with the texts there but no seat naming one: the same draws
+        machines = {1: (-3.0, 8.0), 2: (2.0, 30.0), 3: (0.0, 20.0)}
+        plain, texts = Race(self, machines), Race(self, machines)
+        self.tagged(texts, {})
+        for _ in range(nametags.FADE_IN + 2):
+            self.assertEqual(plain.frame(), texts.frame())
+        self.assertEqual(plain.colours, texts.colours)
+        self.assertEqual(plain.depths, texts.depths)
+        self.assertEqual(plain.sizes, texts.sizes)
+        self.assertEqual(plain.colours["P1"] >> 8, 0xFFFFFF)
 
 
 def race_x(seat):

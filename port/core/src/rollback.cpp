@@ -5,8 +5,15 @@
 #include "rollback.h"
 
 #include <algorithm>
+#include <array>
+#include <iterator>
+#include <map>
 #include <cstddef>
+#include <cstring>
+#include <format>
 #include <memory>
+#include <mutex>
+#include <utility>
 #include <vector>
 
 #include "undo_log.h"
@@ -22,21 +29,49 @@ constexpr u32 CHECKSUMS = layout::CHECKSUMS;
 constexpr u32 INPUTS = layout::INPUTS;
 constexpr int RECORD = 6;
 
-// Rollback::Moments: every change of the memory to another moment than RestoreTo's
-u32 s_moments = 0;
-}  // namespace
+// Rollback::Moments per memory: every change of a memory to another moment than RestoreTo's, by any log. A few
+// memories at most (the game's, the worker's, a test's); the worker's thread (S2) counts its own memory's.
+std::mutex s_moments_mutex;
+std::vector<std::pair<const Host*, u32>> s_moments;
 
-u32 Rollback::Moments()
+u32& MomentsOf(const Host* memory)
 {
-  return s_moments;
+  for (auto& [host, count] : s_moments)
+  {
+    if (host == memory)
+      return count;
+  }
+  return s_moments.emplace_back(memory, 0).second;
 }
+}  // namespace
 
 struct Rollback::Impl : Tracking
 {
+  // the memory `g` became another moment: this log's count when it is its own, and the memory's
+  void Moved(const Guest& g)
+  {
+    if (&g.GetHost() == home)
+      ++moments;
+    const std::lock_guard lock(s_moments_mutex);
+    ++MomentsOf(&g.GetHost());
+  }
 };
 
-Rollback::Rollback() : m(std::make_unique<Impl>())
+u32 Rollback::Moments() const
 {
+  return m->moments;
+}
+
+u32 Rollback::Moments(const Host& memory)
+{
+  const std::lock_guard lock(s_moments_mutex);
+  return MomentsOf(&memory);
+}
+
+
+Rollback::Rollback(bool tells) : m(std::make_unique<Impl>())
+{
+  m->tells = tells;
 }
 Rollback::~Rollback()
 {
@@ -51,18 +86,33 @@ bool Rollback::Active() const
 
 void Rollback::Start(Guest& g)
 {
-  ++s_moments;
+  m->home = &g.GetHost();
+  m->Moved(g);
+  ++m->starts;
   StartTracking(g, *m);
+}
+
+u32 Rollback::Starts() const
+{
+  return m->starts;
 }
 
 void Rollback::Stop()
 {
-  ++s_moments;
+  if (m->home != nullptr)
+  {
+    ++m->moments;
+    const std::lock_guard lock(s_moments_mutex);
+    ++MomentsOf(m->home);
+  }
   if (m->tracking)
     ReportWatched(*m);
   TakeOffGuard(*m);
   m->tracking = false;
   m->undo.clear();
+  DropAfter(*m, 0);
+  m->letting_go.clear();
+  m->letting_go_bytes = 0;
   m->spare.clear();
   m->spare_bytes = 0;
   ForgetPutBack(m.get());
@@ -86,11 +136,17 @@ void Rollback::SaveStep(Guest& g, u32 t, bool frame_step)
   PreStep(g, *m, t, frame_step);
 }
 
+void Rollback::SaveAgain(u32 t)
+{
+  m->save_again = t;
+}
+
 void Rollback::Final(u32 step)
 {
   FZGX_TIME(Final);
   for (auto it = m->undo.begin(); it != m->undo.end() && it->first < step;)
     it = EraseEntry(*m, it);
+  DropAfter(*m, 0xFFFFFFFF, step);
   m->final_below = std::max(m->final_below, step);
 }
 
@@ -101,7 +157,7 @@ u32 Rollback::Oldest() const
 
 std::size_t Rollback::LogBytes() const
 {
-  return static_cast<std::size_t>(m->undo_bytes) + m->spare_bytes;
+  return static_cast<std::size_t>(m->undo_bytes + m->letting_go_bytes) + m->spare_bytes;
 }
 
 void Rollback::Keep(const Guest& g, Moment* moment) const
@@ -116,20 +172,92 @@ void Rollback::Keep(const Guest& g, Moment* moment) const
 
 void Rollback::Exchange(Guest& g, const Rollback& other, Moment* moment, bool copy)
 {
-  ++s_moments;
+  m->Moved(g);
+  m->all_dirty = true;
   ExchangeMoment(g, *m, *other.m, *moment, copy);
 }
 
 void Rollback::Apply(Guest& g, u32 from, u32 t) const
 {
-  ++s_moments;
+  m->Moved(g);
+  if (&g.GetHost() == m->home)
+    m->all_dirty = true;
   ApplyEntries(g, *m, from, t);
 }
 
-void Rollback::Adopt(Guest& g, const Rollback& other, u32 step)
+void Rollback::Adopt(Guest& g, const Rollback& other, u32 step, const std::vector<u32>* also)
 {
-  ++s_moments;
-  AdoptMemory(g, *m, *other.m, step);
+  m->Moved(g);
+  AdoptMemory(g, *m, other.m->watched, step, also);
+}
+
+std::shared_ptr<const Rollback::Taken> Rollback::Take(u32 from, u32 t) const
+{
+  auto taken = std::make_shared<Taken>();
+  taken->home = m->home;
+  taken->region = m->region;
+  taken->size = m->shadow.size();
+  taken->scratch = !m->scratch_shadow.empty();
+  taken->kept = m->kept;
+  taken->log = m.get();
+  for (u32 k = from; k-- > t;)
+  {
+    if (const auto it = m->undo.find(k); it != m->undo.end())
+    {
+      taken->entries.push_back(&it->second);
+      taken->ids.emplace_back(k, it->second.serial);
+    }
+  }
+  taken->watched = m->watched;
+  return taken;
+}
+
+bool Rollback::Stands(const Taken& taken)
+{
+  // every entry taken is still in its log, the same node, not written since (the log's thread only)
+  for (std::size_t k = 0; k < taken.ids.size(); ++k)
+  {
+    const auto it = taken.log->undo.find(taken.ids[k].first);
+    if (it == taken.log->undo.end() || &it->second != taken.entries[k] || it->second.serial != taken.ids[k].second)
+      return false;
+  }
+  return true;
+}
+
+void Rollback::Apply(Guest& g, const Taken& taken)
+{
+  if (&g.GetHost() == taken.home)
+    return;  // (onto another memory only: the log's own would need its dirty pages named, as Apply does)
+  {
+    const std::lock_guard lock(s_moments_mutex);  // (as Moved: the memory's moments)
+    ++MomentsOf(&g.GetHost());
+  }
+  ApplyTaken(g, taken);
+}
+
+void Rollback::Adopt(Guest& g, const Taken& other, u32 step, const std::vector<u32>* also)
+{
+  m->Moved(g);
+  AdoptMemory(g, *m, other.watched, step, also);
+}
+
+void Rollback::KeepAfter(bool keep)
+{
+  m->keep_after = keep;
+  if (!keep)
+    DropAfter(*m, 0);
+}
+
+bool Rollback::Forward(Guest& g, u32 from, u32 to, std::vector<u32>* pages) const
+{
+  if (pages != nullptr)
+    pages->clear();
+  if (!ForwardAfter(g, *m, from, to, pages))
+    return false;
+  m->Moved(g);
+  if (&g.GetHost() == m->home)
+    m->all_dirty = true;
+  return true;
 }
 
 void Rollback::KeepWatching()
@@ -139,7 +267,8 @@ void Rollback::KeepWatching()
 
 void Rollback::Discard(Guest& g)
 {
-  ++s_moments;
+  m->Moved(g);
+  m->all_dirty = true;
   DiscardChanges(g, *m);
 }
 
@@ -214,9 +343,22 @@ u32 Rollback::KeyAbove(u32 step) const
 
 void Rollback::TakeKey(Guest& g, const Rollback& other, u32 key, const Moment& base) const
 {
-  ++s_moments;
+  m->Moved(g);
+  m->all_dirty = true;
   if (const auto it = m->keys.find(key); it != m->keys.end())
     TakeAKey(g, *m, *other.m, it->second, base);
+}
+
+void Rollback::Rebase(Guest& g, u32 step, bool keep_below)
+{
+  m->Moved(g);
+  m->all_dirty = true;
+  RebaseMemory(g, *m, step, keep_below);
+}
+
+void Rollback::DropKey(u32 step)
+{
+  DropAKey(*m, step);
 }
 
 std::size_t Rollback::KeyBytes() const
@@ -270,6 +412,224 @@ void Rollback::KeepChecksum(Guest& g, u32 step, u32 value)
 u32 Rollback::KeptChecksum(const Guest& g, u32 step)
 {
   return g.Read32(CHECKSUMS + (step & 1023) * 4);
+}
+
+void Rollback::TakeOver(Guest& g, Rollback& worker, const Guest& gw, u32 from, u32 to, const std::vector<u32>* keep)
+{
+  TakeOverMoment(g, *m, *worker.m, gw, from, to, keep);
+  // the checksums and the rows the worker's steps ran with (at most the rings' 1024 steps)
+  for (u32 k = std::max(from, to > 1024 ? to - 1024 : 0); k < to; ++k)
+  {
+    u8 bytes[30 * 8];
+    gw.CopyFrom(bytes, CHECKSUMS + (k & 1023) * 4, 4);
+    g.CopyTo(CHECKSUMS + (k & 1023) * 4, bytes, 4);
+    gw.CopyFrom(bytes, INPUTS + (k & 1023) * 30 * 8, sizeof(bytes));
+    g.CopyTo(INPUTS + (k & 1023) * 30 * 8, bytes, sizeof(bytes));
+  }
+}
+
+std::vector<u32> Rollback::TakeDirty()
+{
+  std::vector<u32> pages;
+  const Tracking& s = *m;
+  for (u32 page = 0; page < s.dirty.size(); ++page)
+  {
+    if (s.all_dirty || s.dirty[page] || s.untracked[page] || s.exact[page])
+      pages.push_back(page * PAGE);
+  }
+  std::fill(m->dirty.begin(), m->dirty.end(), u8{0});
+  m->all_dirty = false;
+  return pages;
+}
+
+u32 Rollback::Region() const
+{
+  return m->tracking ? m->region : 0;
+}
+
+// A word (its offset in the region) in one of the kept parts a restore leaves as they are.
+static bool InKept(const std::vector<std::pair<u32, u32>>& kept, u32 off)
+{
+  for (const auto& [at, len] : kept)
+    if (off + 4 > at && off < at + len)
+      return true;
+  return false;
+}
+
+u32 Rollback::Compare(const Guest& g, const Guest& other, std::vector<u32>* words, std::size_t most,
+                      const std::vector<u32>* ignore) const
+{
+  const auto ignored = [ignore](u32 address) {
+    return ignore != nullptr && std::binary_search(ignore->begin(), ignore->end(), address);
+  };
+  const Tracking& s = *m;
+  if (!s.tracking)
+    return 0;
+  u32 count = 0;
+  const auto note = [&](u32 address) {
+    if (words != nullptr && words->size() < most)
+      words->push_back(address);
+    ++count;
+  };
+  const u8* a = g.Ram(s.region, s.shadow.size());
+  const u8* b = other.Ram(s.region, s.shadow.size());
+  for (u32 page = 0; a != nullptr && b != nullptr && page < s.shadow.size() / PAGE; ++page)
+  {
+    const u32 off = page * PAGE;
+    if (s.untracked[page] || std::memcmp(a + off, b + off, PAGE) == 0)
+      continue;
+    for (u32 w = off; w < off + PAGE; w += 4)
+    {
+      if (std::memcmp(a + w, b + w, 4) != 0 && !InKept(s.kept, w) && !ignored(s.region + w))
+        note(s.region + w);
+    }
+  }
+  const u8* ca = s.scratch_shadow.empty() ? nullptr : g.GetHost().Scratch();
+  const u8* cb = s.scratch_shadow.empty() ? nullptr : other.GetHost().Scratch();
+  for (u32 w = 0; ca != nullptr && cb != nullptr && w + 4 <= s.scratch_shadow.size(); w += 4)
+  {
+    if ((w < SCRATCH_KEPT || w >= SCRATCH_KEPT_END) && std::memcmp(ca + w, cb + w, 4) != 0)
+      note(0xE0000000u + w);
+  }
+  if (g.Read32(DOL_RNG) != other.Read32(DOL_RNG))
+    note(DOL_RNG);
+  return count;
+}
+
+u32 Rollback::CompareMoments(const Guest& g, const Rollback& other, const Guest& other_memory, u32 from, u32 to,
+                             const std::vector<u32>* ignore, std::vector<std::string>* where) const
+{
+  const Tracking &x = *m, &y = *other.m;
+  const u8* mx = g.Ram(x.region, x.shadow.size());
+  const u8* my = other_memory.Ram(x.region, x.shadow.size());
+  const u8* cx = x.scratch_shadow.empty() ? nullptr : g.GetHost().Scratch();
+  const u8* cy = y.scratch_shadow.empty() ? nullptr : other_memory.GetHost().Scratch();
+  if (mx == nullptr || my == nullptr || x.region != y.region)
+    return to;
+  // every block either log names in those steps (memory and locked cache apart), with its content in each now
+  std::map<u32, std::pair<std::array<u8, 32>, std::array<u8, 32>>> blocks, cache;
+  for (const Tracking* t : {&x, &y})
+  {
+    for (u32 k = from; k < to; ++k)
+    {
+      const auto it = t->undo.find(k);
+      if (it == t->undo.end())
+        continue;
+      for (const auto& block : it->second.blocks)
+        blocks.try_emplace(block.first);
+      for (const auto& block : it->second.scratch)
+        cache.try_emplace(block.first);
+    }
+  }
+  for (auto& [off, pair] : blocks)
+  {
+    std::memcpy(pair.first.data(), mx + off, 32);
+    std::memcpy(pair.second.data(), my + off, 32);
+  }
+  for (auto& [off, pair] : cache)
+  {
+    if (cx != nullptr)
+      std::memcpy(pair.first.data(), cx + off, 32);
+    if (cy != nullptr)
+      std::memcpy(pair.second.data(), cy + off, 32);
+  }
+  // what a restore leaves: untracked pages and the kept parts
+  for (auto it = blocks.begin(); it != blocks.end();)
+    it = x.untracked[it->first / PAGE] ? blocks.erase(it) : std::next(it);
+  u32 rx = g.Read32(DOL_RNG), ry = other_memory.Read32(DOL_RNG);
+  // (with `where`, every difference is named, up to 8 words)
+  const auto same = [&]() {
+    bool all = true;
+    const auto differ = [&](std::string text) {
+      all = false;
+      if (where != nullptr && where->size() < 10)
+        where->push_back(std::move(text));
+      return where == nullptr;
+    };
+    for (const auto& [off, pair] : blocks)
+    {
+      if (pair.first == pair.second)
+        continue;
+      for (u32 w = 0; w < 32; w += 4)
+      {
+        if (std::memcmp(pair.first.data() + w, pair.second.data() + w, 4) != 0 && !InKept(x.kept, off + w) &&
+            !(ignore != nullptr && std::binary_search(ignore->begin(), ignore->end(), x.region + off + w)) &&
+            differ(std::format("{:08x} ({:02x}{:02x}{:02x}{:02x} here, {:02x}{:02x}{:02x}{:02x} there)", x.region + off + w,
+                               pair.first[w], pair.first[w + 1], pair.first[w + 2], pair.first[w + 3], pair.second[w],
+                               pair.second[w + 1], pair.second[w + 2], pair.second[w + 3])))
+          return false;
+      }
+    }
+    for (const auto& [off, pair] : cache)
+    {
+      if ((off < SCRATCH_KEPT || off >= SCRATCH_KEPT_END) && pair.first != pair.second &&
+          differ(std::format("the locked cache +{:x}", off)))
+        return false;
+    }
+    if (rx != ry && differ(std::format("the generator word ({:08x} here, {:08x} there)", rx, ry)))
+      return false;
+    return all;
+  };
+  // a step's entry onto the copies, as a restore goes through it: from its last block to its first
+  const auto back = [&](const Tracking& t, u32 k, bool first) {
+    const auto it = t.undo.find(k);
+    if (it == t.undo.end())
+      return;
+    for (auto b = it->second.blocks.rbegin(); b != it->second.blocks.rend(); ++b)
+    {
+      if (x.untracked[b->first / PAGE])
+        continue;
+      auto& pair = blocks[b->first];
+      (first ? pair.first : pair.second) = b->second;
+    }
+    for (auto b = it->second.scratch.rbegin(); b != it->second.scratch.rend(); ++b)
+    {
+      auto& pair = cache[b->first];
+      (first ? pair.first : pair.second) = b->second;
+    }
+    if (it->second.has_rng)
+    {
+      u32 v = 0;
+      for (u8 byte : it->second.rng)
+        v = v << 8 | byte;
+      (first ? rx : ry) = v;
+    }
+  };
+  if (!same())
+    return to;
+  u32 highest = 0xFFFFFFFF, lowest = 0xFFFFFFFF, moments = 0;
+  for (u32 k = to; k-- > from;)
+  {
+    back(x, k, true);
+    back(y, k, false);
+    std::vector<std::string>* named = where;
+    if (where != nullptr && highest != 0xFFFFFFFF)
+      where = nullptr;  // (only the highest's words are named)
+    const bool equal = same();
+    where = named;
+    if (!equal)
+    {
+      if (where == nullptr)
+        return k;
+      if (highest == 0xFFFFFFFF)
+        highest = k;
+      lowest = k;
+      ++moments;
+    }
+  }
+  if (where != nullptr && highest != 0xFFFFFFFF)
+    where->push_back(std::format("(moments differing: {}, the lowest before step {})", moments, lowest));
+  return highest;
+}
+
+u32 Rollback::LatePages() const
+{
+  return m->late_pages;
+}
+
+u32 Rollback::WatchedPages() const
+{
+  return static_cast<u32>(m->watched_list.size());
 }
 
 Work Rollback::TakeWork()

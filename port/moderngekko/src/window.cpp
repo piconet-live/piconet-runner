@@ -1,9 +1,10 @@
 // The mod's data window and the host calls: what the emulator is given so that the image's data lives in this
-// process and the game's calls to the host's four addresses arrive in the core.
+// process and the game's calls to the host's seven addresses arrive in the core.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "adapter_internal.h"
 #include "lanes.h"
+#include "lanes_census.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -12,6 +13,8 @@
 #include "fzgx/hfr.h"
 #include "threads.h"
 #include "Core/PowerPC/StaticRecomp/StaticRecompModuleSource.h"
+#include "fzgx/rollback_worker.h"
+#include "moderngekko/mod_loader.hpp"
 
 namespace fzgx_port
 {
@@ -20,7 +23,7 @@ namespace
 bool IsOurs(u32 address)
 {
   if (s_state.native)
-    return address >= HOST_CALLS && address < HOST_CALLS_END && (address & 3) == 0;
+    return address >= HOST_CALLS && address < HOST_CALLS_END + 4 && (address & 3) == 0;  // (+4: run_ahead.cpp's)
   return address == NET_HOOK;
 }
 }  // namespace
@@ -67,20 +70,39 @@ void CountFrame()
 // that calls it (port/image/sites_hfr.py) reads it.
 bool HostCall(CPUState* cpu, u32 address, void*)
 {
+  if (fzgx::rollback_worker::OnW())  // (study section 17: W's host calls are its own hook table's, never these)
+  {
+    fzgx::rollback_worker::OffLimits("the adapter's host call");
+    return true;  // (handled, nothing done: the job is given up and its context stopped)
+  }
+  if (s_state.native && (IsOurs(address) || lanes::IsTask(address)))
+    lanes::CensusHostCall(cpu, address);  // (the deep-rollback probe, off unless its key asks: lanes_census.h)
   if (lanes::IsTask(address))  // the machines' task, with the per-machine rollback on (lanes.h)
     return lanes::TaskCall(cpu);
+  if (address == HOST_CALLS_END && s_state.native)  // a call of the step run ahead has returned (run_ahead.cpp)
+  {
+    RunAheadReturned(cpu);
+    return true;
+  }
   if (IsOurs(address))
   {
     if (!s_state.native || address == table::HOST_NET)
     {
       ++s_state.steps;
       fzgx::NetSync();
+      if (s_state.native)
+      {
+        lanes::CensusAfterNet(cpu);
+        RunRollbackWorker(cpu);  // (the deep-rollback worker, off unless its key asks: fzgx/rollback_worker.h)
+      }
     }
     else if (address == table::HOST_TICK)
     {
       threads::KnowThisThread(threads::Which::Game);  // (for the freeze report: one flag read from the second call on)
       CountFrame();
       fzgx::FrameTick();
+      if (RunAheadAtTick(cpu))  // (it goes on from guest code, and comes back to the tick's caller when done)
+        return true;
     }
     else if (address == table::HOST_HFR)
     {
@@ -90,6 +112,18 @@ bool HostCall(CPUState* cpu, u32 address, void*)
     else if (address == table::HOST_LINKED)
     {
       fzgx::Linked(cpu->gpr[30]);  // the loader holds the module in r30 (the patched site is `lwz r12, 0x34(r30)`)
+    }
+    else if (address == table::HOST_MODE)
+    {
+      fzgx::ModeCall();  // the game mode's rules, at the mode point (port/image/sites_mode.py)
+    }
+    else if (address == table::HOST_HUD)
+    {
+      fzgx::HudMoveCall(cpu->gpr[3], cpu->gpr[4]);  // the classic HUD's moves (port/image/sites_hudmove.py): drawing only
+    }
+    else if (address == table::HOST_MARK)
+    {
+      MarkCall(cpu->gpr[3], cpu->gpr[4]);  // the draw marks for Aurora (marks.cpp, port/image/sites_marks.py): drawing only
     }
     cpu->pc = cpu->lr;
     return true;
@@ -104,7 +138,7 @@ bool HostCallContains(u32 address, void*)
 
 bool HostCallRangeContains(u32 start, u32 end, void*)
 {
-  const bool ours = s_state.native ? (start < HOST_CALLS_END && HOST_CALLS < end) : (start <= NET_HOOK && NET_HOOK < end);
+  const bool ours = s_state.native ? (start < HOST_CALLS_END + 4 && HOST_CALLS < end) : (start <= NET_HOOK && NET_HOOK < end);
   return ours || lanes::Holds(start, end) || (s_state.next_range_contains && s_state.next_range_contains(start, end, s_state.next_user));
 }
 
@@ -126,6 +160,14 @@ void RegisterWindow(HostHooks::Hooks& hooks)
     fzgx::Data().Write(address, value, size);
     fzgx::WindowWritten(address, value);  // (the replay scrubber: one of the image's stores is a call to the core)
   };
+}
+
+// The mod loader's interception is active (study section 17, U7): a native mod hooks guest functions, which W would
+// run natively without the mod's hook. The host calls after ours are the mod loader's (TakeHostCalls).
+bool InterceptionActive()
+{
+  return s_state.next_call == &moderngekko::ModManager::HostCall &&
+         moderngekko::ModManager::HostCallActive(s_state.next_user);
 }
 
 // The host calls go in front of the ones `source` holds (the mod loader's).

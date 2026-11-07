@@ -332,7 +332,9 @@ class TheSpectator(Build):
         g.press((0, 100))                                            # the C-stick: the view, with no set-up
         self.assertEqual(g.pictures[-1], ("chase", 2, 2, "no hud"))
         g.press((0, 100)); self.assertEqual(g.pictures[-1][2], 3)
+        g.press((0, 100)); self.assertEqual(g.pictures[-1][2], 0)    # first person, a view like the others
         g.press((0, 100)); self.assertEqual(g.pictures[-1][2], 1)
+        g.press((0, -100)); self.assertEqual(g.pictures[-1][2], 0)
         g.press((0, -100)); self.assertEqual(g.pictures[-1][2], 3)
         self.assertEqual(len(g.calls), calls)
         g.frame(RIGHT)                                               # another racer: the record is made anew
@@ -457,13 +459,16 @@ class TheSpectator(Build):
 
     def test_only_the_spectators_routines_name_its_words(self):
         # an instruction whose displacement is one of the five words' offsets, off any register: inside
-        # frame_spectate.py's text, but for the stand-in's one read of the mode (the camera record, chase or not)
+        # frame_spectate.py's text, but for the stand-in's one read of the mode (the camera record, chase or not);
+        # and ghost_disp's reads of a machine's part record, +0x3A0 of the car: another register, the same number
         words = {a - CONTROL for a in (MODE, HEIGHT, CHANGE, PENDING, LOGGED)}
         outside = []
         for o in range(0x10, len(self.image), 4):
             w = struct.unpack_from(">I", self.image, o)[0]
             if w >> 26 in (32, 36) and w & 0xFFFF in words and not self.spectator_text[0] <= IMAGE + o < self.spectator_text[1]:
                 outside.append((IMAGE + o, w))
+        outside = [(at, w) for at, w in outside if w != 0x807D0000 | 0x3A0]
+        self.assertEqual(MODE - CONTROL, 0x3A0)
         self.assertEqual([w for _, w in outside], [0x80070000 | (MODE - CONTROL)])     # lwz r0, SPEC_MODE(r7)
         self.assertLess(outside[0][0], self.symbols["frame_routine"])                 # in the seat routines
 

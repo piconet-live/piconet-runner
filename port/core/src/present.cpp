@@ -28,9 +28,11 @@
 #include "net_internal.h"
 
 #include "fzgx/hfr.h"
+#include "fzgx/runahead.h"
 
 #include <algorithm>
 #include <chrono>
+#include <utility>
 
 namespace fzgx::net
 {
@@ -54,6 +56,7 @@ struct Present
   bool timed = false;        // a drawing has been timed
   double draw_ms = FIRST_DRAW_MS;
   u32 race_frames = 0, skipped = 0, forced = 0, late = 0;
+  double last_busy_ms = -1;  // the last drawn race frame's time from its tick to the drawing's end (the worker's rule)
 };
 Present s_present;
 
@@ -76,7 +79,7 @@ bool Decide(Guest& g, Clock::time_point now)
     return false;
   ++p.race_frames;
   const Debug& d = TheOptions().debug;
-  if (hfr::On() || g.Read32(layout::RACE + 4) == NO_SKIP_COURSE)
+  if (hfr::On() || runahead::On() || g.Read32(layout::RACE + 4) == NO_SKIP_COURSE)
     return false;
   if (d.skip_draws != 0 && p.race_frames % d.skip_draws == 0)
   {
@@ -130,7 +133,18 @@ void PresentAsked(Guest& g, u32 value)
     const double ms = Ms(now - p.began);
     p.draw_ms = p.timed ? p.draw_ms + (ms - p.draw_ms) / 8 : ms;
     p.timed = true;
+    p.last_busy_ms = Ms(now - p.tick);
   }
+}
+
+u32 PresentLateFrames()
+{
+  return s_present.late;
+}
+
+double PresentLastBusyMs()
+{
+  return std::exchange(s_present.last_busy_ms, -1.0);
 }
 
 void PresentEnd()

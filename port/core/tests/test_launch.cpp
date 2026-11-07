@@ -99,6 +99,23 @@ void TestALaunchFile()
         DebugSettingsOn(plain.debug).empty());
   CHECK(!ParseLaunchFile(Launch(R"({"singleCore": true})"), &plain) && DebugSettingsOn(plain.debug) ==
                                                                           std::vector<std::string>{"debug.singleCore"});
+  // the picture shown: the emulator's own unless a test asks for Aurora's (presentation only), and its test pictures
+  CHECK(plain.debug.renderer == "dolphin" && plain.debug.aurora_shots.empty() && plain.debug.aurora_log.empty());
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "aurora", "auroraShots": [600, 1200], "auroraLog": "C:\\runs\\a"})"),
+                         &plain) &&
+        plain.debug.renderer == "aurora" && plain.debug.aurora_shots == std::vector<u32>({600, 1200}) &&
+        plain.debug.aurora_log == "C:\\runs\\a" &&
+        DebugSettingsOn(plain.debug) ==
+            std::vector<std::string>({"debug.renderer", "debug.auroraShots", "debug.auroraLog"}));
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain) && DebugSettingsOn(plain.debug).empty());
+  // its render scale: unless given (1 to 8, the file's word stands), none
+  CHECK(plain.debug.aurora_scale == 0);
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "aurora", "auroraScale": 3})"), &plain) && plain.debug.aurora_scale == 3 &&
+        DebugSettingsOn(plain.debug) == std::vector<std::string>({"debug.renderer", "debug.auroraScale"}));
+  CHECK(ParseLaunchFile(Launch(R"({"auroraScale": 9})"), &plain).has_value());
+  CHECK(!ParseLaunchFile(Launch(R"({"renderer": "dolphin"})"), &plain));
+  const std::optional<std::string> wrong = ParseLaunchFile(Launch(R"({"renderer": "vulkan"})"), &plain);
+  CHECK(wrong && wrong->find("renderer") != std::string::npos);
   // a playback, and a plain start
   Options play;
   CHECK(!ParseLaunchFile(R"({"about": "a playback", "bundle": "b", "replay": {"file": "r.fzrp",
@@ -207,10 +224,11 @@ void TestALaunchFileThatIsRefused()
   CHECK(Says(Launch(R"({"lateSteps": 0})"), "\"debug.lateSteps\" is not a whole number from 1 to 20"));
   CHECK(Says(Launch(R"({"lateSteps": 21})"), "\"debug.lateSteps\" is not a whole number from 1 to 20"));
   CHECK(Says(Launch(R"({"alterStep": 0})"), "\"debug.alterStep\""));
-  // the player's camera view: 1 to 3 only
-  CHECK(Says(Launch("", "\"camera\": 0"), "\"match.camera\" is not a whole number from 1 to 3"));
-  CHECK(Says(Launch("", "\"camera\": 4"), "\"match.camera\" is not a whole number from 1 to 3"));
+  // the player's camera view: 1 to 3, 4 first person
+  CHECK(Says(Launch("", "\"camera\": 0"), "\"match.camera\" is not a whole number from 1 to 4"));
+  CHECK(Says(Launch("", "\"camera\": 5"), "\"match.camera\" is not a whole number from 1 to 4"));
   CHECK(Refused(Launch("", "\"camera\": 3")).empty());
+  CHECK(Refused(Launch("", "\"camera\": 4")).empty());
   CHECK(Says(Launch(R"({"alterStep": 4294967296})"), "\"debug.alterStep\""));
   // a number too large to be one is refused before the parser, which ends the program on it, sees it
   CHECK(Says(Launch(R"({"jitterMs": 1e999})"), "a number too large to be one"));
@@ -268,10 +286,10 @@ void TestALaunchFileOfTheEmulatorsSide()
     "lockstepWhitelist": "0x80001000-0x80002000",
     "probe": "C:\\runs\\r\\probe.csv", "probeNoHash": true, "paceLog": "pace.csv", "taskTimers": true, "taskDumps": "300,600",
     "taskList": true, "dumpFields": "120,240", "dumpRam": true, "sample": "samples.txt", "sampleTasks": true,
-    "samplePhysics": true, "census": true, "accessTrace": true, "noSlowLog": true, "voiceLog": "ax.bin",
+    "samplePhysics": true, "census": true, "stepCensus": "census", "accessTrace": true, "noSlowLog": true, "voiceLog": "ax.bin",
     "dispatchSamples": true, "dispatchTrace": "dispatch.txt", "windowNoActivate": true, "windowControls": true})"), &o));
   const Debug& d = o.debug;
-  CHECK(d.jit && d.cheats && d.mods && d.automation && d.load_state && d.user_settings && d.emulator.size() == 41);
+  CHECK(d.jit && d.cheats && d.mods && d.automation && d.load_state && d.user_settings && d.emulator.size() == 42);
   const auto value = [&d](const std::string& key, const std::string& name) {
     for (const EmulatorSetting& s : d.emulator)
     {
@@ -299,13 +317,14 @@ void TestALaunchFileOfTheEmulatorsSide()
   CHECK(value("dumpFields", "FZGX_DUMP_FIELDS") == "120,240" && value("dumpRam", "FZGX_DUMP_RAM") == "1");
   CHECK(value("sample", "FZGX_SAMPLE") == "samples.txt" && value("sampleTasks", "FZGX_SAMPLE_TASKS") == "1");
   CHECK(value("samplePhysics", "FZGX_SAMPLE_PHYSICS") == "1" && value("census", "FZGX_CENSUS") == "1");
+  CHECK(value("stepCensus", "FZGX_STEP_CENSUS") == "census");
   CHECK(value("accessTrace", "FZGX_TRACE") == "1" && value("noSlowLog", "FZGX_SLOW_LOG") == "0");
   CHECK(value("voiceLog", "FZGX_AXLOG") == "ax.bin" && value("dispatchSamples", "STATICRECOMP_DISPATCH_SAMPLES") == "1");
   CHECK(value("dispatchTrace", "STATICRECOMP_TRACE_FILE") == "dispatch.txt" && value("windowNoActivate", "FZGX_WINDOW_NOACTIVATE") == "1");
   CHECK(value("windowControls", "FZGX_WINDOW_CONTROLS") == "1");
-  // the log's first line names each: 6 of the runner's and the 41
+  // the log's first line names each: 6 of the runner's and the 42
   const std::vector<std::string> on = DebugSettingsOn(d);
-  CHECK(on.size() == 47 && on.front() == "debug.jit" && on[5] == "debug.userSettings" && on[6] == "debug.pad" &&
+  CHECK(on.size() == 48 && on.front() == "debug.jit" && on[5] == "debug.userSettings" && on[6] == "debug.pad" &&
         on.back() == "debug.windowControls");
   // the other kind of two settings that share a name
   CHECK(!ParseLaunchFile(Launch(R"({"accessTraceNoInterrupts": true, "slowLogEverySecond": true, "pad": "neutral"})"), &o));

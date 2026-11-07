@@ -270,6 +270,15 @@ public:
   // wait for that picture: the game's thread goes on at once. The default does nothing.
   virtual void PanelChanged();
 
+  // Where the game stands, told on the game's thread when the game's mode, its race phase or the race's course changes
+  // (a race or replay start's frame tick): `racing` while the race runs (panel.h Racing), `where` its words (SceneWords).
+  // The presenter compiles nothing ahead while racing (Aurora's pipelines). The default does nothing.
+  virtual void Scene(bool racing, const std::string& where);
+
+  // The game's step, told on the game's thread once a frame of the game's main module (the frame tick): the presenter stamps its
+  // event lines with it (Aurora: a catch-up, a slow picture between, a true frame late on the GPU). The default does nothing.
+  virtual void Step(u32 step);
+
   // The time the relay session reads: the race clock it follows, the round trip, the length of a displayed frame.
   // The default is the steady clock, and a host that runs a game has no reason for another; the core's tests give
   // one they move themselves, so that a test of when steps run does not depend on how busy the computer is.

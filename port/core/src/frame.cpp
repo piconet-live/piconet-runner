@@ -4,9 +4,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "net_internal.h"
+#include "fzgx/rollback_worker.h"
 
 #include "board_net.h"
 #include "host_timers.h"
+#include "fzgx/runahead.h"
 
 #include <algorithm>
 #include <array>
@@ -42,6 +44,8 @@ void SendChecksums(Guest& g, Session& s)
 // Tests: the "AI drives" record (steering 0x80, outside a stick's range): the mod's seat routine keeps the AI's own
 // controls for a seat whose record this is, so an autopilot game's own machine races like a CPU, the same everywhere.
 constexpr std::array<u8, RECORD> AI_DRIVES = {0, 0x80, 0, 0, 0, 0};
+// (with a last byte the seat routine does not read: a test game driving, which a mode without CPUs must tell from the
+// relay's record for a player gone or never ready: mode.cpp GonePlayers)
 
 // Lockstep catching up (NormalStep): the emulation speed and CPU clock while it does, and back.
 void SetCatchUp(Session& s, bool on)
@@ -53,14 +57,24 @@ void SetCatchUp(Session& s, bool on)
 
 // The steps of NormalStep, in its order.
 
+// The local pad now is the local seat's input for step + delay.
+void ReadThePad(Guest& g, Session& s, u32 module)
+{
+  if (s.autopilot)
+  {
+    s.pad = AI_DRIVES;
+    s.pad[5] = 1;
+  }
+  else
+    g.CopyFrom(s.pad.data(), (module + PAD_RECORD), RECORD);
+}
+
 // The local seat's input, to the relay; and the race as it stands, to the launcher (the status board).
 void SendLocalInput(Guest& g, Session& s, u32 step, u32 module)
 {
-  // the local pad now is the local seat's input for step + delay
-  if (s.autopilot)
-    s.pad = AI_DRIVES;
-  else
-    g.CopyFrom(s.pad.data(), (module + PAD_RECORD), RECORD);
+  const std::array<u8, RECORD> sent_early = s.pad;
+  ReadThePad(g, s, module);
+  runahead::NoteInputSent(step, sent_early != s.pad);
   // Kept, when the step already has one: a frame that ran no new step (held, below) is followed by a frame that
   // begins at the same step, and the input sent in the first of the two is the one the relay keeps for it (the
   // first it receives for a frame: Online.Server RaceTimeline). Taking the second, this game ran its own machine
@@ -310,9 +324,33 @@ bool BeginRollbackFrame(Guest& g, Session& s, u32 step, bool settle, bool check)
   return true;
 }
 
+// The rows from the last check up to `arrived`, when they are a burst: for the summary line (BurstTally). Host memory
+// only, no allocation; the rows are compared only in a frame that has a burst.
+void NoteBurst(Session& s, u32 step, u32 arrived, u32 depth)
+{
+  BurstTally& bursts = s.summary.bursts;
+  const u32 from = std::max(bursts.checked_to, s.checked);
+  bursts.checked_to = std::max(bursts.checked_to, arrived);
+  if (arrived < from + BurstTally::LEAST_ROWS)
+    return;
+  const u32 rows = arrived - from;
+  bursts.Burst(rows);
+  for (std::size_t j = 0; j < s.seats.size(); ++j)
+    for (u32 t = from; t < arrived; ++t)
+    {
+      const auto it = s.used.find(t);
+      if (it != s.used.end() &&
+          !std::equal(it->second.begin() + j * RECORD, it->second.begin() + (j + 1) * RECORD, s.official[t].begin() + j * RECORD))
+      {
+        bursts.Corrected({.step = step, .seat = s.seats[j], .rows = rows, .depth = depth});
+        break;
+      }
+    }
+}
+
 // The predictions checked against the official frames that are here; the memory back to before the first wrong step
 // (or, tests, a forced rollback's).
-FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const Forcing& forcing)
+FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, bool check, const Forcing& forcing)
 {
   // the first step whose inputs turned out wrong, among the steps whose official frames are here
   const u32 arrived = std::min<u32>(Have(s), step);
@@ -325,8 +363,11 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
   // frame that settles the race: every step is checked there.
   const u32 hold = settle ? 0 : forcing.deepest;
   const u32 known = hold == 0 ? arrived : std::max(s.checked, std::min(arrived, step > hold ? step - hold : 0));
+  // (the deep-rollback worker's thread, on from 4 hardware threads: an open job adopted here, or the step a job given
+  // up goes back to; while one is open, its own steps' rows are its own: fzgx/rollback_worker.h)
   std::optional<u32> wrong;
-  for (u32 t = s.checked; t < arrived; ++t)
+  const std::optional<u32> fall_back = WorkerFrame(g, s, step, settle, check);
+  for (u32 t = s.checked; t < WorkerSearchTo(arrived); ++t)
   {
     const auto it = s.used.find(t);
     if (it == s.used.end() || it->second != s.official[t])
@@ -335,6 +376,8 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
       break;
     }
   }
+  if (fall_back && (!wrong || *fall_back < *wrong))
+    wrong = fall_back;
   // the test switch
   if (forcing.every != 0 && !wrong && !settle && s.normal_steps % forcing.every == 0)
   {
@@ -347,14 +390,25 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, const F
       s.work.forced = true;
     }
   }
+  if (wrong && (WorkerTakes(s, step, *wrong) || WorkerStart(g, s, step, *wrong)))
+  {
+    // the worker's: the game goes on with its predicted steps
+    ++s.rollbacks;
+    s.max_depth = std::max(s.max_depth, step - *wrong);
+    s.summary.Rollback(step - *wrong);
+    wrong.reset();
+  }
   u32 run_from = wrong.value_or(step);
   if (wrong)
   {
+    WorkerPrepare(g, s, step, run_from);  // (the deep-rollback worker: fzgx/rollback_worker.h)
     s.rollback.RestoreTo(g, step, run_from);
+    WorkerAfterRestore(g, s);
     ++s.rollbacks;
     s.max_depth = std::max(s.max_depth, step - run_from);
     s.summary.Rollback(step - run_from);
   }
+  NoteBurst(s, step, arrived, step - run_from);
   return {known, run_from};
 }
 
@@ -365,12 +419,13 @@ void RunSteps(Guest& g, Session& s, u32 step, const FrameSteps& steps)
   // the steps the frame runs: from run_from to `step`, the catch-up steps after it; held, to the step before `step`
   const u32 extra = step - run_from + catch_up - (held ? 1 : 0);
   Rollback::Resimulate(g, extra);
+  WorkerOpen(g, s, run_from, extra, held);
   s.last_extra = extra;
   s.work.depth = step - run_from;
   s.work.catch_up = catch_up;
   s.work.held = held;
   s.work.extra = s.last_extra;
-  s.checked = known;
+  s.checked = WorkerKnown(known);
   for (auto it = s.used.begin(); it != s.used.end() && it->first < s.checked;)
     it = s.used.erase(it);
   s.rollback.Final(s.checked);
@@ -382,9 +437,23 @@ void RunSteps(Guest& g, Session& s, u32 step, const FrameSteps& steps)
 }
 }  // namespace
 
+// At the frame tick, with a step run ahead to come: the input the frame's own step will send later, sent now, as early
+// as a game with no step run ahead sends it. (A watcher's input goes by the schedule: SendWatchersInput.)
+void SendInputBeforeRunAhead(Guest& g, Session& s, u32 step)
+{
+  if (s.watch != Watch::Racing || s.next_input != 0)
+    return;
+  ReadThePad(g, s, g.Read32(MODULE_POINTER));
+  NoteOwnInput(s, step + s.delay, s.my_inputs.try_emplace(step + s.delay, PadFor(s, step + s.delay)).second);
+  SendInputs(s);
+}
+
 // Before a displayed frame's own step s.
 void NormalStep(Guest& g, Session& s)
 {
+  // (a rollback job's base made on its worker's thread reads the game's log and the older job's after-images: done
+  // before this frame touches either, study section 22)
+  rollback_worker::WaitBases();
   const u32 step = g.Read32(STEP);
   ++s.normal_steps;
   freeze::ThePulse().step.store(step, std::memory_order_relaxed);  // for the freeze report: one store, nothing read
@@ -451,7 +520,7 @@ void NormalStep(Guest& g, Session& s)
   FrameSteps steps;
   {
     FZGX_TIME(Predictions);
-    steps = CheckPredictions(g, s, step, kind.settle, forcing);
+    steps = CheckPredictions(g, s, step, kind.settle, kind.check, forcing);
   }
   const double ahead = StepsAhead(s, step);
   if (!s.playback && !TallyTheWatchersFrame(s, true, frame_now, step))  // (the schedule's own figure, no clock read)

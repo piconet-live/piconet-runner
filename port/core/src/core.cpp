@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "fzgx/rollback_worker.h"
 #include "internal.h"
+#include "fzgx/runahead.h"
+#include "mode.h"
+#include "mode_hud.h"
+#include "hud_move.h"
+#include "clean_picture.h"
+#include "game_shadow.h"
 
 #include "fzgx/freeze.h"
 #include "fzgx/panel.h"
@@ -9,6 +16,7 @@
 #include <memory>
 
 #include "board_net.h"
+#include "host_timers.h"
 #include "page_guard.h"
 #include "rollback.h"
 
@@ -23,6 +31,17 @@ panel::Progress s_load;  // how far the start's load is (LoadField)
 }  // namespace
 
 Host& TheHost()
+{
+  if (rollback_worker::OnW())
+  {
+    rollback_worker::OffLimits("the core's host (TheHost)");
+    if (Host* own = rollback_worker::OwnHost())
+      return *own;  // (the job given up: a host that does nothing, over W's own memory)
+  }
+  return *s_host;
+}
+
+Host& TheHostAnyThread()
 {
   return *s_host;
 }
@@ -54,6 +73,7 @@ void Init(Host& host, const Options& options)
   Data().Clear();
   boot::Reset();
   boot::Prepare(Data());
+  hud_move::Prepare(Data());  // the classic HUD's moves: on from the first frame, in every start (offline play too)
   // a start that goes straight into a race or a replay: LOADING over the start-up pictures, from the first one
   panel::TheBoard().Reset();
   s_load = {};
@@ -237,6 +257,34 @@ void BeforeTheGameStarts()
     s_host->LoadPace(true);
 }
 
+namespace
+{
+// Where the game stands, for the host's presenter (Host::Scene): on any change of the mode, the phase or the course.
+void TellScene(Guest& g)
+{
+  if (g.Ram(net::MODULE_POINTER, 4) && g.Read32(net::MODULE_POINTER) == layout::MAIN_REL)
+  {
+    static u32 told[3] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
+    const u32 now[3] = {g.Read16(game::GAME_MODE_AT), g.Read16(game::PHASE_AT), g.Read32(table::RACE_COURSE_AT)};
+    if (now[0] != told[0] || now[1] != told[1] || now[2] != told[2])
+    {
+      std::copy(std::begin(now), std::end(now), std::begin(told));
+      s_host->Scene(panel::Racing(now[0], now[1]), panel::SceneWords(now[0], now[1], now[2]));
+    }
+  }
+}
+}  // namespace
+
+void PlainField()
+{
+  if (!s_host || boot::IsActive() || rollback_worker::OnW())
+    return;
+  Guest g(*s_host, Data());
+  boot::PlainField(g);
+  TellScene(g);
+  net::InputsFrame(g, true);
+}
+
 void FrameTick()
 {
   if (!Active())
@@ -248,6 +296,11 @@ void FrameTick()
   boot::OnFrame(g);
   net::PresentTick(g);
   net::MinimapFrame(g);
+  net::InputsFrame(g);
+  // the game's step, for the host's presenter (Host::Step: its lines and pacing), in our races as before
+  if (g.Ram(net::MODULE_POINTER, 4) && g.Read32(net::MODULE_POINTER) == layout::MAIN_REL)
+    s_host->Step(g.Read32(net::STEP));
+  TellScene(g);
   // the panel comes down when the course is loaded (one load of a flag once it is down)
   panel::Board& board = panel::TheBoard();
   if (board.Now() == panel::Shows::Loading && g.Ram(net::MODULE_POINTER, 4) &&
@@ -265,12 +318,35 @@ void FrameTick()
 
 void WindowWritten(u32 address, u64 value)
 {
+  if (rollback_worker::OnW())  // (study section 17: W's window stores land in its own window and call nothing)
+  {
+    rollback_worker::OffLimits("the window's side effects (WindowWritten)");
+    return;
+  }
   if (!s_host)
     return;
   if (address == layout::DRAW_ASK)
   {
     Guest g(*s_host, Data());
+    // a plain start (offline play) with PLAIN_DRAW, the one way the image stores here outside a race: the drawing's
+    // times and high refresh's request alone; nothing of a race
+    if (!boot::IsActive() && g.Read32(layout::PLAIN_DRAW) != 0)
+    {
+      if (value == 1)
+        game_shadow::Frame(g, s_options.aurora_ray_tracing);  // with rays on, no game drop shadow (game_shadow.h)
+      runahead::TimeTheDrawing(static_cast<u32>(value));
+      return;
+    }
+    if (value == 1)
+    {
+      mode::hud::Hud(g);  // the game mode's displays: after the frame routine's HUD passes, before the drawing
+      hud_move::Frame(g);  // the classic HUD's moves: the window's word the image's sites test
+      mode::hud::Board(g);  // and its values, for the launcher
+      clean_picture::Frame(g);  // `hud clean`: after the mode's pass, whose tag bytes it takes off
+      game_shadow::Frame(g, s_options.aurora_ray_tracing);  // with rays on, no game drop shadow (game_shadow.h)
+    }
     net::PresentAsked(g, static_cast<u32>(value));
+    runahead::TimeTheDrawing(static_cast<u32>(value));
     return;
   }
   if (address != layout::CONTROL + 12 || value != 0 || !s_options.replay_scrubber)
@@ -301,6 +377,55 @@ void NetSync()
     return;
   Guest g(*s_host, Data());
   net::Run(g);
+}
+
+void HudMoveCall(u32 op, u32 arg)
+{
+  if (!s_host)
+    return;
+  Guest g(*s_host, Data());
+  hud_move::Call(g, op, arg);
+}
+
+void ModeCall()
+{
+  if (!s_host || runahead::Inside())  // (a step run ahead is undone, and the mode's rules keep state of their own)
+    return;
+  Guest g(*s_host, Data());
+  FZGX_TIME(Mode);
+  mode::Step(g);
+}
+
+u32 ModeRecord(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Record(g, seat);
+}
+
+u32 ModeMove(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Move(g, seat);
+}
+
+u32 ModeStat(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::Stat(g, seat);
+}
+
+u32 ModeRollSave(u32 seat)
+{
+  if (!s_host)
+    return 0;
+  Guest g(*s_host, Data());
+  return mode::RollSave(g, seat);
 }
 
 void Shutdown()

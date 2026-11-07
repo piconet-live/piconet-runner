@@ -2,7 +2,9 @@
 // start, from the host's frame tick (core.cpp FrameTick: the mode machine's start, before the frame's steps and
 // before the network hook, so what it reads is what the last frame drew: the drawn bodies with the smoothing's
 // offsets still on them, the HUD parts as drawn).
-//   - The game's map picture: its bit of the HUD part mask (game::HUD_PARTS, viewport 0) is cleared, and in the
+//   - The game's map picture: never drawn in a race of the native form, which never calls its draw (fn_1_79654: the
+//     image's overlay site, port/image/sites_present.py MAP_PASS) in any phase or frame. For the fork's image, which
+//     has no such site, its bit of the HUD part mask (game::HUD_PARTS, viewport 0) is cleared, and in the
 //     word the image keeps the race's own mask in (control block +60: frame_spectate.py `spechud` keeps it,
 //     frame_hud.py `hudstate` and the spectator's controls put it back), so neither puts the bit back. Only the
 //     map's draw (fn_1_79654) reads the bit; the mask is drawing's alone and no checksum covers it. The core
@@ -23,10 +25,12 @@
 // Picture only: what is read changes nothing, and the one word written is drawing's.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "board_net.h"
 #include "net_internal.h"
 #include "net_modes.h"
 #include "out_test.h"
 #include "files.h"
+#include "mode_hud.h"
 
 #include "fzgx/minimap.h"
 
@@ -105,17 +109,6 @@ void Load(Guest& g, u32 module)
   TheHost().MinimapCourseLoaded(prepared);
 }
 
-// The racer the picture follows (see the head).
-u32 You(Guest& g)
-{
-  const Session* s = s_session.get();
-  if (s && s->spectator.shown)
-    return s->spectator.followed;
-  if (g.Read32(SPECTATING) != 0)
-    return g.Read32(SPECTATED);
-  return g.Read32(SEAT_SLOT + 4);
-}
-
 mm::Racers ReadRacers(Guest& g, u32 module, u32 machines, u32 count)
 {
   mm::Racers racers{};
@@ -171,6 +164,31 @@ void CheckStart(const mm::Racers& racers, u32 count)
   Notice("fzgx: course map: start line check: {}", s_map.start_check);
 }
 
+// The racers' dots as the game mode shows them to `you` (map_hide, map_mark: mode_hud.h): nothing without a mode.
+void ModeDots(Guest& g, mm::Racers& racers, u32 you)
+{
+  std::array<bool, 30> present{};
+  std::array<u32, 30> colour{};
+  for (u32 i = 0; i < 30; ++i)
+    present[i] = racers[i].present, colour[i] = racers[i].colour;
+  mode::hud::MapRacers(g, you, OwnSeat(g) == you, present, colour);
+  for (u32 i = 0; i < 30; ++i)
+    racers[i].present = present[i], racers[i].colour = colour[i];
+}
+
+// What decides whether the map shows.
+mm::Seen SeenNow(Guest& g, u32 module, u32 phase)
+{
+  const Session* s = s_session.get();
+  mm::Seen seen;
+  seen.phase = phase;
+  seen.hud_parts = g.Read32(module + game::HUD_PARTS);
+  seen.watched = s && s->spectator.shown;
+  seen.overlay = !s || s->spectator.overlay;
+  seen.practice_paused = s && s->practice && PracticePaused();
+  return seen;
+}
+
 void Tell(const MinimapShow& show)
 {
   if (!show.on && !s_map.shown)
@@ -198,13 +216,7 @@ void MinimapFrame(Guest& g)
     Load(g, module);
   if (s_map.course == 0)
     return;
-  const Session* s = s_session.get();
-  mm::Seen seen;
-  seen.phase = phase;
-  seen.hud_parts = g.Read32(module + game::HUD_PARTS);
-  seen.watched = s && s->spectator.shown;
-  seen.overlay = !s || s->spectator.overlay;
-  seen.practice_paused = s && s->practice && PracticePaused();
+  const mm::Seen seen = SeenNow(g, module, phase);
   MinimapShow show;
   s_map.race_frames += phase == 0x28 || phase == 0x29;
   const u32 machines = g.Read32(module + MACHINES);
@@ -213,7 +225,9 @@ void MinimapFrame(Guest& g)
     CheckStart(ReadRacers(g, module, machines, count), count);
   if (mm::Shows(seen) && machines != 0 && count != 0)
   {
-    show = mm::Pick(ReadRacers(g, module, machines, count), count, You(g), s_map.camera);
+    mm::Racers racers = ReadRacers(g, module, machines, count);
+    ModeDots(g, racers, ViewedRacer(g));
+    show = mm::Pick(racers, count, ViewedRacer(g), s_map.camera);
     show.on = true;
     // the view's turn: port 1's C-stick left or right, unless the player's controls give the C-stick a racing action
     std::array<u8, mm::BINDING_SETS * mm::BINDING_SET_SIZE> bindings{};
@@ -235,6 +249,56 @@ void MinimapFrame(Guest& g)
   }
   show.course = s_map.course;
   Tell(show);
+}
+
+// "Show inputs" (the launcher's Inputs window): the local player's pad onto the status board, from the course intro on,
+// while this game has a driver of its own (a race or a practice); held 0 otherwise. A racer followed in a replay or a
+// watched race has none to show: its record holds the game's actions after that player's own bindings (steering,
+// pitch, strafe, pedals, action bits), not a pad's buttons, triggers and C-stick. Reads only, and only with a board.
+void InputsFrame(Guest& g, bool plain)
+{
+  if (!board::Taken())
+    return;
+  board::LocalPad pad;
+  if (g.Ram(MODULE_POINTER, 4) && g.Read32(MODULE_POINTER) == layout::MAIN_REL)
+  {
+    const u32 module = layout::MAIN_REL;
+    // a plain start (offline play): the player's controller in port 1 as the game reads it, in every mode and menu
+    if (plain || (g.Read16(module + PHASE) >= COURSE_INTRO && OwnSeat(g) != 0xFFFFFFFF))
+    {
+      const u32 at = module + PAD_STATUS;
+      pad.held = 1;
+      pad.buttons = g.Read16(at);
+      pad.stick_x = static_cast<std::int8_t>(g.Read8(at + 2));
+      pad.stick_y = static_cast<std::int8_t>(g.Read8(at + 3));
+      pad.c_stick_x = static_cast<std::int8_t>(g.Read8(at + 4));
+      pad.c_stick_y = static_cast<std::int8_t>(g.Read8(at + 5));
+      pad.l = g.Read8(at + 6);
+      pad.r = g.Read8(at + 7);
+    }
+  }
+  board::PutLocalPad(pad);
+}
+
+// The racer the picture follows (see the head).
+u32 ViewedRacer(Guest& g)
+{
+  const Session* s = s_session.get();
+  if (s && s->spectator.shown)
+    return s->spectator.followed;
+  if (g.Read32(SPECTATING) != 0)
+    return g.Read32(SPECTATED);
+  return g.Read32(SEAT_SLOT + 4);
+}
+
+u32 OwnSeat(Guest& g)
+{
+  const Session* s = s_session.get();
+  if (s && (s->spectator.shown || s->watcher || s->playback))
+    return 0xFFFFFFFF;
+  if (g.Read32(SPECTATING) != 0)
+    return 0xFFFFFFFF;
+  return g.Read32(SEAT_SLOT + 4);
 }
 
 void MinimapSummary()

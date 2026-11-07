@@ -6,7 +6,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "files.h"
+#include "fzgx/runahead.h"
+#include "mode_hud.h"
 
+#include <bit>
 #include <cstring>
 #include <string_view>
 
@@ -196,9 +199,11 @@ void WriteStartView(Guest& g)
   if (module == 0)
     return;
   const u32 options = g.Read32(module + game::GAME_OPTIONS);
-  if (!g.Ram(options + game::SAVED_VIEW, 1) || g.Read8(options + game::SAVED_VIEW) == view)
+  // (match.camera's 4 is first person, the game's view 0)
+  const u8 saved = view == 4 ? 0 : static_cast<u8>(view);
+  if (!g.Ram(options + game::SAVED_VIEW, 1) || g.Read8(options + game::SAVED_VIEW) == saved)
     return;
-  g.Write8(options + game::SAVED_VIEW, static_cast<u8>(view));
+  g.Write8(options + game::SAVED_VIEW, saved);
 }
 }  // namespace
 
@@ -276,6 +281,40 @@ void Prepare(ModData& data)
     data.CopyTo(NAMES, m->names.data(), m->names.size());
     const std::array<u8, NAME_SIZE> course_name = CourseNameBytes(CourseOf(*m));
     data.CopyTo(COURSE_NAME, course_name.data(), course_name.size());
+    // a game mode: the image takes its block from the heap before the start gate (sites_mode.py, mode.h); 5, with
+    // the stats page (one page more; every other mode's allocation stays what it was)
+    data.Write(layout::MODES, m->game_mode ? (m->game_mode->stats_page ? 5 : 4) : 0, 4);
+    data.Write(layout::MODES + 4, 0, 4);
+    data.Write(layout::MODE_HUD, m->game_mode ? mode::hud::WindowFlags(*m->game_mode) : 0, 4);
+    data.Write(layout::MODE_HUD + 8, 0, 4);  // (the story's pictures not loaded yet: sites_modehud.py mode_story)
+    // start_gap's metres for the grid (sites_grid.py grid_spread); 0.0 with even or no gap
+    data.Write(layout::MODE_HUD + mode::hud::WINDOW_START_GAP,
+               m->game_mode && m->game_mode->start_gap ? std::bit_cast<u32>(*m->game_mode->start_gap) : 0, 4);
+    {
+      std::array<u8, mode::hud::WINDOW_TITLE_SIZE> title{};
+      if (m->game_mode)
+        std::copy_n(m->game_mode->results_title.begin(), m->game_mode->results_title.size(), title.begin());
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TITLE, title.data(), title.size());
+    }
+    {
+      std::array<u8, mode::hud::WINDOW_HEADING_SIZE> heading{};
+      if (m->game_mode)
+      {
+        const std::string_view text = m->game_mode->results_heading.empty() ? std::string_view(mode::hud::DEFAULT_HEADING)
+                                                                            : std::string_view(m->game_mode->results_heading);
+        std::copy_n(text.begin(), text.size(), heading.begin());
+      }
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_HEADING, heading.data(), heading.size());
+    }
+    {
+      // `tag`: no seat tagged yet (the HUD pass writes them from the block), and the package's texts
+      std::array<u8, mode::hud::WINDOW_TAG_TEXTS - mode::hud::WINDOW_TAGS + modes::TAG_TEXTS * mode::hud::WINDOW_TAG_TEXT> tags{};
+      if (m->game_mode)
+        for (size_t i = 0; i < m->game_mode->tag_texts.size(); ++i)
+          std::copy_n(m->game_mode->tag_texts[i].begin(), m->game_mode->tag_texts[i].size(),
+                      tags.begin() + (mode::hud::WINDOW_TAG_TEXTS - mode::hud::WINDOW_TAGS) + i * mode::hud::WINDOW_TAG_TEXT);
+      data.CopyTo(layout::MODE_HUD + mode::hud::WINDOW_TAGS, tags.data(), tags.size());
+    }
   }
   Notice("fzgx: native form: image {} ({} bytes), {} patched words, mode {}", b->image_sha1.substr(0, 8), image.size(),
          b->patches.size(), m ? m->mode : 0);
@@ -338,6 +377,45 @@ void OnFrame(Guest& g)
   g.CopyTo(COURSE_NAME, course_name.data(), course_name.size());
   g.CopyTo(IMAGE, m->image.data(), m->image.size());
   Notice("fzgx: mod image ({} bytes) and race values written", m->image.size());
+}
+
+// A plain start (offline play), every field of the native form: the launcher's picture settings, as a race has them
+// (OnFrame), for the picture only. The game's own screen option is set to the launch file's "widescreen" (1 Wide Screen,
+// 0 Normal; a file without the key leaves the player's own) every field once main.rel is linked: a plain start reads the player's options from their saved game some
+// seconds into the boot, and this takes the place of what that load wrote, as a race's set-up does. The save itself is
+// not written here; the game writes the option with the rest when it saves its options (the options screen, a cup's
+// end), and it then holds the launcher's choice. Not in a start that opens the game's own controller options, which
+// saves what the player had. True widescreen's word (sites_view.py) while the game is in Wide Screen; and PLAIN_DRAW
+// while high refresh may draw pictures between, so that the image makes the frame tick and asks at the drawing.
+void PlainField(Guest& g)
+{
+  const Options& o = TheOptions();
+  const u32 module = MainRel(g);
+  // the screen option as the launch file says, on or off, every field, as a race does: a save the game wrote with
+  // another option (the player changed one in the game's own menu) never decides; the start that opens the game's
+  // own controller options keeps the save's, and true widescreen's word stays 0 there
+  const bool set = module != 0 && !o.controller_setup;
+  if (set)
+    g.Write32(module + SCREEN_OPTION, o.widescreen ? 1 : 0);
+  const std::optional<bool> wide = Widescreen(g);
+  const u32 aspect = set && wide.value_or(false) ? TrueAspectWord(o) : 0;
+  g.Write32(TRUE_ASPECT, aspect);
+  const bool draw = runahead::PlainDraw();
+  g.Write32(layout::PLAIN_DRAW, draw ? 1 : 0);
+  // the log, once each: what offline play was given of the launcher's settings
+  static bool said_screen = false, said_draw = false;
+  if (set && !said_screen)
+  {
+    said_screen = true;
+    Notice("fzgx: offline play: the game's screen option is {} in memory every picture (the launch file's \"widescreen\"){}",
+           o.widescreen ? "Wide Screen" : "Normal", aspect != 0 ? ", with true widescreen's race view" : "");
+  }
+  if (draw && !said_draw)
+  {
+    said_draw = true;
+    Notice("fzgx: offline play: high refresh's pictures between in the game's own races (PLAIN_DRAW: the frame tick and "
+           "the drawing's asks; one screen, the chase camera)");
+  }
 }
 
 void PaintMachines(Guest& g)

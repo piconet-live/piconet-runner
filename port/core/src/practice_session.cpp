@@ -1,15 +1,24 @@
 // A practice's session (Options::practice; the design: fzgx/practice.h): one seat, no relay, the race run in
-// the game's own Practice mode with a rewind of the last minute. Each step's row is the local pad's record as the
+// the game's own Practice mode with a rewind of the last five minutes. Its game mode (protocol/quickplay/practice.fzmode, a
+// `solo` mode) says the rewind's reach, the pause, the save and the countdown (WordsOfTheRace); the mode's block is
+// game memory like the rest, so the one undo log below takes it back and a save, a mark on a step, holds it too. Each step's row is the local pad's record as the
 // step comes to run, so the run needs nobody; Start pauses, the stick scrubs, Start resumes after a 1 s countdown,
 // D-pad right saves and D-pad left loads. Rewind (practice.h) says what each displayed frame does; this file moves
 // the game's memory by it.
 //
 // One memory and one undo log (Session::rollback), started at the race phase's first frame: every step of the
-// minute's reach keeps its entry (Rollback::Final drops what is older). The steps' rows and checksums are the kept
+// reach keeps its entry (Rollback::Final drops what is older). The steps' rows and checksums are the kept
 // run's (Line): a picture of an earlier moment is made as the replay scrubber makes a standing one, by putting the
 // memory back to before the step before it (RestoreTo) and running that step again, silently (the mute word), with
 // its row from the line; a later moment is reached by running the steps between again, as extra steps of the frame
-// (whose presentation tasks the image leaves out), the last of them drawn. Every step run again is checked against
+// (whose presentation tasks the image leaves out), the last of them drawn. A long way is cut short by the log's
+// keys, a whole copy of the race's moment before every KEY_EVERY-th step of the line (Rollback::KeepKey, as the
+// replay scrubber keeps its front's): back, from the key above the moment, the log rebased there (Rollback::Rebase),
+// through at most a few hundred entries; forwards, or below what the log holds, from the key below it, the log
+// rebased there with nothing below it, and at most KEY_EVERY - 1 steps run again. The entries a jump drops are let
+// go a few at each later step. So no move costs more however far it reaches (without them a jump forwards across
+// the five minutes ran some 18,000 steps again in one frame, about 4 s, and one back put back as many entries, about
+// 90 ms). Keys out of the buffer or past a branch go (Rewind::TakeDropped). Every step run again is checked against
 // the checksum it had when it first ran: the rewind's determinism, counted for the log. A resume from an earlier
 // moment cuts the line there (a branch): the steps after it are no part of the run any more. Their rows and
 // checksums are kept aside (the ghost) for as long as the new run's rows are the same: a step resumed with the same
@@ -27,10 +36,13 @@
 
 #include "net_internal.h"
 
+#include "files.h"
 #include "fzgx/panel.h"
 #include "fzgx/practice.h"
+#include "mode.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -44,10 +56,27 @@ namespace
 constexpr u32 SOUNDS_FROM = CONTROL + 492;  // the image's mute word (mute.py): a step below it is silent
 constexpr u32 SILENT = 0xFFFFFFFF;
 constexpr u32 PAD_STATUS = BSS + 0x998;     // PADStatus of port 0: the buttons (u16), then the stick's x (s8)
+constexpr u32 LOG_EVERY = 3600;             // the undo log's size into the log once a minute of the race
+constexpr double SLOW_FRAME_MS = 50;        // a displayed frame longer than this is named in the log
+constexpr u32 BIG_MOVE = 1000;              // ... and one that put back or ran again this many steps
+using Steady = std::chrono::steady_clock;
+
+// A displayed frame's own moves of the memory, for the log: the undo entries put back and the steps run again.
+struct Moves
+{
+  u32 restored = 0, reran = 0, keys = 0;
+  double restore_ms = 0, key_ms = 0;
+};
+constexpr u32 NO_KEY = 0xFFFFFFFF;
+// A move back takes the key above the moment when the entries it would put back between the key and the present
+// are more than this many; a move forwards takes the key below when more than KEY_EVERY steps lie ahead (fewer run
+// again from the present, and the log keeps its entries for the way back).
+constexpr u32 BACK_BY_KEY = 2 * practice::KEY_EVERY;
 
 struct Practice
 {
   std::unique_ptr<practice::Rewind> rewind;  // from the race phase's first frame
+  Rollback::Moment base;                     // the memory at the race phase's first frame (the keys' pages beside)
   practice::Line line{0};
   u32 first = 0;
   bool begun = false, over = false;
@@ -60,10 +89,89 @@ struct Practice
   // for the log
   u32 rerun_checked = 0, rerun_differed = 0, ghost_checked = 0, ghost_differed = 0, live_steps = 0;
   u32 held_frames = 0, restores = 0;
-  std::size_t log_most = 0;
+  std::size_t log_most = 0, keys_most = 0;
+  // a displayed frame's time, hook to hook (with the steps it ran again), and the longest of a frame that moved
+  Moves moves, longest_moves;
+  Steady::time_point hooked{};
+  double longest_ms = 0;
+  u32 longest_at = 0, slow_frames = 0, told_moves = 0;
+  s32 laps_done = 0;  // the seat's laps done at the front, as last seen
 };
 
 std::unique_ptr<Practice> s_practice;
+
+// The memory back to before step `to` from before `from`, timed for the log.
+void PutBack(Guest& g, Session& s, Practice& p, u32 from, u32 to)
+{
+  const Steady::time_point began = Steady::now();
+  s.rollback.RestoreTo(g, from, to);
+  p.moves.restored += from - to;
+  p.moves.restore_ms += std::chrono::duration<double, std::milli>(Steady::now() - began).count();
+  ++p.restores;
+}
+
+// The memory from before step `at` to before step `x` by the shortest way the undo log and the keys give: back
+// through the log's entries, from the key above `x` when that saves many; forwards from the key below `x` when more
+// than a key's spacing lies ahead (the log rebased on the key's moment, holding nothing before it); below what the
+// log holds, from the key below. The step the memory is before after the move: the steps from it to `x` are still to
+// run.
+u32 Reach(Guest& g, Session& s, Practice& p, u32 at, u32 x)
+{
+  if (x <= at && x >= s.rollback.Oldest())
+  {
+    const u32 above = s.rollback.KeyAbove(x);
+    if (above != NO_KEY && above < at && at - above > BACK_BY_KEY)
+    {
+      const Steady::time_point began = Steady::now();
+      s.rollback.TakeKey(g, s.rollback, above, p.base);
+      s.rollback.Rebase(g, above, true);
+      p.moves.key_ms += std::chrono::duration<double, std::milli>(Steady::now() - began).count();
+      ++p.moves.keys;
+      at = above;
+    }
+    if (x < at)
+      PutBack(g, s, p, at, x);
+    return x;
+  }
+  const u32 below = s.rollback.KeyBelow(x);
+  if (x > at && (below == NO_KEY || below <= at || x - at <= practice::KEY_EVERY))
+    return at;  // the steps between run again from the present
+  if (below == NO_KEY)
+  {
+    Warn("fzgx: practice: no key at or below step {} (the log holds steps from {} on)", x, s.rollback.Oldest());
+    return at;
+  }
+  const Steady::time_point began = Steady::now();
+  s.rollback.TakeKey(g, s.rollback, below, p.base);
+  s.rollback.Rebase(g, below, false);
+  p.moves.key_ms += std::chrono::duration<double, std::milli>(Steady::now() - began).count();
+  ++p.moves.keys;
+  return below;
+}
+
+// The frame before's time (from its hook to this one), named when it moved the memory and was slow.
+void TimeTheFrame(Practice& p, u32 t)
+{
+  const Steady::time_point now = Steady::now();
+  if (p.hooked != Steady::time_point{} && (p.moves.restored > 0 || p.moves.reran > 0 || p.moves.keys > 0))
+  {
+    const double ms = std::chrono::duration<double, std::milli>(now - p.hooked).count();
+    if (ms > p.longest_ms)
+    {
+      p.longest_ms = ms;
+      p.longest_moves = p.moves;
+      p.longest_at = t;
+    }
+    const bool slow = ms > SLOW_FRAME_MS;
+    p.slow_frames += slow ? 1 : 0;
+    if ((slow || p.moves.keys > 0 || p.moves.restored >= BIG_MOVE || p.moves.reran >= BIG_MOVE) && ++p.told_moves <= 40)
+      Notice("fzgx: practice: a frame took {:.1f} ms before step {}: {} keys taken ({:.1f} ms), {} undo entries put back "
+             "({:.1f} ms), {} steps run again", ms, t, p.moves.keys, p.moves.key_ms, p.moves.restored, p.moves.restore_ms,
+             p.moves.reran);
+  }
+  p.moves = {};
+  p.hooked = now;
+}
 
 // The local seat's row: the pad's record, or (tests, Debug::autopilot) "the AI drives" (frame.cpp's AI_DRIVES).
 Row PadRow(Guest& g, u32 module)
@@ -145,14 +253,9 @@ void RunLive(Guest& g, Session& s, Practice& p, u32 t, u32 module)
 void ShowMoment(Guest& g, Session& s, Practice& p, u32 at, u32 to)
 {
   const u32 run_from = std::max(to, p.first + 1) - 1;
-  u32 from = at;
-  if (run_from < at)
-  {
-    s.rollback.RestoreTo(g, at, run_from);
-    ++p.restores;
-    from = run_from;
-  }
+  const u32 from = Reach(g, s, p, at, run_from);
   const u32 last = std::max(run_from, from);  // (a moment past the memory's: the steps between run first)
+  p.moves.reran += last - from + 1;
   g.Write32(STEP, from);
   WriteRow(g, s, from, p.line.At(from) ? p.line.At(from)->row : Row(RECORD, 0));
   g.Write32(SOUNDS_FROM, SILENT);
@@ -170,7 +273,7 @@ void ForgetTheEnd(Guest& g)
   g.Write32(END_ASKED, 0);
 }
 
-// The replay scrubber's bar (fzgx/host.h, ScrubBar), told every frame: the minute's reach, the moment shown, the
+// The replay scrubber's bar (fzgx/host.h, ScrubBar), told every frame: the reach, the moment shown, the
 // front. The host shows it while the picture stands (`paused`) and lets the sound through while the race runs
 // (`heard`). It stands only while paused, never in the countdown: the host lays the game's window again when the
 // bar comes or goes, and the picture's window resized holds the game's thread up for 50 to 200 ms (pacing logs of
@@ -197,20 +300,34 @@ void ShowTheCountdown(const practice::Rewind& r)
 {
   panel::Board& board = panel::TheBoard();
   if (r.Now() == practice::Mode::Countdown && r.CountdownLeft() > 0)
-    panel::Counting(board, (r.CountdownLeft() * 3 + practice::COUNTDOWN - 1) / practice::COUNTDOWN);
+    panel::Counting(board, (r.CountdownLeft() * 3 + r.Said().countdown - 1) / r.Said().countdown);
   else if (board.Now() == panel::Shows::Countdown)
     panel::Down(board);
+}
+
+// The practice's words: its game mode's; a start with no mode (a launcher's before Practice was a mode), today's.
+practice::Words WordsOfTheRace()
+{
+  const boot::Match* m = boot::Get();
+  if (!m || !m->game_mode)
+    return {};
+  const mode::Package& mode = *m->game_mode;
+  return {mode.rewind, mode.pause, mode.save_state, mode.resume_countdown};
 }
 
 void Begin(Guest& g, Session& s, Practice& p, u32 t)
 {
   p.begun = true;
   p.first = t;
-  p.rewind = std::make_unique<practice::Rewind>(t);
+  p.rewind = std::make_unique<practice::Rewind>(t, WordsOfTheRace());
   if (!s.rollback.Active())
     s.rollback.Start(g);
-  Notice("fzgx: practice: the race begins at step {}: Start pauses, the stick scrubs back a minute at most, "
-         "D-pad right saves and left loads", t);
+  // a key's pages are those the log has seen change: none may rest (the scrubber's two logs do the same)
+  s.rollback.KeepWatching();
+  s.rollback.Keep(g, &p.base);
+  Notice("fzgx: practice: the race begins at step {}: Start pauses, the stick scrubs back {} steps at most, "
+         "D-pad right saves and left loads; the undo log's copy of the memory takes {:.1f} MiB", t, p.rewind->Said().reach,
+         static_cast<double>(s.rollback.TrackedBytes()) / (1 << 20));
 }
 
 void End(Guest& g, Session& s, Practice& p, u32 t)
@@ -244,6 +361,17 @@ void Frame(Guest& g, Session& s, Practice& p, u32 t)
   }
   s.rollback.SaveStep(g, t, true);
   p.log_most = std::max(p.log_most, s.rollback.LogBytes());
+  p.keys_most = std::max(p.keys_most, s.rollback.KeyBytes());
+  const u32 machines = g.Read32(module + MACHINES);
+  const u32 progress = machines != 0 ? g.Read32(machines + game::MACHINE_PROGRESS) : 0;
+  const s32 laps = progress != 0 ? static_cast<s32>(g.Read32(progress + game::PROGRESS_LAPS)) : -1;
+  if (p.last_live && laps > p.laps_done)
+    Notice("fzgx: practice: lap {} done at step {}", laps, t - 1);
+  p.laps_done = p.last_live ? laps : p.laps_done;  // (a branch from before a lap line: that lap is to be done again)
+  if (t > p.first && (t - p.first) % LOG_EVERY == 0 && p.last_live)
+    Notice("fzgx: practice: at step {} ({} laps done) the buffer reaches back {} steps; the undo log holds {:.1f} MiB and "
+           "the keys {:.1f} MiB", t, laps, t - p.rewind->Oldest(), static_cast<double>(s.rollback.LogBytes()) / (1 << 20),
+           static_cast<double>(s.rollback.KeyBytes()) / (1 << 20));
   practice::Rewind& r = *p.rewind;
   practice::Pad pad;
   pad.buttons = g.Read16(module + PAD_STATUS);
@@ -254,7 +382,8 @@ void Frame(Guest& g, Session& s, Practice& p, u32 t)
   const practice::Frame frame = r.Next(pad);
   TellTheBar(p, frame.step, frame.run, r.Now() == practice::Mode::Paused);
   ShowTheCountdown(r);
-  r.TakeDropped();  // (no keys are kept: the undo log reaches the whole minute)
+  for (const u32 key : r.TakeDropped())  // out of the buffer, or past a branch
+    s.rollback.DropKey(key);
   if (frame.saved)
   {
     // the host marks it briefly, where the bar would show it (TellTheBar's span)
@@ -269,11 +398,8 @@ void Frame(Guest& g, Session& s, Practice& p, u32 t)
   {
     if (frame.branch || frame.step != t)
     {
-      if (frame.step < t)
-      {
-        s.rollback.RestoreTo(g, t, frame.step);
-        ++p.restores;
-      }
+      if (frame.step < t && Reach(g, s, p, t, frame.step) != frame.step)
+        Warn("fzgx: practice: the race goes on from step {}, which the log could not reach from step {}", frame.step, t);
       const u32 dropped = p.line.End() > frame.step ? p.line.End() - frame.step : 0;
       p.ghost.clear();
       for (u32 i = frame.step; i < p.line.End(); ++i)
@@ -288,6 +414,8 @@ void Frame(Guest& g, Session& s, Practice& p, u32 t)
     }
     s.rollback.Final(std::max(r.Oldest(), p.first + 1) - 1);
     WriteFinal(s, p, r.FinalBelow());
+    if (r.WantsKey(t))
+      s.rollback.KeepKey(g, t, p.base);
     return RunLive(g, s, p, t, module);
   }
   ForgetTheEnd(g);
@@ -344,6 +472,7 @@ void PracticeHook(Guest& g, Session& s, bool extra)
     return;
   if (extra)
     return Extra(g, s, *s_practice);
+  TimeTheFrame(*s_practice, g.Read32(STEP));
   Frame(g, s, *s_practice, g.Read32(STEP));
 }
 
@@ -362,6 +491,10 @@ void PracticeEnd(Session& s)
          "inputs: {} checked, {} differed; the undo log held {:.1f} MiB at most",
          p.rerun_checked, p.rerun_differed, p.ghost_checked, p.ghost_differed,
          static_cast<double>(p.log_most) / (1 << 20));
+  Notice("fzgx: practice: the longest frame that moved the memory took {:.1f} ms (before step {}): {} keys taken, {} "
+         "undo entries put back ({:.1f} ms), {} steps run again; {} frames over {:.0f} ms; the keys held {:.1f} MiB at most",
+         p.longest_ms, p.longest_at, p.longest_moves.keys, p.longest_moves.restored, p.longest_moves.restore_ms,
+         p.longest_moves.reran, p.slow_frames, SLOW_FRAME_MS, static_cast<double>(p.keys_most) / (1 << 20));
   s_practice.reset();
 }
 }  // namespace fzgx::net

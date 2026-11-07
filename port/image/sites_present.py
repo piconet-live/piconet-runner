@@ -19,15 +19,20 @@ fn_1_37AA8's epilogue (0x37E48, which restores everything from the stack); else 
 rate's routine at the same site (sites_hfr.py `hfr`, which makes it): a frame that draws nothing tells that one
 nothing, and the host never skips while pictures between are drawn (present.cpp). The tail's calls
 (`present_*`): with DRAW_SKIP set, branch past the call or the run of calls; else the stock call. `present_depth`
-(0x554): the read-back unless skipping, then DRAW_ASK = 2 (the host times the drawing up to here). `present_copy`
-(the executable's frame begin, 0x8006FDA4 `bl fn_80035110`, GXCopyDisp with clear): with DRAW_SKIP still set (the
+(0x554): the read-back unless skipping, then DRAW_ASK = 2 (the host times the drawing up to here). `present_overlay`
+(0x490, the overlay pass: the game's course map) never calls it in a race, whether the frame draws or not (MAP_PASS).
+`present_copy` (the executable's frame begin, 0x8006FDA4 `bl fn_80035110`, GXCopyDisp with clear): with DRAW_SKIP still set (the
 host clears it at the next frame tick, after this frame begin) no copy: the frame before drew nothing, so the
 picture in the display buffer, the one before it, is shown again, and the embedded frame buffer, cleared by the
 copy before, is still clear for this frame's drawing.
 
 Every routine uses r11, r12 and CR field 0 only, each dead after its site (liveness.py proves it at the site; a run
 of calls skipped lands on a call or a `lbz`/`cmplwi` that writes them again before reading). No step reads either
-word, no rollback puts them back."""
+word, no rollback puts them back.
+
+A plain start (offline play) with the host's memmap.PLAIN_DRAW set (high refresh): `present_draw` stores DRAW_ASK = 1
+and makes the stock call, `present_depth` stores DRAW_ASK = 2 after the stock read-back; nothing is ever skipped there
+(the host's answer is not read), and the tail and the copy are stock. PLAIN_DRAW 0: every site stock, as before."""
 import memmap
 
 # (site in main.rel .text, the call's target, where a skip goes on, name)
@@ -37,6 +42,14 @@ TAIL = [(0x41C, 0x545B8, 0x420, "present_ord"),        # DrawOrdSys: the ordered
         (0x4A4, 0x4DEC0, 0x4A8, "present_sprites"),    # the sprites' draw
         (0x4A8, 0x4FD64, 0x4B4, "present_sorted"),     # the sorted sprite draw, fn_8006CD50, fn_8006CDA8
         (0x4C0, 0xA9250, 0x4C8, "present_text")]       # the debug text fn_1_A9250(0), the sorted sprite draw again
+# The overlay pass draws one thing: the game's course map (fn_1_7926C, its only caller; fn_1_79654 does nothing
+# else when it does not draw it), which our own course map replaces (port/core/src/minimap_frame.cpp). In a race it is
+# never called, in any phase (the course intro, the countdown, the race, the results), in a replay, a practice, a
+# spectator's game, and in every frame, also one a rollback or the scrubber ran again: the map is not held off by
+# the HUD part mask's bit (.data 0x3D544[viewport] 0x00800000) alone any more: that is a word of tracked memory, which
+# a restore puts back and the image's HUD passes rewrite after the steps, and the core clears it once a frame, before
+# the steps, for viewport 0 only.
+MAP_PASS = 0x490
 DRAW = (0x37C18, 0x3CC4, 0x37C1C, 0x37E48)               # the draw half: its first call, the epilogue
 SOUND = 0x727C                                           # the machine sound update
 DEPTH = (0x554, 0x9E1D0)                                 # the main loop's depth read-back
@@ -48,8 +61,8 @@ def add(k, r, patch, stock, middle, draw_next=None):
     routine of another site at 0x37C18 that a frame that draws goes on to in place of the stock call (sites_hfr.py's
     `hfr`, which makes the call itself and comes back after the site)."""
     TEXT, C, branch = k.TEXT, k.C, k.branch
-    MODE, ASK, SKIP = (memmap.MODE - memmap.CONTROL, memmap.DRAW_ASK - memmap.CONTROL,
-                       memmap.DRAW_SKIP - memmap.CONTROL)
+    MODE, ASK, SKIP, PLAIN = (memmap.MODE - memmap.CONTROL, memmap.DRAW_ASK - memmap.CONTROL,
+                              memmap.DRAW_SKIP - memmap.CONTROL, memmap.PLAIN_DRAW - memmap.CONTROL)
 
     def head(name, ask=None):
         """r12 the control block; to `name`_stock in a plain start; DRAW_ASK stored; cr0 eq when not skipping."""
@@ -71,13 +84,25 @@ def add(k, r, patch, stock, middle, draw_next=None):
 
     at, target, back, epilogue = (TEXT + x for x in DRAW)
     drawn = f"    @b {draw_next}\n" if draw_next else f"    @bl {target:#x}\n    @b {back:#x}\n"
-    site(at, target, "present_draw", head("present_draw", 1) + f"""    @bl {TEXT + SOUND:#x}
+    # a plain start goes to present_draw_plain: with the host's PLAIN_DRAW set (offline play at high refresh) it stores
+    # DRAW_ASK = 1 and never skips; else the stock call
+    site(at, target, "present_draw", head("present_draw", 1).replace(
+        "    beq present_draw_stock\n", "    beq present_draw_plain\n", 1) + f"""    @bl {TEXT + SOUND:#x}
     @b {epilogue:#x}
+present_draw_plain:
+    lwz 11, {PLAIN}(12)
+    cmpwi 11, 0
+    beq present_draw_stock
+    li 11, 1
+    stw 11, {ASK}(12)
 present_draw_stock:
 """ + drawn)
     for offset, call, resume, name in TAIL:
         at = TEXT + offset
-        site(at, TEXT + call, name, head(name) + f"""    @b {TEXT + resume:#x}
+        # the overlay pass: in a race never, drawing or skipping (MAP_PASS)
+        skip = f"    lis 12, {C}\n    lwz 11, {MODE}(12)\n    cmpwi 11, 0\n    beq {name}_stock\n" \
+            if offset == MAP_PASS else head(name)
+        site(at, TEXT + call, name, skip + f"""    @b {TEXT + resume:#x}
 {name}_stock:
     @bl {TEXT + call:#x}
     @b {at + 4:#x}
@@ -98,6 +123,13 @@ present_depth_asked:
     @b {at + 4:#x}
 present_depth_stock:
     @bl {target:#x}
+    lis 12, {C}
+    lwz 11, {PLAIN}(12)
+    cmpwi 11, 0
+    beq present_depth_plain
+    li 11, 2
+    stw 11, {ASK}(12)
+present_depth_plain:
     @b {at + 4:#x}
 """)
     at, target = COPY

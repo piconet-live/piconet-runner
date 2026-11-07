@@ -10,17 +10,24 @@
 #include <thread>
 #include <unistd.h>
 
+// test_alerts.cpp
+void TestAlerts();
 // test_hfr.cpp
 void TestTheRefreshesBetweenTwoSteps();
+void TestTheClassicHudMoves();
 void TestTheBlendOfAPoseAndAView();
 void TestTheCorrections();
 void TestAPassOfPicturesBetween();
 void TestTheGuessesForward();
+// test_runahead.cpp
+void TestHighRefreshWithNoStepAhead();
+void TestHighRefreshInAPlainStart();
 // test_guest.cpp
 void TestGuestMemory();
 void TestHelpers();
 // test_rollback.cpp
 void TestUndoLog();
+void TestOneLogsJumpByAKey();
 void TestThePageGuard();
 void TestThePageGuardBesideTheEmulatorsHandler();
 void TestThePageGuardWhenItsMemoryIsGone();
@@ -29,6 +36,18 @@ void TestTheLockedCacheInTheUndoLog();
 void TestTheRollbackInterface();
 void TestChecksum();
 void TestTheSpareListsAreBounded();
+void TestTheWorkersTakeOver();
+void TestTheSecondWorkersBase();
+void TestTheWorkersBaseTaken();
+void TestTheWorkersBaseHeld();
+void TestRollbackMomentsPerLog();
+void TestTheWorkersDefault();
+void TestTheWorkersLogStartsWithTheRace();
+void TestTheKeptWordsTable();
+void TestTheWorkersGuards();
+void TestTheWorkersPace();
+void TestTheSecondWorkersEstimate();
+void TestTheWorkersPair();
 void TestARollbackLeavesTheWindow();
 // test_rollback_state.cpp
 void TestRollbacksStateList();
@@ -52,6 +71,7 @@ void TestTheStatusBoardOfAPlainStart();
 void TestABoardThatIsNotThisVersionsIsLeft();
 void TestTheRaceOnTheBoard();
 void TestTheCameraViewOnTheBoard();
+void TestTheLocalPadOnTheBoard();
 void TestTheSessionsPhasesOnTheBoard();
 void TestARelayThatNamesSeatsAndFramesOfNoRace();
 void TestAPacketWithoutTheSeatsKeyIsNotTheRelays();
@@ -69,6 +89,7 @@ void TestAGameAheadOfItsScheduleFallsBack();
 void TestASlowHostSendsItsInputsInTime();
 void TestTheScheduleAtALowerDelay();
 void TestARaceLeavesItsSummaryLine();
+void TestTheSummaryCountsBursts();
 void TestTheSummarysEndsAndItsFile();
 void TestTheHostsPicturesReachTheSummaryLine();
 void TestASummaryThatFailsCostsNoReplay();
@@ -78,6 +99,7 @@ void TestAGameThatStandsStillIsReported();
 void TestAStopWhileTheGameStands();
 void TestTheSummaryLineSaysAFreeze();
 // test_panel.cpp
+void TestTheRaceScene();
 void TestWhatThePanelShows();
 void TestThePanelHeldToTheRace();
 void TestThePanelHeldUntilLive();
@@ -148,6 +170,7 @@ void TestSavesDamagedAtRandom();
 void TestALaunchFile();
 void TestALaunchFileThatIsRefused();
 void TestThePartialRollbackKeys();
+void TestTheRollbackWorkerKeys();
 void TestALaunchFilesTaskbarButton();
 void TestALaunchFileOfTheEmulatorsSide();
 void TestTheWindowsControlsAndTheUsersSettings();
@@ -156,6 +179,7 @@ void TestTheNamedLaunchFiles();
 // test_present.cpp
 void TestALateFramesDrawingIsSkipped();
 void TestALaunchFileOfTheLaunchers();  // test_launch_vectors.cpp
+void TestTheModPackOverlay();  // test_mod_files.cpp
 void TestTheLaunchFilesPlayersKeys();  // test_launch_latency.cpp: presentation, delay, lanes, true widescreen
 void TestTheWindowsKeptPlace();
 void TestThePicturesWaitForAConsolesMoment();
@@ -173,6 +197,46 @@ void TestTheStartGrid();
 // test_out_test.cpp
 void TestTheOutTestsCases();
 void TestTheOutTestReadsTheGame();
+void TestTheModeVectorsRead();
+void TestTheBoardsLinesAndValues();
+void TestPracticeIsAMode();
+void TestAnUnknownModeFieldPassesThrough();
+void TestAGonePlayerRetires();
+void TestTheModeTagWords();
+void TestTheModeTimeGaps();
+void TestTheCutRaceWords();
+void TestFinishSeat();
+void TestTheStatWords();
+void TestAVecIsBuilt();
+void TestAFaultShowsOnTheResults();
+void TestTheHeldWords();
+void TestThePedalLatch();
+void TestTheStatsPage();
+void TestTheEnergyWords();
+void TestTheCombatWords();
+void TestTheOnOffWordsByParameter();
+void TestASquareRootsCostInBothLoops();
+void TestSoloModesAndTheRelay();
+void TestDestroyedAndOutTellAnEndApart();
+void TestOverdriveRunsInTheBlock();
+void TestEveryWordRuns();
+void TestTheGamesSquareRootIsTheCompilers();
+void TestTheGeneratorIsTheReferences();
+void TestWaitsRunInTheBlock();
+void TestTheLanguageVectorRuns();
+void TestGameStartComesFirst();
+void TestTheRaceWordsRun();
+void TestStartGapZeroKeepsEveryPairApart();
+void TestTheKnockoutEndsWithItsPlaces();
+void TestARaceThatWaitsRanksTheOut();
+void TestTheLivesLibraryRuns();
+void TestCpuModeEighteen();
+void TestTheDisplayWordsRun();
+void TestTheCleanPicture();
+void TestTheGameShadowWithRays();
+void TestTheGhostWords();
+void TestThePreparedInterpreterIsThePlainOne();
+void TestTheLobbysRestoreStaysOut();
 // test_stats_race.cpp
 void TestAStatPackIsLaidOverTheCarData();
 void TestAStatPackUnderRollback();
@@ -277,6 +341,7 @@ static int SaveOptionsOf(const char* folder)
 void TestTheUndoLogAndItsGuard()
 {
   TestUndoLog();
+  TestOneLogsJumpByAKey();
   TestThePageGuard();
   TestThePageGuardBesideTheEmulatorsHandler();
   TestThePageGuardWhenItsMemoryIsGone();
@@ -291,6 +356,7 @@ void TestThePanelBeforeARace()
   TestThePanelsLines();
   TestThePanelFromAStartToTheCourse();
   TestThePanelAtTheStartGate();
+  TestTheRaceScene();
 }
 
 // The hits and lunges a rollback reveals (test_hits.cpp): each shown once, never what a frame already showed.
@@ -319,6 +385,7 @@ void TestARaceAgainstARelay()
   TestABoardThatIsNotThisVersionsIsLeft();
   TestTheRaceOnTheBoard();
   TestTheCameraViewOnTheBoard();
+  TestTheLocalPadOnTheBoard();
   TestTheSessionsPhasesOnTheBoard();
   TestARelayThatNamesSeatsAndFramesOfNoRace();
   TestAPacketWithoutTheSeatsKeyIsNotTheRelays();
@@ -391,10 +458,13 @@ void TestStatPacks()
 void TestTheHighRefreshRate()
 {
   TestTheRefreshesBetweenTwoSteps();
+  TestTheClassicHudMoves();
   TestTheBlendOfAPoseAndAView();
   TestTheCorrections();
   TestAPassOfPicturesBetween();
   TestTheGuessesForward();
+  TestHighRefreshWithNoStepAhead();
+  TestHighRefreshInAPlainStart();
 }
 
 // When a picture is shown (test_place.cpp's, test_screen.cpp's) and the pictures between two steps (test_hfr.cpp's)
@@ -419,6 +489,7 @@ int main(int argc, char** argv)
     return SaveOptionsOf(argv[2]);
   TestGuestMemory();
   TestHelpers();
+  TestAlerts();
   TestTheUndoLogAndItsGuard();
   TestAnotherThreadsWriteUnderRollback();
   TestTheLockedCacheInTheUndoLog();
@@ -427,6 +498,18 @@ int main(int argc, char** argv)
   TestARollbackLeavesTheWindow();   // before any Init: the core's log then has no host to go to
   TestChecksum();
   TestTheSpareListsAreBounded();
+  TestTheWorkersTakeOver();
+  TestTheSecondWorkersBase();
+  TestTheWorkersBaseTaken();
+  TestTheWorkersBaseHeld();
+  TestRollbackMomentsPerLog();
+  TestTheWorkersDefault();
+  TestTheWorkersLogStartsWithTheRace();
+  TestTheKeptWordsTable();
+  TestTheWorkersGuards();
+  TestTheWorkersPace();
+  TestTheSecondWorkersEstimate();
+  TestTheWorkersPair();
   TestRaceFromAMatchFile();
   TestAReplaysLineup();
   TestAReplayThatIsNotPlayed();
@@ -442,6 +525,7 @@ int main(int argc, char** argv)
   TestASlowHostSendsItsInputsInTime();
   TestTheScheduleAtALowerDelay();
   TestARaceLeavesItsSummaryLine();
+  TestTheSummaryCountsBursts();
   TestTheSummarysEndsAndItsFile();
   TestTheHostsPicturesReachTheSummaryLine();
   TestASummaryThatFailsCostsNoReplay();
@@ -478,12 +562,14 @@ int main(int argc, char** argv)
   TestALaunchFile();
   TestALaunchFileThatIsRefused();
   TestThePartialRollbackKeys();
+  TestTheRollbackWorkerKeys();
   TestALaunchFilesTaskbarButton();
   TestALaunchFileOfTheEmulatorsSide();
   TestTheWindowsControlsAndTheUsersSettings();
   TestARunnerOptionALaunchFileMustAllow();
   TestTheNamedLaunchFiles();
   TestALaunchFileOfTheLaunchers();
+  TestTheModPackOverlay();
   TestTheLaunchFilesPlayersKeys();
   TestTheWindowsKeptPlace();
   TestThePictures();
@@ -499,6 +585,46 @@ int main(int argc, char** argv)
   TestStatPacks();
   TestTheOutTestsCases();
   TestTheOutTestReadsTheGame();
+  TestTheModeVectorsRead();
+  TestTheBoardsLinesAndValues();
+  TestPracticeIsAMode();
+  TestAnUnknownModeFieldPassesThrough();
+  TestAGonePlayerRetires();
+  TestTheModeTagWords();
+  TestTheModeTimeGaps();
+  TestTheCutRaceWords();
+  TestFinishSeat();
+  TestTheStatWords();
+  TestAVecIsBuilt();
+  TestAFaultShowsOnTheResults();
+  TestTheHeldWords();
+  TestThePedalLatch();
+  TestTheStatsPage();
+  TestTheEnergyWords();
+  TestTheCombatWords();
+  TestTheOnOffWordsByParameter();
+  TestASquareRootsCostInBothLoops();
+  TestSoloModesAndTheRelay();
+  TestDestroyedAndOutTellAnEndApart();
+  TestOverdriveRunsInTheBlock();
+  TestEveryWordRuns();
+  TestTheGamesSquareRootIsTheCompilers();
+  TestTheGeneratorIsTheReferences();
+  TestWaitsRunInTheBlock();
+  TestTheLanguageVectorRuns();
+  TestGameStartComesFirst();
+  TestTheRaceWordsRun();
+  TestStartGapZeroKeepsEveryPairApart();
+  TestTheKnockoutEndsWithItsPlaces();
+  TestARaceThatWaitsRanksTheOut();
+  TestTheLobbysRestoreStaysOut();
+  TestTheLivesLibraryRuns();
+  TestCpuModeEighteen();
+  TestTheDisplayWordsRun();
+  TestTheCleanPicture();
+  TestTheGameShadowWithRays();
+  TestTheGhostWords();
+  TestThePreparedInterpreterIsThePlainOne();
   std::printf("%d checks, %d failed\n", s_checks, s_failed);
   return s_failed == 0 ? 0 : 1;
 }

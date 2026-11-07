@@ -172,12 +172,14 @@ struct StateList
       Wrong(row, "the checksum covers it and the undo log does not put it back");
     // rules 5 and 6: who writes it, and what a once-a-frame writer's state needs
     const Writers writers = ReadTheWriters(row.writer);
-    if (!writers.ok || !OneOf(row.fix, {"-", "settled", "into-step", "rng-guard", "untrack", "open"}))
+    if (!writers.ok || !OneOf(row.fix, {"-", "settled", "into-step", "done", "rng-guard", "untrack", "open"}))
       Wrong(row, "a writer or a fix the list does not have");
     if (writers.once_a_frame && (row.step == "yes" || row.restored == "yes") && row.fix == "-")
       Wrong(row, "written once a frame and read by a step or put back by the undo log, with no fix");
-    if (row.fix != "-" && !writers.once_a_frame)
+    if (row.fix != "-" && row.fix != "done" && !writers.once_a_frame)
       Wrong(row, "a fix for a row no once-a-frame code writes");
+    if (row.fix == "done" && writers.once_a_frame)
+      Wrong(row, "done, and once-a-frame code still writes it");
     if (row.fix == "untrack" && !OneOf(row.step, {"no", "writes"}))
       Wrong(row, "to be left out of the undo log, and a step may read it");
     if (row.fix == "rng-guard" && row.step != "yes")

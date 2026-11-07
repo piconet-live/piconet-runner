@@ -49,6 +49,7 @@ class Parts(unittest.TestCase):
         # this checkout: the commit the runner is built from, then a later one checked out
         write(self.at("repo", FORKS, "README.md"), "as the runner was built\n")
         write(self.at("repo", *IMAGE.split("/"), "same-race.json"), '{"version": 1, "rows": [], "released": []}\n')
+        write(self.at("repo", "port", "moderngekko", "art", "inputs", "LICENSE.txt"), "MIT License\n\nCopyright (c) 2020 Bkacjios\n")
         self.runner_commit = self.commit("repo", "the runner's commit")
         write(self.at("repo", FORKS, "README.md"), "changed after the runner was built\n")
         self.runner_head = self.commit("repo", "a later commit of the runner's")
@@ -65,6 +66,11 @@ class Parts(unittest.TestCase):
             "bundle": {n: sha1(read(self.at("parts", "bundle", n))) for n in ("mod.bin", "patches.json", "manifest.json")}}))
         write(self.at("parts", "runner", "moderngekko-run.exe"), b"MZ the runner")
         self.manifest("parts/runner/build-manifest.json", self.built("runner", "moderngekko-run.exe"))
+        # Aurora beside the runner, as its build keeps it: the library, what it loads, its pipeline seed (and a map that stays out)
+        for name in ("aurora-present.dll", "webgpu_dawn.dll", "SDL3.dll"):
+            write(self.at("parts", "aurora", name), b"MZ " + name.encode())
+        write(self.at("parts", "aurora", "initial_pipeline_cache.db"), b"SQLite format 3\x00 the seed")
+        write(self.at("parts", "aurora", "moderngekko-run.map"), b"a map")
         for name in ("msvcp140.dll", "msvcp140_atomic_wait.dll", "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll"):
             write(self.at("parts", "vcrt", name), b"MZ " + name.encode())
         for name in ("SairaCondensed-ExtraBold.ttf", "SairaCondensed-SemiBold.ttf", "SairaSemiCondensed-Regular.ttf", "OFL.txt", "Another.ttf"):
@@ -112,7 +118,7 @@ class Parts(unittest.TestCase):
              "runner": self.at("parts", "runner", "moderngekko-run.exe"), "runner-commit": self.runner_commit[:8],
              "module": self.at("parts", "module", "gGFZE01_recomp.dll"), "bundle": self.at("parts", "bundle"),
              "sys": self.at("parts", "Sys"), "sys-source": self.at("emulator"), "vcrt": self.at("parts", "vcrt"),
-             "fonts": self.at("parts", "fonts"),
+             "fonts": self.at("parts", "fonts"), "aurora": self.at("parts", "aurora"),
              "launcher": self.at("launcher"), "program": self.at("program.exe"), "program-name": "Testnet Launcher",
              "program-folder": "app", "marker": "portable-copy.txt",
              "identity-without": "windows",          # these parts are made up on a PC with no Windows side asked (the PATH above)
@@ -148,8 +154,10 @@ class ACopy(Parts):
             "recomp/fzgx/mod.bin", "recomp/fzgx/manifest.json", "recomp/fzgx/patches.json", "recomp/fzgx/same-race.json",
             "recomp/Sys/GameSettings/GFZ.ini", "recomp/Sys/Themes/Clean/icon.png",
             "recomp/MSVCP140.dll", "recomp/MSVCP140_ATOMIC_WAIT.dll", "recomp/VCRUNTIME140.dll", "recomp/VCRUNTIME140_1.dll",
+            "recomp/aurora-present.dll", "recomp/webgpu_dawn.dll", "recomp/SDL3.dll", "recomp/initial_pipeline_cache.db",   # Aurora, with its seed
             "recomp/Fonts/SairaCondensed-ExtraBold.ttf", "recomp/Fonts/SairaCondensed-SemiBold.ttf",       # the strip's three,
             "recomp/Fonts/SairaSemiCondensed-Regular.ttf", "recomp/Fonts/OFL.txt",                    # and their licence
+            "recomp/m-overlay-LICENSE.txt",                                                           # the inputs art's
             "source/runner-build-manifest.json", "source/module-build-manifest.json", "source/package-manifest.json"]))
         copy = lambda *names: read(self.at("work", "dist", self.name, *names))
         # the source: the read-me points to the public repositories at the release's tag; the record names each tree
@@ -158,6 +166,7 @@ class ACopy(Parts):
         self.assertEqual(record["parts"]["source"], {"runner_commit": self.runner_commit,
                                                      "trees": {"recompcore": {"commit": self.emulator, "tree": "e" * 40}}})
         self.assertEqual(copy("recomp", "MSVCP140.dll"), b"MZ msvcp140.dll")
+        self.assertIn(b"Copyright (c) 2020 Bkacjios", copy("recomp", "m-overlay-LICENSE.txt"))
         self.assertIn(f"package: {self.name}: ", done.stdout)
         self.assertIn("the server's address is the launcher's built-in one", done.stdout)
 
@@ -249,8 +258,8 @@ class ACopy(Parts):
             self.assertEqual(json.load(f)["stack"], {"name": "T1", "server_address": "wss://t1.example/ws", "kind": "test"})
 
     def test_a_launcher_that_was_not_made_for_the_copys_stack_is_refused(self):
-        """A copy named for stack B whose launcher was published without the stack's properties plays on the first
-        server under B's name; one stamped as a test build must not go out as the public one."""
+        """A copy named for a stack whose launcher was published without the stack's properties plays on the first
+        server under that name; one stamped as a test build must not go out as the public one."""
         for stamped, why in (({"stack": None, "address": None, "kind": None}, "its ServerStack, StackServer, StackKind say otherwise, or nothing"),
                              ({"stack": "T2"}, "its ServerStack says otherwise, or nothing"),
                              ({"address": "wss://t1.example/ws2"}, "its StackServer says otherwise, or nothing"),
@@ -426,6 +435,24 @@ class PartsThatBelongTogether(Parts):
         os.remove(self.at("parts", "vcrt", "vcruntime140_1.dll"))
         self.refused("the VC runtime's VCRUNTIME140_1.dll is not there", self.at("parts", "vcrt", "VCRUNTIME140_1.dll"))
 
+
+    def test_aurora_without_its_pipeline_seed(self):
+        os.remove(self.at("parts", "aurora", "initial_pipeline_cache.db"))
+        self.refused("Aurora's initial_pipeline_cache.db is not there", self.at("parts", "aurora", "initial_pipeline_cache.db"))
+
+    def test_aurora_without_its_library(self):
+        os.remove(self.at("parts", "aurora", "aurora-present.dll"))
+        self.refused("Aurora's aurora-present.dll is not there", self.at("parts", "aurora", "aurora-present.dll"))
+
+    def test_a_seed_that_is_no_sqlite_file(self):
+        write(self.at("parts", "aurora", "initial_pipeline_cache.db"), b"not a database")
+        self.refused("Aurora's pipeline seed is no SQLite file", self.at("parts", "aurora", "initial_pipeline_cache.db"))
+
+    def test_the_inputs_arts_licence_that_is_missing(self):
+        notice = self.at("repo", "port", "moderngekko", "art", "inputs", "LICENSE.txt")
+        os.remove(notice)
+        self.commit("repo", "the notice gone")
+        self.refused("m-overlay's licence is not there", notice)
 
     def test_a_font_of_the_game_windows_strip_that_is_missing(self):
         os.remove(self.at("parts", "fonts", "OFL.txt"))

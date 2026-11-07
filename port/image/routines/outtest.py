@@ -7,6 +7,11 @@ it says out of the race for good (fn_1_32200). fn_1_32600, read instruction by i
 - a finished machine (flag 0x10000) is never asked: it races on;
 - with the Restore rule (.bss 0x3C30, the rule word, bit 0x8000) none of the tests below is made: every wreck, fall
   and breakdown is put back about 160 steps later, and the machine is never out for them;
+- a machine with flag 0x1 (Restore on its own: a game mode's `respawns`, the game's story chapter 8) is treated
+  as under the Restore rule: none of the tests below. The game's verdict asks the rule bit alone; the image's site
+  at fn_1_32600 0x32628 (sites_mode.py `respawns`) makes it ask the rule bit or the flag, so the two agree. Flag
+  0x1 on an unfinished machine occurs only under the rule (which already exempts it) or by a mode, so no
+  recording made before needs a gate;
 - else out with flag 0x08000000 (retired), 0x800 (out of the course: destroyed, out of bounds or off the course), +0x58C bit 0x10 (out of contact: a fall), or flag 0x80
   (broken down: energy out) with flag 0x200, or race type 5 (.bss 0x3C35), or the speed +0x17C below 1.0 (.rodata
   0xBE4; fcmpo and bge: a speed that is not a number is not below). A breakdown alone coasts on with its controls
@@ -40,6 +45,7 @@ RETIRED, OUT = memmap.MACHINE_FLAG_RETIRED, memmap.MACHINE_FLAG_OUT
 BROKEN_DOWN, CPU = memmap.MACHINE_FLAG_BROKEN_DOWN, memmap.MACHINE_FLAG_CPU
 FALLEN = memmap.MACHINE_FLAGS2_FALLEN  # +0x58C
 RESTORE = 0x8000                      # the rule word's bit
+RESPAWNS = memmap.MACHINE_FLAG_RESTORE  # a machine's own Restore (flag 0x1)
 ONE = 0x3F800000                      # 1.0, .rodata 0xBE4
 
 
@@ -52,6 +58,8 @@ def clause(m, bss, t0, t1, out, racing):
     bne {out}
     lwz {t1}, 0x3C30({bss})
     andi. {t1}, {t1}, {RESTORE}
+    bne {racing}
+    andi. {t1}, {t0}, {RESPAWNS}
     bne {racing}
     andis. {t1}, {t0}, {RETIRED >> 16}
     bne {out}
@@ -87,7 +95,7 @@ def out(flags, fallen=0, speed=0.0, rules=0, race_type=6):
         return False
     if flags & TIME_OVER:
         return True
-    if rules & RESTORE:
+    if rules & RESTORE or flags & RESPAWNS:
         return False
     if flags & (RETIRED | OUT) or fallen & FALLEN:
         return True

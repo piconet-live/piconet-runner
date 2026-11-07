@@ -38,7 +38,8 @@ class TheCamerasWords(Build):
     def test_a_machine_without_a_slot_reads_the_one_screens_record(self):
         # fn_1_725C, fn_1_6EC0 and fn_1_681C: `clrlwi r0, r3, 0x18`, then record r0. With slot 0xFF they read
         # 0x1FA04 bytes past the four records. In a race or a replay the index is 0 whenever it is not one of the four
-        for offset in build.CAMERA_INDEXES:
+        # (the view, fn_1_725C, has its own: test_a_machine_without_a_slot_is_in_no_first_person_view)
+        for offset in build.CAMERA_INDEXES[1:]:
             name = f"camera_index_{offset:x}"
             self.assertEqual(int(self.patches[TEXT + offset]["original"], 16), build.CAMERA_INDEX_WORD)
             for mode in (1, 2):
@@ -48,6 +49,22 @@ class TheCamerasWords(Build):
                     self.assertLess(m.r[0] * RECORD, 4 * RECORD)
             left, m = self.leave(name, 0, r3=0xFF)                   # a plain start: the game's own instruction
             self.assertEqual((left, m.r[0]), ([TEXT + offset + 4], 0xFF))
+
+    def test_a_machine_without_a_slot_is_in_no_first_person_view(self):
+        # fn_1_725C: `clrlwi r0, r3, 0x18`; a slot of the four goes on to the record, as the game does. Any other slot
+        # returns 1 at once: its callers ask only "view 0?" of the machine (and the one that asks "view 1?", fn_1_86A2C,
+        # has compared the slot with the viewport's first)
+        offset = build.CAMERA_INDEXES[0]
+        self.assertEqual(int(self.patches[TEXT + offset]["original"], 16), build.CAMERA_INDEX_WORD)
+        for mode in (1, 2):
+            for slot, index in ((0, 0), (1, 1), (2, 2), (3, 3)):
+                left, m = self.leave("camera_view", mode, r3=slot)
+                self.assertEqual((left, m.r[0], m.r[3], m.written), ([TEXT + offset + 4], index, slot, set()), slot)
+            for slot in (0xFF, 0xFFFFFFFF, 4, 0x80):
+                left, m = self.leave("camera_view", mode, r3=slot)
+                self.assertEqual((left, m.r[3], m.written), ([], 1, set()), slot)
+        left, m = self.leave("camera_view", 0, r3=0xFF)              # a plain start: the game's own instruction
+        self.assertEqual((left, m.r[0]), ([TEXT + offset + 4], 0xFF))
 
 
 if __name__ == "__main__":

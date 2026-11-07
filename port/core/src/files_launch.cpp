@@ -26,6 +26,7 @@ using launch::Part;
 using launch::ReadEmulatorSide;
 using launch::ReadLanesOff;
 using launch::ReadPartialKeys;
+using launch::ReadWorkerKeys;
 using launch::ReadRedraw;
 using launch::ReadStandStill;
 using launch::RefuseRemovedKeys;
@@ -112,6 +113,7 @@ void ReadDebug(Part& file, Debug* d, std::string* problem)
   }
   ReadStandStill(p, d, problem);
   ReadPartialKeys(p, d, problem);
+  ReadWorkerKeys(p, d, problem);
   ReadEmulatorSide(p, d);
   p.Done();
 }
@@ -201,6 +203,30 @@ void ReadTaskbar(Part& file, TaskbarGroup* out, std::string* problem)
   *out = std::move(group);
 }
 
+// "overlay": a mod pack's files over the disc's, a list of {"disc", "from"}, both needed. Taken as the file gives them:
+// which of them the runner takes is mod_files::Choose's at boot (fzgx/mod_files.h), which refuses an entry by a log line
+// and starts all the same. Only a list that is no list of such objects is refused here, as any key of the wrong kind.
+void ReadOverlay(Part& file, std::vector<OverlayFile>* out, std::string* problem)
+{
+  const picojson::value* v = file.Take("overlay");
+  if (!v)
+    return;
+  if (!v->is<picojson::array>())
+    return file.Refuse("overlay", "is not a list of {\"disc\", \"from\"}");
+  const picojson::array& list = v->get<picojson::array>();
+  for (std::size_t i = 0; i < list.size(); ++i)
+  {
+    const std::string at = "overlay[" + std::to_string(i) + "]";
+    if (!list[i].is<picojson::object>())
+      return file.Refuse(at, "is not an object {\"disc\", \"from\"}");
+    Part p(list[i].get<picojson::object>(), file.Under(at.c_str()), problem);
+    OverlayFile entry;
+    launch_file::ReadOverlayEntry(p, &entry);
+    p.Done();
+    out->push_back(std::move(entry));
+  }
+}
+
 // "replay": a replay's playback. `scrubber_named`: the file says whether the scrubber is on.
 void ReadPlayback(Part& file, Options* o, std::string* problem, bool* scrubber_named)
 {
@@ -242,6 +268,7 @@ std::optional<std::string> ParseLaunchFile(const std::string& text, Options* out
   ReadRace(file, &o, &problem);
   bool scrubber_named = false;
   ReadPlayback(file, &o, &problem, &scrubber_named);
+  ReadOverlay(file, &o.overlay, &problem);
   ReadDebug(file, &o.debug, &problem);
   file.Done();
   // the scrubber runs a playback's race its own way: a test of the rollback path (forced rollbacks, late inputs)

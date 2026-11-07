@@ -93,6 +93,47 @@ void ReadPartialKeys(Part& p, Debug* d, std::string* problem)
     p.Refuse("partialRollback", "needs \"mode\" (\"off\", \"check\" or \"writes\") or \"log\"");
 }
 
+// "debug.rollbackWorker": the deep-rollback worker's S1 (fzgx/rollback_worker.h): a mode alone or {"mode", "depth"}.
+void ReadWorkerKeys(Part& p, Debug* d, std::string* problem)
+{
+  const picojson::value* v = p.Take("rollbackWorker");
+  if (!v)
+    return;
+  const auto mode = [&](const std::string& m) {
+    if (m == "off" || m == "compare" || m == "check" || m == "sync" || m == "on" || m == "async-check")
+      d->worker_mode = m;
+    else
+      p.Refuse("rollbackWorker", "is not \"off\", \"compare\", \"check\", \"sync\", \"on\", \"async-check\" or an object with one of them as \"mode\"");
+  };
+  if (v->is<std::string>())
+    return mode(v->get<std::string>());
+  if (!v->is<picojson::object>())
+    return p.Refuse("rollbackWorker", "is not \"off\", \"compare\", \"check\" or an object");
+  Part f(v->get<picojson::object>(), p.Under("rollbackWorker"), problem);
+  std::string m;
+  f.OneOf("mode", &m, {"off", "compare", "check", "sync", "on", "async-check"});
+  f.OneOf("rule", &d->worker_rule, {"fit", "always"});
+  f.Whole("depth", &d->worker_depth, 1, 24);
+  f.Whole("restarts", &d->worker_restarts, 0, 30);
+  f.Whole("perturb", &d->worker_perturb, 0, 1000);
+  f.Whole("catchUp", &d->worker_catch_up, 8, 256);
+  f.Whole("slowStepUs", &d->worker_slow_us, 0, 100000);
+  f.Whole("delayUs", &d->worker_delay_us, 0, 50000);
+  f.Whole("delayFrom", &d->worker_delay_from, 0, 1000000);
+  f.Whole("delayTo", &d->worker_delay_to, 0, 1000000);
+  f.Whole("spikeAt", &d->worker_spike_at, 0, 1000000);
+  f.Whole("spikeUs", &d->worker_spike_us, 0, 1000000);
+  f.Whole("spikeSlot", &d->worker_spike_slot, 0, 1);
+  f.Whole("from", &d->worker_from, 0, 100000);
+  f.Whole("workers", &d->worker_workers, 1, 2);
+  f.OneOf("start", &d->worker_start, {"changed", "whole"});
+  f.Words("watch", &d->worker_watch);
+  f.Done();
+  if (m.empty())
+    return p.Refuse("rollbackWorker", "needs \"mode\" (\"off\", \"compare\" or \"check\")");
+  mode(m);
+}
+
 // "debug.standStill": the freeze on purpose (fzgx::Debug says what it does).
 void ReadStandStill(Part& p, Debug* d, std::string* problem)
 {
@@ -150,6 +191,8 @@ constexpr EmulatorKey EMULATOR_KEYS[] = {
     {"lockstepWhitelist", "STATICRECOMP_LOCKSTEP_WHITELIST", nullptr, "0123456789abcdefABCDEFx,-: "},
     // files, and time lost writing them
     {"probe", "FZGX_PROBE"},
+    {"modeTrace", "FZGX_MODE_TRACE"},   // the game mode's events, actions and the seats' state (mode.cpp)
+    {"modeTraceEvery", "FZGX_MODE_TRACE_EVERY", nullptr, "0123456789"},
     {"probeNoHash", "FZGX_PROBE_HASH", "0"},
     {"paceLog", "FZGX_PACE_LOG"},
     {"taskTimers", "FZGX_TASKPROF", "1"},
@@ -161,6 +204,7 @@ constexpr EmulatorKey EMULATOR_KEYS[] = {
     {"sampleTasks", "FZGX_SAMPLE_TASKS", "1"},
     {"samplePhysics", "FZGX_SAMPLE_PHYSICS", "1"},
     {"census", "FZGX_CENSUS", "1"},
+    {"stepCensus", "FZGX_STEP_CENSUS"},  // the deep-rollback probe's files (moderngekko/src/lanes_census.h)
     {"accessTrace", "FZGX_TRACE", "1"},
     {"accessTraceNoInterrupts", "FZGX_TRACE", "noirq"},
     {"noSlowLog", "FZGX_SLOW_LOG", "0"},

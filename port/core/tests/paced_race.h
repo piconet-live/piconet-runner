@@ -28,6 +28,8 @@ struct Pace
   bool record = false;        // the race is recorded (Raced::results: the recording's results, if it holds any)
   u32 delay = 2;              // this game's input delay in steps (the player's setting: 0, 1 or 2)
   u32 other_changes_every = 7;  // the other seat's input changes every so many steps (1: every prediction is wrong)
+  // From frame together_from to together_to the game is told of the frames closed only rows_together at a time: a burst.
+  u32 rows_together = 0, together_from = 0, together_to = 0;
   u32 relay_back_steps = 0;   // an official frame reaches the game this many steps after the relay closed it (the
                               // way back of a round trip: the game's rollbacks are as much deeper)
   // The host hands a picture to the screen in every displayed frame of the race, this many microseconds after the
