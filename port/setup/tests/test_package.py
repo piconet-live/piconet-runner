@@ -49,7 +49,6 @@ class Parts(unittest.TestCase):
         # this checkout: the commit the runner is built from, then a later one checked out
         write(self.at("repo", FORKS, "README.md"), "as the runner was built\n")
         write(self.at("repo", *IMAGE.split("/"), "same-race.json"), '{"version": 1, "rows": [], "released": []}\n')
-        write(self.at("repo", "port", "moderngekko", "art", "inputs", "LICENSE.txt"), "MIT License\n\nCopyright (c) 2020 Bkacjios\n")
         self.runner_commit = self.commit("repo", "the runner's commit")
         write(self.at("repo", FORKS, "README.md"), "changed after the runner was built\n")
         self.runner_head = self.commit("repo", "a later commit of the runner's")
@@ -157,7 +156,6 @@ class ACopy(Parts):
             "recomp/aurora-present.dll", "recomp/webgpu_dawn.dll", "recomp/SDL3.dll", "recomp/initial_pipeline_cache.db",   # Aurora, with its seed
             "recomp/Fonts/SairaCondensed-ExtraBold.ttf", "recomp/Fonts/SairaCondensed-SemiBold.ttf",       # the strip's three,
             "recomp/Fonts/SairaSemiCondensed-Regular.ttf", "recomp/Fonts/OFL.txt",                    # and their licence
-            "recomp/m-overlay-LICENSE.txt",                                                           # the inputs art's
             "source/runner-build-manifest.json", "source/module-build-manifest.json", "source/package-manifest.json"]))
         copy = lambda *names: read(self.at("work", "dist", self.name, *names))
         # the source: the read-me points to the public repositories at the release's tag; the record names each tree
@@ -166,7 +164,6 @@ class ACopy(Parts):
         self.assertEqual(record["parts"]["source"], {"runner_commit": self.runner_commit,
                                                      "trees": {"recompcore": {"commit": self.emulator, "tree": "e" * 40}}})
         self.assertEqual(copy("recomp", "MSVCP140.dll"), b"MZ msvcp140.dll")
-        self.assertIn(b"Copyright (c) 2020 Bkacjios", copy("recomp", "m-overlay-LICENSE.txt"))
         self.assertIn(f"package: {self.name}: ", done.stdout)
         self.assertIn("the server's address is the launcher's built-in one", done.stdout)
 
@@ -447,12 +444,6 @@ class PartsThatBelongTogether(Parts):
     def test_a_seed_that_is_no_sqlite_file(self):
         write(self.at("parts", "aurora", "initial_pipeline_cache.db"), b"not a database")
         self.refused("Aurora's pipeline seed is no SQLite file", self.at("parts", "aurora", "initial_pipeline_cache.db"))
-
-    def test_the_inputs_arts_licence_that_is_missing(self):
-        notice = self.at("repo", "port", "moderngekko", "art", "inputs", "LICENSE.txt")
-        os.remove(notice)
-        self.commit("repo", "the notice gone")
-        self.refused("m-overlay's licence is not there", notice)
 
     def test_a_font_of_the_game_windows_strip_that_is_missing(self):
         os.remove(self.at("parts", "fonts", "OFL.txt"))
