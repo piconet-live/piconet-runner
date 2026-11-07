@@ -177,8 +177,8 @@ void TestHighRefreshWithNoStepAhead()
 // Offline play (a plain start: no match, no replay, no session): high refresh's pictures between come in the game's own
 // races by the game's words alone (MD_GAME, the race's phase, one screen, the chase camera; the race clock as the step),
 // from the frame tick and DRAW_ASK the image makes there only with PLAIN_DRAW, which the core sets each field while the
-// pictures between may be drawn (PlainField); with them, the game's screen option and true widescreen's word follow the
-// launch file. Nothing of the game's simulation is written.
+// pictures between may be drawn or the rays are on (PlainField); with them, the game's screen option and true
+// widescreen's word follow the launch file. Nothing of the game's simulation is written.
 void TestHighRefreshInAPlainStart()
 {
   BEGIN_TEST();
@@ -207,6 +207,33 @@ void TestHighRefreshInAPlainStart()
   }
   CHECK(aspect == 16.0f / 9.0f);
   runahead::Stop();
+  // the rays on, high refresh off (the launcher's "Start F-Zero GX" with ray tracing): PLAIN_DRAW too, for the drawing's
+  // ask, where the game's drop shadow is left out (game_shadow.h: bit 0x4 of each machine's CarShadow record); nothing
+  // runs at the tick, and the ask asks nothing of run ahead
+  {
+    Options rays;
+    CHECK(!ParseLaunchFile(R"({"about": "offline play", "renderer": "aurora", "auroraRayTracing": true,
+                               "widescreen": true, "trueWidescreen": true})", &rays));
+    CHECK(rays.aurora_ray_tracing);
+    Init(host, rays);
+    CHECK(!Active());
+    constexpr u32 SHADOWS = 0x80830000;
+    g.Write32(game::CAR_SHADOWS_AT, SHADOWS);
+    runahead::Start(nullptr, nullptr, nullptr, nullptr);
+    CHECK(!runahead::On());
+    PlainField();
+    CHECK(g.Read32(layout::PLAIN_DRAW) == 1);
+    g.Write32(game::RACE_CLOCK_AT, 50);
+    CHECK(!runahead::Begin());
+    for (u32 r = 0; r < 2; ++r)
+      g.Write32(SHADOWS + r * game::CAR_SHADOW_SIZE, 0x4 | 0x1);
+    WindowWritten(layout::DRAW_ASK, 1);
+    CHECK(g.Read32(SHADOWS) == 0x1 && g.Read32(SHADOWS + game::CAR_SHADOW_SIZE) == 0x1);
+    WindowWritten(layout::DRAW_ASK, 2);
+    runahead::Stop();
+    g.Write32(game::CAR_SHADOWS_AT, 0);
+    Init(host, options);
+  }
   setenv("AURORA_RUNAHEAD", "240", 1);
   setenv("AURORA_REDRAW", "1", 1);
   u64 position = 700;
