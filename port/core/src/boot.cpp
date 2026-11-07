@@ -386,7 +386,9 @@ void OnFrame(Guest& g)
 // not written here; the game writes the option with the rest when it saves its options (the options screen, a cup's
 // end), and it then holds the launcher's choice. Not in a start that opens the game's own controller options, which
 // saves what the player had. True widescreen's word (sites_view.py) while the game is in Wide Screen; and PLAIN_DRAW
-// while high refresh may draw pictures between, so that the image makes the frame tick and asks at the drawing.
+// while high refresh may draw pictures between, or the rays are on, so that the image makes the frame tick and asks at
+// the drawing: the ask is where the game's drop shadow is left out under the rays (core.cpp WindowWritten,
+// game_shadow.h). With run ahead off the tick and the asks do nothing else (runahead::Begin, TimeTheDrawing).
 void PlainField(Guest& g)
 {
   const Options& o = TheOptions();
@@ -400,7 +402,7 @@ void PlainField(Guest& g)
   const std::optional<bool> wide = Widescreen(g);
   const u32 aspect = set && wide.value_or(false) ? TrueAspectWord(o) : 0;
   g.Write32(TRUE_ASPECT, aspect);
-  const bool draw = runahead::PlainDraw();
+  const bool draw = runahead::PlainDraw() || o.aurora_ray_tracing;
   g.Write32(layout::PLAIN_DRAW, draw ? 1 : 0);
   // the log, once each: what offline play was given of the launcher's settings
   static bool said_screen = false, said_draw = false;
@@ -413,8 +415,10 @@ void PlainField(Guest& g)
   if (draw && !said_draw)
   {
     said_draw = true;
-    Notice("fzgx: offline play: high refresh's pictures between in the game's own races (PLAIN_DRAW: the frame tick and "
-           "the drawing's asks; one screen, the chase camera)");
+    const bool high = runahead::PlainDraw();
+    Notice("fzgx: offline play: the frame tick and the drawing's asks (PLAIN_DRAW), for {}{}{}",
+           high ? "high refresh's pictures between in the game's own races (one screen, the chase camera)" : "",
+           high && o.aurora_ray_tracing ? " and " : "", o.aurora_ray_tracing ? "the rays (no game drop shadow)" : "");
   }
 }
 
