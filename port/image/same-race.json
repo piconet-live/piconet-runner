@@ -655,6 +655,36 @@
    "recorded": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
    "plays_on": "54203c734e805be731fe36804afa88b888fa92c9",
    "evidence": "branch feat/finish-spectate, 2026-10-28 (module fs1 3158da24, runner 22409c35, headless; a finished racer spectates, the results leave after 30 s): 0.5.0's fs-m0-2 race.fzrp as the race 0 of 5,095 (fs-pb-9)"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "68fd27e174fab112c9c93564e3ae488adab205a1",
+   "evidence": "build q (0.6.0 release candidate), 2026-11-07 (bundle o1 68fd27e1, module o1 e4ed95a3, runner edf0036d of runner 8e354fc, headless): 0.1.0's f2-v010-ctlw2.fzrp as the race 0 of 2,932 (q-o010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "68fd27e174fab112c9c93564e3ae488adab205a1",
+   "evidence": "build q (0.6.0 release candidate), 2026-11-07 (bundle o1 68fd27e1, module o1 e4ed95a3, runner edf0036d of runner 8e354fc, headless): 0.2.0's owner race 20261011-194824-m35.fzrp as the race 0 of 9,013 (q-o020)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "68fd27e174fab112c9c93564e3ae488adab205a1",
+   "evidence": "build q (0.6.0 release candidate), 2026-11-07 (bundle o1 68fd27e1, module o1 e4ed95a3, runner edf0036d of runner 8e354fc, headless): 0.2.2's owner race 20261018-124638-m24.fzrp as the race 0 of 5,440 (q-o022)"
+  },
+  {
+   "recorded": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "plays_on": "68fd27e174fab112c9c93564e3ae488adab205a1",
+   "evidence": "build q (0.6.0 release candidate), 2026-11-07 (bundle o1 68fd27e1, module o1 e4ed95a3, runner edf0036d of runner 8e354fc, headless): 0.3.0's owner race 20261022-120323-m37.fzrp as the race 0 of 5,936 (q-o030), and practice-24a01485.fzrp 0 of 2,192 (q-o030p)"
+  },
+  {
+   "recorded": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "plays_on": "68fd27e174fab112c9c93564e3ae488adab205a1",
+   "evidence": "build q (0.6.0 release candidate), 2026-11-07 (bundle o1 68fd27e1, module o1 e4ed95a3, runner edf0036d of runner 8e354fc, headless): 0.5.0's owner race 20261027-183604-m283.fzrp as the race 0 of 3,878 (q-o050)"
+  },
+  {
+   "recorded": "54203c734e805be731fe36804afa88b888fa92c9",
+   "plays_on": "68fd27e174fab112c9c93564e3ae488adab205a1",
+   "evidence": "build q (0.6.0 release candidate), 2026-11-07 (bundle o1 68fd27e1, module o1 e4ed95a3, runner edf0036d of runner 8e354fc, headless): 0.5.2's owner race 20261030-005424-m55.fzrp (format 8) as the race 0 of 9,488 (q-o052), and d052-2.fzrp (30 seats) 0 of 5,786 (q-o054)"
   }
  ]
 }
