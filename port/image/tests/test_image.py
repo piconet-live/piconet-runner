@@ -9,7 +9,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(here, ".."))
 sys.path.insert(0, os.path.join(here, "..", "routines"))
 sys.path.insert(0, os.path.join(here, "..", "..", "setup"))
-import build, liveness, memmap, relink, work_folder
+import build, liveness, memmap, relink, sites_hudmove, work_folder
 
 IMAGE = memmap.IMAGE
 word_at = lambda data, address, base=IMAGE: struct.unpack_from(">I", data, address - base)[0]
@@ -177,11 +177,27 @@ class Bundle(unittest.TestCase):
         # the draw marks (sites_marks.py): a host call that changes nothing of the game's, in every start
         untested = {"linked", "pin", "smooth_hook", "mine_fade", "simgen_cpu", "simgen_hazard", "ghost_make",
                     "mode_points_free", "true_view", "true_aspect", "mark_body", "mark_body_end", "mark_deferred"}
+        # the classic HUD's moves (sites_hudmove.py hm_*, hs_*; sites_modehud.py mode_faces, before its mode test) test
+        # their own window word first, in every start: a test layout's (hud_move.cpp), 0 without one, and then the
+        # routine is the game's instruction alone
+        window = (0x3D800000 | memmap.hi(memmap.MODE_HUD_MOVE), 0x618C0000 | memmap.lo(memmap.MODE_HUD_MOVE), 0x818C0000)
+        moves = (0x2C0C0000, 0x718C0000 | sites_hudmove.FACES_HIDDEN)                   # cmpwi r12, 0; andi. r12, r12, 2
         for address, p in self.patches.items():
             # a `bl mode_sort` first, which tests the mode's own flag word (sites_modehud.py), and then the stock call
             if p["what"] in untested or p["what"].startswith(("mode_sort_", "mode_clock_")):
                 continue
             to = target(int(p["new"], 16), address)
+            if p["what"].startswith(("hm_", "hs_")) or p["what"] == "mode_faces":
+                self.assertEqual(tuple(word_at(self.image, to + 4 * i) for i in range(3)), window, p)
+                self.assertIn(word_at(self.image, to + 12), moves, p)
+                if p["what"] != "mode_faces":
+                    continue
+                to += 24                     # the board's own hide (beq past a blr), then the mode test as everywhere
+            # the boost trail's bolts and sparkles (sites_trail.py) do the site's own word first, as the game does in
+            # every start (a store the routine may write over after the test), and then test the mode word
+            if p["what"] in ("trail_bolts", "trail_sparkles"):
+                self.assertEqual(word_at(self.image, to), int(p["original"], 16), p)
+                to += 4
             # the draw skip's routines (sites_present.py) load the word into r11 and keep r12 the control block;
             # the leader's state (sites_cpu.py) into r3, the register dead where it goes back to
             rd = 11 if p["what"].startswith("present_") else 3 if p["what"] == "cpu_leader" else 12
