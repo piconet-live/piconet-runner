@@ -48,6 +48,14 @@ struct Pace
   u32 knock_out_by_input_at = 0;  // the race's frame stall_at takes this long (a hitch of the host)
   bool follow_speed = false;   // the host keeps the emulation speed the game sets (Host::SetPace) in the race
   double relay_rate = 1.0;     // the relay's clock runs this fast against the host's
+  // The deep-rollback worker (rollback_worker.h) on threads of a fake adapter (test_pace.cpp's FakeWorkers): its test
+  // key's mode ("": none, the core tests' own default), and its depth with the rule "always" and its workers
+  std::string worker;
+  u32 worker_depth = 1, workers = 2;
+  // A fault of the rollback's bookkeeping, as a desynced game's recording showed one (2026-11-07, race m285): the
+  // first time step fault_at is about to run on its official row, its row in the input ring is another one, so the
+  // step runs on that row while the session counts it as run on the official one (0: none)
+  u32 fault_at = 0;
 };
 
 // What came of it.
@@ -58,6 +66,9 @@ struct Raced
   std::vector<double> depth, catch_up;   // (the same: the frame's rollback in steps, the steps it added to catch up)
   std::vector<double> watch, speed, buffer;  // (the same: how the game watched, its speed, official frames in hand)
   u32 other_checksums = 0;               // final steps whose checksum is not the official race's
+  u32 other_rows = 0;
+  u32 first_other_checksum = 0, first_other_row = 0;  // the first of each
+  u32 faults = 0;                        // hooks at which Pace::fault_at's fault was made                    // final steps whose inputs (the ones they ran with) are not the official row
   u32 final_steps = 0;
   // the local seat's inputs as the relay saw them, for the frames first sent after the race's start was over:
   std::vector<double> margin;            // frames left until the relay closed the frame, when its input came

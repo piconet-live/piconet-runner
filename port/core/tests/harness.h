@@ -243,6 +243,12 @@ struct FakeRace
   }
   void Step(u32 t)
   {
+    StepOn(g, host.scratch, t);
+    ++steps_run;
+  }
+  // One step on a memory: the game's (Step), or a rollback worker's copy of it (its own locked cache: none in a test).
+  void StepOn(Guest& g, std::vector<u8>& scratch, u32 t) const
+  {
     const u32 rng = g.Read32(net::DOL_RNG);
     for (u32 i = 0; i < 2; ++i)
     {
@@ -254,8 +260,8 @@ struct FakeRace
       if (leak)
         h ^= g.Read32(0x80003200);  // a word no rollback puts back
       // as the game's collision work area in the locked cache: a machine takes from it what the step before left
-      if (!host.scratch.empty())
-        h ^= ScratchWord();
+      if (!scratch.empty())
+        h ^= ScratchWord(scratch);
       g.Write32(machines + i * game::MACHINE_SIZE + game::MACHINE_POSITION_X, h);
       g.Write32(g.Read32(machines + i * game::MACHINE_SIZE + game::MACHINE_PROGRESS) + game::PROGRESS_DISTANCE, h ^ 0x55AA55AA);
       // and a word the race's results are read from: the thousandths of the best lap (progress record +0x1CC + 10)
@@ -285,18 +291,18 @@ struct FakeRace
     g.Write32(net::DOL_RNG, rng * 1664525 + 1013904223);
     g.Write32(0x80003200, g.Read32(0x80003200) + 1);
     // and the step leaves there what the next step's machines take (a word that changes every few steps)
-    if (!host.scratch.empty())
+    if (!scratch.empty())
     {
       const u32 left = (rng >> 20) / 3;
-      std::memcpy(host.scratch.data() + SCRATCH_WORD, &left, 4);
+      std::memcpy(scratch.data() + SCRATCH_WORD, &left, 4);
     }
-    ++steps_run;
   }
   static constexpr u32 SCRATCH_WORD = 0x1DB0 + 0x47C;
-  u32 ScratchWord() const
+  u32 ScratchWord() const { return ScratchWord(host.scratch); }
+  static u32 ScratchWord(const std::vector<u8>& scratch)
   {
     u32 word;
-    std::memcpy(&word, host.scratch.data() + SCRATCH_WORD, 4);
+    std::memcpy(&word, scratch.data() + SCRATCH_WORD, 4);
     return word;
   }
   // One displayed frame; false once the session asked the game to stop.
@@ -313,6 +319,8 @@ struct FakeRace
     g.Write32(layout::CONTROL + 44, 1);  // at the race-start gate
     g.Write32(layout::CONTROL + 12, 0);
     NetSync();
+    if (after_net)
+      after_net();
     if (host.stops != 0)
       return false;
     if (!running)
@@ -334,6 +342,8 @@ struct FakeRace
       }
       over_before = over_now;
       NetSync();
+      if (after_net)
+        after_net();
       Step(g.Read32(net::STEP));
       g.Write32(net::STEP, g.Read32(net::STEP) + 1);
       left = image_loop ? g.Read32(layout::CONTROL + 8) - 1 : left - 1;
@@ -408,6 +418,7 @@ struct FakeRace
   u32 over_step = 0;                 // the step about to run when the race-over test first said "over"
   std::chrono::nanoseconds frame_time{16'666'667};  // what a displayed frame adds to the host's time, when it has one
   u32 first = 0, machines = 0, steps_run = 0;
+  std::function<void()> after_net;  // after each network hook (a rollback worker's adapter: its jobs begin there)
 };
 
 // A wall clock in milliseconds, for a test whose relay is a thread of its own.

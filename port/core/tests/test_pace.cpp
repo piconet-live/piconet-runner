@@ -5,6 +5,10 @@
 
 #include "harness.h"
 #include "paced_race.h"
+#include "fzgx/rollback_worker.h"
+
+#include <condition_variable>
+#include <mutex>
 
 #include <map>
 #include <set>
@@ -219,7 +223,14 @@ struct PacedRelay
       net::Rollback::UseInputs(plain.g, t, {0, 1}, inputs.data());
       plain.Step(t);
       if (t + 1000 >= out.final_steps && net::Rollback::KeptChecksum(race.g, t) != net::StateChecksum(plain.g, MODULE))
-        ++out.other_checksums;
+      {
+        if (out.other_checksums++ == 0)
+          out.first_other_checksum = t;
+      }
+      std::array<u8, 12> ran{};
+      net::Rollback::UsedInputs(race.g, t, {0, 1}, ran.data());
+      if (t + 1000 >= out.final_steps && ran != inputs && out.other_rows++ == 0)
+        out.first_other_row = t;
     }
   }
 
@@ -260,6 +271,91 @@ void TakeTheLog(const std::string& path, const Pace& pace, Raced& out)
 // seat 1's input changes every seventh step. The relay is the real one's rules (Online.Server RaceTimeline,
 // RaceSession): frame f closes when its clock is at f + 2; a seat's first input for a frame is the one it keeps;
 // a frame that closes without one holds the seat's latest; an input for a closed frame is late.
+namespace
+{
+// The deep-rollback worker's adapter, as port/moderngekko's runs it (RunRollbackWorker, ThreadMain), on a fake race:
+// after each network hook a job begun for a slot wakes that slot's thread, which makes the job's base (TakeBase) and
+// runs the race's steps on the slot's memory and window (FakeRace::StepOn), the worker's hook before each, until the
+// hook says the job is over.
+struct FakeWorkers
+{
+  explicit FakeWorkers(FakeRace& r) : race(r)
+  {
+    rollback_worker::SetPipePerThread(true);
+    for (int k = 0; k < 2; ++k)
+      slots[k].thread = std::thread([this, k] { Main(k); });
+    race.after_net = [this] { AfterTheHook(); };
+  }
+  ~FakeWorkers()
+  {
+    rollback_worker::Stop();
+    for (Slot& slot : slots)
+    {
+      {
+        const std::lock_guard lock(slot.m);
+        slot.quit = true;
+      }
+      slot.cv.notify_all();
+      slot.thread.join();
+    }
+    rollback_worker::SetPipePerThread(false);
+    race.after_net = nullptr;
+  }
+  void AfterTheHook()
+  {
+    for (int k = 0; k < 2; ++k)
+    {
+      rollback_worker::Memory memory;
+      if (!rollback_worker::Begin(k, &memory) || !memory.threaded)
+        continue;
+      {
+        const std::lock_guard lock(slots[k].m);
+        slots[k].go = true;
+      }
+      slots[k].cv.notify_all();
+    }
+  }
+  void Main(int k)
+  {
+    rollback_worker::ThreadStarts(k);
+    Slot& slot = slots[k];
+    std::unique_lock lock(slot.m);
+    for (;;)
+    {
+      slot.cv.wait(lock, [&] { return slot.go || slot.quit; });
+      if (slot.quit)
+        return;
+      slot.go = false;
+      lock.unlock();
+      if (rollback_worker::TakeBase(k))
+      {
+        Guest gw(*rollback_worker::OwnHost(), rollback_worker::Window());
+        std::vector<u8> no_cache;
+        do
+        {
+          const u32 t = gw.Read32(net::STEP);
+          race.StepOn(gw, no_cache, t);
+          gw.Write32(net::STEP, t + 1);
+          ++steps;
+        } while (rollback_worker::Hook());
+      }
+      rollback_worker::Left(k);
+      lock.lock();
+    }
+  }
+  struct Slot
+  {
+    std::thread thread;
+    std::mutex m;
+    std::condition_variable cv;
+    bool go = false, quit = false;
+  };
+  FakeRace& race;
+  Slot slots[2];
+  std::atomic<u64> steps{0};
+};
+}  // namespace
+
 Raced RunAPacedRace(const Pace& pace)
 {
   Raced out;
@@ -272,6 +368,14 @@ Raced RunAPacedRace(const Pace& pace)
   options.debug.rollback_log = folder + "/rb.csv";
   if (pace.record)
     options.replay_file = folder + "/race.fzrp";
+  if (!pace.worker.empty())
+  {
+    options.debug.worker_mode = pace.worker;
+    options.debug.worker_rule = "always";
+    options.debug.worker_depth = pace.worker_depth;
+    options.debug.worker_workers = pace.workers;
+    options.debug.worker_from = FROM + 1;
+  }
   TestHost host;
   auto now = std::chrono::steady_clock::now();  // this test's time, from here on
   host.time = now;
@@ -286,6 +390,30 @@ Raced RunAPacedRace(const Pace& pace)
   race.g.Write32(layout::SLOT + 44, pace.delay);  // the seat slot's input delay, which the session reads when it begins
 
   PacedRelay r(pace, relay, out);
+  std::optional<FakeWorkers> workers;
+  if (!pace.worker.empty())
+    workers.emplace(race);
+  if (pace.fault_at != 0)
+    race.after_net = [&, before = race.after_net] {
+      if (before)
+        before();
+      // the session's account of step fault_at says "the official row" while the step ran on another (a prediction)
+      // and has not run again since: the fault is made at every hook until the step is final or ran on that row
+      net::Session* session = net::s_session.get();
+      const u32 t = pace.fault_at;
+      if (session == nullptr || t < session->checked || !session->used.contains(t) || !session->my_inputs.contains(t))
+        return;
+      net::Row official(12);
+      std::copy_n(session->my_inputs.at(t).begin(), 6, official.begin());
+      const std::array<u8, 12> relays = r.Row(t);
+      std::copy(relays.begin() + 6, relays.end(), official.begin() + 6);
+      std::array<u8, 12> ran{};
+      net::Rollback::UsedInputs(race.g, t, {0, 1}, ran.data());
+      if (std::equal(ran.begin(), ran.end(), official.begin()))
+        return;
+      session->used[t] = official;
+      ++out.faults;
+    };
   auto due = now;       // the host's pacing: when the next displayed frame is due
   bool undone = false;  // (Pace::undo_at_behind)
   u32 race_frames = 0, frames = 0;
@@ -331,6 +459,7 @@ Raced RunAPacedRace(const Pace& pace)
 
   out.final_steps = race.g.Read32(layout::CONTROL + 232);
   r.CompareWithTheOfficialRace(race);
+  workers.reset();
   out.next_input_end = net::s_session ? net::s_session->next_input : 0;
   Shutdown();
   r.CountTheInputs();
