@@ -49,6 +49,7 @@ void TestTheWorkersPace();
 void TestTheSecondWorkersEstimate();
 void TestTheWorkersPair();
 void TestTheWorkersFinalRows();
+void TestAStepThatRanOnAnotherRowStaysOpen();
 void TestARollbackLeavesTheWindow();
 // test_rollback_state.cpp
 void TestRollbacksStateList();
@@ -512,6 +513,7 @@ int main(int argc, char** argv)
   TestTheSecondWorkersEstimate();
   TestTheWorkersPair();
   TestTheWorkersFinalRows();
+  TestAStepThatRanOnAnotherRowStaysOpen();
   TestRaceFromAMatchFile();
   TestAReplaysLineup();
   TestAReplayThatIsNotPlayed();
