@@ -324,8 +324,8 @@ struct Rule
 };
 Rule s_r;
 
-// S7: the followed machine's place and the camera's eye (runahead.cpp's Take: the camera's records, the machine's pose
-// translation); not ok outside a race's camera
+// S7: the followed machine's place and the camera's eye (the camera's records, the followed racer a half-word at +2;
+// the machine's pose translation); not ok outside a race's camera
 Rule::View ReadView(const Guest& g, u32 step)
 {
   constexpr u32 CAMERA_RECORDS = game::REL_BSS_AT + 0xF6C, POSE = 0x14C, SEATS = 30;
@@ -333,7 +333,7 @@ Rule::View ReadView(const Guest& g, u32 step)
   const u32 r = g.Read32(CAMERA_RECORDS), machines = g.Read32(game::MACHINES_AT);
   if (r < 0x80000000u || machines < 0x80000000u)
     return v;
-  v.follow = g.Read8(r + 2);
+  v.follow = g.Read16(r + 2);
   if (v.follow >= SEATS)
     return v;
   const u32 pose = machines + v.follow * game::MACHINE_SIZE + POSE;
