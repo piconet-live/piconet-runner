@@ -261,6 +261,25 @@ void LockstepFrame(Guest& g, Session& s, u32 step, bool race_phase)
     return Fail(g, s, step);
   if (s.rollback.Active())
   {
+    // The steps below this one not yet final become final here as they ran: each must have run on its official row
+    // (a watching game confirms its seat out only when every step before the frame's own is final:
+    // spectate.cpp AfterADriftingFrame). One that did not is said (detection only: the race may be desynced there).
+    if (const u32 open = WorkerKnown(step); open < step && s.unchecked_into_lockstep++ < 5)
+      Notice("fzgx: steps from {} became final as the game went into lockstep at {} with a rollback worker's job "
+             "still open on them (the race may be desynced from there)",
+             open, step);
+    for (u32 t = s.checked; t < step && t < s.official.size(); ++t)
+    {
+      std::array<u8, 30 * RECORD> ran{};
+      Rollback::UsedInputs(g, t, s.seats, ran.data());
+      if (s.seats.size() * RECORD <= ran.size() && std::equal(ran.begin(), ran.begin() + s.seats.size() * RECORD, s.official[t].begin()))
+        continue;
+      if (s.unchecked_into_lockstep++ < 5)
+        Notice("fzgx: step {} became final as the game went into lockstep at {}, though it ran on inputs other than "
+               "the official row (the race may be desynced from there)",
+               t, step);
+      break;
+    }
     s.rollback.Stop();
     s.used.clear();
     ScrubStop(s);
@@ -412,6 +431,33 @@ FrameSteps CheckPredictions(Guest& g, Session& s, u32 step, bool settle, bool ch
   return {known, run_from};
 }
 
+// The last check before steps become final: each step from the last final one up to `to` that this frame does not run
+// again (below `run_from`) has run already, and the inputs it ran with are in the input ring, the bytes the recording
+// keeps and the race's state was made from. Each must be the official row. The session's own account of them (`used`,
+// which CheckPredictions compares) said so, or they would not be about to become final; where the ring says
+// otherwise that account was wrong (a fault between the worker's adoption and the session's rows), and the step stays
+// open: its account is dropped, so the next frame's check finds it wrong and runs it again from there, on the worker
+// or sync, while its undo entry is still kept. That is a rollback before finality, not a repair of a final step. The
+// first such step, or `to`. A row of 6 bytes a seat for the one or two steps a frame makes final: no allocation.
+u32 HeldOpenSteps(const Guest& g, Session& s, u32 run_from, u32 to)
+{
+  std::array<u8, 30 * RECORD> ran{};
+  const std::size_t bytes = s.seats.size() * RECORD;
+  for (u32 t = s.checked; t < to && t < run_from && t < s.official.size(); ++t)
+  {
+    Rollback::UsedInputs(g, t, s.seats, ran.data());
+    if (bytes <= ran.size() && std::equal(ran.begin(), ran.begin() + bytes, s.official[t].begin()))
+      continue;
+    s.used.erase(t);
+    if (++s.held_open <= 5)
+      Notice("fzgx: step {} kept open: it ran on inputs other than the official row, though the session counted it "
+             "as run on them (held open {} times in this race)",
+             t, s.held_open);
+    return t;
+  }
+  return to;
+}
+
 // The frame's steps asked of the mod's frame routine, the steps checked made final, and the first step's inputs.
 void RunSteps(Guest& g, Session& s, u32 step, const FrameSteps& steps)
 {
@@ -425,7 +471,7 @@ void RunSteps(Guest& g, Session& s, u32 step, const FrameSteps& steps)
   s.work.catch_up = catch_up;
   s.work.held = held;
   s.work.extra = s.last_extra;
-  s.checked = WorkerKnown(known);
+  s.checked = HeldOpenSteps(g, s, run_from, WorkerKnown(known));
   for (auto it = s.used.begin(); it != s.used.end() && it->first < s.checked;)
     it = s.used.erase(it);
   s.rollback.Final(s.checked);
