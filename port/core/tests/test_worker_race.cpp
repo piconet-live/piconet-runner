@@ -64,3 +64,36 @@ void TestAStepThatRanOnAnotherRowStaysOpen()
     CHECK(*worker != 0 || r.notices.find("step 600 kept open") != std::string::npos);
   }
 }
+
+// A racer who is out watches: its game falls behind live, and once a frame has run only official steps the next goes
+// into lockstep (spectate.cpp FollowTheRacer, frame.cpp LockstepFrame). With the worker on, a job may still be open
+// then: the steps it runs again on their official rows had run on predictions in the game. Race m285 (2026-11-07):
+// seat 14, out on its first lap, went into lockstep with such a job open; steps 1229-1236 became final as predicted.
+void TestAGameGoingIntoLockstepWaitsForTheWorker()
+{
+  BEGIN_TEST();
+  for (const u32 depth : {1u, 4u})
+  {
+    Pace pace;
+    pace.worker = "on";
+    pace.worker_depth = depth;
+    pace.race_frames = 1500;
+    pace.other_changes_every = 1;
+    pace.relay_back_steps = 4;
+    pace.out_at = 400;
+    pace.follow_speed = true;
+    pace.rows_together = 3;  // (rows in bursts of 3 from the knock-out on: a burst puts frames in hand at once, as a
+    pace.together_from = 400;  // job starts for the correction it brings)
+    pace.together_to = 1000000;
+    const Raced r = RunAPacedRace(pace);
+    std::printf("into lockstep with the worker (depth %u): final %u, other rows %u (from %u), other checksums %u "
+                "(from %u)\n",
+                depth, r.final_steps, r.other_rows, r.first_other_row, r.other_checksums, r.first_other_checksum);
+    CHECK(r.ran);
+    CHECK(r.final_steps > 1000);
+    CHECK(r.notices.find("watching in lockstep on official frames") != std::string::npos);
+    CHECK(r.other_rows == 0);
+    CHECK(r.other_checksums == 0);
+    CHECK(r.notices.find("as the game went into lockstep") == std::string::npos);
+  }
+}
