@@ -258,6 +258,10 @@ PROGRESS_BEST_LAP	port/core/src/replay.cpp	use	game::PROGRESS_BEST_LAP	1
 PROGRESS_LAP_SUM	port/core/src/replay.cpp	use	game::PROGRESS_LAP_SUM	1
 CARS	port/core/src/paint.cpp	cxx	CARS	
 CAR_SIZE	port/core/src/paint.cpp	cxx	CAR_SIZE	
+CAR_SIZE	port/core/src/spectator_frame.cpp	use	game::CAR_SIZE	2
+CAR_FLAGS	port/core/src/spectator_frame.cpp	use	game::CAR_FLAGS	2
+CAR_FLAG_HIDDEN	port/core/src/spectator_frame.cpp	use	game::CAR_FLAG_HIDDEN	1
+CAR_FLAG_HIDDEN	follow.py	py	HIDDEN	
 DOL_PIN	port/image/build.py	py	DOL_PIN[0]	
 DOL_PIN_STOCK	port/image/build.py	py	DOL_PIN[1]	
 DOL_PIN_NEW	port/image/build.py	py	DOL_PIN[2]	

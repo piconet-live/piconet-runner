@@ -99,6 +99,7 @@ struct SpectatorRow
 {
   u8 seat = 0, rank = 0, laps = 0;
   bool out = false, finished = false;
+  bool pickable = true;  // a watcher may follow it (spectator::Pickable): not a racer out whose body is gone
   float energy = 0;  // 0 to 1
   // the observer HUD's (fzgx/observer.h): the seat's colour (0xRRGGBB) and name from the race's set-up, else its
   // machine's name; its gap to the leader (observer::Gap: kind, milliseconds, laps)

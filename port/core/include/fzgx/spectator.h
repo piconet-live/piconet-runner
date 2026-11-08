@@ -123,6 +123,9 @@ struct Racer
 {
   bool present = false;   // a machine with a progress record
   bool out = false;       // out by the game's own verdict (out_test.h)
+  bool drawn = false;     // its body is drawn: its car object's flags lack game::CAR_FLAG_HIDDEN, which the game sets
+                          // when the machine explodes or falls (fn_1_25004) and car_disp then draws nothing; a wreck
+                          // that broke down or retired stays drawn where it lies until a machine hits it
   bool finished = false;
   u32 rank = 0;           // 0 the leader (the progress record's place, +0x115)
   float distance = 0;     // along the course over all laps (progress +0xF8)
@@ -131,13 +134,19 @@ using Racers = std::array<Racer, MOST>;
 
 // Racers still in the race (present, not out, not finished).
 bool Racing(const Racer& r);
-// The leader still racing (lowest rank), or the leader of all present racers when none races; NOBODY when none.
+// Racers a watcher may pick (the D-pad, a click, the leader): present, and not out unless the wreck is still drawn on
+// the track. A finished racer may be picked.
+bool Pickable(const Racer& r);
+// The leader still racing (lowest rank), or the best-placed racer that may be picked when none races; NOBODY when
+// none.
 u32 Leader(const Racers& racers);
 // The closest battle: of two racers still racing next to each other in race order, the pair with the least
 // distance between them; the one behind (the chase camera behind it sees both). NOBODY when there is no pair.
 u32 ClosestBattle(const Racers& racers);
-// The racer `by` places on (positive: further back) from `from` in race order, present racers only, round. A racer
-// out stays in the order: a watcher may look at a wreck.
+// The racer `by` places on (positive: further back) from `from` in race order, round, passing over the racers that may
+// not be picked (Pickable: a racer out whose body is gone). A wreck still drawn may be picked. `from` itself need not
+// be pickable (the racer watched just exploded): the walk starts from its place. NOBODY when no other racer may be
+// picked (and `from` may not either); a `from` not in the race: the first pickable in race order.
 u32 ByRank(const Racers& racers, u32 from, int by);
 
 // What a frame's pad asks for, before any role's restriction.
@@ -191,8 +200,9 @@ public:
   // A displayed frame: the pad, and the race as it is now.
   Frame Next(const Pad& pad, const Racers& racers);
   // The overlay's mouse: follow this racer (a standings row, a timeline lane or circle); a camera kind's button.
-  // Applied at the next frame. False: not allowed (the course's rule).
-  bool Click(u32 racer);
+  // Applied at the next frame. False: not allowed (the course's rule, or a racer out whose body is gone: Pickable,
+  // by `racers`, the race as it is now).
+  bool Click(u32 racer, const Racers& racers);
   bool ClickKind(Kind kind);
   void ClickOverlay();  // the next view, as Z
   void ClickLeader();   // follow the leader, as X

@@ -256,6 +256,8 @@ PROGRESS_BEST_LAP	machine	0x1CC	MACHINE_PROGRESS	u32		port/core/src/replay.cpp:7
 PROGRESS_LAP_SUM	machine	0x1D8	MACHINE_PROGRESS	u32		port/core/src/replay.cpp:79	in a progress record: the sum of the completed laps, the finish time once finished
 CARS	machine	=REL_BSS + 0x6D83C	MAIN_REL	ptr		port/core/src/paint.cpp:23	the pointer to the car objects, CAR_SIZE bytes each, racer order
 CAR_SIZE	machine	0x440		u32		port/core/src/paint.cpp:24	bytes of one car object
+CAR_FLAGS	machine	0x390	CARS	u32		port/core/src/spectator_frame.cpp:84	in a car object: its flags (a word; CAR_FLAG_HIDDEN; 0x00200000 a wreck that explodes when a machine touches it)
+CAR_FLAG_HIDDEN	machine	0x01000000		u32		port/core/src/spectator_frame.cpp:84	in a car object's flags: its body is not drawn (car_disp fn_1_84860 tests it first and draws nothing); set when the machine explodes or falls (fn_1_25004) or the scenery crushes it (fn_1_2A8D0), cleared only by the car effect fn_1_68284 once it is no longer broken down (the Restore rule) and at a race's set-up: a breakdown or a retirement at rest stays drawn until a machine hits it (decomp burner.c, stcoli.c, effect_car.c)
 MACHINE_ID	machine	0x6	MACHINES	u32		port/core/src/stat_pack.cpp:130	in a machine's block: the machine it is (16 bits; 0 to 40 a stock machine, 41 or more a custom one)
 MACHINE_WEIGHT	machine	0x8	MACHINES	u32		port/core/src/stat_pack.cpp:133	in a machine's block: its weight, the car data's own value (block + 4) stored again every step
 MACHINE_DRAWN_X	machine	0x158	MACHINES	u32		port/core/src/minimap_frame.cpp:110	in a machine's block: the translation of its drawn matrix (+0x14C), x: where the body is drawn, rollback smoothing included (a float; y at +0x168, z at +0x178)

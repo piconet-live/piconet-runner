@@ -97,6 +97,11 @@ bool Racing(const Racer& r)
   return r.present && !r.out && !r.finished;
 }
 
+bool Pickable(const Racer& r)
+{
+  return r.present && (!r.out || r.drawn);
+}
+
 ResultsPick ReadResultsPick(u32 word)
 {
   if ((word >> 31) == 0)  // (the top bit: a pick was written)
@@ -125,7 +130,7 @@ u32 Leader(const Racers& racers)
   for (u32 i = 0; i < MOST; ++i)
   {
     const Racer& r = racers[i];
-    if (!r.present)
+    if (!Pickable(r))
       continue;
     if (best == NOBODY || r.rank < racers[best].rank)
       best = i;
@@ -176,15 +181,30 @@ u32 ByRank(const Racers& racers, u32 from, int by)
       order[at] = order[at - 1];
     order[at] = i;
   }
-  if (n == 0)
-    return NOBODY;
   for (u32 k = 0; k < n; ++k)
     if (order[k] == from)
       at_from = k;
   if (at_from == NOBODY)
-    return order[0];
-  const int to = ((static_cast<int>(at_from) + by) % static_cast<int>(n) + static_cast<int>(n)) % static_cast<int>(n);
-  return order[static_cast<u32>(to)];
+  {
+    for (u32 k = 0; k < n; ++k)
+      if (Pickable(racers[order[k]]))
+        return order[k];
+    return NOBODY;
+  }
+  // `by` pickable places on, round; the racers that may not be picked are passed over (they keep their places, so a
+  // walk from a racer that just went still starts where it was)
+  const int step = by < 0 ? -1 : 1;
+  int left = by < 0 ? -by : by;
+  int at = static_cast<int>(at_from);
+  const int places = static_cast<int>(n);
+  for (u32 tries = 0; left > 0 && tries < n; ++tries)
+  {
+    at = ((at + step) % places + places) % places;
+    if (Pickable(racers[order[static_cast<u32>(at)]]))
+      --left;
+  }
+  const u32 to = order[static_cast<u32>(at)];
+  return Pickable(racers[to]) ? to : NOBODY;
 }
 
 Asked Map(Role role, const Pad& now, const Pad& before)
@@ -214,9 +234,9 @@ Controls::Controls(Role role, u32 course, u32 first)
 {
 }
 
-bool Controls::Click(u32 racer)
+bool Controls::Click(u32 racer, const Racers& racers)
 {
-  if (racer >= MOST || (!m_rule.follow_others && racer != m_first))
+  if (racer >= MOST || (!m_rule.follow_others && racer != m_first) || !Pickable(racers[racer]))
     return false;
   m_clicked = racer;
   return true;
