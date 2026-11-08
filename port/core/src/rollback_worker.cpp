@@ -2285,7 +2285,9 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
     s_r.barred_late += d <= TheOptions().debug.worker_catch_up;  // (the worker's pace bars it: a catch-up foreseen)
     return false;
   }
-  if (fit_rule && pace::SyncFits(d, s_r.c_high, s_r.r_sync, chained, TheOptions().debug.worker_chained == "fit"))
+  const std::string& chain = TheOptions().debug.worker_chained;
+  if (fit_rule && pace::SyncFits(d, s_r.c_high, s_r.r_sync, chained,
+                                 chain == "worker" ? pace::Chain::WORKER : chain == "sync" ? pace::Chain::SYNC : pace::Chain::FIT))
   {
     ++s_r.sync_fit;
     s_r.chain_sync_fit += chained;

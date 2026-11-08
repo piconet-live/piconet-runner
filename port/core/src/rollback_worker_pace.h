@@ -32,9 +32,16 @@ inline double Smoothed(double r_ms, double ran_ms)
 u32 Foreseen(u32 d, double r_ms);
 
 // The rule "fit" (S2): a rollback `d` steps deep runs sync on the game's thread when the frame fits it (the frame's own
-// cost lately `c_ms`, `d` steps at `r_ms`, MARGIN_MS before the field); a chain's next correction (`chained`: after an
-// adoption on rows that changed since) as any other when `chain_fits` ("chained": "fit", S7), else on the worker
-bool SyncFits(u32 d, double c_ms, double r_ms, bool chained, bool chain_fits);
+// cost lately `c_ms`, `d` steps at `r_ms`, MARGIN_MS before the field). A chain's next correction (`chained`: after an
+// adoption on rows that changed since) by the test key "chained" (S7): FIT as any other (the default), WORKER always on
+// the worker (0.6.0's way), SYNC always sync (tests: the path a fitting one takes, on a PC whose frames never fit it)
+enum class Chain
+{
+  FIT,
+  WORKER,
+  SYNC,
+};
+bool SyncFits(u32 d, double c_ms, double r_ms, bool chained, Chain chain);
 
 // What a Watch asks of the worker
 enum class Verdict

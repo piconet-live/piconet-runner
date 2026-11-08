@@ -80,7 +80,8 @@ void TestTheRollbackWorkerKeys()
   // S7: a chain's next correction sync as it fits (the default), or on the worker however shallow
   CHECK(!ParseLaunchFile(with(R"("on")"), &o) && o.debug.worker_chained == "fit");
   CHECK(!ParseLaunchFile(with(R"({"mode": "on", "chained": "worker"})"), &o) && o.debug.worker_chained == "worker");
-  CHECK(Refused(with(R"({"mode": "on", "chained": "sync"})"), "\"debug.rollbackWorker.chained\""));
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "chained": "sync"})"), &o) && o.debug.worker_chained == "sync");
+  CHECK(Refused(with(R"({"mode": "on", "chained": "always"})"), "\"debug.rollbackWorker.chained\""));
   CHECK(Refused(with(R"({"depth": 3})"), "\"debug.rollbackWorker\" needs \"mode\""));
   CHECK(Refused(with(R"({"mode": "check", "depth": 0})"), "\"debug.rollbackWorker.depth\""));
   // S3: the adoptions compared with their sync rollbacks, the restarts' cap, the job's start
