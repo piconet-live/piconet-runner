@@ -809,6 +809,12 @@ void TestTheWorkersPace()
   BEGIN_TEST();
   namespace pace = fzgx::rollback_worker::pace;
   using pace::Verdict;
+  // the rule "fit": 3 ms of the frame's own and 6 steps of 1 ms fit the field, 13 do not; a chain's next correction
+  // fits as any other with "chained": "fit" (S7), and goes to the worker with "worker"
+  CHECK(pace::SyncFits(6, 3.0, 1.0, false, false) && pace::SyncFits(6, 3.0, 1.0, true, true));
+  CHECK(!pace::SyncFits(6, 3.0, 1.0, true, false));
+  CHECK(!pace::SyncFits(13, 3.0, 1.0, false, true) && !pace::SyncFits(13, 3.0, 1.0, true, true));
+  CHECK(pace::SyncFits(12, 3.0, 1.0, true, true));  // (3 + 12 + 1.5 = 16.5 ms, within 16.68)
   std::vector<float> window;
   pace::Now now;
   now.limit_us = 6000;

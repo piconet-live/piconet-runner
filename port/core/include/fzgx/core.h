@@ -95,6 +95,10 @@ struct Debug
   std::string worker_mode;
   u32 worker_depth = 7;
   std::string worker_rule = "fit";  // "rule": "fit" (S2: sync when the frame fits) or "always" (tests: every job async)
+  // "chained": with the rule "fit", a chain's next correction (after an adoption on rows that changed since) runs sync
+  // when the frame fits it, as any other ("fit"), or always on the worker however shallow ("worker": as 0.6.0 did, for
+  // comparisons). A sync rollback lands in its own frame, a job one frame later
+  std::string worker_chained = "fit";
   std::string worker_watch;  // "watch": a write watch on one word, "address[:first-last]" (tests, the trace module)
   // "restarts": how many times a job may be stopped for a correction below its R and started again from there; past
   // it the correction is the chain's: the job runs on, is adopted as it ran, and the next job starts from the

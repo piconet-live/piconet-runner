@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -63,7 +64,7 @@ constexpr u32 MOST_ADOPT = 512;
 static_assert(MOST_ADOPT < 1024 && MOST_ADOPT > 256, "far below the rings, above the largest \"catchUp\"");
 constexpr u32 LEAST_CORES = 4;    // below it, no thread (study section 7, decision 5)
 constexpr double FIELD_MS = pace::FIELD_MS;
-constexpr double MARGIN_MS = 1.5;      // run-ahead's MARGIN_MS: room kept before the field
+constexpr double MARGIN_MS = pace::MARGIN_MS;
 constexpr double FIRST_CONST_MS = 5.4; // a frame's own cost before one is measured (study section 4)
 constexpr double FIRST_STEP_MS = 2.0;  // a step run again before one is measured
 // S3: the code outside the log, which no step writes (the DOL's text, main.rel's text, constructors and read-only
@@ -304,8 +305,93 @@ struct Rule
   u32 workers_seen = 0;
   unsigned threads_seen = 0;
   double second_start_us = 0;
+  // S7, what a correction shows: the chained corrections run sync as they fit (WorkerStart); and the followed
+  // machine's place and the camera's eye at each race frame's hook (the state the frame before drew), their second
+  // difference over three hooks a step apart by what the frame between did (FRAME_ADOPTED, FRAME_SYNCED, neither), and
+  // at an adoption the jump itself (the game's predicted state against W's)
+  u64 chain_sync_fit = 0;
+  bool frame_adopted = false, frame_synced = false;
+  struct View
+  {
+    bool ok = false;
+    u32 step = 0, follow = 0;
+    float pos[3] = {}, eye[3] = {};
+  };
+  View view[2];  // the last hook's and the one before
+  static constexpr int FRAME_ADOPTED = 0, FRAME_SYNCED = 1, FRAME_PLAIN = 2, FRAME_CLASSES = 3;
+  std::vector<float> jerk_pos[FRAME_CLASSES], jerk_eye[FRAME_CLASSES];
+  std::vector<float> jump_pos, jump_eye;
 };
 Rule s_r;
+
+// S7: the followed machine's place and the camera's eye (runahead.cpp's Take: the camera's records, the machine's pose
+// translation); not ok outside a race's camera
+Rule::View ReadView(const Guest& g, u32 step)
+{
+  constexpr u32 CAMERA_RECORDS = game::REL_BSS_AT + 0xF6C, POSE = 0x14C, SEATS = 30;
+  Rule::View v;
+  const u32 r = g.Read32(CAMERA_RECORDS), machines = g.Read32(game::MACHINES_AT);
+  if (r < 0x80000000u || machines < 0x80000000u)
+    return v;
+  v.follow = g.Read8(r + 2);
+  if (v.follow >= SEATS)
+    return v;
+  const u32 pose = machines + v.follow * game::MACHINE_SIZE + POSE;
+  for (u32 k = 0; k < 3; ++k)
+  {
+    v.pos[k] = std::bit_cast<float>(g.Read32(pose + 12 + 16 * k));
+    v.eye[k] = std::bit_cast<float>(g.Read32(r + 0x10 + 4 * k));
+  }
+  v.ok = true;
+  v.step = step;
+  return v;
+}
+
+float Distance(const float* a, const float* b)
+{
+  double d2 = 0;
+  for (int k = 0; k < 3; ++k)
+    d2 += (double(a[k]) - b[k]) * (double(a[k]) - b[k]);
+  return static_cast<float>(std::sqrt(d2));
+}
+
+// At a race frame's hook, before its adoption or rollback: the second difference of the views of three hooks a step
+// apart, under what the frame before did
+void WatchView(const Guest& g, u32 step)
+{
+  Rule& r = s_r;
+  const Rule::View v = ReadView(g, step), &a = r.view[0], &b = r.view[1];
+  if (v.ok && a.ok && b.ok && a.step + 1 == v.step && b.step + 2 == v.step && a.follow == v.follow &&
+      b.follow == v.follow)
+  {
+    const int c = r.frame_adopted ? Rule::FRAME_ADOPTED : r.frame_synced ? Rule::FRAME_SYNCED : Rule::FRAME_PLAIN;
+    const auto second = [](const float* x, const float* y, const float* z) {
+      double d2 = 0;
+      for (int k = 0; k < 3; ++k)
+      {
+        const double d = double(x[k]) - 2.0 * y[k] + z[k];
+        d2 += d * d;
+      }
+      return static_cast<float>(std::sqrt(d2));
+    };
+    r.jerk_pos[c].push_back(second(v.pos, a.pos, b.pos));
+    r.jerk_eye[c].push_back(second(v.eye, a.eye, b.eye));
+  }
+  r.view[1] = r.view[0];
+  r.view[0] = v;
+  r.frame_adopted = r.frame_synced = false;
+}
+
+// "N frames: p50 a, p90 b, p99 c, p99.9 d, at most e" of `x` (sorted here)
+std::string Quantiles(std::vector<float>& x)
+{
+  if (x.empty())
+    return "none";
+  std::sort(x.begin(), x.end());
+  const auto at = [&](double q) { return x[std::min(x.size() - 1, static_cast<std::size_t>(q * x.size()))]; };
+  return std::format("{}: p50 {:.3f}, p90 {:.3f}, p99 {:.3f}, p99.9 {:.3f}, at most {:.3f}", x.size(), at(0.5), at(0.9),
+                     at(0.99), at(0.999), x.back());
+}
 enum Kind
 {
   K_PLAIN,      // no rollback
@@ -944,6 +1030,7 @@ void PrepareMemory(Guest& g, Session& s, u32 step, u32 run_from, int slot, bool 
 // Before the session's restore from `step` to `run_from` (CheckPredictions): a job when the rollback is deep enough.
 void WorkerPrepare(Guest& g, Session& s, u32 step, u32 run_from)
 {
+  s_r.frame_synced = true;  // (S7: a sync rollback in this frame)
   for (Worker& x : s_ws)
   {
     if (x.job != Job::NONE)
@@ -1855,9 +1942,15 @@ void AdoptJob(int k, Guest& g, Session& s, u32 step, bool clean, bool through)
   }
   {
     const std::lock_guard lock(a.m);  // (the worker waits at A's hook)
+    const Rule::View before = ReadView(g, step);  // (S7: the jump the adoption makes)
     {
       const Timed timed{"TakeOver"};
       s.rollback.TakeOver(g, x.log, gw, from, step, &keep);
+    }
+    if (const Rule::View after = ReadView(g, step); before.ok && after.ok && before.follow == after.follow)
+    {
+      s_r.jump_pos.push_back(Distance(before.pos, after.pos));
+      s_r.jump_eye.push_back(Distance(before.eye, after.eye));
     }
     const Timed timed{"trace, used rows and forget"};
     mode::TraceJob(true, k);  // (U4: W's mode trace lines are the adopted runs: written now, in order)
@@ -1889,6 +1982,7 @@ void AdoptJob(int k, Guest& g, Session& s, u32 step, bool clean, bool through)
     s_r.delay_high = std::max(s_r.delay_high, delay);
   }
   s_r.kind = K_ADOPT;
+  s_r.frame_adopted = true;
   s_r.adopt_us += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
   if (clean)
   {
@@ -1918,6 +2012,7 @@ std::optional<u32> WorkerFrame(Guest& g, Session& s, u32 step, bool settle, bool
 {
   if (!Measuring())
     return std::nullopt;
+  WatchView(g, step);  // (S7: before this hook's adoption or rollback)
   CountFrame();
   s_r.hook = std::chrono::steady_clock::now();
   s_r.fall_back = false;
@@ -2137,8 +2232,12 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
   const u32 d = step - wrong, least = std::max<u32>(TheOptions().debug.worker_depth, 1);
   s_r.kind = d >= least ? K_DEEP_SYNC : K_SHALLOW;
   // S4 (study section 14: a race of humans rolls back about 6 steps every frame): a chain's next job goes to the worker
-  // however shallow, so the game's thread runs only its new steps and the job's start; with the rule "fit" any depth
-  // goes to the worker when the frame would not fit its sync rollback (`depth` is the least for "always", tests)
+  // however shallow with the rule "always" (tests); with the rule "fit" any depth goes to the worker when the frame
+  // would not fit its sync rollback (`depth` is the least for "always"). S7: a chain's next correction too: a job lands
+  // a frame after its start at the soonest (its adoption is at the next hook), a sync rollback in its own frame, so a
+  // chain on the worker kept every correction of a race with lag a frame late, the game going on from its wrong guess
+  // that frame longer (the owner's camera jumps at 240 Hz, 2026-11-08; the game's thread had the room: the tick to the
+  // drawing 2.5 ms at p50). "chained": "worker" keeps the chain on the worker (as 0.6.0 did, for comparisons)
   const bool chained = s_r.chain;
   const bool fit_rule = TheOptions().debug.worker_rule != "always";
   if (!Threaded() || s_r.fall_back || s.practice || s.scrub.forked || !s.rollback.Active() ||
@@ -2186,9 +2285,10 @@ bool WorkerStart(Guest& g, Session& s, u32 step, u32 wrong)
     s_r.barred_late += d <= TheOptions().debug.worker_catch_up;  // (the worker's pace bars it: a catch-up foreseen)
     return false;
   }
-  if (fit_rule && !chained && s_r.c_high + d * s_r.r_sync + MARGIN_MS <= FIELD_MS)
+  if (fit_rule && pace::SyncFits(d, s_r.c_high, s_r.r_sync, chained, TheOptions().debug.worker_chained == "fit"))
   {
     ++s_r.sync_fit;
+    s_r.chain_sync_fit += chained;
     return false;
   }
   // S4: no bar for a worker slower than a frame (the owner: never a stall): the chain falls behind, and its lag says so
@@ -2543,6 +2643,18 @@ void WorkerStop()
   Notice("fzgx: rollback worker S4: correction delay (frames from a correction's first frame to its job's adoption): "
          "{:.2f} on average, at most {} (by delay:{})", r.delay_n ? double(r.delay_sum) / r.delay_n : 0.0, r.delay_high,
          delays.empty() ? std::string(" none") : delays);
+  {
+    const char* const classes[Rule::FRAME_CLASSES] = {"after an adoption", "after a sync rollback", "after neither"};
+    std::string jerks;
+    for (int c = 0; c < Rule::FRAME_CLASSES; ++c)
+      jerks += std::format(" [{}: the machine {}; the camera {}]", classes[c], Quantiles(s_r.jerk_pos[c]),
+                           Quantiles(s_r.jerk_eye[c]));
+    Notice("fzgx: rollback worker S7: chained corrections run sync as they fit {} (\"chained\": {}); what the "
+           "player sees (the followed machine's place and the camera's eye, game units): an adoption's jump: the "
+           "machine {}; the camera {}; the second difference over three hooks a step apart, by the frame between:{}",
+           r.chain_sync_fit, TheOptions().debug.worker_chained, Quantiles(s_r.jump_pos), Quantiles(s_r.jump_eye),
+           jerks);
+  }
   Notice("fzgx: rollback worker S4: chaining: adopted {} with the session's rows, {} on rows that changed since "
          "(provisional); jobs chained {}; corrections below a job's R left to the chain {}; chains (to an adoption with the session's rows) {}, "
          "frames {} in all, at most {} (by length:{}); a job's R to its adoption at most {} steps; jobs started with the worker at a frame a step or slower {}",

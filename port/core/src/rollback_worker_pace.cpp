@@ -15,6 +15,11 @@ u32 Foreseen(u32 d, double r_ms)
   return r_ms < FIELD_MS - 0.5 ? static_cast<u32>(std::ceil((d * r_ms + START_MS) / (FIELD_MS - r_ms))) : FORESEEN_NEVER;
 }
 
+bool SyncFits(u32 d, double c_ms, double r_ms, bool chained, bool chain_fits)
+{
+  return (!chained || chain_fits) && c_ms + d * r_ms + MARGIN_MS <= FIELD_MS;
+}
+
 void Pace::Restart(const Now& now, std::vector<float>& window)
 {
   switched = false;
