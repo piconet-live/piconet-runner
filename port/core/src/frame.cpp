@@ -261,6 +261,25 @@ void LockstepFrame(Guest& g, Session& s, u32 step, bool race_phase)
     return Fail(g, s, step);
   if (s.rollback.Active())
   {
+    // The steps below this one not yet final become final here as they ran: each must have run on its official row
+    // (a watching game confirms its seat out only when every step before the frame's own is final:
+    // spectate.cpp AfterADriftingFrame). One that did not is said (detection only: the race may be desynced there).
+    if (const u32 open = WorkerKnown(step); open < step && s.unchecked_into_lockstep++ < 5)
+      Notice("fzgx: steps from {} became final as the game went into lockstep at {} with a rollback worker's job "
+             "still open on them (the race may be desynced from there)",
+             open, step);
+    for (u32 t = s.checked; t < step && t < s.official.size(); ++t)
+    {
+      std::array<u8, 30 * RECORD> ran{};
+      Rollback::UsedInputs(g, t, s.seats, ran.data());
+      if (s.seats.size() * RECORD <= ran.size() && std::equal(ran.begin(), ran.begin() + s.seats.size() * RECORD, s.official[t].begin()))
+        continue;
+      if (s.unchecked_into_lockstep++ < 5)
+        Notice("fzgx: step {} became final as the game went into lockstep at {}, though it ran on inputs other than "
+               "the official row (the race may be desynced from there)",
+               t, step);
+      break;
+    }
     s.rollback.Stop();
     s.used.clear();
     ScrubStop(s);

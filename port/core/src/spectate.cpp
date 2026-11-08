@@ -294,7 +294,11 @@ void AfterADriftingFrame(Session& s, u32 step, const FrameSteps& steps)
     return;
   PaceTheWatching(s, step);
   // (the steps run after this hook: whether the seat is out on them is read when the next frame begins)
-  s.behind_next = steps.catch_up == 0 && !steps.held && Have(s) >= step + 1 + SPECTATE_INTO_LOCKSTEP;
+  // Only with every step below this frame's final (s.checked, set by RunSteps before this hook): a step the
+  // rollback worker still runs again in an open job, or one held open, ran on a prediction in this game, and
+  // lockstep makes every step below its own final as it is. Race m285 (2026-11-07): seat 14, out on its first lap,
+  // went into lockstep with a job open from step 1229, and steps 1229 to 1236 stayed as predicted.
+  s.behind_next = steps.catch_up == 0 && !steps.held && Have(s) >= step + 1 + SPECTATE_INTO_LOCKSTEP && s.checked >= step;
 }
 
 // The race's end for a game watching behind (frame.cpp KindOfFrame): it has nothing to check, every step it ran

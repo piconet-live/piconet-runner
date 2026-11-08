@@ -340,6 +340,7 @@ struct Session
   // Steps about to become final whose inputs, as the step ran them (the input ring: what the recording keeps), were
   // not the official row although the session's own account (`used`) said they were: kept open and run again
   // instead (frame.cpp HeldOpenSteps). Each is a bookkeeping fault found before it could become a desync.
+  u32 unchecked_into_lockstep = 0;  // steps found run on other rows as lockstep made them final (frame.cpp LockstepFrame)
   u32 held_open = 0;
   u32 normal_steps = 0;
   RaceSummary summary;  // what the race's one line in the player's file is made of (summary.h)
