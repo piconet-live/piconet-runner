@@ -59,14 +59,16 @@ void Frame(Guest& g)
   const Package& p = *match->game_mode;
   const u32 say = g.Read32(block + SAY);
   const bool paused = g.Read32(block + PAUSED) != 0;
+  const u32 at = g.Read32(block + RESUME_AT), runs = g.Read32(block + RUNS), length = g.Read32(block + RESUME_LENGTH);
+  const bool counting = paused && at != 0 && at > runs && length != 0;
   const bool known = say != 0 && say <= p.say_texts.size();
-  mode_say::Publish(board, known ? say : 0, known ? p.say_texts[say - 1] : std::string{}, paused);
+  // (during a resume's count the message goes to the foot already: the middle is the figure's)
+  mode_say::Publish(board, known ? say : 0, known ? p.say_texts[say - 1] : std::string{}, paused && !counting);
   if (TheOptions().practice)
     return;
   // `resume after`: the figure over its length, 3, 2, 1, while the race still stands
   panel::Board& figure = panel::TheBoard();
-  const u32 at = g.Read32(block + RESUME_AT), runs = g.Read32(block + RUNS), length = g.Read32(block + RESUME_LENGTH);
-  if (paused && at != 0 && at > runs && length != 0)
+  if (counting)
   {
     const u32 left = std::min(at - runs, length);
     panel::Counting(figure, (left * 3 + length - 1) / length);
