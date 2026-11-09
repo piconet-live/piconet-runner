@@ -123,7 +123,11 @@ constexpr u32 StatBaseAt(u32 seat, u32 i)
   return i < STATS_FIRST ? STATS + seat * STAT + STAT_BASE + 4 * i
                          : STATS_TWO + seat * STAT_TWO + STAT_TWO_BASE + 4 * (i - STATS_FIRST);
 }
-constexpr float MOST_SPEED = 9000.0f;
+// seat.speed's and rolling_start's top: 9000 (under the stock pack's SpeedCap, 9990), as before 0.6.1; with the file's
+// setup word seat_speed_open (0.6.1), 1e17: the largest at which the held momentum v / 216 x W (W at most the packs' 25,000) and its square, which the next
+// step's drag sums, stay finite binary32 (216 x sqrt(FLT_MAX) / 25000 = 1.59e17)
+constexpr float MOST_SPEED = 9000.0f, MOST_SPEED_OPEN = 1.0e17f;
+static_assert(MOST_SPEED_OPEN / 216.0f * 25000.0f < 1.8e19f);
 constexpr float MOST_START_GAP = 10000.0f;  // start_gap's metres at most (modes.toml)
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
@@ -231,6 +235,7 @@ struct Package
   std::optional<u16> max_energy;    // max_energy: every seat's M+0x5DA and M+0x184 at game_start; none, the game's
   bool stats_page = false;          // the compiler's stats_page: the block has the stats page, its last (a rule writes one of its stats)
   bool time_gaps = false;              // the compiler's: a rule reads a time gap: the block's gap page is kept (mode_gap.h)
+  bool speed_open = false;             // the file's seat_speed_open: seat.speed and rolling_start to MOST_SPEED_OPEN, not 9000
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // start_gap: the metres between the grid's slots round the lap (0: every machine on slot 0's spot, every no-contact row

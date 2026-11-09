@@ -318,6 +318,12 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.stats_page = true;
         }
+        else if (id == modes::SETUP_SEATSPEEDOPEN)
+        {
+          if (!setup_args.empty())
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          p.speed_open = true;
+        }
         else if (id == modes::SETUP_TAGTEXTS)
         {
           // a value a byte and a 0 between texts, as the compiler's ModeTagTexts holds them: font 5's characters
@@ -340,8 +346,8 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         else if (id == modes::SETUP_ROLLINGSTART)
         {
           const float v = std::bit_cast<float>(arg(0));
-          if (setup_args.size() != 1 || !(v >= 0.0f && v <= MOST_SPEED))
-            return Fail(why, "starts rolling at a speed outside 0 to 9000 km/h");
+          if (setup_args.size() != 1 || !(v >= 0.0f && v <= MOST_SPEED_OPEN))  // (NaN and infinity outside too)
+            return Fail(why, "starts rolling at a speed outside 0 to 1e17 km/h");
           p.rolling = static_cast<u32>(arg(0));
         }
         else if (id == modes::SETUP_REWIND || id == modes::SETUP_RESUMECOUNTDOWN)
@@ -442,6 +448,9 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
       if (at != NONE && at >= p.code.size())
         return Fail(why, std::format("has a rule whose code is not there (\"{}\")", rule.label));
   }
+  // past 9000 km/h only with the file's seat_speed_open (0.6.1), as the compiler holds it
+  if (p.rolling && !p.speed_open && !(std::bit_cast<float>(*p.rolling) <= MOST_SPEED))
+    return Fail(why, "starts rolling above 9000 km/h without seat_speed_open");
   return true;
 }
 }  // namespace

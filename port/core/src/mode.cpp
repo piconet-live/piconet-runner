@@ -1795,7 +1795,7 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
       {
         if (!Finite(a.value[0]))
           return m.Fail(FAULT_REAL);
-        const float v = std::clamp(Real(a.value[0]), 0.0f, MOST_SPEED);
+        const float v = std::clamp(Real(a.value[0]), 0.0f, p.speed_open ? MOST_SPEED_OPEN : MOST_SPEED);
         g.Write32(record, g.Read32(record) | HELD);
         g.Write32(record + 12, std::bit_cast<u32>(v + 0.0f));  // (-0 as 0)
         break;

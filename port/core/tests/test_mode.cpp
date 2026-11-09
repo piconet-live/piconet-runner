@@ -133,7 +133,7 @@ void TestOverdriveRunsInTheBlock()
   g.Write32(MODULE + game::RACE_CLOCK, 1260);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(g.Read32(BLOCK + mode::SeatWord(2, 0)) == 1200 && g.Read32(BLOCK + mode::RUNS) == 3);
-  // the speed's cap: 9000 at most
+  // Overdrive's own min: 9000 at most
   g.Write32(MODULE + game::RACE_CLOCK, 600 * 900);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(std::bit_cast<float>(g.Read32(BLOCK + mode::RECORDS + 12)) == 9000.0f);
@@ -141,6 +141,34 @@ void TestOverdriveRunsInTheBlock()
   g.Write32(BLOCK + mode::END, 1);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(g.Read32(BLOCK + mode::RUNS) == 4);
+}
+
+// seat.speed without the 9000 top of before 0.6.1 (the file's seat_speed_open): 12000 held as written, 1e30 held
+// to 1e17, -5 to 0; a package of before (no seat_speed_open) holds 12000 to 9000 as it did. rolling_start reads 12000.
+void TestSeatSpeedOpen()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("speed_open.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->speed_open && p->rolling == std::bit_cast<u32>(12000.0f));
+  const auto held = [&](const mode::Package& package, u32 seat) {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 3, 600);
+    mode::Run(g, package, BLOCK, MODULE);
+    const u32 record = BLOCK + mode::RECORDS + seat * mode::RECORD;
+    CHECK(g.Read32(record) & mode::HELD);
+    return std::bit_cast<float>(g.Read32(record + 12));
+  };
+  CHECK(held(*p, 0) == 12000.0f && held(*p, 1) == mode::MOST_SPEED_OPEN && held(*p, 2) == 0.0f);
+  CHECK(std::bit_cast<u32>(held(*p, 2)) == 0);  // -0 never
+  mode::Package before = *p;
+  before.speed_open = false;
+  CHECK(held(before, 0) == 9000.0f && held(before, 1) == 9000.0f && held(before, 2) == 0.0f);
 }
 
 // The words vector (every operation and word of the api) runs on thirty seats without a mode error, within the

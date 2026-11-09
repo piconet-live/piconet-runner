@@ -222,6 +222,7 @@ void TestASquareRootsCostInBothLoops();
 void TestSoloModesAndTheRelay();
 void TestDestroyedAndOutTellAnEndApart();
 void TestOverdriveRunsInTheBlock();
+void TestSeatSpeedOpen();
 void TestEveryWordRuns();
 void TestTheGamesSquareRootIsTheCompilers();
 void TestTheGeneratorIsTheReferences();
@@ -613,6 +614,7 @@ int main(int argc, char** argv)
   TestSoloModesAndTheRelay();
   TestDestroyedAndOutTellAnEndApart();
   TestOverdriveRunsInTheBlock();
+  TestSeatSpeedOpen();
   TestEveryWordRuns();
   TestTheGamesSquareRootIsTheCompilers();
   TestTheGeneratorIsTheReferences();
