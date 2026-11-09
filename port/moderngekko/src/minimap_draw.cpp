@@ -36,9 +36,13 @@ bool DrawSymbol(ImDrawList* list, fzgx::u32 symbol, ImVec2 p, float size, ImU32 
 {
   if (symbol == fzgx::MinimapDot::SYMBOL_CROWN)
   {
-    // a base band and three points, the middle one highest: x -1 to 1, y -0.75 (the top) to 0.55 (the base), in size / 2
+    // a base band and three points, the middle one highest: x -1 to 1, y -0.75 (the top) to 0.55 (the base), in size / 2.
+    // An even number of corners: the fill's indices are (n - 2) * 3, plus 6n with anti-aliasing, so an odd n makes the
+    // frame's index count odd, and Aurora's overlay upload (16-bit indices, sizes in multiples of 4 bytes) then stops
+    // Aurora for the run ("Size (...) is not a multiple of 4", seen 2026-11-08 with 7 corners). Hence the base's middle.
     static constexpr ImVec2 CROWN[] = {{-1.0f, 0.55f}, {-1.0f, -0.55f}, {-0.5f, 0.0f}, {0.0f, -0.75f},
-                                       {0.5f, 0.0f},   {1.0f, -0.55f},  {1.0f, 0.55f}};
+                                       {0.5f, 0.0f},   {1.0f, -0.55f},  {1.0f, 0.55f}, {0.0f, 0.55f}};
+    static_assert(std::size(CROWN) % 2 == 0, "an odd corner count gives the frame an odd index count (see above)");
     ImVec2 at[std::size(CROWN)];
     for (std::size_t i = 0; i < std::size(CROWN); ++i)
       at[i] = ImVec2(p.x + CROWN[i].x * size / 2, p.y + CROWN[i].y * size / 2);
