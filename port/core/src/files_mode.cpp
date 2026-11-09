@@ -324,6 +324,12 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
           p.speed_open = true;
         }
+        else if (id == modes::SETUP_MAXSPEEDOPEN)
+        {
+          if (!setup_args.empty())
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          p.max_speed_open = true;
+        }
         else if (id == modes::SETUP_TAGTEXTS)
         {
           // a value a byte and a 0 between texts, as the compiler's ModeTagTexts holds them: font 5's characters

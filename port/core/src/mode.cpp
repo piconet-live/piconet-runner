@@ -61,6 +61,7 @@ constexpr u32 M_RESTORING = 0x214, M_SURFACE = 0x218, M_BASE_SPEED = 0x224;   //
 constexpr u32 M_LAST_HIT = 0x4AC, M_SETTLED = 0x481, M_KOS = 0x482, M_CPU = 0x484;  // (u8, u8, the CPU block)
 constexpr u32 M_CONTACT = 0x58C, M_KO_WAIT = 0x593, M_MAX_ENERGY = 0x5DA;     // (u8 at 0x593; u16 at 0x5DA)
 constexpr u32 M_BOOST_LEFT = 0x18A;                                           // (u8: fn_1_26F34 counts it down)
+constexpr u32 M_BOOST_VALUE = 0x228;                                          // (the game's boost value)
 constexpr float MAX_ENERGY_LEAST = 1.0f, MAX_ENERGY_MOST = 1000.0f;
 constexpr u32 F_RESTORE = 0x1, F_AIRBORNE = 0x2, F_SPIN = 0x8, F_BOOSTING = 0x20, F_BROKEN = 0x80, F_DRIVEN = 0x400,
               F_FALLEN = 0x800, F_FROZEN = 0x8000, F_FINISHED = 0x10000, F_SIDE = 0x20000, F_WALL = 0x00800000,
@@ -918,6 +919,8 @@ private:
       case SEAT_TOPSPEED: return m_g.Read32(m + M_TOP_SPEED);
       case SEAT_MAXENERGY: return Bits(static_cast<float>(m_g.Read16(m + M_MAX_ENERGY)));
       case SEAT_BOOSTLEFT: return m_g.Read8(m + M_BOOST_LEFT);
+      case SEAT_BASESPEED: return m_g.Read32(m + M_BASE_SPEED);
+      case SEAT_BOOSTVALUE: return m_g.Read32(m + M_BOOST_VALUE);
       case SEAT_LASTHITENERGY: return m_g.Read32(m + M_LAST_HIT);
       case SEAT_FALLEN: return (Flags() & F_FALLEN) != 0;
       case SEAT_SPINNING: return (Flags() & F_SPIN) != 0;
@@ -1800,6 +1803,17 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         g.Write32(record + 12, std::bit_cast<u32>(v + 0.0f));  // (-0 as 0)
         break;
       }
+      case ACTION_SEATBASESPEED:
+      {
+        if (!Finite(a.value[0]))
+          return m.Fail(FAULT_REAL);
+        // the engine's speed, nothing held: not a seat seat.speed would not hold (the image's NOT_HELD, sites_mode.py)
+        if ((flags & (F_FROZEN | F_BROKEN | F_FALLEN | F_FINISHED | F_RETIRED | F_DESTROYED)) || g.Read16(machine + M_RESTORING) != 0 ||
+            (g.Read32(machine + M_CONTACT) & M_DESTROY_RECORD))
+          break;
+        g.Write32(machine + M_BASE_SPEED, Bits(std::clamp(Real(a.value[0]), 0.0f, MOST_BASE_SPEED) + 0.0f));  // (-0 as 0)
+        break;
+      }
       case ACTION_RETIRE:
         mask(RESPAWN, seat, false);
         if (!finished)
@@ -1956,7 +1970,9 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         if (i >= STATS_FIRST && !p.stats_page)
           return m.Fail(FAULT_CODE);
         const u32 stat = block + STATS + seat * STAT, changed = g.Read32(stat);
-        const float v = std::clamp(Real(a.value[0]), STAT_RANGES[i].low, STAT_RANGES[i].high) + 0.0f;  // (-0 as 0)
+        // max speed to MOST_MAX_SPEED_OPEN with the file's setup word max_speed_open (0.6.1)
+        const float high = i == STAT_MAX_SPEED && p.max_speed_open ? MOST_MAX_SPEED_OPEN : STAT_RANGES[i].high;
+        const float v = std::clamp(Real(a.value[0]), STAT_RANGES[i].low, high) + 0.0f;  // (-0 as 0)
         const u32 field = StatField(g, machine, seat, i);
         if (!(changed >> i & 1))
           g.Write32(block + StatBaseAt(seat, i), field);

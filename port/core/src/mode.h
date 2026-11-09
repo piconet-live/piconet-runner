@@ -110,10 +110,10 @@ static_assert(NO_CAP + 4 <= 7 * PAGE && 7 * PAGE <= BLOCK);
 // image's seat_energy (sites_seats.py, fn_1_26F34 0x27420) loads the value from the stats page in its place.
 constexpr std::array<u32, 18> STAT_FIELDS = {0x8,  0x220, 0x22C, 0xC,  0x14, 0x1C, 0x23C, 0x230, 0x234,
                                              0x30, 0x24,  0x28,  0x10, 0x20, 0x18, 0x2C,  0x238, 0x477};
-constexpr u32 STATS_FIRST = 10, STAT_GRIP_WINDOW = 17, STAT_BOOST_ENERGY = 18, STAT_COUNT = 19;
+constexpr u32 STAT_MAX_SPEED = 2, STATS_FIRST = 10, STAT_GRIP_WINDOW = 17, STAT_BOOST_ENERGY = 18, STAT_COUNT = 19;
 constexpr u32 STATS_TWO = BLOCK + 0x10, STAT_TWO = 0x80, STAT_TWO_BASE = 0x40;
 static_assert(STATS_TWO + 30 * STAT_TWO <= BLOCK_WITH_STATS && (STAT_COUNT - STATS_FIRST) * 4 <= STAT_TWO_BASE &&
-              STAT_COUNT <= 32 && STAT_FIELDS[STAT_GRIP_WINDOW] == 0x477 && STAT_BOOST_ENERGY == STAT_FIELDS.size());
+              STAT_COUNT <= 32 && STAT_FIELDS[STAT_GRIP_WINDOW] == 0x477 && STAT_FIELDS[STAT_MAX_SPEED] == 0x22C && STAT_BOOST_ENERGY == STAT_FIELDS.size());
 constexpr u32 StatValueAt(u32 seat, u32 i)
 {
   return i < STATS_FIRST ? STATS + seat * STAT + STAT_VALUES + 4 * i : STATS_TWO + seat * STAT_TWO + 4 * (i - STATS_FIRST);
@@ -128,6 +128,13 @@ constexpr u32 StatBaseAt(u32 seat, u32 i)
 // step's drag sums, stay finite binary32 (216 x sqrt(FLT_MAX) / 25000 = 1.59e17)
 constexpr float MOST_SPEED = 9000.0f, MOST_SPEED_OPEN = 1.0e17f;
 static_assert(MOST_SPEED_OPEN / 216.0f * 25000.0f < 1.8e19f);
+// seat.base_speed's top (M+0x224, the game's units, a metre a step): the base speed a held seat.speed of MOST_SPEED_OPEN
+// writes at site L (v / 216), so the word puts nothing there that a hold could not
+constexpr float MOST_BASE_SPEED = MOST_SPEED_OPEN / 216.0f;
+// seat.stat.max_speed's top with the file's setup word max_speed_open (0.6.1): Twilight's
+// survival mod's 10,000, at which the thrust's loss base / (36 + 40 x max speed + 2 x boost value) is about nothing; a
+// package without it holds the stat to the stat pack's range (0 to 4)
+constexpr float MOST_MAX_SPEED_OPEN = 10000.0f;
 constexpr float MOST_START_GAP = 10000.0f;  // start_gap's metres at most (modes.toml)
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
@@ -236,6 +243,7 @@ struct Package
   bool stats_page = false;          // the compiler's stats_page: the block has the stats page, its last (a rule writes one of its stats)
   bool time_gaps = false;              // the compiler's: a rule reads a time gap: the block's gap page is kept (mode_gap.h)
   bool speed_open = false;             // the file's seat_speed_open: seat.speed and rolling_start to MOST_SPEED_OPEN, not 9000
+  bool max_speed_open = false;         // the file's max_speed_open: seat.stat.max_speed held to MOST_MAX_SPEED_OPEN
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // start_gap: the metres between the grid's slots round the lap (0: every machine on slot 0's spot, every no-contact row

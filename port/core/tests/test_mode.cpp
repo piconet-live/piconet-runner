@@ -171,6 +171,58 @@ void TestSeatSpeedOpen()
   CHECK(held(before, 0) == 9000.0f && held(before, 1) == 9000.0f && held(before, 2) == 0.0f);
 }
 
+// The engine's own speed (0.6.1): seat.base_speed writes M+0x224 at the mode point, held to 0 .. MOST_BASE_SPEED and
+// never on a seat the game would not hold (frozen, broken down, out, finished, retired, destroyed, restoring);
+// seat.boost_value reads M+0x228; seat.stat.max_speed reaches 10000 with the file's max_speed_open and stays at the
+// stat pack's 4 in a package of before.
+void TestSeatBaseSpeed()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("engine_speed.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->max_speed_open && !p->speed_open);
+  constexpr u32 SEATS = 10;
+  const auto run = [&](const mode::Package& package, auto&& check) {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, SEATS, 600);
+    for (u32 seat = 0; seat < SEATS; ++seat)
+    {
+      const u32 m = MACHINES + seat * game::MACHINE_SIZE;
+      g.Write32(m + 0x224, std::bit_cast<u32>(1.0f));
+      g.Write32(m + 0x228, std::bit_cast<u32>(0.5f * static_cast<float>(seat)));
+    }
+    const u32 kept[] = {0x8000, 0x80, 0x800, 0x10000, 0x08000000, 0x40000000};
+    for (u32 k = 0; k < std::size(kept); ++k)
+      g.Write32(MACHINES + (3 + k) * game::MACHINE_SIZE + game::MACHINE_FLAGS, kept[k]);
+    g.Write16(MACHINES + 9 * game::MACHINE_SIZE + 0x214, 1);   // restoring
+    mode::Run(g, package, BLOCK, MODULE);
+    CHECK(g.Read32(BLOCK + mode::FAULT) == 0);
+    check(g);
+  };
+  const auto base = [](Guest& g, u32 seat) { return std::bit_cast<float>(g.Read32(MACHINES + seat * game::MACHINE_SIZE + 0x224)); };
+  run(*p, [&](Guest& g) {
+    CHECK(base(g, 0) == 28.0f && base(g, 1) == 0.0f && std::bit_cast<u32>(base(g, 1)) == 0 && base(g, 2) == mode::MOST_BASE_SPEED);
+    for (u32 seat = 3; seat < SEATS; ++seat)
+      CHECK(base(g, seat) == 1.0f);
+    for (u32 seat = 0; seat < SEATS; ++seat)
+    {
+      CHECK(std::bit_cast<float>(g.Read32(BLOCK + mode::SeatWord(seat, 0))) == 0.5f * static_cast<float>(seat));
+      CHECK(std::bit_cast<float>(g.Read32(BLOCK + mode::StatValueAt(seat, mode::STAT_MAX_SPEED))) == 10000.0f);
+    }
+  });
+  mode::Package before = *p;
+  before.max_speed_open = false;
+  run(before, [&](Guest& g) {
+    CHECK(std::bit_cast<float>(g.Read32(BLOCK + mode::StatValueAt(0, mode::STAT_MAX_SPEED))) == 4.0f);
+  });
+  CHECK(mode::MOST_BASE_SPEED == mode::MOST_SPEED_OPEN / 216.0f);
+}
+
 // The words vector (every operation and word of the api) runs on thirty seats without a mode error, within the
 // budget, and twice from the same memory to the same block.
 void TestEveryWordRuns()
