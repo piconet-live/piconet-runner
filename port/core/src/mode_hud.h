@@ -58,14 +58,16 @@ static_assert(TAGS_AT + 30 <= GHOST_SOUNDS && GHOST_SOUNDS + 4 <= STATS && STATS
 // flags (STORY_DISTANCE, STORY_OBJECTS: the mode gave that value), +6 show_objects's n, +7 its of (0 to 99 each).
 // A page of zeros: the game's own values.
 constexpr u32 STORY = 7 * PAGE + 0xF10, STORY_RECORD = 8;
-// hud_move's moves, in the page 7's head (unused since the modern HUD's slots left it): a record of MOVE_RECORD bytes a
-// seat at MOVES, for each modes::PART_* p at +4 p its dx and dy, s16 each, whole 640 x 480 units held to -MOVE_MOST ..
-// MOVE_MOST (0, 0: not moved). Then MAP_CHARS: map_char's code a seat, u32 (0: none; a Unicode code point, or
-// MAP_SHAPES + n for a named shape, the compiler's MapSymbols). The block's like the rest: undo log and checksum.
-constexpr u32 MOVES = 7 * PAGE, MOVE_RECORD = 4 * modes::PART_COUNT, MAP_CHARS = MOVES + 30 * MOVE_RECORD;
+// hud_move's moves, in the page 7's head (unused since the modern HUD's slots left it) after the page's step stamp (its
+// first word, which mode.cpp's Stamp writes at every run: read as seat 0's TIMER move it slid the clock down a unit a
+// step, off the screen within seconds): a record of MOVE_RECORD bytes a seat at MOVES, for each modes::PART_* p at
+// +4 p its dx and dy, s16 each, whole 640 x 480 units held to -MOVE_MOST .. MOVE_MOST (0, 0: not moved). Then
+// MAP_CHARS: map_char's code a seat, u32 (0: none; a Unicode code point, or MAP_SHAPES + n for a named shape, the
+// compiler's MapSymbols). The block's like the rest: undo log and checksum.
+constexpr u32 MOVES = 7 * PAGE + 0x10, MOVE_RECORD = 4 * modes::PART_COUNT, MAP_CHARS = MOVES + 30 * MOVE_RECORD;
 constexpr s32 MOVE_MOST = 640;
 constexpr u32 MAP_SHAPES = 0x110000, MAP_CROWN = MAP_SHAPES;
-static_assert(MAP_CHARS + 30 * 4 <= STORY);
+static_assert(MOVES % PAGE >= 4 && MAP_CHARS + 30 * 4 <= STORY);  // (clear of the stamp; below STORY)
 constexpr u32 STORY_METRES = 0, STORY_FLAGS = 4, STORY_SHOWN = 6, STORY_OF = 7;
 constexpr u8 STORY_DISTANCE = 1, STORY_OBJECTS = 2;
 constexpr float DISTANCE_MOST = 99999.0f;  // the drawer's five digits (fn_1_CDC8C 0xCEACC)

@@ -448,6 +448,12 @@ void TestTheDisplayWordsRun()
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, (viewed + 1) % 30, modes::PART_LAPS, real(0), real(0)));
     moves = hud::ViewedMoves(g);
     CHECK(std::all_of(moves.begin(), moves.end(), [](const auto& m) { return m[0] == 0 && m[1] == 0; }));
+    // seat 0's TIMER record is not the page's step stamp (mode.cpp's Stamp, at every run: read as that move it slid
+    // the clock off the screen)
+    const u32 stamp = g.Read32(BLOCK + 7 * mode::PAGE);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, 0, modes::PART_TIMER, real(5), real(7)));
+    CHECK(g.Read32(BLOCK + 7 * mode::PAGE) == stamp);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, 0, modes::PART_TIMER, real(0), real(0)));
   }
 
   // show_number's range: 0 to 99 as it is, above 99 clamped to 99, a negative hidden (the record holds number + 1)
