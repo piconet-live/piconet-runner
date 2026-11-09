@@ -931,7 +931,29 @@ private:
       case SEAT_POINTS: return m_g.Read32(m_block + POINTS + 4 * seat);
       case SEAT_KOS: return m_g.Read8(m + M_KOS);
       case SEAT_NOCONTACT: return m_g.Read32(m_block + NC + 4 * seat) == 0xFFFFFFFFu;
+      case SEAT_PADSTEER:
+      case SEAT_PADACCEL:
+      case SEAT_PADBRAKE:
+      case SEAT_PADBOOST: return PadRead(id, seat);
       default: Fail(FAULT_CODE); return 0;
+    }
+  }
+
+  // seat.pad.*: the step's row in the input buffer (the relay's, the same in every game and in the replay), as the
+  // stand-in routine reads it: byte 0 the bits (0x40 boost), 1 the stick, 4 the accelerator, 5 the brake, each / 100
+  // (binary32, the pad layer's own division). A row that says "the AI drives" (the stick's 0x80) reads 0.
+  u32 PadRead(u32 id, u32 seat) const
+  {
+    const u32 at = layout::INPUTS + ((m_g.Read32(net::STEP) & 1023) * SEATS + seat) * 8;
+    if (m_g.Read8(at + 1) == 0x80)
+      return 0;
+    const auto hundredths = [](s32 v) { return Bits(static_cast<float>(v) / 100.0f); };
+    switch (id)
+    {
+      case SEAT_PADSTEER: return hundredths(static_cast<std::int8_t>(m_g.Read8(at + 1)));
+      case SEAT_PADACCEL: return hundredths(m_g.Read8(at + 4));
+      case SEAT_PADBRAKE: return hundredths(m_g.Read8(at + 5));
+      default: return (m_g.Read8(at) & 0x40) != 0;
     }
   }
   // a read of type vec: its three words, x first (none: zeros)
@@ -1050,6 +1072,9 @@ private:
       case RACE_SPINATTACKS: return m_g.Read32(m_block + COMBAT + C_SPIN_OFF) == 0;
       case RACE_SIDEATTACKS: return m_g.Read32(m_block + COMBAT + C_SIDE_OFF) == 0;
       case RACE_SPINIMMUNITY: return m_g.Read32(m_block + COMBAT + C_IMMUNE) != 0;
+      case RACE_PAUSED: return m_g.Read32(m_block + PAUSED) != 0;
+      case RACE_PAUSEDSTEPS:
+        return m_g.Read32(m_block + PAUSED) != 0 ? m_g.Read32(m_block + RUNS) - m_g.Read32(m_block + PAUSE_RUN) : 0;
       default: Fail(FAULT_CODE); return 0;
     }
   }
@@ -1276,6 +1301,14 @@ private:
       // (its one cell is the number: `seat` holds it) the clock's word, never 0: the game's zero paths never run
       m_g.Plain().Write16(m_module + R_BASE + R_TIMER,
                           static_cast<u16>(std::clamp<std::int64_t>(static_cast<s32>(a.seat), 1, 65535)));
+      return;
+    }
+    // `say`: the message's word, at once, as a display (its one cell, the text's number, is in `seat`)
+    if (a.id == ACTION_SAY || a.id == ACTION_SAYOFF)
+    {
+      if (a.id == ACTION_SAY && (a.seat == 0 || a.seat > m_p.say_texts.size()))
+        return Fail(FAULT_CODE);
+      m_g.Write32(m_block + SAY, a.id == ACTION_SAY ? a.seat : 0);
       return;
     }
     if (hud::IsDisplay(a.id))
@@ -1759,6 +1792,35 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         g.Write32(module + R_BASE, g.Read32(module + R_BASE) | RULE_STOP);
         continue;
       case ACTION_PADSBACK: g.Write32(block + HANDED, 0); continue;
+      // a mode's pause: the next step stands (the image reads PAUSED), until resume; resume after t: t steps more
+      case ACTION_PAUSE:
+        if (g.Read32(block + PAUSED) == 0)
+        {
+          g.Write32(block + PAUSED, 1);
+          g.Write32(block + PAUSE_RUN, g.Read32(block + RUNS));
+        }
+        g.Write32(block + RESUME_AT, 0);
+        continue;
+      case ACTION_RESUME:
+        g.Write32(block + PAUSED, 0);
+        g.Write32(block + RESUME_AT, 0);
+        continue;
+      case ACTION_RESUMEAFTER:
+      {
+        if (g.Read32(block + PAUSED) == 0)
+          continue;
+        const s32 t = static_cast<s32>(a.seat);
+        if (t <= 0)
+        {
+          g.Write32(block + PAUSED, 0);
+          g.Write32(block + RESUME_AT, 0);
+          continue;
+        }
+        const u32 steps = std::min(static_cast<u32>(t), MOST_RESUME);
+        g.Write32(block + RESUME_AT, g.Read32(block + RUNS) + steps);
+        g.Write32(block + RESUME_LENGTH, steps);
+        continue;
+      }
       case ACTION_RACEDAMAGE:
       case ACTION_RACEKNOCKBACK:
       case ACTION_RACEWALLDAMAGE:
@@ -2103,7 +2165,7 @@ void EndClause(Machine& m, Mem& g, u32 block, u32 module, bool ranks_the_out)
 // After the queue: the seats' own Restore follows the respawns words (never on a finished seat, never cleared in a
 // restore's wreck phase: mode-open-words 1.4), the no-contact rows' OR, the danger zones, the rolling start's hold,
 // the clock limit's timer and its end, and the end clause when the run asked for it.
-void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const Now& n, bool end)
+void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const Now& n, bool end, bool standing = false)
 {
   const u32 count = m.Count(), respawn = g.Read32(block + RESPAWN);
   u32 any = 0;
@@ -2138,7 +2200,7 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
     any |= g.Read32(block + NC + 4 * seat);
     // the danger zone (story chapter 6): armed at `arm`, under `below` a count from 60 x seconds + 60, at 60 explode
     const u32 d = block + DANGER + 16 * seat, state = g.Read32(d + 12);
-    if ((state & DANGER_ON) && n.started && !(flags & (F_FINISHED | F_RETIRED)) && !(n.out >> seat & 1) &&
+    if ((state & DANGER_ON) && n.started && !standing && !(flags & (F_FINISHED | F_RETIRED)) && !(n.out >> seat & 1) &&
         restoring == 0)
     {
       const float speed = Real(g.Read32(machine + game::MACHINE_SPEED));
@@ -2344,6 +2406,17 @@ void CloseRun(Machine& m, Mem& g, u32 block, u32 module, u32 runs, bool running,
     g.Write32(block + FAULT + 4, g.Read32(module + game::RACE_CLOCK));
     g.Write32(block + END, 1);
   }
+  // a mode's pause: a `resume after` whose time has come lets the race go on from the next step, and a race that has
+  // ended stands no more (its results come as ever)
+  if (g.Read32(block + PAUSED) != 0)
+  {
+    const u32 at = g.Read32(block + RESUME_AT);
+    if (g.Read32(block + END) != 0 || (at != 0 && g.Read32(block + RUNS) >= at))
+    {
+      g.Write32(block + PAUSED, 0);
+      g.Write32(block + RESUME_AT, 0);
+    }
+  }
 }
 
 // game_start, the mode's first pass: once, called from the countdown task's first entry (the image's mode_begin, in the
@@ -2388,6 +2461,8 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
   Mem g(guest);
   if (const u32 end = g.Read32(block + END); end != 0)
   {
+    if (g.Read32(block + PAUSED) != 0)
+      g.Write32(block + PAUSED, 0);  // (CloseRun's: an ended race never stands)
     // the race is over (the image's race-end clause has it); a race the mode ended keeps the mode's order
     if (end == 2)
       HoldOrder(g, block, module);
@@ -2405,6 +2480,8 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
     hud::NoteGaps(guest, block, module, runs + 1);
   Machine m(g, p, block, module);
   const Now n = ReadNow(m, g, block, module);
+  // a step that stands (a mode's pause, the image's `manager`): the machines did not move, nothing of the race counts
+  const bool standing = g.Read32(block + PAUSED) != 0;
   // the mode point's first run compares the step with itself (out for a seat already out, as ever): game_start's state
   // is many steps old
   if (runs == 1)
@@ -2443,7 +2520,7 @@ void Run(Guest& guest, const Package& p, u32 block, u32 module)
   if (m.Faulted() == FAULT_NONE)
     Apply(m, g, p, block, module, &end);
   if (m.Faulted() == FAULT_NONE)
-    After(m, g, p, block, module, n, end);
+    After(m, g, p, block, module, n, end, standing);
   CloseRun(m, g, block, module, runs, n.started && !end, n);
 }
 

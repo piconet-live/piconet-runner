@@ -7,6 +7,7 @@
 #include "fzgx/rollback_worker.h"
 
 #include "board_net.h"
+#include "mode.h"
 #include "host_timers.h"
 #include "fzgx/runahead.h"
 
@@ -64,6 +65,15 @@ void ReadThePad(Guest& g, Session& s, u32 module)
   {
     s.pad = AI_DRIVES;
     s.pad[5] = 1;
+    // a mode's pause (mode.h PAUSED): the test's player lets go for 150 steps (the message is read), then holds A (the
+    // accelerator full, the pad layer's bit 0x04) for 30, and again, so that a mode waiting for a press goes on. A row like any other: the
+    // relay and the replay have it
+    const u32 block = g.Read32(layout::MODES + 4);
+    if (block != 0 && g.Read32(block + mode::PAUSED) != 0)
+    {
+      const u32 stood = g.Read32(block + mode::RUNS) - g.Read32(block + mode::PAUSE_RUN);
+      s.pad = stood % 180 >= 150 ? std::array<u8, RECORD>{0x04, 0, 0, 0, 100, 1} : std::array<u8, RECORD>{0, 0, 0, 0, 0, 1};
+    }
   }
   else
     g.CopyFrom(s.pad.data(), (module + PAD_RECORD), RECORD);

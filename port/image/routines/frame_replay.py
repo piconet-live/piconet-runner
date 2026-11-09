@@ -10,13 +10,50 @@ assembles: every machine has finished or is out, or, with the host's rule, its e
 is done. The frame routine asks before and after every step and runs no further step in a frame once a step has
 made it so (frame_entry.py, `extra_cut`): with the rule too, every game stands before the same step when the
 race-over test speaks. `endtest_extra` is the same question before an extra step, where the race clock has not yet
-counted the step just run (raceend.py)."""
+counted the step just run (raceend.py).
+
+A mode's pause (protocol modes.toml `pause`; port/core/src/mode.h PAUSED): `manager` reads the mode's block's pause word
+before every step's simulation. Not 0, the step stands: no simulation manager (no machine, CPU or presentation task, no
+camera, no generator seed), the mode point's host call (memmap.HOST_MODE: the mode's run, which reads the step's rows and
+may resume) made in its place, and memmap.STOOD set to 1; otherwise STOOD is 0 and the step runs as ever. The step itself
+goes on as any other: its number (+124), its row, its checksum (of the machines as they stand) and its sounds' word. So
+that the race clock stands too, the frame routine counts it only after a step that ran (frame_entry.py `extra_on`; for
+the frame's last step, `done_ret` takes back the count the game's frame function makes after it, 0x37BAC). The word is
+the block's, so a rollback, a step run again and a playback stand where the first run stood."""
 import memmap, raceend
 
 
 def asm():
     return _TEXT.replace("CLAUSE", raceend.clause(30, "et_", "et_yes", "et_no", behind=11)).replace(
-        "SIMGEN_TEXT", _simgen())
+        "SIMGEN_TEXT", _simgen()).replace("STAND_TEXT", _stand())
+
+
+# The pause's test in `manager`, after the mute words: r0, r9, r12, ctr and cr0 (the simulation manager's call, which
+# it takes the place of, writes every volatile register). The block's address and its pause word, then either the
+# mode's run and the routine's return, or STOOD 0 and on to the simulation.
+def _stand():
+    modes, stood, host = memmap.MODES, memmap.STOOD - memmap.CONTROL, memmap.HOST_MODE
+    assert memmap.lo(modes) + 4 < 0x8000 and memmap.MODE_PAUSED < 0x8000 and 0 < stood < 0x8000
+    return f"""    lis 9, {memmap.hi(modes)}
+    lwz 9, {memmap.lo(modes) + 4}(9)
+    cmplwi 9, 0
+    beq m_live
+    lwz 0, {memmap.MODE_PAUSED}(9)
+    cmpwi 0, 0
+    beq m_live
+    li 0, 1
+    stw 0, {stood}(31)
+    lis 12, {memmap.hi(host)}
+    ori 12, 12, {memmap.lo(host)}
+    mtctr 12
+    bctrl
+    lwz 0, 16(1)
+    mtlr 0
+    blr
+m_live:
+    li 0, 0
+    stw 0, {stood}(31)
+"""
 
 
 # The simulation's own generator (sites_generator.py): before every step of a running race whose race block says so
@@ -129,7 +166,7 @@ m_running:
     stw 11, 492(31)
 m_flag:
     stw 10, 488(31)
-    lwz 9, 116(31)
+STAND_TEXT    lwz 9, 116(31)
     cmpwi 9, 0
     beq m_call
     bl rt_cam
