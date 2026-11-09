@@ -64,12 +64,28 @@ bool DrawSymbol(ImDrawList* list, fzgx::u32 symbol, ImVec2 p, float size, ImU32 
   }
   char text[5] = {};
   ImTextCharToUtf8(text, static_cast<unsigned int>(symbol));
-  const ImVec2 wide = font->CalcTextSizeA(size, 1e9f, 0, text);
-  const ImVec2 at(p.x - wide.x / 2, p.y - wide.y / 2);
+  // the character's own ink, not its line box, at the crown's size: as tall as the crown (0.65 of `size`) and no wider
+  // than it (`size`), centred on `p` (a glyph's corners are offsets from the pen at the line's top, in pixels of the
+  // size it was baked at)
+  float height = size;
+  ImVec2 middle(0, 0);
+  if (const ImFontGlyph* glyph = font->GetFontBaked(size)->FindGlyphNoFallback(static_cast<ImWchar>(symbol));
+      glyph != nullptr && glyph->X1 > glyph->X0 && glyph->Y1 > glyph->Y0)
+  {
+    const float k = std::min(0.65f * size / (glyph->Y1 - glyph->Y0), size / (glyph->X1 - glyph->X0));
+    height = size * k;
+    middle = ImVec2((glyph->X0 + glyph->X1) / 2 * k, (glyph->Y0 + glyph->Y1) / 2 * k);
+  }
+  else
+  {
+    const ImVec2 wide = font->CalcTextSizeA(size, 1e9f, 0, text);
+    middle = ImVec2(wide.x / 2, wide.y / 2);
+  }
+  const ImVec2 at(p.x - middle.x, p.y - middle.y);
   for (const ImVec2 d : {ImVec2(-1, 0), ImVec2(1, 0), ImVec2(0, -1), ImVec2(0, 1), ImVec2(-0.7f, -0.7f),
                          ImVec2(0.7f, -0.7f), ImVec2(-0.7f, 0.7f), ImVec2(0.7f, 0.7f)})
-    list->AddText(font, size, ImVec2(at.x + d.x * edge, at.y + d.y * edge), rim, text);
-  list->AddText(font, size, at, fill, text);
+    list->AddText(font, height, ImVec2(at.x + d.x * edge, at.y + d.y * edge), rim, text);
+  list->AddText(font, height, at, fill, text);
   return true;
 }
 
