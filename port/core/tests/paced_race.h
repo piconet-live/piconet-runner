@@ -56,6 +56,11 @@ struct Pace
   // first time step fault_at is about to run on its official row, its row in the input ring is another one, so the
   // step runs on that row while the session counts it as run on the official one (0: none)
   u32 fault_at = 0;
+  // The relay ends the race at this displayed frame of the race (0: never), as the operator's end from the dashboard
+  // and the relay's time limit do: it closes no frame from then on, the frames it closed before reach the game, and
+  // it answers "over" with a frame count relay_end_extra past them (a frame the relay closed as it ended and sent to
+  // no game), as the real relay answers the Join a game sends when no frame came for a second
+  u32 relay_ends_at = 0, relay_end_extra = 1;
 };
 
 // What came of it.
@@ -82,6 +87,9 @@ struct Raced
   std::vector<std::array<u8, 6>> official_mine;  // the local seat's record in each official frame, by frame
   std::map<u32, std::array<u8, 6>> pads;  // the pad of the displayed race frame that began at each step
   u32 next_input_end = 0;                 // the session's Session::next_input as the race stopped
+  u32 relay_closed = 0;                   // the frames the relay had closed when it ended the race (Pace::relay_ends_at)
+  u32 stops = 0;                          // the stops the game asked of its host
+  int exit_code = 0;                      // what the process ends with (ExitCode, after Shutdown)
 };
 
 // The image's count of frames the local seat has been out (Pace::out_at), at a frame of the race from out_at on: 0

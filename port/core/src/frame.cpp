@@ -119,6 +119,11 @@ bool PlaybackFrame(Guest& g, Session& s, u32 step, u32 module)
       // forced) are final too
       s.final_steps = step;
       VerifyReplay(g, s);
+      // a recording that ends where the relay ended its race (the operator's end, the relay's time limit: frame.cpp
+      // EndAtTheRelaysEnd) took its results at its last step, where the playback stands now, and the race never
+      // looked over before it
+      if (!s.results_checked && !s.replay_results.empty() && g.Read32(END_OVER) == 0)
+        CheckResults(g, s);
       Notice("fzgx: the replay ended at step {}; {} steps differed", step, s.desyncs);
       PlaybackSummary(g, s);
       TheHost().RequestStop();
@@ -230,6 +235,92 @@ FrameKind KindOfFrame(Guest& g, Session& s, u32 step, u32 module, const Forcing&
   return {race_phase, race, settle, end_asked && race && step > s.checked};
 }
 
+// The race's end the relay said (relay_wire.cpp TakeTheRelaysEnd): at step E = s.relay_end in every game of the race,
+// since every game has the same official frames below it. Called for a displayed frame at step E or past it (a
+// racer's game runs ahead of the official frames on predictions; a watching one comes up to E in lockstep), or when
+// a wait of this frame found that its frames never come (`saved`: the frame's SaveStep was made, BeginRollbackFrame).
+// - The steps below E not yet final are checked against their official rows in the input ring (what this memory was
+//   made from). At the first that ran on another row the memory goes back to it, and this frame runs it and every
+//   step after it up to E on the official rows; the next frame comes here again, at E.
+// - All of them on their rows: the memory back to E, every step below it final, the results taken there (the
+//   standing at that step, as a mode's end_race and the host's finish limit give them; a race already over keeps the
+//   results it took then), the replay's steps up to E, and the game stops as leaving the results does: exit code 0,
+//   nothing kept for a rejoin, the launcher back in the lobby. Shutdown closes the replay (made compact) and writes the
+//   summary line.
+// The frames that still come before the host stops run on the last rows (RowFor), and nothing of them is recorded or
+// sent: every step from E on is past the race.
+void EndAtTheRelaysEnd(Guest& g, Session& s, u32 step, bool saved)
+{
+  if (s.relay_ended)
+  {
+    WriteRow(g, s, step, RowFor(s, step));
+    Rollback::Resimulate(g, 0);
+    return;
+  }
+  u32 end = s.relay_end;
+  WorkerQuiesce();  // (the deep-rollback worker's open jobs closed: every step from here is this thread's)
+  std::optional<u32> wrong;
+  std::array<u8, 30 * RECORD> ran{};
+  const std::size_t bytes = s.seats.size() * RECORD;
+  for (u32 t = s.checked; t < end && t < step; ++t)
+  {
+    Rollback::UsedInputs(g, t, s.seats, ran.data());
+    if (bytes <= ran.size() && std::equal(ran.begin(), ran.begin() + bytes, s.official[t].begin()))
+      continue;
+    wrong = t;
+    break;
+  }
+  const u32 to = std::min(wrong.value_or(end), step);
+  if (to < step && !s.rollback.Active())
+  {
+    // (not reached: a game in lockstep runs no step past its official frames, and those end at E)
+    Warn("fzgx: the race's end at step {}: the game is at step {} with no undo log to go back with; it ends here",
+         end, step);
+    wrong.reset();
+    end = s.relay_end = step;
+  }
+  else if (to < step)
+  {
+    if (!saved)
+      s.rollback.SaveStep(g, step, true);
+    s.rollback.RestoreTo(g, step, to);
+  }
+  if (wrong)
+  {
+    Notice("fzgx: the race's end at step {}: step {} ran on a predicted row; from it to the end again on the official "
+           "rows (this game was at step {})",
+           end, *wrong, step);
+    ++s.rollbacks;
+    s.max_depth = std::max(s.max_depth, step - *wrong);
+    Rollback::Resimulate(g, end - 1 - *wrong);
+    WriteRow(g, s, *wrong, s.official[*wrong]);
+    s.used[*wrong] = s.official[*wrong];
+    return;
+  }
+  // every step below E ran on its official row: the race is over here, for this game as for the others
+  s.checked = end;
+  OfficialSteps(g, end);
+  if (s.rollback.Active())
+  {
+    s.rollback.Stop();
+    s.used.clear();
+    ScrubStop(s);
+  }
+  CloseFinalSteps(g, s);
+  if (s.recorder.IsOpen() && !s.recorder.HasResults())
+    s.recorder.TakeResults(g);
+  board::Race(g, end, s.my_seat);
+  s.relay_ended = true;
+  s.exit_sent = true;
+  freeze::ThePulse().racing = false;
+  Notice("fzgx: the race ended at step {}, where the relay ended it (this game was at step {}): every step before it "
+         "final, the replay's {} steps to it; stopping",
+         end, step, s.final_steps);
+  TheHost().RequestStop();
+  WriteRow(g, s, end, RowFor(s, end));
+  Rollback::Resimulate(g, 0);
+}
+
 // A frame in lockstep: it waits for its step's official frame and runs that step alone.
 void LockstepFrame(Guest& g, Session& s, u32 step, bool race_phase)
 {
@@ -258,7 +349,7 @@ void LockstepFrame(Guest& g, Session& s, u32 step, bool race_phase)
   const bool watching = s.watch == Watch::Behind;  // its own slack, never CATCH_UP_SPEED (spectate.cpp)
   BeforeTheWatchersWait(s, step);
   if (!WaitFor(s, step + 1))
-    return Fail(g, s, step);
+    return s.relay_end != NEVER ? EndAtTheRelaysEnd(g, s, step, false) : Fail(g, s, step);
   if (s.rollback.Active())
   {
     // The steps below this one not yet final become final here as they ran: each must have run on its official row
@@ -514,6 +605,9 @@ void NormalStep(Guest& g, Session& s)
     TakeLastFramesWork(g, s, step, frame_now);
     ReportFrameTimes(g, s);
   }
+  // the race ends where the relay ended it (relay_wire.cpp TakeTheRelaysEnd)
+  if (step >= s.relay_end)
+    return EndAtTheRelaysEnd(g, s, step, false);
   const u32 module = g.Read32(MODULE_POINTER);
   StartBlackout(s, step);
   CatchingUpOrLive(g, s, step);
@@ -560,7 +654,7 @@ void NormalStep(Guest& g, Session& s)
     begun = BeginRollbackFrame(g, s, step, kind.settle, kind.check);
   }
   if (!begun)
-    return Fail(g, s, step);
+    return s.relay_end != NEVER ? EndAtTheRelaysEnd(g, s, step, true) : Fail(g, s, step);
   if (kind.race && !kind.settle && !kind.check)  // (a frame that may skip its drawing when late: present.cpp)
     PresentRaceFrame();
   FrameSteps steps;

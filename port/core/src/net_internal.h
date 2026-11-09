@@ -265,6 +265,12 @@ struct Session
   u32 hand_back = 0;      // the step the seat is the player's again from (SeatBack); 0: none announced
   Clock::time_point last_official{}, last_rejoin{}, last_ack{}, last_over{};
   u32 overs_sent = 0;     // Over packets sent (a few, the race's end said once on official steps)
+  // The relay ended the race (the operator's end from the dashboard, or its time limit: every seat out, nothing more
+  // sent) and said so in its answer to this game's Join: the race ends at this step here as in every game of it
+  // (relay_wire.cpp TakeTheRelaysEnd, frame.cpp EndAtTheRelaysEnd); NEVER: not said. relay_ended: this game has ended
+  // its race there (results taken, the replay's steps up to it, the game stopping).
+  u32 relay_end = NEVER;
+  bool relay_ended = false;
   Clock::time_point blackout_until{};  // tests (Debug::blackout_step): nothing goes to or comes from the relay until then
 
   // replay (protocol/formats.md section 1): the launcher starts the file (Core.FzgxReplay) with its

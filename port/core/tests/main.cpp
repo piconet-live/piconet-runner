@@ -90,6 +90,7 @@ void TestTheFinishLimitInTheRaceBlock();
 void TestTheGameKeepsToItsSchedule();
 void TestAGameAheadOfItsScheduleFallsBack();
 void TestASlowHostSendsItsInputsInTime();
+void TestARaceTheRelayEndsEndsAtOneStep();
 void TestTheScheduleAtALowerDelay();
 void TestARaceLeavesItsSummaryLine();
 void TestTheSummaryCountsBursts();
@@ -529,6 +530,7 @@ int main(int argc, char** argv)
   TestTheGameKeepsToItsSchedule();
   TestAGameAheadOfItsScheduleFallsBack();
   TestASlowHostSendsItsInputsInTime();
+  TestARaceTheRelayEndsEndsAtOneStep();
   TestTheScheduleAtALowerDelay();
   TestARaceLeavesItsSummaryLine();
   TestTheSummaryCountsBursts();

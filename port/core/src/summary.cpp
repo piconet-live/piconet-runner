@@ -57,7 +57,8 @@ const char* EndOf(const Session& s)
     return "over";    // started again into a race the relay said was over: nothing to rejoin
   if (s.phase == Phase::Failed)
     return "lost";    // no official inputs for 15 s: the relay was gone
-  return s.settled ? "finished" : "closed";  // the race ran to its end here; or the game was closed before it
+  // the race ran to its end here (the relay's end too: frame.cpp EndAtTheRelaysEnd); or the game was closed before it
+  return s.settled || s.relay_ended ? "finished" : "closed";
 }
 }  // namespace
 
