@@ -164,16 +164,16 @@ void CheckStart(const mm::Racers& racers, u32 count)
   Notice("fzgx: course map: start line check: {}", s_map.start_check);
 }
 
-// The racers' dots as the game mode shows them to `you` (map_hide, map_mark: mode_hud.h): nothing without a mode.
+// The racers' dots as the game mode shows them to `you` (map_hide, map_mark, map_char: mode_hud.h): nothing without a mode.
 void ModeDots(Guest& g, mm::Racers& racers, u32 you)
 {
   std::array<bool, 30> present{};
-  std::array<u32, 30> colour{};
+  std::array<u32, 30> colour{}, symbol{};
   for (u32 i = 0; i < 30; ++i)
     present[i] = racers[i].present, colour[i] = racers[i].colour;
-  mode::hud::MapRacers(g, you, OwnSeat(g) == you, present, colour);
+  mode::hud::MapRacers(g, you, OwnSeat(g) == you, present, colour, symbol);
   for (u32 i = 0; i < 30; ++i)
-    racers[i].present = present[i], racers[i].colour = colour[i];
+    racers[i].present = present[i], racers[i].colour = colour[i], racers[i].symbol = symbol[i];
 }
 
 // What decides whether the map shows.

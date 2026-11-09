@@ -269,6 +269,14 @@ void TestTheCourseMapsDots()
   CHECK(show.dots[2].seat == 5 && show.dots[2].role == MinimapDot::Leader);
   CHECK(show.dots[3].seat == 0 && show.dots[3].role == MinimapDot::You);
   CHECK(show.dots[3].colour == 0x100000);  // the machine's colour, no more
+  // a mode's map_char goes with its racer's dot, whatever its place in the order; none: 0
+  r[4].symbol = 0x265B;
+  r[0].symbol = MinimapDot::SYMBOL_CROWN;
+  show = Pick(r, 6, 0, c);
+  CHECK(show.dots[1].seat == 4 && show.dots[1].symbol == 0x265B && show.dots[3].symbol == MinimapDot::SYMBOL_CROWN &&
+        show.dots[0].symbol == 0 && show.dots[2].symbol == 0);
+  r[4].symbol = r[0].symbol = 0;
+  show = Pick(r, 6, 0, c);
   CHECK(show.dots[2].x > show.dots[3].x && Near(show.dots[3].y, 0));
   // you lead: one dot, yours; a finished you keeps it; an out you has none
   show = Pick(r, 6, 5, c);

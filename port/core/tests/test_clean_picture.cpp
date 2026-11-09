@@ -56,6 +56,10 @@ void TestTheCleanPicture()
   CHECK(clean.has_value() && clean->hud_clean && (hud::WindowFlags(*clean) & hud::HUD_CLEAN) != 0);
   const std::optional<mode::Package> same = Vector("gap_same.mode.json");
   CHECK(same.has_value() && !same->hud_clean && (hud::WindowFlags(*same) & hud::HUD_CLEAN) == 0);
+  // hud_layout ax likewise: the ax_hud vector's package, its window flag HUD_AX (the image's ax_rank and ax_faces read it)
+  const std::optional<mode::Package> ax = Vector("ax_hud.mode.json");
+  CHECK(ax.has_value() && ax->hud_ax && !ax->hud_clean && (hud::WindowFlags(*ax) & hud::HUD_AX) != 0);
+  CHECK(!same->hud_ax && (hud::WindowFlags(*same) & hud::HUD_AX) == 0 && (hud::WindowFlags(*clean) & hud::HUD_AX) == 0);
 
   TestHost host;
   ModData data;
