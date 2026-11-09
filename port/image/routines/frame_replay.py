@@ -2,8 +2,9 @@
 `replay` and `replay_filter` set the task filter for every step of a frame but its last, `filters` puts back the
 values the frame began with, `net_step` counts the session's step, and `manager` is the step wrapper around the
 game's simulation manager: it sets the words mute.py reads (+488, +492) and, in a session, calls `rt_cam`
-(frame_tasks.py) and `specstep` (frame_spectate.py) first, then `simgen`, which seeds the simulation's own
-generator for the step (sites_generator.py). `endtest` says whether the race-over test (standin_race.py,
+(frame_tasks.py) and `specstep` (frame_spectate.py) first, then (native form) `lapscroll`, which counts the lap-time
+list's scroll down (sites_lapscroll.py), then `simgen`, which seeds the simulation's own generator for the step
+(sites_generator.py). `endtest` says whether the race-over test (standin_race.py,
 `over`) would find the race over on the machines as they are: r3 = 1 in a running session's race phase when the
 test's own guards are clear and the race is over as raceend.py's text says, the text the race-over test itself
 assembles: every machine has finished or is out, or, with the host's rule, its end is reached and the results' wait
@@ -11,12 +12,43 @@ is done. The frame routine asks before and after every step and runs no further 
 made it so (frame_entry.py, `extra_cut`): with the rule too, every game stands before the same step when the
 race-over test speaks. `endtest_extra` is the same question before an extra step, where the race clock has not yet
 counted the step just run (raceend.py)."""
-import memmap, raceend
+import memmap, native, raceend
 
 
 def asm():
     return _TEXT.replace("CLAUSE", raceend.clause(30, "et_", "et_yes", "et_no", behind=11)).replace(
-        "SIMGEN_TEXT", _simgen())
+        "SIMGEN_TEXT", _simgen() + (_lapscroll() if native.ON else "")).replace(
+        "LAPSCROLL\n", "    bl lapscroll\n" if native.ON else "")
+
+
+# The lap-time list's scroll (../sites_lapscroll.py), native form only (the fork's image has neither this nor the
+# drawing's site): before every step, each of the four ports' counts (main.rel .bss 0x7ACA0 + 12 x port, +8), when
+# not 0, goes down by one: the count the stock game's drawing (fn_1_CB028) takes down once a displayed frame, which in
+# a race of ours the drawing leaves alone. Before the task manager, so the step whose lap event sets 15 draws 15, as
+# the stock game's first frame does. r30 is main.rel's .bss. Writes r9, r10, r11, cr0.
+LAP_ENTRIES, LAP_ENTRY, LAP_COUNT, LAP_PORTS = 0x7ACA0, 12, 8, 4   # .bss: the entries, their size, +8, the ports
+
+
+def _lapscroll():
+    first = LAP_ENTRIES + LAP_COUNT - 0x80000
+    assert -0x8000 <= first < 0 and LAP_ENTRIES + LAP_PORTS * LAP_ENTRY <= 0x80000
+    return f"""lapscroll:
+    addis 9, 30, 8
+    addi 9, 9, {first}
+    li 10, {LAP_PORTS}
+lsc_port:
+    lbz 11, 0(9)
+    cmpwi 11, 0
+    beq lsc_next
+    addi 11, 11, -1
+    stb 11, 0(9)
+lsc_next:
+    addi 9, 9, {LAP_ENTRY}
+    addi 10, 10, -1
+    cmpwi 10, 0
+    bne lsc_port
+    blr
+"""
 
 
 # The simulation's own generator (sites_generator.py): before every step of a running race whose race block says so
@@ -135,6 +167,7 @@ m_flag:
     bl rt_cam
     bl specstep
 m_call:
+LAPSCROLL
     bl simgen
     lis 12, 0x8000
     lwz 12, 0x30C8(12)
