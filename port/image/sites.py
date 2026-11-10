@@ -41,6 +41,7 @@ import sites_present
 import sites_seats
 import sites_shadow
 import sites_view
+import sites_wreck
 
 
 def add(k, r, patch, stock, complete, codes, hooks, mute):
@@ -481,6 +482,7 @@ rl_disc:
     sites_grid.add(k, r, patch, stock, test, middle, complete)
     sites_mines.add(k, r, patch, stock, test, la, D, middle)
     sites_mode.add(k, r, patch, stock, test, la, D, middle)
+    sites_wreck.add(k, r, patch, stock, test, la, middle)
     middle.extend(sites_combat.add(k, r, patch, stock, test, la))
     sites_modehud.add(k, r, patch, stock, test, la, middle)
     sites_hudmove.add(k, r, patch, stock, la, middle)
