@@ -1317,6 +1317,7 @@ void TestTheOnOffWordsByParameter()
     return;
   CHECK(p->boost_off && p->contact_off && p->restore == true && p->cpus_allowed);
   CHECK(p->mine_regen == static_cast<u32>(modes::SETUP_MINEREGEN_ON));
+  CHECK(p->instant_restore);   // wreck_slide off
   CHECK(p->results_title == "A B");
   // a title with no award still takes the results through the points page, the title's only place
   CHECK(mode::hud::WindowFlags(*p) & mode::hud::POINTS_PAGE);
@@ -1327,6 +1328,7 @@ void TestTheOnOffWordsByParameter()
     return;
   CHECK(!q->boost_off && !q->contact_off && q->restore == false && !q->cpus_allowed);
   CHECK(q->mine_regen == 0u);
+  CHECK(!q->instant_restore);
 }
 
 // A mode without `cpus on`: a player seat with the "AI drives" record retires at that step (flag set, its Restore

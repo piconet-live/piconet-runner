@@ -100,7 +100,7 @@ assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_
 # (racers - 1), +16 laps, +20 race type (6 laps, 3 free run), +24 the DOL generator's value up to the race (SHUFFLE),
 # +28 the per-race CPU seed; +32 the 30 seats' machines (bytes, seat 0 first); +64 the start grid's word (1: the race
 # names its grid, sites_grid.py; 0: the game's own sort, every recording made before it), +68 the grid (30 bytes, the
-# seat of each slot, pole first); +98 and +99 unused, +100 the rubber band (RACE_RUBBER_BAND_ON, below), +104 the simulation's own generator (RACE_SIM_GENERATOR, below), +108 to +256 unused; the race's rules: +256 the CPU level (0-3), +260 boost from the start (the fork
+# seat of each slot, pole first); +98 and +99 unused, +100 the rubber band (RACE_RUBBER_BAND_ON, below), +104 the simulation's own generator (RACE_SIM_GENERATOR, below), +108 wrecks slide before a restore (RACE_WRECK_SLIDE, below), +112 to +256 unused; the race's rules: +256 the CPU level (0-3), +260 boost from the start (the fork
 # sets rule flag 0x10 through control block +520), +264 restore (words), +268 every seat's machine setting (30 bytes,
 # 0 acceleration to 100 top speed; standin.py), +300 the steps after the first finish at which the race ends for
 # everyone (a word; 0: no such end; raceend.py); +304 the race's flow (a word: 1, a machine is out by the game's own
@@ -126,6 +126,12 @@ RACE_RUBBER_BAND_ON = _facts.RACE_RUBBER_BAND_ON
 # core reads a replay's from its header's "simGenerator"; sites_generator.py)
 RACE_SIM_GENERATOR = _facts.RACE_SIM_GENERATOR
 assert RACE_RUBBER_BAND_ON + 4 <= RACE_SIM_GENERATOR and RACE_SIM_GENERATOR + 4 <= RACE_CPULEVEL
+# +108 wrecks slide before a restore (a word: 1, a seat that gets restores and breaks down slides as the game's wreck
+# without restore does and is restored at the step that game would have taken it out, every race and practice from
+# this build but a mode's `wreck_slide off`; 0, its restore starts at the breakdown's step, every recording made
+# before; the core reads a replay's from its header's "wreckSlide"; sites_wreck.py)
+RACE_WRECK_SLIDE = _facts.RACE_WRECK_SLIDE
+assert RACE_SIM_GENERATOR + 4 <= RACE_WRECK_SLIDE and RACE_WRECK_SLIDE + 4 <= RACE_CPULEVEL
 # The seats' custom machines (garage-built: three parts and a pilot; sites_custom.py): 30 entries of 32 bytes, seat
 # order. +0 a word, not 0 when the seat races its own parts (0xC0000000: a garage record's "used, parts" bits); +4,
 # +12, +20 the body's, cockpit's and booster's part id (bytes: 0-24, 25-49, 50-74) and +8, +16, +24 each part's

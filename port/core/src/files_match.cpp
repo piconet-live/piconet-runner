@@ -284,6 +284,13 @@ void ModeIntoRace(Match& m)
   Put32(r + RACE_RESTORE, 0);
 }
 
+// Wrecks slide before a restore (files.h RACE_WRECK_SLIDE): every race and practice raced from here on, but a mode's
+// that says `wreck_slide off`; its recording says so (replay.cpp StartReplay).
+void WreckSlideIntoRace(Match& m)
+{
+  Put32(m.race.data() + RACE_WRECK_SLIDE, m.game_mode && m.game_mode->instant_restore ? 0 : 1);
+}
+
 // The start grid of the set-up ("grid", the coordinator's RaceSetup.Grid: the seats in starting order, pole first)
 // into the race block: RACE_GRID_ON 1 and each slot's seat at RACE_GRID. None (absent or null): the word stays 0
 // and the game sorts its own grid, as every race and recording before it. One that is not every seat of the race
@@ -472,6 +479,7 @@ std::optional<Match> ReadPractice(Match& m, const picojson::object& json, const 
   Put32(m.race.data() + RACE_FLOW, FLOW_GAME_OUT);
   Put32(m.race.data() + RACE_RUBBER_BAND_ON, 0);   // every driver at its own pace (0.4.0 on)
   Put32(m.race.data() + RACE_SIM_GENERATOR, 1);    // the race's draws from a generator of their own
+  WreckSlideIntoRace(m);
   m.seat = 0;
   m.delay = 0;
   m.other_sounds = OtherSoundsWord(TheOptions().other_sounds);
@@ -510,6 +518,7 @@ std::optional<Match> ReadMatch(const std::string& text, const std::string& path)
   Put32(m.race.data() + RACE_FLOW, FLOW_GAME_OUT);
   Put32(m.race.data() + RACE_RUBBER_BAND_ON, 0);
   Put32(m.race.data() + RACE_SIM_GENERATOR, 1);
+  WreckSlideIntoRace(m);
   const std::optional<u32> seat = Whole(json, "seat", 0, 0, MAX_SEATS - 1);
   const std::optional<u32> port = Whole(*relay, "port", 0, 0, 65535);
   if (!seat || !port)

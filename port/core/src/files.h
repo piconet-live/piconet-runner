@@ -75,6 +75,13 @@ static_assert(RACE_GRID + 30 <= RACE_RUBBER_BAND_ON && RACE_RUBBER_BAND_ON + 4 <
 // a replay's is its header's "simGenerator" (none: 0, every recording made before it, which plays as it was raced).
 constexpr u32 RACE_SIM_GENERATOR = 104;
 static_assert(RACE_RUBBER_BAND_ON + 4 <= RACE_SIM_GENERATOR && RACE_SIM_GENERATOR + 4 <= RACE_CPULEVEL);
+// wrecks slide before a restore: a word, 1 a seat that gets restores (rule 0x8000, a mode's respawns) and breaks down
+// slides as the game's wreck without restore does and is restored at the step that game would have taken it out, 0
+// its restore starts at the breakdown's step (the image's sites_wreck.py). A race or practice from a match is 1
+// unless its mode says `wreck_slide off`; a replay's is its header's "wreckSlide" (none: 0, every recording made
+// before it, which plays as it was raced).
+constexpr u32 RACE_WRECK_SLIDE = 108;
+static_assert(RACE_SIM_GENERATOR + 4 <= RACE_WRECK_SLIDE && RACE_WRECK_SLIDE + 4 <= RACE_CPULEVEL);
 constexpr const char* GAME_ID = "GFZE01";  // the disc this core is for (NTSC-U)
 // What a race can be made of. A match is the coordinator's word and a replay is a file somebody sent: their numbers
 // go to the game's own set-up routines, which check nothing (a machine or a course the disc does not hold, a seat
