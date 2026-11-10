@@ -416,7 +416,7 @@ struct FakeRace
   bool image_loop = false;  // the extra steps as the image's own loop runs them (Frame; the replay scrubber)
   u32 ends = 0, asks = 0, cuts = 0;  // the results phase's first frames; the test's asks; frames cut short
   u32 over_step = 0;                 // the step about to run when the race-over test first said "over"
-  std::chrono::nanoseconds frame_time{16'666'667};  // what a displayed frame adds to the host's time, when it has one
+  std::chrono::nanoseconds frame_time{16'683'334};  // what a displayed frame adds to the host's time, when it has one
   u32 first = 0, machines = 0, steps_run = 0;
   std::function<void()> after_net;  // after each network hook (a rollback worker's adapter: its jobs begin there)
 };

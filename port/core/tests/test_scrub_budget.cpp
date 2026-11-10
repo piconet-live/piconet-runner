@@ -43,13 +43,14 @@ void TestTheRule()
   // own work 12 ms: 0.3 + 12 + 3.4 is over 15 ms, so none: the frame goes straight to its play step
   CHECK(!FrontStepFits(Budget(0, 0.3, 12.0)));
   // the whole frame: 15 ms (90 % of a field) is the line, the steps set to run but not run counted
-  CHECK(FrontStepFits(Budget(0, 0.5, 15.0 - 0.5 - 1.25 * STEP_MS - 0.01)));
-  CHECK(!FrontStepFits(Budget(0, 0.5, 15.0 - 0.5 - 1.25 * STEP_MS + 0.01)));
-  CHECK(FrontStepFits(Budget(1, 0.5, 15.0 - 0.5 - 2.25 * STEP_MS - 0.01)));
-  CHECK(!FrontStepFits(Budget(1, 0.5, 15.0 - 0.5 - 2.25 * STEP_MS + 0.01)));
+  const double line = FIELD_MS * 0.9;
+  CHECK(FrontStepFits(Budget(0, 0.5, line - 0.5 - 1.25 * STEP_MS - 0.01)));
+  CHECK(!FrontStepFits(Budget(0, 0.5, line - 0.5 - 1.25 * STEP_MS + 0.01)));
+  CHECK(FrontStepFits(Budget(1, 0.5, line - 0.5 - 2.25 * STEP_MS - 0.01)));
+  CHECK(!FrontStepFits(Budget(1, 0.5, line - 0.5 - 2.25 * STEP_MS + 0.01)));
   // with no own work known, after the first step the rule is the share's as it was (since + 1.25 steps)
   for (double since = 0; since < 10; since += 0.1)
-    CHECK(FrontStepFits(Budget(1, since, 0)) == (since + 1.25 * STEP_MS <= net::FRAME_MS * 0.4));
+    CHECK(FrontStepFits(Budget(1, since, 0)) == (since + 1.25 * STEP_MS <= FIELD_MS * 0.4));
   // the first step is not held to the share (it was always run; a small share still buffers)
   FrontBudget small = Budget(0, 0.3, 5.0);
   small.share = 0.05;
@@ -106,7 +107,7 @@ void TestFramesByTheRule()
         since += STEP_MS;    // (the last one)
       }
       const double ms = since + c.own_ms;
-      over += frame > 0 && steps != 0 && ms > net::FRAME_MS * 1.1 ? 1 : 0;
+      over += frame > 0 && steps != 0 && ms > FIELD_MS * 1.1 ? 1 : 0;
       own = own == 0 ? c.own_ms : own * 0.8 + c.own_ms * 0.2;
       if (frame >= 30)
       {

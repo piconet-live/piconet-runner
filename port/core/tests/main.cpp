@@ -88,6 +88,7 @@ void TestTheRaceEndsOnceOnOfficialInputs();
 void TestTheFinishLimitInTheRaceBlock();
 // test_pace.cpp
 void TestTheGameKeepsToItsSchedule();
+void TestTheScheduleRunsAtTheConsolesFieldRate();
 void TestAGameAheadOfItsScheduleFallsBack();
 void TestASlowHostSendsItsInputsInTime();
 void TestTheScheduleAtALowerDelay();
@@ -527,6 +528,7 @@ int main(int argc, char** argv)
   TestARaceAgainstARelay();
   TestTheRaceEndsOnceOnOfficialInputs();
   TestTheGameKeepsToItsSchedule();
+  TestTheScheduleRunsAtTheConsolesFieldRate();
   TestAGameAheadOfItsScheduleFallsBack();
   TestASlowHostSendsItsInputsInTime();
   TestTheScheduleAtALowerDelay();

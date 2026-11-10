@@ -59,7 +59,6 @@ constexpr u32 SKIP_LISTS = 1u << 5 | 1u << 11 | 1u << 12 | 1u << 22 | 1u << 23 |
 constexpr u32 LIST_MASK = 0x10;  // the simulation manager's own: list n is left out with bit n
 constexpr u32 SMOOTH_ENTRY = 48, SMOOTH_OFFSET = 12, SMOOTH_WRITTEN = 36;
 constexpr u32 SHADOWS = B + 0x6D83C + 8, SHADOW_SIZE = 0x4C, SHADOW_PLACE = 0x18;
-constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
 constexpr double MARGIN_MS = 1.5;  // room kept before the next field beside the step and its drawing
 constexpr u32 HIGH_WINDOW = 120;  // frames a cost counts as recent: two seconds
 double s_high_share = 0.5;  // AURORA_TEST_HIGH_SHARE: a test's choice
