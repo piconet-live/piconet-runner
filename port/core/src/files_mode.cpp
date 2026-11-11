@@ -174,8 +174,11 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         else if (id == modes::SETUP_BOOST || id == modes::SETUP_RESTORE || id == modes::SETUP_CONTACT ||
                  id == modes::SETUP_CPUS || id == modes::SETUP_SOLO || id == modes::SETUP_PAUSE || id == modes::SETUP_SAVESTATE)
         {
-          // on, off or a switch parameter's value (a package from before these took a value has none: refused)
-          if (setup_args.size() != 1 || (arg(0) != 0 && arg(0) != 1))
+          // on, off or a switch parameter's value (a package from before these took a value has none: refused);
+          // cpus has a third, always (2: modes.toml's `always`), which is the lobby's matter (no CPU vote): the game
+          // reads it as on
+          const s32 most = id == modes::SETUP_CPUS ? 2 : 1;
+          if (setup_args.size() != 1 || arg(0) < 0 || arg(0) > most)
             return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
           const bool on = arg(0) != 0;
           if (id == modes::SETUP_BOOST)
