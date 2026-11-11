@@ -124,4 +124,16 @@ Part PartAt(const Layout& layout, int height, int x, int y, int grip);
 // The smallest inside a window may be dragged to: the four buttons with a name's room, over the smallest picture.
 int LeastWidth(int dpi);
 int LeastHeight(int dpi);
+
+// The pointer over the picture: hidden once it has rested there for POINTER_REST_MS, and back at its next move (as
+// over a video player's picture). Over the strip, or off the picture, it is never hidden.
+constexpr std::uint32_t POINTER_REST_MS = 2000;
+struct Pointer
+{
+  int x = -1, y = -1;          // where it was last seen
+  std::uint32_t moved_ms = 0;  // when it last moved, on the caller's clock (which may wrap)
+  bool hidden = false;
+  // The pointer is at (x, y) at `now_ms`; `over_picture`: that point is the picture's. True: it is hidden now.
+  bool At(int x_now, int y_now, bool over_picture, std::uint32_t now_ms);
+};
 }  // namespace fzgx::strip
