@@ -11,6 +11,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_story` | the frame routine, after mode_preload (sites.py's `frame`) | — | the story's picture group 0xBA (bmp_sto: the big digit, DANGER, the distance's digits, MISSION CLEAR!/FAILED, Time is up...) loaded once, with fn_1_47F74, on the frame the block is taken, when the core says the mode shows one of them (MODE_STORY_PICTURES): every game and playback of the race at the same point, before step 0 |
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
 
+| `mode_distance_label` | fn_1_CDC8C 0xCE948, the DISTANCE part's label (`bl fn_1_4F734`, the picture 0xBA13: REST, the game's metres to the finish) | the label drawn | not drawn while the viewed racer's metres are the mode's (show_distance; the window's MODE_HUD_DISTANCE +8, the stand-in's laps byte, the core's HUD pass): the number and its m stay where they are. What the number counts is the mode's, so the game's word for it is left out |
 | `mode_objects_of`, `mode_objects_gone` | fn_1_CDC8C 0xCDD7C and 0xCDD88, the OBJECTS part's two counts (`bl fn_1_E5430`, `bl fn_1_E5568`, argument 1: the course objects' table .bss 0x7AE88) | the course's count and what it subtracts (00/00 on every course of the pool) | while the viewed racer's OBJECTS is the mode's (show_objects; the window's MODE_HUD_OBJECTS: of + 1, then of - n, the core's HUD pass) those two numbers, so the part reads n/of; else the stock calls |
 | `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
 | `mode_points_free` | fn_1_14A328 0x14A5A4, the race type switch's `b` to leaving, reached only with the rule read as clear | leave | race type 3 (`laps unlimited`) goes to VS RESULTS as type 6 does; a stock path has the rule set and never gets here with type 3 |
@@ -35,6 +36,7 @@ SPARE, SPARE_KNOWN = 0xCA920, 0x4BF748B5    # fn_1_CA8FC: bl fn_1_3F1D4
 OBJECTS_OF, OBJECTS_OF_KNOWN = 0xCDD7C, 0x480176B5      # fn_1_CDC8C: bl fn_1_E5430 (the count shown after the slash)
 OBJECTS_GONE, OBJECTS_GONE_KNOWN = 0xCDD88, 0x480177E1  # fn_1_CDC8C: bl fn_1_E5568 (what the drawer subtracts from it)
 OBJECTS_OF_GET, OBJECTS_GONE_GET = 0xE5430, 0xE5568
+DISTANCE_LABEL, DISTANCE_LABEL_KNOWN, QUEUE_PICTURE = 0xCE948, 0x4BF80DED, 0x4F734  # fn_1_CDC8C: bl fn_1_4F734 (REST)
 LOOK, LOOK_KNOWN = 0x84F9C, 0x48002121       # fn_1_84860: bl fn_1_870BC
 POINTS, POINTS_KNOWN = 0x14A37C, 0x5400014B  # fn_1_14A328: rlwinm. r0, r0, 0, 5, 5
 POINTS_TYPE, POINTS_TYPE_KNOWN = 0x14A5A4, 0x48000400  # fn_1_14A328: b 0x14A9A4, its race type switch's "leave"
@@ -135,6 +137,24 @@ mob{short}_stock:
 """)
         patch(site, word, 0, name)
         middle.append((site, ["r11", "r12", "cr0", "lr"], name))
+
+    # DISTANCE's label, REST: left out while the metres are the mode's (show_distance), whose number it does not name
+    site = TEXT + DISTANCE_LABEL
+    word = stock(site, DISTANCE_LABEL_KNOWN)
+    r.add("mode_distance_label", test + """    beq mdl_stock
+""" + la(12, memmap.MODES) + """    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq mdl_stock
+""" + la(12, memmap.MODE_HUD_DISTANCE) + f"""    lwz 12, 8(12)
+    cmplwi 12, 0
+    beq mdl_stock
+    @b {site + 4:#x}
+mdl_stock:
+    @bl {FN(QUEUE_PICTURE)}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_distance_label")
+    middle.append((site, ["r12", "cr0", "lr"], "mode_distance_label"))
 
     # a machine's draw by the look this game draws its seat with (r29 the machine; f1 the alpha; r3 to r7 the call's)
     site = TEXT + LOOK

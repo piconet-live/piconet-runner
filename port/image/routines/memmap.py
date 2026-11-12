@@ -327,6 +327,7 @@ MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HU
 # +0 its colour (0: not drawn), +4 its sign's character, +8 minutes, +0xC seconds, +0x10 thousandths; +0x180 eight bytes a
 # seat the machine's draw sets aside for this frame's ghost task: +0 its car (the task clears it), +4 its level of detail
 MODE_HUD_SILENT, MODE_HUD_GAP, MODE_HUD_GHOSTS = MODE_HUD + 0xCC, MODE_HUD + 0xD0, MODE_HUD + 0x180
+MODE_HUD_DISTANCE = MODE_HUD + 0x270  # DISTANCE's stand-ins; +8 not 0: the metres are the mode's (mode_hud.h WINDOW_DISTANCE)
 MODE_HUD_OBJECTS = MODE_HUD + 0x27C  # OBJECTS's of + 1 (0: the course's own) and of - n (mode_hud.h WINDOW_OBJECTS)
 MODE_HUD_START_GAP = MODE_HUD + 0x290  # start_gap's metres, binary32; 0.0 under SPREAD: even (mode_hud.h WINDOW_START_GAP)
 MODE_HUD_MOVE = MODE_HUD + 0x300     # not 0: the classic HUD's moves are on, the sites of sites_hudmove.py call the host; bit 2: the faces board hidden (hud_move.cpp)

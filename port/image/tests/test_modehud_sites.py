@@ -112,6 +112,26 @@ class TheLapShown(Build):
             self.assertEqual(self.shown(at, 3, 3, mode=0), 4)
 
 
+class TheDistanceLabel(Build):
+    def reached(self, fed, mode=1, block=BLOCK):
+        """The game addresses the label's site reaches, to the drawer's next word."""
+        memory = {}
+        put(memory, memmap.MODE, mode)
+        put(memory, memmap.MODES + 4, block)
+        put(memory, memmap.MODE_HUD_DISTANCE + 8, fed)
+        reached = []
+        m = HudCpu(self.image, memory, lambda address, cpu: reached.append(address - TEXT))
+        m.run(self.symbols["mode_distance_label"])
+        return reached
+
+    def test_the_modes_metres_have_no_label(self):
+        self.assertEqual(self.reached(0x01000000), [hud.DISTANCE_LABEL + 4])
+
+    def test_the_games_metres_keep_theirs(self):
+        for args in ((0,), (0x01000000, 0), (0x01000000, 1, 0)):
+            self.assertEqual(self.reached(*args), [hud.QUEUE_PICTURE, hud.DISTANCE_LABEL + 4])
+
+
 class TheObjectsCounts(Build):
     def counts(self, of_plus_one, gone, mode=1, block=BLOCK):
         """Both sites' answers (r3 at the drawer's next word) and the game addresses each reached."""
