@@ -90,7 +90,12 @@ void TestTheModeVectorsRead()
   CHECK(!ReadWith("overdrive.mode.json", "hash", picojson::value(std::string(64, '0'))));
   CHECK(!ReadWith("overdrive.mode.json", "params", picojson::value(picojson::array{picojson::value(55.0)})));
   CHECK(!ReadWith("overdrive.mode.json", "params", picojson::value(picojson::array{})));
-  CHECK(!ReadWith("overdrive.mode.json", "api", picojson::value(2.0)));
+  CHECK(!ReadWith("overdrive.mode.json", "api", picojson::value(2.0)));  // (not its package's)
+  CHECK(!ReadWith("overdrive.mode.json", "api", picojson::value(modes::API + 1.0)));
+  // rule set 2 (api 0.6.1): cpus always, read as CPUs allowed; never under rule set 1's number
+  const std::optional<mode::Package> fill = mode::Read(Vector("cpu_fill.mode.json"), &why);
+  CHECK(fill && fill->api == 2 && fill->cpus_allowed);
+  CHECK(!ReadWith("cpu_fill.mode.json", "api", picojson::value(1.0)));
 }
 
 // Overdrive on four seats: the pedals and boost words on every record, the speed held at 1000 + rise x steps / 600

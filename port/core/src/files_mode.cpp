@@ -175,8 +175,11 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
                  id == modes::SETUP_CPUS || id == modes::SETUP_SOLO || id == modes::SETUP_PAUSE || id == modes::SETUP_SAVESTATE ||
                  id == modes::SETUP_DISTANCELABEL || id == modes::SETUP_RESULTSTIMES)
         {
-          // on, off or a switch parameter's value (a package from before these took a value has none: refused)
-          if (setup_args.size() != 1 || (arg(0) != 0 && arg(0) != 1))
+          // on, off or a switch parameter's value (a package from before these took a value has none: refused);
+          // cpus has a third, always (2: modes.toml's `always`), from the rule set it arrived in (a package of an
+          // earlier one that holds it is refused): the lobby's matter (no CPU vote), which the game reads as on
+          const s32 most = id == modes::SETUP_CPUS && p.api >= modes::SETUP_CPUS_ALWAYS_SINCE ? modes::SETUP_CPUS_ALWAYS : 1;
+          if (setup_args.size() != 1 || arg(0) < 0 || arg(0) > most)
             return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
           const bool on = arg(0) != 0;
           if (id == modes::SETUP_BOOST)
@@ -522,7 +525,8 @@ std::optional<Package> Read(const picojson::value& mode, std::string* why)
   const double number = api->second.get<double>();
   if (!(number >= 1 && number <= modes::API) || number != static_cast<double>(static_cast<u32>(number)))
   {
-    *why = std::format("is of api {}, and this build runs api {} and older", number, modes::API);
+    *why = std::format("is of rule set {}, and this build runs rule set {} (api {}) and older", number, modes::API,
+                       modes::API_VERSION);
     return std::nullopt;
   }
   p.api = static_cast<u32>(number);
