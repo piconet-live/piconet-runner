@@ -39,7 +39,7 @@ inline constexpr std::array<std::string_view, 26> PARTS = {
     "FACES",     "SPARE",     "SKULLS",   "BOOST",   "WRONG_WAY", "BANNERS", "FINISH", "STORY_OTHER"};
 constexpr u32 NONE = 0, LEADER_GAP = 10, RANK = 12, FACES = 18, ENERGY = 15, BOOST = 21, WRONG_WAY = 22, BANNERS = 23;
 static_assert(PARTS[LEADER_GAP] == "LEADER_GAP" && PARTS[RANK] == "RANK" && PARTS[FACES] == "FACES" && PARTS[BANNERS] == "BANNERS" &&
-              PARTS[modes::PART_COUNT] == "FACES");  // (modes::PART_* p is part p + 1)
+              PARTS[modes::PART_COUNT] == "SPARE");  // (modes::PART_* p is part p + 1; SPARE the last one a mode names)
 constexpr u32 PUSH = 1, POP = 2, SET = 3, SPRITE = 4, FLUSH = 5;  // the host call's operations (r3)
 
 struct Move
@@ -50,6 +50,10 @@ struct Move
   bool has_pivot = false;
   bool hide = false;  // FACES only
   float px = 0, py = 0;
+  // a mode's place (hud_move s, PART, x, y, angle): the part's centre to (tx, ty) of the screen, in place of dx and dy;
+  // each squeezed packet gets tx as its Wide Screen anchor, so the part stays centred on tx in Wide Screen too
+  bool to_point = false;
+  float tx = 0, ty = 0;
 };
 
 struct Layout
@@ -66,24 +70,34 @@ Layout FromText(const std::string& text, std::string* why);
 const Layout& TheLayout();
 
 // What one packet becomes: the pure arithmetic, for the tests. `x`, `y`, `rot` (the packet's +0x28, 65536 a turn),
-// `flags` (+0x30), the texture corners `u0`, `u1`, `v0`, `v1`; `squeezed`: Wide Screen squeezes this packet.
+// `flags` (+0x30), the texture corners `u0`, `u1`, `v0`, `v1`, `anchor` (+0x34, the Wide Screen anchor's x: the
+// game's fn_1_4EDAC squeezes a squeezed packet's x by 0.75 about it); `squeezed`: Wide Screen squeezes this packet.
 struct Packet
 {
   float x, y;
   s16 rot;
   u32 flags;
   float u0, v0, u1, v1;
+  float anchor = 0;
 };
 Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p);
+// Where the game then draws x: the squeeze about the anchor in Wide Screen, as fn_1_4EDAC (for the tests).
+float ScreenX(const Packet& p, bool widescreen);
 
-// A game mode's moves (hud_move s, PART, dx, dy: protocol modes.toml), for the racer the picture follows, by
-// modes::PART_* (dx, dy; 0, 0: not moved). Set once a drawn frame before Frame (core.cpp, from mode_hud's ViewedMoves).
-// For a part the mode moves, its move takes the place of the layout's for that part (the layout's turn and mirror
-// too); LEADER_GAP, drawn as a banner, moves BANNERS.
-using ModeMoves = std::array<std::array<s16, 2>, modes::PART_COUNT>;
-void SetMode(const ModeMoves& moves);
-// The move a part gets: the mode's when it moves the part, else the layout's. Pure, for the tests.
-Move Effective(const Layout& layout, const ModeMoves& moves, std::size_t part);
+// A game mode's places (hud_move s, PART, x, y, angle: protocol modes.toml), for the racer the picture follows, by
+// modes::PART_*: the part's centre to (x, y) of the 640 x 480 screen, turned `angle` degrees clockwise (`given`: the
+// part is placed). Set once a drawn frame before Frame (core.cpp, from mode_hud's ViewedMoves). For a part the mode
+// places, its place takes the place of the layout's move for that part (the layout's turn and mirror too);
+// LEADER_GAP, drawn as a banner, places BANNERS.
+struct Place
+{
+  bool given = false;
+  s16 x = 0, y = 0, angle = 0;
+};
+using ModePlaces = std::array<Place, modes::PART_COUNT>;
+void SetMode(const ModePlaces& places);
+// The move a part gets: the mode's place when it places the part, else the layout's move. Pure, for the tests.
+Move Effective(const Layout& layout, const ModePlaces& places, std::size_t part);
 
 // At the start (Init): the window's word the image's sites test, from the layout.
 void Prepare(ModData& data);

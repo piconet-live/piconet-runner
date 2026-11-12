@@ -26,7 +26,7 @@ namespace
 // The game's packet (font.h FontDrawPacket) and its queue (font.c fn_1_4F734, fn_1_4FD64)
 constexpr u32 PACKET = 0x58;
 constexpr u32 IMAGE = 0, X = 4, Y = 8, SCALE_X = 0x10, SCALE_Y = 0x14, U0 = 0x18, V0 = 0x1C, U1 = 0x20, V1 = 0x24,
-              ROT_Z = 0x28, FLAGS = 0x30, PIXELS_W = 0x44, PIXELS_H = 0x46;
+              ROT_Z = 0x28, FLAGS = 0x30, ANCHOR = 0x34, PIXELS_W = 0x44, PIXELS_H = 0x46;
 constexpr u32 NOT_DRAWN = 0x02000000;  // +0x30: fn_1_4FD64 skips the packet
 constexpr u32 SQUEEZED = 0x08000000, GLYPH = 0x400000, PIXELS = 0x800000;  // +0x30: Wide Screen's anchor; the two other paths
 constexpr u32 QUEUE = game::REL_DATA_AT + 0x1C504, QUEUED = game::REL_BSS_AT + 0x646D2;
@@ -214,7 +214,7 @@ struct State
   bool said = false;
 };
 State s_state;
-ModeMoves s_mode{};
+ModePlaces s_mode{};
 bool s_mode_any = false;
 
 bool AnyMove()
@@ -295,8 +295,10 @@ void Flush(Guest& g)
         continue;
       const u32 a = queue + i * PACKET;
       Packet k{F(g, a + X), F(g, a + Y), static_cast<s16>(g.Read16(a + ROT_Z)), g.Read32(a + FLAGS),
-               F(g, a + U0),  F(g, a + V0),  F(g, a + U1), F(g, a + V1)};
+               F(g, a + U0),  F(g, a + V0),  F(g, a + U1), F(g, a + V1), F(g, a + ANCHOR)};
       k = Apply(m, px, py, widescreen && (k.flags & SQUEEZED), k);
+      if (m.to_point && (k.flags & SQUEEZED))
+        g.Write32(a + ANCHOR, std::bit_cast<u32>(k.anchor));
       g.Write32(a + X, std::bit_cast<u32>(k.x));
       g.Write32(a + Y, std::bit_cast<u32>(k.y));
       g.Write16(a + ROT_Z, static_cast<u16>(k.rot));
@@ -399,6 +401,10 @@ const Layout& TheLayout()
 Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p)
 {
   Packet k = p;
+  // a place: the centre (px, py) to (tx, ty), and the squeeze about tx (the anchor), so no division by it
+  const float dx = m.to_point ? m.tx - px : squeezed ? m.dx / SQUEEZE : m.dx, dy = m.to_point ? m.ty - py : m.dy;
+  if (m.to_point && (p.flags & SQUEEZED))
+    k.anchor = m.tx;
   float rx = p.x - px, ry = p.y - py;
   if (m.flip_x)
     rx = -rx;
@@ -406,8 +412,8 @@ Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p)
     ry = -ry;
   const double t = static_cast<double>(m.angle) * (std::numbers::pi / 180.0);
   const double c = std::cos(t), s = std::sin(t);
-  k.x = static_cast<float>(px + rx * c - ry * s + (squeezed ? m.dx / SQUEEZE : m.dx));
-  k.y = static_cast<float>(py + rx * s + ry * c + m.dy);
+  k.x = static_cast<float>(px + rx * c - ry * s + dx);
+  k.y = static_cast<float>(py + rx * s + ry * c + dy);
   // the quad: the game turns it by -rot (fn_1_4EDAC's mathutil_mtxA_rotate_z(-rot)); a mirror before it turns the
   // other way, so the packet's own turn changes sign, and the box's side and its texture corners swap
   const s32 units = static_cast<s32>(std::lround(static_cast<double>(m.angle) * (65536.0 / 360.0)));
@@ -426,6 +432,11 @@ Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p)
   return k;
 }
 
+float ScreenX(const Packet& p, bool widescreen)
+{
+  return widescreen && (p.flags & SQUEEZED) ? p.anchor + (p.x - p.anchor) * SQUEEZE : p.x;
+}
+
 namespace
 {
 u32 Word(const Layout& l)
@@ -434,28 +445,30 @@ u32 Word(const Layout& l)
 }
 }  // namespace
 
-Move Effective(const Layout& layout, const ModeMoves& moves, std::size_t part)
+Move Effective(const Layout& layout, const ModePlaces& places, std::size_t part)
 {
   // the mode's part whose packets are this part's (LEADER_GAP is drawn with the banners)
-  for (std::size_t p = 0; p < moves.size(); ++p)
+  for (std::size_t p = 0; p < places.size(); ++p)
   {
     const std::size_t drawn = p + 1 == LEADER_GAP ? BANNERS : p + 1;
-    if (drawn == part && (moves[p][0] != 0 || moves[p][1] != 0))
+    if (drawn == part && places[p].given)
     {
       Move m;
       m.given = true;
-      m.dx = moves[p][0];
-      m.dy = moves[p][1];
+      m.to_point = true;
+      m.tx = places[p].x;
+      m.ty = places[p].y;
+      m.angle = places[p].angle;
       return m;
     }
   }
   return part < layout.parts.size() ? layout.parts[part] : Move{};
 }
 
-void SetMode(const ModeMoves& moves)
+void SetMode(const ModePlaces& places)
 {
-  s_mode = moves;
-  s_mode_any = std::any_of(moves.begin(), moves.end(), [](const auto& m) { return m[0] != 0 || m[1] != 0; });
+  s_mode = places;
+  s_mode_any = std::any_of(places.begin(), places.end(), [](const Place& p) { return p.given; });
 }
 
 void Prepare(ModData& data)

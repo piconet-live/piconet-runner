@@ -440,30 +440,38 @@ void TestTheDisplayWordsRun()
   CHECK(symbol[2] == 0 && symbol[3] == 0x265B);
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 3, 0) && hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 4, 0));
 
-  // hud_move: whole units, held to 640 either way, in the seat's record; the viewed racer's moves for the HUD
+  // hud_move: the place in whole units held to 1280 either way, the angle whole degrees 0 to 359, the part's bit, in the
+  // seat's record; the viewed racer's places for the HUD; hud_move off clears the part's
   {
     const u32 viewed = net::ViewedRacer(g);
     CHECK(viewed < 30);
     const auto real = [](float f) { return std::bit_cast<u32>(f); };
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_DISTANCE, real(10.6f), real(-60)));
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_RANK, real(5000), real(-5000)));
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_COUNT, real(1), real(1)));  // no such part
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, (viewed + 1) % 30, modes::PART_LAPS, real(7), real(7)));
-    auto moves = hud::ViewedMoves(g);
-    CHECK(moves[modes::PART_DISTANCE][0] == 11 && moves[modes::PART_DISTANCE][1] == -60);
-    CHECK(moves[modes::PART_RANK][0] == 640 && moves[modes::PART_RANK][1] == -640);
-    CHECK(moves[modes::PART_LAPS][0] == 0 && moves[modes::PART_LAPS][1] == 0);  // another seat's
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_DISTANCE, real(0), real(0)));
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_RANK, real(0), real(0)));
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, (viewed + 1) % 30, modes::PART_LAPS, real(0), real(0)));
-    moves = hud::ViewedMoves(g);
-    CHECK(std::all_of(moves.begin(), moves.end(), [](const auto& m) { return m[0] == 0 && m[1] == 0; }));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_DISTANCE, real(10.6f), real(-60), real(-90)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_RANK, real(5000), real(-5000), real(725.4f)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_SPARE, real(320), real(444), real(0)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_COUNT, real(1), real(1), real(1)));  // no such part
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, (viewed + 1) % 30, modes::PART_LAPS, real(7), real(7), real(7)));
+    auto places = hud::ViewedMoves(g);
+    CHECK(places[modes::PART_DISTANCE].given && places[modes::PART_DISTANCE].x == 11 && places[modes::PART_DISTANCE].y == -60 && places[modes::PART_DISTANCE].angle == 270);
+    CHECK(places[modes::PART_RANK].given && places[modes::PART_RANK].x == 1280 && places[modes::PART_RANK].y == -1280 && places[modes::PART_RANK].angle == 5);
+    CHECK(places[modes::PART_SPARE].given && places[modes::PART_SPARE].x == 320 && places[modes::PART_SPARE].y == 444 && places[modes::PART_SPARE].angle == 0);
+    CHECK(!places[modes::PART_LAPS].given && places[modes::PART_LAPS].x == 0);  // another seat's
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_DISTANCE));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_RANK));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_SPARE));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, (viewed + 1) % 30, modes::PART_LAPS));
+    places = hud::ViewedMoves(g);
+    CHECK(std::all_of(places.begin(), places.end(), [](const hud_move::Place& p) { return !p.given && p.x == 0 && p.y == 0 && p.angle == 0; }));
+    // a part placed at (0, 0, 0) is placed (its bit), unlike one never placed
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_LAPS, real(0), real(0), real(0)));
+    CHECK(hud::ViewedMoves(g)[modes::PART_LAPS].given);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_LAPS));
     // seat 0's TIMER record is not the page's step stamp (mode.cpp's Stamp, at every run: read as that move it slid
     // the clock off the screen)
     const u32 stamp = g.Read32(BLOCK + 7 * mode::PAGE);
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, 0, modes::PART_TIMER, real(5), real(7)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, 0, modes::PART_TIMER, real(5), real(7), real(0)));
     CHECK(g.Read32(BLOCK + 7 * mode::PAGE) == stamp);
-    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, 0, modes::PART_TIMER, real(0), real(0)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, 0, modes::PART_TIMER));
   }
 
   // show_number's range: 0 to 99 as it is, above 99 clamped to 99, a negative hidden (the record holds number + 1)

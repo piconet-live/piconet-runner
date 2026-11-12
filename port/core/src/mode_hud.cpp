@@ -67,6 +67,7 @@ bool IsDisplay(u8 id)
     case ACTION_SHOWOBJECTS:
     case ACTION_SHOWOBJECTSOFF:
     case ACTION_HUDMOVE:
+    case ACTION_HUDMOVEOFF:
     case ACTION_MAPCHAR:
     case ACTION_MAPCHAROFF:
       return true;
@@ -101,7 +102,7 @@ void NoteGaps(Guest& g, u32 block, u32 module, u32 run)
   }
 }
 
-bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 third)
+bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 third, u32 fourth)
 {
   const u32 r = Seat(block, seat);
   switch (id)
@@ -203,17 +204,25 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 thir
       return true;
     }
     case ACTION_HUDMOVE:
+    case ACTION_HUDMOVEOFF:
     {
-      // whole units, held to the screen's width either way (NaN: 0)
+      // the place: whole units held to twice the screen either way; the angle whole degrees, 0 to 359 (NaN: 0)
       const auto unit = [](u32 v) {
         const float f = std::bit_cast<float>(v);
         return static_cast<s16>(f == f ? std::clamp(std::lround(f), -long{MOVE_MOST}, long{MOVE_MOST}) : 0);
       };
+      const auto degrees = [](u32 v) {
+        const float f = std::bit_cast<float>(v);
+        return static_cast<s16>(f == f ? ((std::lround(std::fmod(f, 360.0f)) % 360) + 360) % 360 : 0);
+      };
       if (value < PART_COUNT)
       {
-        const u32 at = block + MOVES + seat * MOVE_RECORD + 4 * value;
-        g.Write16(at, static_cast<u16>(unit(second)));
-        g.Write16(at + 2, static_cast<u16>(unit(third)));
+        const u32 record = block + MOVES + seat * MOVE_RECORD, at = record + MOVE_PLACES + 6 * value;
+        const bool on = id == ACTION_HUDMOVE;
+        g.Write32(record, on ? g.Read32(record) | 1u << value : g.Read32(record) & ~(1u << value));
+        g.Write16(at, on ? static_cast<u16>(unit(second)) : 0);
+        g.Write16(at + 2, on ? static_cast<u16>(unit(third)) : 0);
+        g.Write16(at + 4, on ? static_cast<u16>(degrees(fourth)) : 0);
       }
       return true;
     }
@@ -230,9 +239,9 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 thir
   }
 }
 
-std::array<std::array<s16, 2>, PART_COUNT> ViewedMoves(Guest& g)
+hud_move::ModePlaces ViewedMoves(Guest& g)
 {
-  std::array<std::array<s16, 2>, PART_COUNT> moves{};
+  hud_move::ModePlaces moves{};
   const u32 block = g.Read32(layout::MODES + 4);
   if (block == 0 || !g.Ram(net::MODULE_POINTER, 4) || g.Read32(net::MODULE_POINTER) != layout::MAIN_REL ||
       g.Read16(layout::MAIN_REL + game::PHASE) < PHASE_INTRO)
@@ -240,10 +249,12 @@ std::array<std::array<s16, 2>, PART_COUNT> ViewedMoves(Guest& g)
   const u32 viewed = net::ViewedRacer(g);
   if (viewed >= SEATS)
     return moves;
+  const u32 record = block + MOVES + viewed * MOVE_RECORD, placed = g.Read32(record);
   for (u32 p = 0; p < PART_COUNT; ++p)
   {
-    const u32 at = block + MOVES + viewed * MOVE_RECORD + 4 * p;
-    moves[p] = {static_cast<s16>(g.Read16(at)), static_cast<s16>(g.Read16(at + 2))};
+    const u32 at = record + MOVE_PLACES + 6 * p;
+    moves[p] = {(placed >> p & 1) != 0, static_cast<s16>(g.Read16(at)), static_cast<s16>(g.Read16(at + 2)),
+                static_cast<s16>(g.Read16(at + 4))};
   }
   return moves;
 }

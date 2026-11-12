@@ -63,23 +63,45 @@ void TestTheClassicHudMoves()
   CHECK(why.empty() && l.any && l.faces_hidden && !l.parts[FACES].given);
   l = FromText(R"({"RANK": {"hide": true}})", &why);
   CHECK(!why.empty() && !l.any);
-  // a mode's moves: for its part in place of the layout's (turn and mirror too); LEADER_GAP's go to BANNERS; (0, 0) none
+  // a mode's places: for its part in place of the layout's (turn and mirror too); LEADER_GAP's go to BANNERS; not given: none
   {
     Layout layout = FromText(R"({"RANK": {"dx": 5, "angle": 30}, "LAPS": {"dy": 3}})", &why);
-    ModeMoves moves{};
-    moves[modes::PART_RANK] = {-296, 350};
-    moves[modes::PART_LEADER_GAP] = {0, -20};
-    Move e = Effective(layout, moves, RANK);
-    CHECK(e.given && Near(e.dx, -296) && Near(e.dy, 350) && e.angle == 0);
-    e = Effective(layout, moves, 13);
-    CHECK(e.given && Near(e.dy, 3));
-    e = Effective(layout, moves, BANNERS);
-    CHECK(e.given && Near(e.dx, 0) && Near(e.dy, -20));
-    CHECK(!Effective(layout, moves, LEADER_GAP).given && !Effective(layout, moves, ENERGY).given);
-    moves[modes::PART_RANK] = {0, 0};
-    e = Effective(layout, moves, RANK);
-    CHECK(e.given && Near(e.dx, 5) && Near(e.angle, 30));
-    // the mode's part p is the classic HUD's part p + 1
-    CHECK(PARTS[modes::PART_DISTANCE + 1] == "DISTANCE" && PARTS[modes::PART_FACES + 1] == "FACES");
+    ModePlaces places{};
+    places[modes::PART_RANK] = {true, 24, 412, 90};
+    places[modes::PART_LEADER_GAP] = {true, 320, 130, 0};
+    Move e = Effective(layout, places, RANK);
+    CHECK(e.given && e.to_point && Near(e.tx, 24) && Near(e.ty, 412) && Near(e.angle, 90));
+    e = Effective(layout, places, 13);
+    CHECK(e.given && !e.to_point && Near(e.dy, 3));
+    e = Effective(layout, places, BANNERS);
+    CHECK(e.given && e.to_point && Near(e.tx, 320) && Near(e.ty, 130));
+    CHECK(!Effective(layout, places, LEADER_GAP).given && !Effective(layout, places, ENERGY).given);
+    places[modes::PART_RANK] = {};
+    e = Effective(layout, places, RANK);
+    CHECK(e.given && !e.to_point && Near(e.dx, 5) && Near(e.angle, 30));
+    // the mode's part p is the classic HUD's part p + 1; SPARE, the last one a mode names, is the counter's tag
+    CHECK(PARTS[modes::PART_DISTANCE + 1] == "DISTANCE" && PARTS[modes::PART_FACES + 1] == "FACES" && PARTS[modes::PART_SPARE + 1] == "SPARE");
+  }
+  // a place: the part's centre to the point on the screen, in 4:3 and in Wide Screen alike. SPARE's box 24,432-88,456
+  // (centre 56, 444) in the left group (anchor 96): placed at (320, 444) its two ends land 32 units either side of
+  // 320 in 4:3, and 24 (squeezed by 0.75 about the place, which is now the anchor) in Wide Screen: centred both ways,
+  // where a dx from its left group would squeeze about 96 and land off centre
+  {
+    Move m;
+    m.given = true, m.to_point = true, m.tx = 320, m.ty = 444;
+    const Packet left{24, 432, 0, 5 | 0x08000000, 0, 0, 1, 1, 96}, right{88, 432, 0, 5 | 0x08000000, 0, 0, 1, 1, 96};
+    const Packet l4 = Apply(m, 56, 444, false, left), r4 = Apply(m, 56, 444, false, right);
+    CHECK(Near(l4.x, 288) && Near(r4.x, 352) && Near(l4.y, 432) && Near(l4.anchor, 320) && Near(ScreenX(l4, false), 288) && Near(ScreenX(r4, false), 352));
+    const Packet lw = Apply(m, 56, 444, true, left), rw = Apply(m, 56, 444, true, right);
+    CHECK(Near(ScreenX(lw, true), 296) && Near(ScreenX(rw, true), 344));
+    // the game's own left group, for comparison: 96 + 0.75 * (x - 96)
+    CHECK(Near(ScreenX(left, true), 42) && Near(ScreenX(right, true), 90) && Near(ScreenX(left, false), 24));
+    // a packet the game does not squeeze (no flag): no anchor given, its place as it is
+    const Packet plain{24, 432, 0, 5, 0, 0, 1, 1, 0};
+    CHECK(Near(Apply(m, 56, 444, true, plain).anchor, 0) && Near(ScreenX(Apply(m, 56, 444, true, plain), true), 288));
+    // turned a quarter clockwise about the centre: the left end goes up, the quads turn with it
+    m.angle = 90;
+    const Packet lt = Apply(m, 56, 444, false, left);
+    CHECK(Near(lt.x, 320 + 12) && Near(lt.y, 444 - 32) && lt.rot == -16384);
   }
 }
