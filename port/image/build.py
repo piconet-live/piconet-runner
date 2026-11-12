@@ -102,7 +102,9 @@ def gecko(lines):
 
 class Routines:
     """The routines after 'FZPT', assembled as one text. `@b X` and `@bl X` are branches to an absolute address
-    (keystone has no symbols outside its text): X is a number or a name of `symbols`."""
+    (keystone has no symbols outside its text): X is a number or a name of `symbols`. `@la R, X` is X's address in
+    register R (lis and ori, two instructions): X a label of this text (a routine's data, such as a table after its
+    blr), a name of `symbols` or a number."""
 
     def __init__(self, base, symbols):
         self.base, self.symbols, self.text, self.names = base, dict(symbols), "", []
@@ -117,15 +119,22 @@ class Routines:
     def build(self):
         from keystone import Ks, KS_ARCH_PPC, KS_MODE_PPC32, KS_MODE_BIG_ENDIAN
         import native
-        offsets = native.label_offsets(self.text.replace("@b ", "nop ").replace("@bl ", "nop "))
+        counted = "\n".join("    nop\n    nop" if line.strip().startswith("@la ") else line for line in self.text.split("\n"))
+        offsets = native.label_offsets(counted.replace("@b ", "nop ").replace("@bl ", "nop "))
+        resolve = lambda target: self.symbols[target] if target in self.symbols else \
+            self.base + offsets[target] if target in offsets else int(target, 0)
         out, at = [], 0
         for line in self.text.split("\n"):
             s = line.strip()
             if s.startswith("@b ") or s.startswith("@bl "):
                 op, target = s.split(None, 1)
-                to = self.symbols[target] if target in self.symbols else \
-                    self.base + offsets[target] if target in offsets else int(target, 0)
-                line = f"    .long {branch(self.base + at, to, op == '@bl'):#010x}"
+                line = f"    .long {branch(self.base + at, resolve(target), op == '@bl'):#010x}"
+            elif s.startswith("@la "):
+                reg, target = (part.strip() for part in s[4:].split(",", 1))
+                to = resolve(target)
+                line = (f"    lis {reg}, {memmap.hi(to) - (0x10000 if to & 0x80000000 else 0)}\n"
+                        f"    ori {reg}, {reg}, {memmap.lo(to)}")
+                at += 4
             if s and not s.endswith(":"):
                 at += 4
             out.append(line)
