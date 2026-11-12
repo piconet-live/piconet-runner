@@ -21,6 +21,11 @@ using u64 = std::uint64_t;
 using s16 = std::int16_t;
 using s32 = std::int32_t;
 
+// The console's field, 59.94 a second (16.683 ms): the length of a displayed frame, and of a step of the race on the
+// schedule (schedule.cpp; the relay's frames come at the same rate, Online.Server ServerOptions.FrameRateNumerator).
+// Not what turns a rule's time into steps: that is race_rules::STEPS_A_SECOND, 60, held in every race and recording.
+constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
+
 enum class LogLevel
 {
   Notice,

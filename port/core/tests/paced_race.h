@@ -9,7 +9,6 @@
 
 #include <map>
 
-constexpr double FRAME_MS = 1000.0 / 60;
 constexpr u32 FROM = 10;      // the race phase begins at this step
 constexpr u32 SETTLED = 120;  // displayed frames of the race after which its start is over
 

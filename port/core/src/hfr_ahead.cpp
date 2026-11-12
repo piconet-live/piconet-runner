@@ -10,7 +10,6 @@ namespace fzgx::hfr
 {
 namespace
 {
-constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
 
 Matrix Four(const Mtx& m)
 {

@@ -11,13 +11,14 @@
 #include <mutex>
 
 #include <map>
+#include <numeric>
 #include <set>
 #include <sstream>
 
 namespace
 {
 using Ns = std::chrono::nanoseconds;
-constexpr Ns FRAME{16'666'667};
+constexpr Ns FRAME{16'683'334};  // the host's displayed frame: the console's field (FIELD_MS), rounded up
 
 Ns Ms(double ms)
 {
@@ -119,7 +120,7 @@ struct PacedRelay
     const bool lockstep = step < FROM || step + 16 >= pace.race_to;
     // (what its clock has closed is closed before it reads what arrived now: an input that comes at the moment its
     // frame is due is late)
-    const u32 by_clock = clock_ms / FRAME_MS >= 2 ? static_cast<u32>(clock_ms / FRAME_MS) - 1 : 0;
+    const u32 by_clock = clock_ms / FIELD_MS >= 2 ? static_cast<u32>(clock_ms / FIELD_MS) - 1 : 0;
     for (const u32 to = std::max(closed, lockstep ? std::max(step + 8, by_clock) : by_clock); closed < to; ++closed)
     {
       if (const auto it = pending.find(closed); it != pending.end())
@@ -162,7 +163,7 @@ struct PacedRelay
           if (racing && race_frames > SETTLED)
           {
             counted.insert(f);
-            out.margin.push_back(static_cast<double>(f + 2) - clock_ms / FRAME_MS);
+            out.margin.push_back(static_cast<double>(f + 2) - clock_ms / FIELD_MS);
             out.late += f < closed ? 1 : 0;
           }
           if (f >= closed)
@@ -568,6 +569,36 @@ void TestTheGameKeepsToItsSchedule()
                   "inputs late %u of %zu; frames the game sent two inputs for: %u\n",
                   host.what, SETTLED, low, middle, high, r.late, r.margin.size(), r.sent_twice);
   }
+}
+
+// A host with time to spare shows a frame every field, 59.94 a second, and the schedule runs at that rate (FIELD_MS,
+// and the relay's frames): over six thousand frames the game adds no step to catch up and holds none, and stays
+// where it is against its schedule. (The schedule ran at 60 a second: every 1,001 frames the game was a step behind
+// it and ran two steps in one frame, a jump in the picture at a high refresh rate.) The control is that relay, its
+// clock 1001/1000 fast: a catch-up step about every 1,001 frames.
+void TestTheScheduleRunsAtTheConsolesFieldRate()
+{
+  const auto count = [](const std::vector<double>& column) {
+    return std::accumulate(column.begin() + SETTLED, column.end(), 0.0);
+  };
+  Pace pace;
+  pace.race_frames = 6200;
+  const Raced r = RunAPacedRace(pace);
+  CHECK(r.ran && r.final_steps > 6000 && r.other_checksums == 0 && r.late == 0);
+  if (r.ran)
+  {
+    const auto [low, high] = std::minmax_element(r.sched.begin() + SETTLED, r.sched.end());
+    CHECK(count(r.catch_up) == 0 && count(r.held) == 0);
+    CHECK(*high - *low < 0.5);
+    if (count(r.catch_up) != 0 || count(r.held) != 0 || *high - *low >= 0.5)
+      std::printf("  at the field rate: %.0f catch-up steps, %.0f frames held, %.2f to %.2f steps ahead of the schedule\n",
+                  count(r.catch_up), count(r.held), *low, *high);
+  }
+  pace.relay_rate = 1.001;
+  const Raced at_60 = RunAPacedRace(pace);
+  CHECK(at_60.ran && at_60.other_checksums == 0);
+  if (at_60.ran)
+    CHECK(count(at_60.catch_up) >= 5 && count(at_60.catch_up) <= 7 && count(at_60.held) == 0);
 }
 
 // A host with time to spare, and a relay whose clock stands for five steps at frame 600 (as when the game's

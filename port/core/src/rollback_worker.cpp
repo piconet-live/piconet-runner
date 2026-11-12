@@ -63,7 +63,6 @@ constexpr u32 COUNTDOWN_END = 422;
 constexpr u32 MOST_ADOPT = 512;
 static_assert(MOST_ADOPT < 1024 && MOST_ADOPT > 256, "far below the rings, above the largest \"catchUp\"");
 constexpr u32 LEAST_CORES = 4;    // below it, no thread (study section 7, decision 5)
-constexpr double FIELD_MS = pace::FIELD_MS;
 constexpr double MARGIN_MS = pace::MARGIN_MS;
 constexpr double FIRST_CONST_MS = 5.4; // a frame's own cost before one is measured (study section 4)
 constexpr double FIRST_STEP_MS = 2.0;  // a step run again before one is measured

@@ -39,7 +39,7 @@ double PaceOwed(Session& s, Clock::time_point now)
 {
   if (s.pace_last != Clock::time_point{})
   {
-    const double over = std::chrono::duration<double, std::milli>(now - s.pace_last).count() - FRAME_MS;
+    const double over = std::chrono::duration<double, std::milli>(now - s.pace_last).count() - FIELD_MS;
     if (over > PACE_SLACK_MS)
     {
       s.pace_calm = 0;
@@ -100,7 +100,7 @@ double ScheduledStep(const Session& s)
 {
   const double since_go = std::chrono::duration<double, std::milli>(Clock::now() - s.go_local).count();
   const double relay_ms = since_go + (s.relay_offsets.empty() ? s.rtt_ms / 2 : s.relay_offset_ms);
-  return (relay_ms + s.rtt_ms / 2) / FRAME_MS - static_cast<double>(s.delay) + LEAD;
+  return (relay_ms + s.rtt_ms / 2) / FIELD_MS - static_cast<double>(s.delay) + LEAD;
 }
 
 // The time sync's decision for the frame: a step more to catch up, no new step to fall back (the memory then goes
@@ -136,7 +136,7 @@ FrameSteps CatchUpOrHold(Guest& g, Session& s, u32 step, bool settle, bool check
     s.work.sched = ahead;
     return steps;
   }
-  const double owed = s.playback ? 0.0 : std::min(PaceOwed(s, frame_now) / FRAME_MS, MAX_OWED_STEPS);
+  const double owed = s.playback ? 0.0 : std::min(PaceOwed(s, frame_now) / FIELD_MS, MAX_OWED_STEPS);
   s.work.sched = ahead;
   s.work.owed = owed;
   u32 catch_up = 0;
@@ -163,7 +163,7 @@ FrameSteps CatchUpOrHold(Guest& g, Session& s, u32 step, bool settle, bool check
     catch_up = std::min(catch_up, limit > step + 1 ? limit - step - 2 : 0);
     s.catch_ups += catch_up;
   }
-  else if (check || (!settle && ahead > 2 + std::max(0.0, s.pace_worst_ms / FRAME_MS - HOLD_SPARE_STEPS) &&
+  else if (check || (!settle && ahead > 2 + std::max(0.0, s.pace_worst_ms / FIELD_MS - HOLD_SPARE_STEPS) &&
                      step > s.checked))  // (the step before is not final: its undo entry is there)
   {
     held = true;

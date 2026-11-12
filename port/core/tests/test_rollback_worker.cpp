@@ -947,7 +947,7 @@ void TestTheSecondWorkersEstimate()
     r1 = pace::Smoothed(r1, 3);
   CHECK(allowed(r1));
   r1 = pace::Smoothed(r1, 113);
-  CHECK(r1 > pace::FIELD_MS - 0.5 && pace::Foreseen(DEPTH, r1) == pace::FORESEEN_NEVER && !allowed(r1));
+  CHECK(r1 > FIELD_MS - 0.5 && pace::Foreseen(DEPTH, r1) == pace::FORESEEN_NEVER && !allowed(r1));
   now.second_steps = 21;  // (its steps, taken into the window that ends below)
   // W runs 4 steps of 3 ms a frame, slot 1 none (its starts barred): the first window still holds slot 1's steps
   double t = 0;

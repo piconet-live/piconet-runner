@@ -126,9 +126,9 @@ void TallyFrame(ScrubState& a, Steady::time_point now)
   a.kind_ms[a.kind] += ms;
   a.kind_steps[a.kind] += a.front_steps;
   a.kind_longest_ms[a.kind] = std::max(a.kind_longest_ms[a.kind], ms);
-  if (ms > FRAME_MS * 1.1)
+  if (ms > FIELD_MS * 1.1)
     ++a.kind_long[a.kind];
-  if (ms > FRAME_MS * 1.1 && a.front_steps != 0)
+  if (ms > FIELD_MS * 1.1 && a.front_steps != 0)
     ++a.long_with;
   if (!a.front_done && a.front_steps == 0)
     ++a.frames_without;

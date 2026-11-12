@@ -41,7 +41,6 @@ namespace
 constexpr u32 DRAW_ASK = layout::DRAW_ASK;    // the image's: 1 the drawing begins, 2 it has ended
 constexpr u32 DRAW_SKIP = layout::DRAW_SKIP;  // ours: not 0, this frame draws nothing (cleared at the next tick)
 constexpr u32 ASK_BEGIN = 1, ASK_END = 2;
-constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;  // 16.683 ms
 constexpr double MARGIN_MS = 0.8;   // the frame's head before the tick and its tail after the read-back
 constexpr double FIRST_DRAW_MS = 2.5;  // the drawing's cost before one was timed (the study: 1.2 to 3 ms)
 constexpr u32 NO_SKIP_COURSE = 41;

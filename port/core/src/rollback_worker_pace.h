@@ -16,7 +16,6 @@ namespace fzgx::rollback_worker::pace
 // with CATCH_UPS catch-ups in their span switch the race to sync, and the worker is tried again RETRY_S later
 constexpr u32 WINDOW = 240, STRIKES = 3, CATCH_UPS = 2;
 constexpr double WINDOW_S = 1.0, RETRY_S = 10.0;
-constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
 constexpr double START_MS = 0.5;  // c of the study's section 4: a job's start and the thread's wake
 constexpr double MARGIN_MS = 1.5;  // run-ahead's MARGIN_MS: room kept before the field (the rule "fit")
 constexpr u32 FORESEEN_NEVER = 99;  // (an estimate at a frame or more: the job would never catch the game)

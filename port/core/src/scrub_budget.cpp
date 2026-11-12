@@ -54,9 +54,9 @@ bool FrontStepFits(const FrontBudget& b)
     host = first;  // (the first step a frame until a step's time is known)
   else
   {
-    host = b.since_ms + b.own_ms + (pending + STEP_MARGIN) * b.step_ms <= FRAME_MS * WHOLE_SHARE;
+    host = b.since_ms + b.own_ms + (pending + STEP_MARGIN) * b.step_ms <= FIELD_MS * WHOLE_SHARE;
     if (!first)
-      host = host && b.since_ms + b.step_ms * STEP_MARGIN <= FRAME_MS * b.share;
+      host = host && b.since_ms + b.step_ms * STEP_MARGIN <= FIELD_MS * b.share;
   }
   // emulated time: every front step of the frame and its own work (until that is known, its play step taken as a
   // front step), within a field; the share as the upper bound, as ever
@@ -84,7 +84,7 @@ void OwnWorkEnds(ScrubState& a, std::chrono::steady_clock::time_point now)
   if (clocked)
     took -= std::chrono::duration_cast<std::chrono::steady_clock::duration>(clocks.waited - a.own_clocks.waited);
   const double ms =
-      std::clamp(std::chrono::duration<double, std::milli>(took).count(), 0.0, FRAME_MS * OWN_MOST_FIELDS);
+      std::clamp(std::chrono::duration<double, std::milli>(took).count(), 0.0, FIELD_MS * OWN_MOST_FIELDS);
   a.own_ms = Smoothed(a.own_ms, ms);
   if (!clocked || clocks.ticks < a.own_clocks.ticks)
     return;

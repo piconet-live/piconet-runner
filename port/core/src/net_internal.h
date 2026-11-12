@@ -111,7 +111,6 @@ constexpr u32 PAD_RECORD = BSS + 0xA88;  // port 0's 6-byte control record (the 
 constexpr int RECORD = 6;
 constexpr u32 MAX_FRAMES = 20;
 constexpr u32 MAX_AHEAD = 24;  // steps simulated beyond the last official frame before waiting
-constexpr double FRAME_MS = 1000.0 / 60;
 constexpr int LEAD = 1;         // steps of margin for the local inputs to reach the relay before it closes their frames
 constexpr u32 MAX_CATCH_UP = 1;  // new steps a displayed frame may add to catch up
 constexpr u32 CATCH_UP_DEPTH = 6;  // ... and only in a frame whose rollback is no deeper than this, at the input delay
@@ -131,7 +130,7 @@ constexpr u32 PACE_CALM_FRAMES = 4;
 // than D - HOLD_SPARE_STEPS ahead (the lead of 1, the relay's close window of 2, less the half step of a frame's
 // rounding). The worst D of late is kept, and fades by a step a second.
 constexpr double HOLD_SPARE_STEPS = 2.5;
-constexpr double PACE_WORST_FADE_MS = FRAME_MS / 60;
+constexpr double PACE_WORST_FADE_MS = FIELD_MS / 60;
 constexpr u32 LOCKSTEP_SLACK = 2;        // official frames past the next step that lockstep leaves waiting
 // A relay that closes a frame once every seat's input is there (Online.Server ServerOptions.EarlyClose) can send a
 // game in lockstep official frames up to its own input delay past its next step: a delay above LOCKSTEP_SLACK would
