@@ -157,26 +157,41 @@ class TheDistanceDigits(Build):
             self.assertEqual(self.most(*args), 5)
 
 
-class TheResultsTime(Build):
-    def reached(self, flags, mode=1):
-        """Where the site goes on, and r0 there (the row's time, 0x123456, when the stock word ran)."""
+class TheResultsWithoutTimes(Build):
+    A, B = 0x0100, 0x0200   # the pad word's bits the two tests read
+
+    def reached(self, name, flags, mode=1, pad=0):
+        """Where the site goes on (the game's addresses), and r0 and cr0's equal there."""
         memory = {}
         put(memory, memmap.MODE, mode)
         put(memory, memmap.MODE_HUD_FLAGS, flags)
-        put(memory, 0x80700030, 0x123456)
         reached = []
-        m = HudCpu(self.image, memory, lambda address, cpu: reached.append((address - TEXT, cpu.r[0])))
-        m.r[27] = 0x80700000
-        m.run(self.symbols["mode_results_time"])
+        m = HudCpu(self.image, memory, lambda address, cpu: reached.append((address - TEXT, cpu.r[0], cpu.cr0[2])))
+        m.r[0] = pad
+        m.run(self.symbols[name])
         return reached
 
-    def test_a_mode_without_times_leaves_the_drawer(self):
-        for flags in (memmap.MODE_NO_RESULTS_TIMES, memmap.MODE_NO_RESULTS_TIMES | memmap.MODE_POINTS_PAGE):
-            self.assertEqual([at for at, _ in self.reached(flags)], [hud.RESULTS_TIME_END])
+    OFF = (memmap.MODE_NO_RESULTS_TIMES, memmap.MODE_NO_RESULTS_TIMES | memmap.MODE_POINTS_PAGE | memmap.MODE_POINTS_ONLY)
+    OTHER = ((0,), (memmap.MODE_POINTS_PAGE | memmap.MODE_POINTS_ONLY,), (memmap.MODE_NO_RESULTS_TIMES, 0))
 
-    def test_every_other_race_draws_the_time(self):
-        for args in ((0,), (memmap.MODE_POINTS_PAGE | memmap.MODE_NO_DISTANCE_LABEL,), (memmap.MODE_NO_RESULTS_TIMES, 0)):
-            self.assertEqual(self.reached(*args), [(hud.RESULTS_TIME + 4, 0x123456)])
+    def test_the_times_page_turns_by_itself_without_its_sound(self):
+        for flags in self.OFF:
+            self.assertEqual([at for at, *_ in self.reached("mode_results_skip", flags)], [hud.RESULTS_TURN])
+            self.assertEqual([at for at, *_ in self.reached("mode_results_quiet", flags)], [hud.RESULTS_QUIET + 4])
+
+    def test_the_points_page_does_not_go_back_to_it(self):
+        for flags in self.OFF:
+            self.assertEqual(self.reached("mode_results_back", flags, pad=self.B), [(hud.RESULTS_BACK + 4, 0, True)])
+
+    def test_every_other_race_keeps_the_page(self):
+        for args in self.OTHER:
+            for pad in (0, self.A, self.B):
+                self.assertEqual(self.reached("mode_results_skip", *args, pad=pad),
+                                 [(hud.RESULTS_SKIP + 4, int(pad == self.A), pad != self.A)])
+                self.assertEqual(self.reached("mode_results_back", *args, pad=pad),
+                                 [(hud.RESULTS_BACK + 4, int(pad == self.B), pad != self.B)])
+            self.assertEqual([at for at, *_ in self.reached("mode_results_quiet", *args)],
+                             [hud.PLAY_SOUND, hud.RESULTS_QUIET + 4])
 
 
 class TheObjectsCounts(Build):

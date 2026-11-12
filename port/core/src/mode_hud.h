@@ -91,7 +91,8 @@ constexpr u32 SPREAD = 512;
 // mode_distance_label); its number and m stay, and the number has a sixth digit in the label's room (mode_distance_digits;
 // show_distance holds the metres to DISTANCE_MOST_NO_LABEL by this same word).
 constexpr u32 NO_DISTANCE_LABEL = 1024;
-// NO_RESULTS_TIMES: `results_times off`: a results row's race time is not drawn (sites_modehud.py mode_results_time).
+// NO_RESULTS_TIMES: `results_times off`: VS RESULTS, the results' page of race times, is passed over (sites_modehud.py
+// mode_results_skip): the results open on the points page.
 constexpr u32 NO_RESULTS_TIMES = 2048;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).

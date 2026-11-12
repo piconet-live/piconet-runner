@@ -60,7 +60,7 @@ void TestTheCleanPicture()
   const std::optional<mode::Package> unlabelled = Vector("distance_label.mode.json");
   CHECK(unlabelled.has_value() && unlabelled->distance_label_off && (hud::WindowFlags(*unlabelled) & hud::NO_DISTANCE_LABEL) != 0);
   CHECK(same.has_value() && !same->distance_label_off && (hud::WindowFlags(*same) & hud::NO_DISTANCE_LABEL) == 0);
-  // results_times off: its package says it and the window has NO_RESULTS_TIMES (the image's results site); none without
+  // results_times off: its package says it and the window has NO_RESULTS_TIMES (the image's results sites); none without
   const std::optional<mode::Package> untimed = Vector("results_times.mode.json");
   CHECK(untimed.has_value() && untimed->results_times_off && (hud::WindowFlags(*untimed) & hud::NO_RESULTS_TIMES) != 0);
   CHECK(same.has_value() && !same->results_times_off && (hud::WindowFlags(*same) & hud::NO_RESULTS_TIMES) == 0);
