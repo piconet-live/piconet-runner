@@ -68,7 +68,7 @@ AX_ROWS, ROWS_SIZE = RODATA + 0x5A08, 0x48       # .rodata 0x5A08: the AX layout
 # SCORE (mode_hud.h WINDOW_SCORE), drawn in the race time's call (fn_1_CBC24) by race_time_score: the race time's packet
 # template (.rodata 0x26F8, 22 words: flags 5, z 0.1, white), its digit pictures (.rodata 0x5E98: 0x9440 to 0x9449), their
 # shadow 0x9430 at z + 0.01 (.rodata 0x5DC8), the digits' y 81 (the race time's 67 + 14), the last digit's x 596 (its 444 +
-# 152), 22 units a digit; the label on the TIME picture's row (y 67), its right edge at TIME's (618 = 586 + 32), in the
+# 152), 22 units a digit; the label on the TIME picture's row (y 67), its right edge at 615 (lined up with ENERGY and TIME as drawn, measured in a race), in the
 # letters of the game's own HUD labels (below), queued through fn_1_51E60 as the race time is; a label with a letter those
 # have not got is written by fn_1_4A0D8 (the text drawer the rank and the ghost names use) in the window's font (mode_hud.h
 # FONT_IDS: 5, the 18 x 18 ASCII of the name tags, unless the mode chose another of the common sheet's), the HUD labels'
@@ -77,7 +77,7 @@ AX_ROWS, ROWS_SIZE = RODATA + 0x5A08, 0x48       # .rodata 0x5A08: the AX layout
 # alignment (fn_1_495C8: 1 the middle across, 8 the middle down), in the centre Wide Screen group
 RACE_TIME_SITES, RACE_TIME_DRAW = (0xC73D8, 0xC7820), 0xCBC24
 SCORE_TEMPLATE, SCORE_DIGITS, SCORE_SHADOW_DZ, SCORE_SHADOW = RODATA + 0x26F8, RODATA + 0x5E98, RODATA + 0x5DC8, 0x9430
-SCORE_LAST_X, SCORE_STEP, SCORE_Y, SCORE_LABEL_RIGHT, SCORE_LABEL_Y = 596.0, 22.0, 81.0, 618.0, 67.0
+SCORE_LAST_X, SCORE_STEP, SCORE_Y, SCORE_LABEL_RIGHT, SCORE_LABEL_Y = 596.0, 22.0, 81.0, 615.0, 67.0
 SCORE_LABEL_SCALE, SCORE_LABEL_COLOUR, SCORE_LABEL_RIGHT_ALIGNED = 2.0 / 3.0, 0x00FFFFFF, 2
 # The label's letters: cut from the game's own HUD label pictures (bitmap group 0x94, bmp_rac.tpl, loaded with the race HUD,
 # so in every race: 0x9400 ENERGY, 0x9401 km/h, 0x9402 LAP, 0x9403 NAME, 0x9404 ND, 0x9405 POS., 0x9406 RD, 0x9407 RIVAL

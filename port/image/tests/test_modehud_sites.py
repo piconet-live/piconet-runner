@@ -329,18 +329,18 @@ class TheScore(Build):
         self.assertEqual(drawer, [])
         # from the right: S (POS. 17-24), T (TIME 0-8), N (ENERGY 7-15), I (TIME 8-13), O (POS. 8-17), P (POS. 0-8); u0, u1 the
         # columns over the picture's width, scale_x the letter's share of it, each letter's left edge a letter's width before
-        self.assertEqual(letters, [(0x9405, 611.0, round(17 / 28, 4), round(24 / 28, 4), round(7 / 28, 4)),
-                                   (0x940A, 603.0, 0.0, 0.25, 0.25),
-                                   (0x9400, 595.0, round(7 / 48, 4), round(15 / 48, 4), round(8 / 48, 4)),
-                                   (0x940A, 590.0, 0.25, round(13 / 32, 4), round(5 / 32, 4)),
-                                   (0x9405, 581.0, round(8 / 28, 4), round(17 / 28, 4), round(9 / 28, 4)),
-                                   (0x9405, 573.0, 0.0, round(8 / 28, 4), round(8 / 28, 4))])
-        self.assertEqual(hm.label_width("POINTS"), 618 - 573)
+        self.assertEqual(letters, [(0x9405, 608.0, round(17 / 28, 4), round(24 / 28, 4), round(7 / 28, 4)),
+                                   (0x940A, 600.0, 0.0, 0.25, 0.25),
+                                   (0x9400, 592.0, round(7 / 48, 4), round(15 / 48, 4), round(8 / 48, 4)),
+                                   (0x940A, 587.0, 0.25, round(13 / 32, 4), round(5 / 32, 4)),
+                                   (0x9405, 578.0, round(8 / 28, 4), round(17 / 28, 4), round(9 / 28, 4)),
+                                   (0x9405, 570.0, 0.0, round(8 / 28, 4), round(8 / 28, 4))])
+        self.assertEqual(hm.label_width("POINTS"), 615 - 570)
         # every letter the table has draws, in the picture its row names; a space is 4 units of nothing
         letters, drawer = self.label("A DEGHILMNOPRSTY.")
         self.assertEqual(drawer, [])
         self.assertEqual(len(letters), 16)
-        self.assertEqual(letters[-1][1], 618.0 - hm.label_width("A DEGHILMNOPRSTY."))
+        self.assertEqual(letters[-1][1], 615.0 - hm.label_width("A DEGHILMNOPRSTY."))
         self.assertEqual(letters[-2][1], letters[-1][1] + (hm.LABEL_LETTERS["A"][2] - hm.LABEL_LETTERS["A"][1]) + hm.LABEL_SPACE)
         # the digits after it, with the packet's corners and scale put back
         got = self.draw(42 + 1)
