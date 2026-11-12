@@ -48,6 +48,9 @@ struct RedrawRequest
   u64 position = 0;  // the command stream's written position at the frame tick (`written`): the true picture's copy is just before it
   u32 machines = 0;
   std::array<std::array<float, 3>, 30> at{};  // each machine's place in the true picture's view
+  // that view (the game's 3x4, row-major): the renderer reads a draw's own place in the world with it, and what stands still there
+  // stays the world's though a machine is near (the course is drawn from the world's origin, and Big Blue's start line lies on it)
+  std::array<float, 12> view{};
   u32 pictures = 0;
   std::array<RedrawPicture, PICTURES_MOST> picture{};
 };

@@ -91,7 +91,7 @@ void StartRunAhead()
       std::memcpy(out.picture[k].camera, r.picture[k].camera.data(), sizeof out.picture[k].camera);
       std::memcpy(out.picture[k].machine, r.picture[k].machine.data(), sizeof out.picture[k].machine);
     }
-    VideoCommon::AuroraPresent::Redraw(&out);
+    VideoCommon::AuroraPresent::Redraw(&out, r.view.data());
   }, [] { return VideoCommon::FrameRedraw::WrittenPosition(); });
 }
 

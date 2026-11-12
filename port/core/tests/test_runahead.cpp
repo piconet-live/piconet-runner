@@ -108,6 +108,7 @@ void TestHighRefreshWithNoStepAhead()
     CHECK(std::fabs(r.picture[0].machine[1][3] - 0.5f) < 1e-5f);
     CHECK(std::fabs(r.picture[2].machine[1][3] - 1.5f) < 1e-5f);
     CHECK(std::fabs(r.at[1][0] - 1.0f) < 1e-5f);  // its place in the true picture's view: where the tick saw it
+    CHECK(r.view[0] == 1.0f && r.view[5] == 1.0f && r.view[10] == 1.0f && r.view[3] == 0.0f);  // and that view itself
   }
   CHECK(FloatAt(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12) == 3.0f);  // nothing of the game's written
   runahead::TimeTheDrawing(1);  // (one request a tick)

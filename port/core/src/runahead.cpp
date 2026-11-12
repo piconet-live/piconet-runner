@@ -736,6 +736,7 @@ void SendRedraw(u64 position)
   RedrawRequest& q = s.request;
   q.position = position;
   const Mtx& view = s.now.camera.b;
+  std::memcpy(q.view.data(), view.m, sizeof view.m);
   q.machines = 0;
   for (u32 i = 0; i < SEATS; ++i)
   {
