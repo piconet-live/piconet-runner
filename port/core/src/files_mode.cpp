@@ -287,6 +287,10 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.hud_clean = true;
         }
+        else if (id == modes::SETUP_HUDLAYOUTAX)
+        {
+          p.hud_ax = true;
+        }
         else if (id == modes::SETUP_RESULTSPOINTS)
         {
           p.results_points = true;

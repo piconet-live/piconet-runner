@@ -4,6 +4,7 @@
 #include "hud_move.h"
 
 #include "internal.h"
+#include "mode_hud.h"
 #include "util.h"
 
 #include <algorithm>
@@ -213,6 +214,13 @@ struct State
   bool said = false;
 };
 State s_state;
+ModeMoves s_mode{};
+bool s_mode_any = false;
+
+bool AnyMove()
+{
+  return TheLayout().any || s_mode_any;
+}
 
 u32 Top()
 {
@@ -269,13 +277,14 @@ void Flush(Guest& g)
     if (now[p].Empty())
       continue;
     const std::size_t from = p == BOOST && !l.parts[BOOST].given ? ENERGY : p;  // the lightning goes with the meter
-    const Move& m = l.parts[from];
+    const Move m = Effective(l, s_mode, from);
     if (!m.given)
       continue;
     float px = m.px, py = m.py;
     if (!m.has_pivot)
     {
-      const Pivot& at = PIVOTS[from];
+      // (RANK drawn by the AX layout's drawer is elsewhere than its measured place: its box)
+      const Pivot at = from == RANK && (g.Read32(layout::MODE_HUD) & mode::hud::HUD_AX) ? Pivot{N, N} : PIVOTS[from];
       const Box& b = s_state.seen[from].Empty() ? s_state.seen[p] : s_state.seen[from];
       px = std::isnan(at.x) ? (b.x0 + b.x1) / 2 : at.x;
       py = std::isnan(at.y) ? (b.y0 + b.y1) / 2 : at.y;
@@ -421,9 +430,33 @@ namespace
 {
 u32 Word(const Layout& l)
 {
-  return l.any ? 1 | (l.faces_hidden ? FACES_HIDDEN : 0) : 0;
+  return l.any || s_mode_any ? 1 | (l.faces_hidden ? FACES_HIDDEN : 0) : 0;
 }
 }  // namespace
+
+Move Effective(const Layout& layout, const ModeMoves& moves, std::size_t part)
+{
+  // the mode's part whose packets are this part's (LEADER_GAP is drawn with the banners)
+  for (std::size_t p = 0; p < moves.size(); ++p)
+  {
+    const std::size_t drawn = p + 1 == LEADER_GAP ? BANNERS : p + 1;
+    if (drawn == part && (moves[p][0] != 0 || moves[p][1] != 0))
+    {
+      Move m;
+      m.given = true;
+      m.dx = moves[p][0];
+      m.dy = moves[p][1];
+      return m;
+    }
+  }
+  return part < layout.parts.size() ? layout.parts[part] : Move{};
+}
+
+void SetMode(const ModeMoves& moves)
+{
+  s_mode = moves;
+  s_mode_any = std::any_of(moves.begin(), moves.end(), [](const auto& m) { return m[0] != 0 || m[1] != 0; });
+}
 
 void Prepare(ModData& data)
 {
@@ -437,7 +470,7 @@ void Frame(Guest& g)
 
 void Call(Guest& g, u32 op, u32 arg)
 {
-  if (!TheLayout().any)
+  if (!AnyMove())
     return;
   switch (op)
   {

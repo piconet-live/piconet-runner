@@ -233,6 +233,7 @@ struct Package
   bool hud_clean = false;           // `hud clean`: no CHECK sign and no name tags (clean_picture.h)
   bool results_times_off = false;   // `results_times off`: the results without the page of race times (mode_hud.h NO_RESULTS_TIMES)
   bool distance_label_off = false;  // `distance_label off`: DISTANCE without the game's REST label (mode_hud.h NO_DISTANCE_LABEL)
+  bool hud_ax = false;              // `hud_layout ax`: the race HUD in F-Zero AX's layout (mode_hud.h HUD_AX)
   bool results_points = false;      // `results points`: the first results page passes by itself
   std::string results_heading;      // `results_heading "TEXT"`: the string for the game's PRACTICE page; empty, RESULTS
   std::string results_title;        // `results_title "TEXT"`: the string for VS TOTAL RANKING; empty, the game's

@@ -64,6 +64,10 @@ void TestTheCleanPicture()
   const std::optional<mode::Package> untimed = Vector("results_times.mode.json");
   CHECK(untimed.has_value() && untimed->results_times_off && (hud::WindowFlags(*untimed) & hud::NO_RESULTS_TIMES) != 0);
   CHECK(same.has_value() && !same->results_times_off && (hud::WindowFlags(*same) & hud::NO_RESULTS_TIMES) == 0);
+  // hud_layout ax likewise: the ax_hud vector's package, its window flag HUD_AX (the image's ax_rank and ax_faces read it)
+  const std::optional<mode::Package> ax = Vector("ax_hud.mode.json");
+  CHECK(ax.has_value() && ax->hud_ax && !ax->hud_clean && (hud::WindowFlags(*ax) & hud::HUD_AX) != 0);
+  CHECK(!same->hud_ax && (hud::WindowFlags(*same) & hud::HUD_AX) == 0 && (hud::WindowFlags(*clean) & hud::HUD_AX) == 0);
 
   TestHost host;
   ModData data;

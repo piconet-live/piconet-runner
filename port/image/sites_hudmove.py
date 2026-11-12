@@ -13,6 +13,7 @@ the drawing's, written by the drawing in the same frame (classic-hud-draw notes)
 | `hm_*` (wraps) | each part's `bl` in fn_1_C72D4 (one viewport), fn_1_C771C (its other layout), fn_1_C6F8C (faces board, timer), fn_1_CDC8C (its timer), fn_1_15C36C (banners, FINISH/RETIRED) | the part's call between the host's PUSH and POP |
 | `hs_*` (story blocks) | each mask test's `bl fn_1_5910` in fn_1_CDC8C and fn_1_CEB38, where one story part's block starts | the host's SET: the packets from here on are that part's (a block of the story's own, no mode part: STORY_OTHER) |
 | `hm_sprite` | fn_1_4DEC0 0x4DF24, a pool sprite's packet queued (`bl fn_1_4F734`, r30 the sprite) | between SPRITE (the host names the part by the sprite's step callback: the boost lightning, wrong way) and POP |
+| `ax_rank`, `ax_faces` | called by the wraps at 0xC7350 (fn_1_C72D4's rank) and 0xC7144 (fn_1_C6F8C's faces board) | under `hud_layout ax` (the window's HUD_AX): the rank by fn_1_CA690 at (24, 412) in the left Wide Screen group, and the board's rows copied from .rodata 0x5A08 over the stack copy of 0x59C0, as the game's AX layout (fn_1_C771C, fn_1_C6F8C's other branch, chosen by the menu's arcade bit .bss 0x8B3A0 +0x94 0x40000000, which is never set: it changes more than the drawing); else the game's own call |
 | `hm_flush` | fn_1_4FD64's entry, the queue drawn (`stwu r1, -0x60(r1)`) | the host's FLUSH: every queued packet of a moved part rewritten, the parts' record cleared |
 
 With the window's word MODE_HUD_MOVE 0 (no layout, every start but a test's) each routine is the game's instruction
@@ -34,7 +35,7 @@ WRAPS = [
     (0xC7360, 0xCEB38, "STORY_OTHER"), (0xC7384, 0xC8DC0, "ENERGY"), (0xC738C, 0xCADC4, "SPEED"),
     (0xC73A8, 0xCC280, "LAPS"), (0xC73D8, 0xCBC24, "RACE_TIME"), (0xC73EC, 0xCB424, "LAP_TIMES"),
     (0xC73F8, 0xCB028, "LAP_TIMES"), (0xC7408, 0xCAB38, "SKULLS"),
-    (0xC7780, 0xCA690, "SPARE"), (0xC77A8, 0xCD7BC, "STORY_OTHER"), (0xC77CC, 0xC8DC0, "ENERGY"),
+    (0xC7780, 0xCA690, "RANK"), (0xC77A8, 0xCD7BC, "STORY_OTHER"), (0xC77CC, 0xC8DC0, "ENERGY"),
     (0xC77D4, 0xCADC4, "SPEED"), (0xC77F0, 0xCC280, "LAPS"), (0xC7820, 0xCBC24, "RACE_TIME"),
     (0xC7834, 0xCB424, "LAP_TIMES"), (0xC7840, 0xCB028, "LAP_TIMES"), (0xC7850, 0xCAB38, "SKULLS"),
     (0xC7144, 0xC8294, "FACES"), (0xC7184, 0xC8294, "FACES"), (0xC7204, 0xCF5B0, "TIMER"),
@@ -49,6 +50,14 @@ STORY_BLOCKS = [
     (0xCEE44, "STORY_OTHER"), (0xCEE88, "STORY_OTHER"), (0xCEECC, "DIGIT"), (0xCF048, "SUCCESS"),  # 0x40 0x20 0x8 0x200
     (0xCF2C0, "FAILED"), (0xCF40C, "STORY_OTHER"), (0xCF4E8, "STORY_OTHER"),                   # 0x100 0x2 0x10
 ]
+# `hud_layout ax` (the window's flag HUD_AX, mode_hud.h): two wraps call a routine of ours in place of the game's
+# function, which draws as the AX layout (fn_1_C771C, fn_1_C6F8C's other branch) and else jumps to the function itself
+AX_FLAG = 4096
+AX_RANK, AX_FACES = 0xC7350, 0xC7144            # fn_1_C72D4's bl fn_1_CA2A4; fn_1_C6F8C's bl fn_1_C8294 (r3 the rows' copy)
+AX_RANK_DRAW = 0xCA690                          # fn_1_CA690(mode, x, y): the AX layout's rank, called at (24, 412)
+VIEWPORTS, ANCHOR_SET, ANCHOR_CLEAR = 0x58C4, 0x52070, 0x52088
+AX_ROWS, ROWS_SIZE = 0x15F710 + 0x5A08, 0x48     # .rodata 0x5A08 (from main.rel's base): the AX layout's faces rows
+CALLEE = {AX_RANK: "ax_rank", AX_FACES: "ax_faces"}
 SPRITE_SITE, QUEUE = 0x4DF24, 0x4F734           # fn_1_4DEC0: bl fn_1_4F734 (r30 the sprite)
 FLUSH_SITE, FLUSH_KNOWN = 0x4FD64, 0x9421FFA0   # fn_1_4FD64: stwu r1, -0x60(r1)
 
@@ -63,16 +72,65 @@ def add(k, r, patch, stock, la, middle):
         return (f"    stwu 1, -0x20(1)\n    stw 3, 0x8(1)\n    stw 4, 0xC(1)\n    li 3, {op}\n    {arg}\n"
                 f"    @bl host_hud\n    lwz 3, 0x8(1)\n    lwz 4, 0xC(1)\n    addi 1, 1, 0x20\n")
 
+    ax = la(12, memmap.MODE_HUD) + f"    lwz 12, 0(12)\n    andi. 12, 12, {AX_FLAG}\n"
+    # the AX layout's rank: fn_1_CA690 at (24, 412) in the left Wide Screen group, as fn_1_C771C draws it (r3 the racer)
+    r.add("ax_rank", ax + f"""    beq axr_stock
+    stwu 1, -0x20(1)
+    mflr 0
+    stw 0, 0x24(1)
+    stw 31, 0x1C(1)
+    mr 31, 3
+    @bl {TEXT + VIEWPORTS:#x}
+    cmpwi 3, 1
+    bne axr_draw
+    @bl {TEXT + ANCHOR_CLEAR:#x}
+    li 3, 0x60
+    @bl {TEXT + ANCHOR_SET:#x}
+axr_draw:
+    mr 3, 31
+    li 4, 0x18
+    li 5, 0x19C
+    @bl {TEXT + AX_RANK_DRAW:#x}
+    @bl {TEXT + VIEWPORTS:#x}
+    cmpwi 3, 1
+    bne axr_back
+    @bl {TEXT + ANCHOR_CLEAR:#x}
+    li 3, 0x140
+    @bl {TEXT + ANCHOR_SET:#x}
+axr_back:
+    lwz 31, 0x1C(1)
+    lwz 0, 0x24(1)
+    mtlr 0
+    addi 1, 1, 0x20
+    blr
+axr_stock:
+    @b {TEXT + 0xCA2A4:#x}
+""")
+    # the AX layout's faces rows over the stack copy of the race's that r3 points at, then the board's draw
+    r.add("ax_faces", ax + f"""    beq axf_stock
+""" + la(11, memmap.REL + AX_ROWS) + f"""    li 12, {ROWS_SIZE // 4}
+    mtctr 12
+    addi 12, 3, -4
+    addi 11, 11, -4
+axf_copy:
+    lwzu 0, 4(11)
+    stwu 0, 4(12)
+    bdnz axf_copy
+axf_stock:
+    @b {TEXT + 0xC8294:#x}
+""")
+
     for n, (at, target, part) in enumerate(WRAPS):
         site, fn = TEXT + at, TEXT + target
         word = stock(site, k.branch(site, fn, True))
         assert k.branch_target(word, site) == fn
+        callee = CALLEE.get(at, f"{fn:#x}")
         name = f"hm_{at:x}"
         r.add(name, on + f"""    beq {name}_stock
-""" + call(PUSH, f"li 4, {P[part]}") + f"""    @bl {fn:#x}
+""" + call(PUSH, f"li 4, {P[part]}") + f"""    @bl {callee}
 """ + call(POP, f"li 4, {P[part]}") + f"""    @b {site + 4:#x}
 {name}_stock:
-    @bl {fn:#x}
+    @bl {callee}
     @b {site + 4:#x}
 """)
         patch(site, word, 0, name)

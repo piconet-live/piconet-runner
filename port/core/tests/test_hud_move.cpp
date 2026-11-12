@@ -63,4 +63,23 @@ void TestTheClassicHudMoves()
   CHECK(why.empty() && l.any && l.faces_hidden && !l.parts[FACES].given);
   l = FromText(R"({"RANK": {"hide": true}})", &why);
   CHECK(!why.empty() && !l.any);
+  // a mode's moves: for its part in place of the layout's (turn and mirror too); LEADER_GAP's go to BANNERS; (0, 0) none
+  {
+    Layout layout = FromText(R"({"RANK": {"dx": 5, "angle": 30}, "LAPS": {"dy": 3}})", &why);
+    ModeMoves moves{};
+    moves[modes::PART_RANK] = {-296, 350};
+    moves[modes::PART_LEADER_GAP] = {0, -20};
+    Move e = Effective(layout, moves, RANK);
+    CHECK(e.given && Near(e.dx, -296) && Near(e.dy, 350) && e.angle == 0);
+    e = Effective(layout, moves, 13);
+    CHECK(e.given && Near(e.dy, 3));
+    e = Effective(layout, moves, BANNERS);
+    CHECK(e.given && Near(e.dx, 0) && Near(e.dy, -20));
+    CHECK(!Effective(layout, moves, LEADER_GAP).given && !Effective(layout, moves, ENERGY).given);
+    moves[modes::PART_RANK] = {0, 0};
+    e = Effective(layout, moves, RANK);
+    CHECK(e.given && Near(e.dx, 5) && Near(e.angle, 30));
+    // the mode's part p is the classic HUD's part p + 1
+    CHECK(PARTS[modes::PART_DISTANCE + 1] == "DISTANCE" && PARTS[modes::PART_FACES + 1] == "FACES");
+  }
 }

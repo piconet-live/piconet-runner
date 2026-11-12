@@ -3,6 +3,7 @@
 // and the course map's dots.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <fstream>
@@ -414,16 +415,56 @@ void TestTheDisplayWordsRun()
 
   // the course map: seat 1 and the out seat are hidden from every other racer's map, never from a spectator's
   std::array<bool, 30> present{};
-  std::array<u32, 30> colour{};
+  std::array<u32, 30> colour{}, symbol{};
   present.fill(true);
-  hud::MapRacers(g, 0, true, present, colour);
+  hud::MapRacers(g, 0, true, present, colour, symbol);
   CHECK(!present[1] && !present[OUT_SEAT] && present[0] && present[2] && colour[OUT_SEAT] == 0xFF0000);
   present.fill(true);
-  hud::MapRacers(g, 1, true, present, colour);
+  hud::MapRacers(g, 1, true, present, colour, symbol);
   CHECK(present[1] && !present[OUT_SEAT] && !present[7]);
   present.fill(true);
-  hud::MapRacers(g, 1, false, present, colour);
+  hud::MapRacers(g, 1, false, present, colour, symbol);
   CHECK(present[1] && present[OUT_SEAT] && present[7]);
+
+  // map_char: a code point or the crown through to the map's racers; a control character or past Unicode: none
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 2, 'K'));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 3, 0x265B));  // the black chess queen
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 4, hud::MAP_CROWN));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 5, 0x7));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 6, hud::MAP_CROWN + 1));
+  hud::MapRacers(g, 1, false, present, colour, symbol);
+  CHECK(symbol[2] == 'K' && symbol[3] == 0x265B && symbol[4] == hud::MAP_CROWN && symbol[5] == 0 && symbol[6] == 0 &&
+        symbol[0] == 0);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 2, 0));
+  hud::MapRacers(g, 1, false, present, colour, symbol);
+  CHECK(symbol[2] == 0 && symbol[3] == 0x265B);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 3, 0) && hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 4, 0));
+
+  // hud_move: whole units, held to 640 either way, in the seat's record; the viewed racer's moves for the HUD
+  {
+    const u32 viewed = net::ViewedRacer(g);
+    CHECK(viewed < 30);
+    const auto real = [](float f) { return std::bit_cast<u32>(f); };
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_DISTANCE, real(10.6f), real(-60)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_RANK, real(5000), real(-5000)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_COUNT, real(1), real(1)));  // no such part
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, (viewed + 1) % 30, modes::PART_LAPS, real(7), real(7)));
+    auto moves = hud::ViewedMoves(g);
+    CHECK(moves[modes::PART_DISTANCE][0] == 11 && moves[modes::PART_DISTANCE][1] == -60);
+    CHECK(moves[modes::PART_RANK][0] == 640 && moves[modes::PART_RANK][1] == -640);
+    CHECK(moves[modes::PART_LAPS][0] == 0 && moves[modes::PART_LAPS][1] == 0);  // another seat's
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_DISTANCE, real(0), real(0)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_RANK, real(0), real(0)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, (viewed + 1) % 30, modes::PART_LAPS, real(0), real(0)));
+    moves = hud::ViewedMoves(g);
+    CHECK(std::all_of(moves.begin(), moves.end(), [](const auto& m) { return m[0] == 0 && m[1] == 0; }));
+    // seat 0's TIMER record is not the page's step stamp (mode.cpp's Stamp, at every run: read as that move it slid
+    // the clock off the screen)
+    const u32 stamp = g.Read32(BLOCK + 7 * mode::PAGE);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, 0, modes::PART_TIMER, real(5), real(7)));
+    CHECK(g.Read32(BLOCK + 7 * mode::PAGE) == stamp);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, 0, modes::PART_TIMER, real(0), real(0)));
+  }
 
   // show_number's range: 0 to 99 as it is, above 99 clamped to 99, a negative hidden (the record holds number + 1)
   for (const auto& [value, record] : std::array<std::pair<s32, u32>, 6>{{{0, 1}, {99, 100}, {100, 100}, {12345, 100}, {-1, 0}, {-50, 0}}})

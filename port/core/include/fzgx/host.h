@@ -174,6 +174,8 @@ struct MinimapDot
   float x = 0, y = 0;
   u32 colour = 0;    // 0xRRGGBB, the machine's
   float wx = 0, wy = 0, wz = 0;  // its place in the course (the view turned)
+  u32 symbol = 0;    // a game mode's map_char drawn over the dot: 0 none, a Unicode code point, or SYMBOL_SHAPES + n
+  static constexpr u32 SYMBOL_SHAPES = 0x110000, SYMBOL_CROWN = SYMBOL_SHAPES;  // (mode_hud.h MAP_SHAPES)
 };
 struct MinimapShow
 {

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <string_view>
 
 #include "internal.h"
@@ -65,6 +66,9 @@ bool IsDisplay(u8 id)
     case ACTION_SHOWDISTANCEOFF:
     case ACTION_SHOWOBJECTS:
     case ACTION_SHOWOBJECTSOFF:
+    case ACTION_HUDMOVE:
+    case ACTION_MAPCHAR:
+    case ACTION_MAPCHAROFF:
       return true;
     default:
       return false;
@@ -97,7 +101,7 @@ void NoteGaps(Guest& g, u32 block, u32 module, u32 run)
   }
 }
 
-bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second)
+bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 third)
 {
   const u32 r = Seat(block, seat);
   switch (id)
@@ -198,9 +202,50 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second)
       g.Write8(st + STORY_FLAGS, g.Read8(st + STORY_FLAGS) & ~STORY_OBJECTS);
       return true;
     }
+    case ACTION_HUDMOVE:
+    {
+      // whole units, held to the screen's width either way (NaN: 0)
+      const auto unit = [](u32 v) {
+        const float f = std::bit_cast<float>(v);
+        return static_cast<s16>(f == f ? std::clamp(std::lround(f), -long{MOVE_MOST}, long{MOVE_MOST}) : 0);
+      };
+      if (value < PART_COUNT)
+      {
+        const u32 at = block + MOVES + seat * MOVE_RECORD + 4 * value;
+        g.Write16(at, static_cast<u16>(unit(second)));
+        g.Write16(at + 2, static_cast<u16>(unit(third)));
+      }
+      return true;
+    }
+    case ACTION_MAPCHAR:
+      // a code point (no control, no surrogate) or a shape the course map knows; anything else: none
+      g.Write32(block + MAP_CHARS + 4 * seat,
+                (value >= 0x20 && value < 0xD800) || (value > 0xDFFF && value < 0x110000) || value == MAP_CROWN ? value : 0);
+      return true;
+    case ACTION_MAPCHAROFF:
+      g.Write32(block + MAP_CHARS + 4 * seat, 0);
+      return true;
     default:
       return false;
   }
+}
+
+std::array<std::array<s16, 2>, PART_COUNT> ViewedMoves(Guest& g)
+{
+  std::array<std::array<s16, 2>, PART_COUNT> moves{};
+  const u32 block = g.Read32(layout::MODES + 4);
+  if (block == 0 || !g.Ram(net::MODULE_POINTER, 4) || g.Read32(net::MODULE_POINTER) != layout::MAIN_REL ||
+      g.Read16(layout::MAIN_REL + game::PHASE) < PHASE_INTRO)
+    return moves;
+  const u32 viewed = net::ViewedRacer(g);
+  if (viewed >= SEATS)
+    return moves;
+  for (u32 p = 0; p < PART_COUNT; ++p)
+  {
+    const u32 at = block + MOVES + viewed * MOVE_RECORD + 4 * p;
+    moves[p] = {static_cast<s16>(g.Read16(at)), static_cast<s16>(g.Read16(at + 2))};
+  }
+  return moves;
 }
 
 void BeginRun(Guest& g, u32 block)
@@ -275,7 +320,7 @@ u32 WindowFlags(const Package& p)
   return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (points_page ? POINTS_PAGE : 0) |
          (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0) | (p.start_gap && *p.start_gap == 0.0f ? SAME_SPOT : 0) |
          ((p.start_gap && *p.start_gap > 0.0f) || p.start_gap_even ? SPREAD : 0) |
-         (NeedsGhostTask(p.code) ? GHOST_TASK : 0) | (p.hud_clean ? HUD_CLEAN : 0) |
+         (NeedsGhostTask(p.code) ? GHOST_TASK : 0) | (p.hud_clean ? HUD_CLEAN : 0) | (p.hud_ax ? HUD_AX : 0) |
          (p.distance_label_off ? NO_DISTANCE_LABEL : 0) | (p.results_times_off ? NO_RESULTS_TIMES : 0);
 }
 
@@ -507,7 +552,8 @@ void Hud(Guest& g)
     DrawGap(g, module, f, viewed);
 }
 
-void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour)
+void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour,
+               std::array<u32, 30>& symbol)
 {
   const u32 block = g.Read32(layout::MODES + 4);
   if (block == 0)
@@ -519,6 +565,7 @@ void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& prese
       present[seat] = false;
     if (const u32 mark = g.Read32(r + MAP_MARK); mark & MARKED)
       colour[seat] = mark & 0xFFFFFF;
+    symbol[seat] = g.Read32(block + MAP_CHARS + 4 * seat);
   }
 }
 }  // namespace fzgx::mode::hud

@@ -22,7 +22,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_title` | fn_1_1461C8 0x146304, VS TOTAL RANKING's string (`addi r3, r21, 0x404`) | the game's | the window's title, when there is one |
 | `mode_heading` | fn_1_1461C8 0x146324, the times list's string (`addi r3, r21, 0x424`: PRACTICE, what every race of ours ends on without a points page) | the game's | the window's heading (the core writes `results_heading`, or RESULTS) |
 | `tag_cell`, `tag_cpu` | fn_1_147188 0x1473D8 (`lwz r7, 0x4c(r30)`), 0x14740C (`lis r4, 1`); with follow.py's 0x147390 | row's tag: P1 to P4 by racer, CPU for the others | the local seat's row P1; a row with a name in memmap.NAMES no tag (as a player row, to 0x147494). Every race; drawing only |
-| `mode_clock_at`, `mode_clock_label` | fn_1_CF5B0's ten calls of fn_1_496FC (the digits' place, f2 its y) and 0xCF9EC (the TIME label's y, `stfs f0, 0x18(r1)`) | at the top, on the rank | in a race with a mode, below the rank: digits at y 128 (CLOCK_Y; the owner's choice, 2026-10-30) and the label at 151 (the rank's own stay). Stock races never draw this clock |
+| `mode_clock_at`, `mode_clock_label` | fn_1_CF5B0's ten calls of fn_1_496FC (the digits' place, f2 its y) and 0xCF9EC (the TIME label's y, `stfs f0, 0x18(r1)`) | at the top, on the rank | in a race with a mode, below the rank: digits at y 128 (CLOCK_Y; the owner's choice, 2026-10-30) and the label at 151 (the rank's own stay); under `hud_layout ax` (the rank at the bottom left) the game's place and label. Stock races never draw this clock |
 | `hud_lap_*` (2) | fn_1_C72D4 0xC73A0 and fn_1_C771C 0xC77E8, `addi r5, r4, 1`: the lap shown, P+0x118 + 1, r6 the race's laps | a finished racer's HUD shows 4/3 | the lap shown stops at the race's laps (r6 0: no race, as it was). In every race of ours, the mode word set: a spectator follows a finished racer with the game's HUD up. r5 only, for fn_1_CC280's digits: nothing a step reads |
 | `mode_beep` | fn_1_3A330 0x3A448, where the timed mode's countdown ends on every path (`lwz r0, 0x30(r29)`) | — | under clock_limit (whose timer the game no longer counts) the countdown's own tick: 0xA9092700 when the time left is a whole second below ten, including 0, as the code it skips does. Only a sound: the mute of a step run again (mute.py) as for the game's |
 
@@ -323,6 +323,9 @@ hl_{at:x}_done:
 """ + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
     cmplwi 12, 0
     beq mca_stock
+""" + la(12, memmap.MODE_HUD) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {sites_hudmove.AX_FLAG}
+    bne mca_stock
     lis 0, {CLOCK_Y >> 16:#x}
     stwu 1, -0x10(1)
     stw 0, 0x8(1)
@@ -346,6 +349,9 @@ mca_stock:
 """ + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
     cmplwi 12, 0
     beq mcl_stock
+""" + la(12, memmap.MODE_HUD) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {sites_hudmove.AX_FLAG}
+    bne mcl_stock
     @b {site + 8:#x}
 mcl_stock:
     .long {word:#010x}

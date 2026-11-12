@@ -130,11 +130,13 @@ const Fonts& TheFonts()
     fonts.body = Load(fzgx::strip::TEXT_FONT);
     fonts.semi = Load(fzgx::strip::FIGURE_FONT);
     fonts.display = Load(fzgx::strip::DISPLAY_FONT);
-    // for a mode's texts: what Saira lacks comes from the system's Segoe UI, if there (Greek, Cyrillic, more of Latin), and from its
-    // Yu Gothic (kana, kanji): glyphs of a merged font load when first drawn
+    // for a mode's texts: what Saira lacks comes from the system's Segoe UI, if there (Greek, Cyrillic, more of Latin),
+    // its Segoe UI Symbol (symbols and arrows for map_char: the chess queen, stars, the skull, lightning, in one colour)
+    // and its Yu Gothic (kana, kanji): glyphs of a merged font load when first drawn. With no WINDIR (Linux) Saira's
+    // alone: map_char's shapes still draw
     if (fonts.display != nullptr)
       if (const char* windows = std::getenv("WINDIR"))
-        for (const char* file : {"segoeui.ttf", "YuGothM.ttc"})
+        for (const char* file : {"segoeui.ttf", "seguisym.ttf", "YuGothM.ttc"})
         {
           const std::filesystem::path path = std::filesystem::path(windows) / "Fonts" / file;
           std::error_code e;

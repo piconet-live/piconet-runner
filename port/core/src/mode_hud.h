@@ -58,6 +58,16 @@ static_assert(TAGS_AT + 30 <= GHOST_SOUNDS && GHOST_SOUNDS + 4 <= STATS && STATS
 // flags (STORY_DISTANCE, STORY_OBJECTS: the mode gave that value), +6 show_objects's n, +7 its of (0 to 99 each).
 // A page of zeros: the game's own values.
 constexpr u32 STORY = 7 * PAGE + 0xF10, STORY_RECORD = 8;
+// hud_move's moves, in the page 7's head (unused since the modern HUD's slots left it) after the page's step stamp (its
+// first word, which mode.cpp's Stamp writes at every run: read as seat 0's TIMER move it slid the clock down a unit a
+// step, off the screen within seconds): a record of MOVE_RECORD bytes a seat at MOVES, for each modes::PART_* p at
+// +4 p its dx and dy, s16 each, whole 640 x 480 units held to -MOVE_MOST .. MOVE_MOST (0, 0: not moved). Then
+// MAP_CHARS: map_char's code a seat, u32 (0: none; a Unicode code point, or MAP_SHAPES + n for a named shape, the
+// compiler's MapSymbols). The block's like the rest: undo log and checksum.
+constexpr u32 MOVES = 7 * PAGE + 0x10, MOVE_RECORD = 4 * modes::PART_COUNT, MAP_CHARS = MOVES + 30 * MOVE_RECORD;
+constexpr s32 MOVE_MOST = 640;
+constexpr u32 MAP_SHAPES = 0x110000, MAP_CROWN = MAP_SHAPES;
+static_assert(MOVES % PAGE >= 4 && MAP_CHARS + 30 * 4 <= STORY);  // (clear of the stamp; below STORY)
 constexpr u32 STORY_METRES = 0, STORY_FLAGS = 4, STORY_SHOWN = 6, STORY_OF = 7;
 constexpr u8 STORY_DISTANCE = 1, STORY_OBJECTS = 2;
 constexpr float DISTANCE_MOST = 99999.0f;  // the drawer's five digits (fn_1_CDC8C 0xCEACC)
@@ -94,6 +104,10 @@ constexpr u32 NO_DISTANCE_LABEL = 1024;
 // NO_RESULTS_TIMES: `results_times off`: VS RESULTS, the results' page of race times, is passed over (sites_modehud.py
 // mode_results_skip): the results open on the points page.
 constexpr u32 NO_RESULTS_TIMES = 2048;
+// HUD_AX: `hud_layout ax`: the one-viewport HUD's rank by the AX layout's drawer at the bottom left, the faces board on
+// that layout's rows, the timed clock at the game's place (sites_hudmove.py ax_rank, ax_faces; sites_modehud.py
+// mode_clock_at).
+constexpr u32 HUD_AX = 4096;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
@@ -158,7 +172,8 @@ bool IsDisplay(u8 id);
 u32 SeatParts(const Guest& g, u32 seat);
 // A display word into the seat's record: true when `id` is one.
 // `second`: a two-number word's second (show_objects's of).
-bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second = 0);
+// `third`: hud_move's dy.
+bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second = 0, u32 third = 0);
 // The start of every run: the banners asked at the last one are gone.
 void BeginRun(Guest& g, u32 block);
 // The window's flags for a race of package `p` (the core writes them with the block's request, boot.cpp; nothing
@@ -236,5 +251,10 @@ void Board(const Guest& g);
 // The course map's dots (minimap_frame.cpp): `you` the racer the map is drawn for, `racing` whether that is this
 // game's own seat in the race (a spectator's map and a replay's show every dot). Hides the dots map_hide hides from
 // it and colours the dots map_mark marks; `present` and `colour` as the map reads them.
-void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour);
+// `symbol`: each seat's map_char (0: none; mode_hud.h MAP_CHARS).
+void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour,
+               std::array<u32, 30>& symbol);
+// The viewed racer's hud_move moves (dx, dy by modes::PART_*; all 0 with no mode or before the intro), for the classic
+// HUD's moves (hud_move.h SetMode). Once a frame at the drawing.
+std::array<std::array<s16, 2>, modes::PART_COUNT> ViewedMoves(Guest& g);
 }  // namespace fzgx::mode::hud

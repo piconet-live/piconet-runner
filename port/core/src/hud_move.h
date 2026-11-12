@@ -28,6 +28,7 @@
 #include <string_view>
 
 #include "fzgx/guest.h"
+#include "mode_words.g.h"
 
 namespace fzgx::hud_move
 {
@@ -36,7 +37,9 @@ inline constexpr std::array<std::string_view, 26> PARTS = {
     "NONE",      "TIMER",     "DISTANCE", "DIGIT",   "WARNING", "SUCCESS",   "FAILED", "TIME_OVER",  "SPEED_GAUGE",
     "OBJECTS",   "LEADER_GAP", "GHOST_GAP", "RANK",  "LAPS",    "SPEED",     "ENERGY", "LAP_TIMES",  "RACE_TIME",
     "FACES",     "SPARE",     "SKULLS",   "BOOST",   "WRONG_WAY", "BANNERS", "FINISH", "STORY_OTHER"};
-constexpr u32 NONE = 0, FACES = 18, ENERGY = 15, BOOST = 21, WRONG_WAY = 22;
+constexpr u32 NONE = 0, LEADER_GAP = 10, RANK = 12, FACES = 18, ENERGY = 15, BOOST = 21, WRONG_WAY = 22, BANNERS = 23;
+static_assert(PARTS[LEADER_GAP] == "LEADER_GAP" && PARTS[RANK] == "RANK" && PARTS[FACES] == "FACES" && PARTS[BANNERS] == "BANNERS" &&
+              PARTS[modes::PART_COUNT] == "FACES");  // (modes::PART_* p is part p + 1)
 constexpr u32 PUSH = 1, POP = 2, SET = 3, SPRITE = 4, FLUSH = 5;  // the host call's operations (r3)
 
 struct Move
@@ -72,6 +75,15 @@ struct Packet
   float u0, v0, u1, v1;
 };
 Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p);
+
+// A game mode's moves (hud_move s, PART, dx, dy: protocol modes.toml), for the racer the picture follows, by
+// modes::PART_* (dx, dy; 0, 0: not moved). Set once a drawn frame before Frame (core.cpp, from mode_hud's ViewedMoves).
+// For a part the mode moves, its move takes the place of the layout's for that part (the layout's turn and mirror
+// too); LEADER_GAP, drawn as a banner, moves BANNERS.
+using ModeMoves = std::array<std::array<s16, 2>, modes::PART_COUNT>;
+void SetMode(const ModeMoves& moves);
+// The move a part gets: the mode's when it moves the part, else the layout's. Pure, for the tests.
+Move Effective(const Layout& layout, const ModeMoves& moves, std::size_t part);
 
 // At the start (Init): the window's word the image's sites test, from the layout.
 void Prepare(ModData& data);
