@@ -331,6 +331,16 @@ void TestTheDisplayWordsRun()
     // held to the five digits, and nothing below 0
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(250000.0f)));
     CHECK(hud::Read(g, BLOCK, 1).metres == hud::DISTANCE_MOST);
+    // under `distance_label off` to six (the sixth digit has the label's room), and five again without it
+    const u32 window = g.Read32(layout::MODE_HUD + hud::WINDOW_FLAGS);
+    g.Write32(layout::MODE_HUD + hud::WINDOW_FLAGS, window | hud::NO_DISTANCE_LABEL);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(250000.0f)));
+    CHECK(hud::Read(g, BLOCK, 1).metres == 250000.0f);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(2500000.0f)));
+    CHECK(hud::Read(g, BLOCK, 1).metres == hud::DISTANCE_MOST_NO_LABEL);
+    g.Write32(layout::MODE_HUD + hud::WINDOW_FLAGS, window);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(250000.0f)));
+    CHECK(hud::Read(g, BLOCK, 1).metres == hud::DISTANCE_MOST);
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(-5.0f)));
     CHECK(hud::Read(g, BLOCK, 1).distance_fed && hud::Read(g, BLOCK, 1).metres == 0.0f);
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, 0x7FC00000));

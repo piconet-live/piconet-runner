@@ -16,7 +16,8 @@ nothing is taken from the heap. Native form only: the fork's image does not have
 A seat's record in the block (memmap.MODE_SEAT bytes at +16 x seat, written by the host at every mode point): +0
 flags (1 pedals locked, 2 boost off, 4 speed held this step), +4 the accelerator and +8 the brake the pedals hold
 (floats; the stand-in routine applies them, routines/standin_inputs.py), +12 the held speed in km/h (a float, 0 to
-9,000). A seat frozen (0x8000), broken down (0x80), out of the course (0x800), finished (0x10000), retired
+9,000, to 1e17 with the file's setup word seat_speed_open: the core's mode.h MOST_SPEED).
+A seat frozen (0x8000), broken down (0x80), out of the course (0x800), finished (0x10000), retired
 (0x08000000), destroyed (0x40000000) or restoring (M+0x214 not 0) is never held: a broken machine held at speed would
 never come to rest, and the out verdict at rest would never come.
 

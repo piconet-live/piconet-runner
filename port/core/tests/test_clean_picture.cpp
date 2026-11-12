@@ -56,6 +56,14 @@ void TestTheCleanPicture()
   CHECK(clean.has_value() && clean->hud_clean && (hud::WindowFlags(*clean) & hud::HUD_CLEAN) != 0);
   const std::optional<mode::Package> same = Vector("gap_same.mode.json");
   CHECK(same.has_value() && !same->hud_clean && (hud::WindowFlags(*same) & hud::HUD_CLEAN) == 0);
+  // distance_label off: its package says it and the window has NO_DISTANCE_LABEL (the image's label site); none without
+  const std::optional<mode::Package> unlabelled = Vector("distance_label.mode.json");
+  CHECK(unlabelled.has_value() && unlabelled->distance_label_off && (hud::WindowFlags(*unlabelled) & hud::NO_DISTANCE_LABEL) != 0);
+  CHECK(same.has_value() && !same->distance_label_off && (hud::WindowFlags(*same) & hud::NO_DISTANCE_LABEL) == 0);
+  // results_times off: its package says it and the window has NO_RESULTS_TIMES (the image's results sites); none without
+  const std::optional<mode::Package> untimed = Vector("results_times.mode.json");
+  CHECK(untimed.has_value() && untimed->results_times_off && (hud::WindowFlags(*untimed) & hud::NO_RESULTS_TIMES) != 0);
+  CHECK(same.has_value() && !same->results_times_off && (hud::WindowFlags(*same) & hud::NO_RESULTS_TIMES) == 0);
 
   TestHost host;
   ModData data;

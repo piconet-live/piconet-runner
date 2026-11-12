@@ -133,7 +133,7 @@ void TestOverdriveRunsInTheBlock()
   g.Write32(MODULE + game::RACE_CLOCK, 1260);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(g.Read32(BLOCK + mode::SeatWord(2, 0)) == 1200 && g.Read32(BLOCK + mode::RUNS) == 3);
-  // the speed's cap: 9000 at most
+  // Overdrive's own min: 9000 at most
   g.Write32(MODULE + game::RACE_CLOCK, 600 * 900);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(std::bit_cast<float>(g.Read32(BLOCK + mode::RECORDS + 12)) == 9000.0f);
@@ -141,6 +141,86 @@ void TestOverdriveRunsInTheBlock()
   g.Write32(BLOCK + mode::END, 1);
   mode::Run(g, *p, BLOCK, MODULE);
   CHECK(g.Read32(BLOCK + mode::RUNS) == 4);
+}
+
+// seat.speed without the 9000 top of before 0.6.1 (the file's seat_speed_open): 12000 held as written, 1e30 held
+// to 1e17, -5 to 0; a package of before (no seat_speed_open) holds 12000 to 9000 as it did. rolling_start reads 12000.
+void TestSeatSpeedOpen()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("speed_open.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->speed_open && p->rolling == std::bit_cast<u32>(12000.0f));
+  const auto held = [&](const mode::Package& package, u32 seat) {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 3, 600);
+    mode::Run(g, package, BLOCK, MODULE);
+    const u32 record = BLOCK + mode::RECORDS + seat * mode::RECORD;
+    CHECK(g.Read32(record) & mode::HELD);
+    return std::bit_cast<float>(g.Read32(record + 12));
+  };
+  CHECK(held(*p, 0) == 12000.0f && held(*p, 1) == mode::MOST_SPEED_OPEN && held(*p, 2) == 0.0f);
+  CHECK(std::bit_cast<u32>(held(*p, 2)) == 0);  // -0 never
+  mode::Package before = *p;
+  before.speed_open = false;
+  CHECK(held(before, 0) == 9000.0f && held(before, 1) == 9000.0f && held(before, 2) == 0.0f);
+}
+
+// The engine's own speed (0.6.1): seat.base_speed writes M+0x224 at the mode point, held to 0 .. MOST_BASE_SPEED and
+// never on a seat the game would not hold (frozen, broken down, out, finished, retired, destroyed, restoring);
+// seat.boost_value reads M+0x228; seat.stat.max_speed reaches 10000 with the file's max_speed_open and stays at the
+// stat pack's 4 in a package of before.
+void TestSeatBaseSpeed()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("engine_speed.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->max_speed_open && !p->speed_open);
+  constexpr u32 SEATS = 10;
+  const auto run = [&](const mode::Package& package, auto&& check) {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, SEATS, 600);
+    for (u32 seat = 0; seat < SEATS; ++seat)
+    {
+      const u32 m = MACHINES + seat * game::MACHINE_SIZE;
+      g.Write32(m + 0x224, std::bit_cast<u32>(1.0f));
+      g.Write32(m + 0x228, std::bit_cast<u32>(0.5f * static_cast<float>(seat)));
+    }
+    const u32 kept[] = {0x8000, 0x80, 0x800, 0x10000, 0x08000000, 0x40000000};
+    for (u32 k = 0; k < std::size(kept); ++k)
+      g.Write32(MACHINES + (3 + k) * game::MACHINE_SIZE + game::MACHINE_FLAGS, kept[k]);
+    g.Write16(MACHINES + 9 * game::MACHINE_SIZE + 0x214, 1);   // restoring
+    mode::Run(g, package, BLOCK, MODULE);
+    CHECK(g.Read32(BLOCK + mode::FAULT) == 0);
+    check(g);
+  };
+  const auto base = [](Guest& g, u32 seat) { return std::bit_cast<float>(g.Read32(MACHINES + seat * game::MACHINE_SIZE + 0x224)); };
+  run(*p, [&](Guest& g) {
+    CHECK(base(g, 0) == 28.0f && base(g, 1) == 0.0f && std::bit_cast<u32>(base(g, 1)) == 0 && base(g, 2) == mode::MOST_BASE_SPEED);
+    for (u32 seat = 3; seat < SEATS; ++seat)
+      CHECK(base(g, seat) == 1.0f);
+    for (u32 seat = 0; seat < SEATS; ++seat)
+    {
+      CHECK(std::bit_cast<float>(g.Read32(BLOCK + mode::SeatWord(seat, 0))) == 0.5f * static_cast<float>(seat));
+      CHECK(std::bit_cast<float>(g.Read32(BLOCK + mode::StatValueAt(seat, mode::STAT_MAX_SPEED))) == 10000.0f);
+    }
+  });
+  mode::Package before = *p;
+  before.max_speed_open = false;
+  run(before, [&](Guest& g) {
+    CHECK(std::bit_cast<float>(g.Read32(BLOCK + mode::StatValueAt(0, mode::STAT_MAX_SPEED))) == 4.0f);
+  });
+  CHECK(mode::MOST_BASE_SPEED == mode::MOST_SPEED_OPEN / 216.0f);
 }
 
 // The words vector (every operation and word of the api) runs on thirty seats without a mode error, within the
@@ -661,6 +741,67 @@ void TestTheKnockoutEndsWithItsPlaces()
   CHECK(g.Read32(R + 0xD4 + 0xA0 * 3 + 0x24) == (45u << 12));              // the winner: the race's 2700 steps
 }
 
+// live_places (0.6.1): the places the mode gives are the standing during the race, in every copy the ranking pass
+// keeps, written again after each pass; the seats with no place follow in the pass's order. A package without the
+// word keeps seat.place for the end clause only, as before.
+void TestLivePlacesShowInTheStanding()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("live_places.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->live_places);
+  const auto run = [&](const mode::Package& package, Guest& g) {
+    // the ranking pass's order of this step: 3, 2, 1, 0
+    for (u32 n = 0; n < 4; ++n)
+    {
+      g.Write8(R + 0xE + n, static_cast<u8>(3 - n));
+      g.Write32(R + 0x2C + 4 * n, ProgressAt(3 - n));
+      g.Write8(ProgressAt(3 - n) + 0x115, static_cast<u8>(n));
+      g.Write8(CM + 0x23C + n, static_cast<u8>(3 - n));
+      g.Write8(CM + 0x21C + (3 - n), static_cast<u8>(n));
+    }
+    mode::Run(g, package, BLOCK, MODULE);
+  };
+  const auto standing = [&](Guest& g, std::array<u32, 4> order) {
+    for (u32 n = 0; n < 4; ++n)
+    {
+      const u32 seat = order[n];
+      CHECK(g.Read8(R + 0xE + n) == seat && g.Read32(R + 0x2C + 4 * n) == ProgressAt(seat));
+      CHECK(g.Read8(ProgressAt(seat) + 0x115) == n);
+      CHECK(g.Read8(CM + 0x23C + n) == seat && g.Read8(CM + 0x21C + seat) == n);
+    }
+  };
+  {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 4, 600);
+    // seat 2 first and seat 0 second by the mode; seats 3 and 1 by the pass; the same after the pass's next run
+    for (u32 step = 600; step < 603; ++step)
+    {
+      g.Write32(MODULE + game::RACE_CLOCK, step);
+      run(*p, g);
+      CHECK(g.Read8(BLOCK + mode::PLACES + 2) == 1 && g.Read8(BLOCK + mode::PLACES + 0) == 2);
+      standing(g, {2, 0, 3, 1});
+    }
+    CHECK(g.Read32(BLOCK + mode::END) == 0);
+  }
+  {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 4, 600);
+    mode::Package before = *p;
+    before.live_places = false;
+    run(before, g);
+    CHECK(g.Read8(BLOCK + mode::PLACES + 2) == 1);
+    standing(g, {3, 2, 1, 0});
+  }
+}
+
 // `race_waits everyone`: a seat that went out on its own, with no place from the mode, is ranked by when it went out and
 // below the racers still in, with that time, not DISQUALIFIED; and a place the mode gave is that row, whatever the rest.
 void TestARaceThatWaitsRanksTheOut()
@@ -865,18 +1006,19 @@ void TestTheLivesLibraryRuns()
     g.Write32(MachineAt(seat) + 0x58C, g.Read32(MachineAt(seat) + 0x58C) & ~0x10u);
     run();
   };
-  CHECK(left(0) == 3 && number(0) == 3 + 1);
+  // the number shows the spare lives left after this one (protocol e51845b: 2, 1, 0 with three)
+  CHECK(left(0) == 3 && number(0) == 2 + 1);
   // every wreck the game restores costs one (Death Race's lives): a fall, at its restore's start, once
   SetFlags(g, 0, 0x800);
   run();
   CHECK(left(0) == 3);
   restore(0);
-  CHECK(left(0) == 2 && number(0) == 2 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
+  CHECK(left(0) == 2 && number(0) == 1 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 1));
   // an explosion of another seat: one, once, however many steps its restore runs
   Explode(g, 2);
   run();
   restore(2);
-  CHECK(left(2) == 2 && number(2) == 2 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 4));
+  CHECK(left(2) == 2 && number(2) == 1 + 1 && (g.Read32(BLOCK + mode::RESPAWN) & 4));
   // a breakdown, the one that leaves one life: still restored (the flag stays until the restore reaches its exit)
   SetFlags(g, 0, 0x80);
   run();
@@ -891,7 +1033,7 @@ void TestTheLivesLibraryRuns()
   g.Write16(MachineAt(0) + 0x214, 0);
   SetFlags(g, 0, 0, 0x800 | 0x80 | 0x00800000);
   run();
-  CHECK(left(0) == 1 && number(0) == 1 + 1);
+  CHECK(left(0) == 1 && number(0) == 0 + 1);
   // the last wreck: nothing restores it; out, nothing shown, the count at 0; a run after the out takes it no lower
   Explode(g, 0);
   run();

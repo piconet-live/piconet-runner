@@ -112,6 +112,88 @@ class TheLapShown(Build):
             self.assertEqual(self.shown(at, 3, 3, mode=0), 4)
 
 
+class TheDistanceLabel(Build):
+    def reached(self, flags, mode=1):
+        """The game addresses the label's site reaches, to the drawer's next word."""
+        memory = {}
+        put(memory, memmap.MODE, mode)
+        put(memory, memmap.MODE_HUD_FLAGS, flags)
+        reached = []
+        m = HudCpu(self.image, memory, lambda address, cpu: reached.append(address - TEXT))
+        m.run(self.symbols["mode_distance_label"])
+        return reached
+
+    def test_a_mode_that_says_off_has_no_label(self):
+        for flags in (memmap.MODE_NO_DISTANCE_LABEL, memmap.MODE_NO_DISTANCE_LABEL | memmap.MODE_STORY_PICTURES):
+            self.assertEqual(self.reached(flags), [hud.DISTANCE_LABEL + 4])
+
+    def test_every_other_race_keeps_it(self):
+        for args in ((0,), (memmap.MODE_STORY_PICTURES | memmap.MODE_SPREAD,), (memmap.MODE_NO_DISTANCE_LABEL, 0)):
+            self.assertEqual(self.reached(*args), [hud.QUEUE_PICTURE, hud.DISTANCE_LABEL + 4])
+
+
+class TheDistanceDigits(Build):
+    def most(self, flags, mode=1):
+        """The digits the loop draws at the most: the first count the site's compare ends the loop at."""
+        for drawn in range(1, 8):
+            memory = {}
+            put(memory, memmap.MODE, mode)
+            put(memory, memmap.MODE_HUD_FLAGS, flags)
+            reached = []
+            m = HudCpu(self.image, memory, lambda address, cpu: reached.append((address - TEXT, cpu.cr0)))
+            m.r[26] = drawn
+            m.run(self.symbols["mode_distance_digits"])
+            self.assertEqual([at for at, _ in reached], [hud.DISTANCE_DIGITS + 4])
+            if not reached[0][1][0]:   # not less: the drawer's `bge` leaves
+                return drawn
+        return None
+
+    def test_a_mode_without_the_label_has_six(self):
+        for flags in (memmap.MODE_NO_DISTANCE_LABEL, memmap.MODE_NO_DISTANCE_LABEL | memmap.MODE_STORY_PICTURES):
+            self.assertEqual(self.most(flags), 6)
+
+    def test_every_other_race_keeps_five(self):
+        for args in ((0,), (memmap.MODE_STORY_PICTURES | memmap.MODE_SPREAD,), (memmap.MODE_NO_DISTANCE_LABEL, 0)):
+            self.assertEqual(self.most(*args), 5)
+
+
+class TheResultsWithoutTimes(Build):
+    A, B = 0x0100, 0x0200   # the pad word's bits the two tests read
+
+    def reached(self, name, flags, mode=1, pad=0):
+        """Where the site goes on (the game's addresses), and r0 and cr0's equal there."""
+        memory = {}
+        put(memory, memmap.MODE, mode)
+        put(memory, memmap.MODE_HUD_FLAGS, flags)
+        reached = []
+        m = HudCpu(self.image, memory, lambda address, cpu: reached.append((address - TEXT, cpu.r[0], cpu.cr0[2])))
+        m.r[0] = pad
+        m.run(self.symbols[name])
+        return reached
+
+    OFF = (memmap.MODE_NO_RESULTS_TIMES, memmap.MODE_NO_RESULTS_TIMES | memmap.MODE_POINTS_PAGE | memmap.MODE_POINTS_ONLY)
+    OTHER = ((0,), (memmap.MODE_POINTS_PAGE | memmap.MODE_POINTS_ONLY,), (memmap.MODE_NO_RESULTS_TIMES, 0))
+
+    def test_the_times_page_turns_by_itself_without_its_sound(self):
+        for flags in self.OFF:
+            self.assertEqual([at for at, *_ in self.reached("mode_results_skip", flags)], [hud.RESULTS_TURN])
+            self.assertEqual([at for at, *_ in self.reached("mode_results_quiet", flags)], [hud.RESULTS_QUIET + 4])
+
+    def test_the_points_page_does_not_go_back_to_it(self):
+        for flags in self.OFF:
+            self.assertEqual(self.reached("mode_results_back", flags, pad=self.B), [(hud.RESULTS_BACK + 4, 0, True)])
+
+    def test_every_other_race_keeps_the_page(self):
+        for args in self.OTHER:
+            for pad in (0, self.A, self.B):
+                self.assertEqual(self.reached("mode_results_skip", *args, pad=pad),
+                                 [(hud.RESULTS_SKIP + 4, int(pad == self.A), pad != self.A)])
+                self.assertEqual(self.reached("mode_results_back", *args, pad=pad),
+                                 [(hud.RESULTS_BACK + 4, int(pad == self.B), pad != self.B)])
+            self.assertEqual([at for at, *_ in self.reached("mode_results_quiet", *args)],
+                             [hud.PLAY_SOUND, hud.RESULTS_QUIET + 4])
+
+
 class TheObjectsCounts(Build):
     def counts(self, of_plus_one, gone, mode=1, block=BLOCK):
         """Both sites' answers (r3 at the drawer's next word) and the game addresses each reached."""

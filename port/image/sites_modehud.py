@@ -11,6 +11,9 @@ the game does. Native form only. sites.py calls add().
 | `mode_story` | the frame routine, after mode_preload (sites.py's `frame`) | — | the story's picture group 0xBA (bmp_sto: the big digit, DANGER, the distance's digits, MISSION CLEAR!/FAILED, Time is up...) loaded once, with fn_1_47F74, on the frame the block is taken, when the core says the mode shows one of them (MODE_STORY_PICTURES): every game and playback of the race at the same point, before step 0 |
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
 
+| `mode_distance_label` | fn_1_CDC8C 0xCE948, the DISTANCE part's label (`bl fn_1_4F734`, the picture 0xBA13: REST, the game's metres to the finish) | the label drawn | not drawn in a mode that says `distance_label off` (the window's flag MODE_NO_DISTANCE_LABEL): the number and its m stay where they are, the game's metres or show_distance's |
+| `mode_distance_digits` | fn_1_CDC8C 0xCEACC, the DISTANCE part's digit loop (`cmpwi r26, 5`: the digits drawn so far, the most significant last at x0 + 14 + 19 a place) | five digits at the most | six in a mode that says `distance_label off` (the same window word): the sixth stands where the label was, and the core holds show_distance's metres to 999999 there (mode_hud.h DISTANCE_MOST_NO_LABEL) |
+| `mode_results_skip`, `mode_results_quiet`, `mode_results_back` | VS RESULTS, the results' page of race times (page 3), in a mode that says `results_times off` (the window's flag MODE_NO_RESULTS_TIMES): fn_1_14B62C 0x14B6A8, the page's A (`rlwinm. r0, r0, 0x18, 0x1f, 0x1f`, then the other pad's test and the page's 195 frames); 0x14B8D0, the page turn's sound (`bl fn_1_A2D84`); fn_1_14B93C 0x14BA14, the points page's B (`rlwinm. r0, r0, 0x17, 0x1f, 0x1f`: back to page 3) | the page waits for A, turns with its sound, and B on the points page comes back to it | the page turns to the points page in the update that follows its opening (0x14B6DC: never drawn, the drawers want the page asked and the page open the same), without the sound, and the points page's B reads as not pressed |
 | `mode_objects_of`, `mode_objects_gone` | fn_1_CDC8C 0xCDD7C and 0xCDD88, the OBJECTS part's two counts (`bl fn_1_E5430`, `bl fn_1_E5568`, argument 1: the course objects' table .bss 0x7AE88) | the course's count and what it subtracts (00/00 on every course of the pool) | while the viewed racer's OBJECTS is the mode's (show_objects; the window's MODE_HUD_OBJECTS: of + 1, then of - n, the core's HUD pass) those two numbers, so the part reads n/of; else the stock calls |
 | `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
 | `mode_points_free` | fn_1_14A328 0x14A5A4, the race type switch's `b` to leaving, reached only with the rule read as clear | leave | race type 3 (`laps unlimited`) goes to VS RESULTS as type 6 does; a stock path has the rule set and never gets here with type 3 |
@@ -35,6 +38,13 @@ SPARE, SPARE_KNOWN = 0xCA920, 0x4BF748B5    # fn_1_CA8FC: bl fn_1_3F1D4
 OBJECTS_OF, OBJECTS_OF_KNOWN = 0xCDD7C, 0x480176B5      # fn_1_CDC8C: bl fn_1_E5430 (the count shown after the slash)
 OBJECTS_GONE, OBJECTS_GONE_KNOWN = 0xCDD88, 0x480177E1  # fn_1_CDC8C: bl fn_1_E5568 (what the drawer subtracts from it)
 OBJECTS_OF_GET, OBJECTS_GONE_GET = 0xE5430, 0xE5568
+DISTANCE_LABEL, DISTANCE_LABEL_KNOWN, QUEUE_PICTURE = 0xCE948, 0x4BF80DED, 0x4F734  # fn_1_CDC8C: bl fn_1_4F734 (REST)
+DISTANCE_DIGITS, DISTANCE_DIGITS_KNOWN = 0xCEACC, 0x2C1A0005   # fn_1_CDC8C: cmpwi r26, 5 (the digits drawn so far)
+# VS RESULTS passed over (`results_times off`): fn_1_14B62C's A test and where its turn to page 4 starts, the turn's
+# sound (bl fn_1_A2D84), fn_1_14B93C's B test
+RESULTS_SKIP, RESULTS_SKIP_KNOWN, RESULTS_TURN = 0x14B6A8, 0x5400C7FF, 0x14B6DC
+RESULTS_QUIET, RESULTS_QUIET_KNOWN = 0x14B8D0, 0x4BF574B5
+RESULTS_BACK, RESULTS_BACK_KNOWN = 0x14BA14, 0x5400BFFF
 LOOK, LOOK_KNOWN = 0x84F9C, 0x48002121       # fn_1_84860: bl fn_1_870BC
 POINTS, POINTS_KNOWN = 0x14A37C, 0x5400014B  # fn_1_14A328: rlwinm. r0, r0, 0, 5, 5
 POINTS_TYPE, POINTS_TYPE_KNOWN = 0x14A5A4, 0x48000400  # fn_1_14A328: b 0x14A9A4, its race type switch's "leave"
@@ -135,6 +145,81 @@ mob{short}_stock:
 """)
         patch(site, word, 0, name)
         middle.append((site, ["r11", "r12", "cr0", "lr"], name))
+
+    # DISTANCE's label, REST: left out in a mode that says `distance_label off`
+    site = TEXT + DISTANCE_LABEL
+    word = stock(site, DISTANCE_LABEL_KNOWN)
+    r.add("mode_distance_label", test + """    beq mdl_stock
+""" + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {memmap.MODE_NO_DISTANCE_LABEL}
+    beq mdl_stock
+    @b {site + 4:#x}
+mdl_stock:
+    @bl {FN(QUEUE_PICTURE)}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_distance_label")
+    middle.append((site, ["r12", "cr0", "lr"], "mode_distance_label"))
+
+    # DISTANCE's digits: a sixth in the label's room in a mode that says `distance_label off` (cr0 the loop's test)
+    site = TEXT + DISTANCE_DIGITS
+    word = stock(site, DISTANCE_DIGITS_KNOWN)
+    r.add("mode_distance_digits", test + """    beq mdd_stock
+""" + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {memmap.MODE_NO_DISTANCE_LABEL}
+    beq mdd_stock
+    cmpwi 26, 6
+    @b {site + 4:#x}
+mdd_stock:
+    cmpwi 26, 5
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_distance_digits")
+    middle.append((site, ["r12", "cr0", "lr"], "mode_distance_digits"))
+
+    # `results_times off`: VS RESULTS, the page of race times, is passed over. Its A test goes on to the page's own turn
+    # to the points page (the update after its opening: the page is never drawn), the turn's sound is not played, and
+    # the points page's B (back to VS RESULTS) reads as not pressed
+    flag = la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {memmap.MODE_NO_RESULTS_TIMES}
+"""
+    site = TEXT + RESULTS_SKIP
+    word = stock(site, RESULTS_SKIP_KNOWN)
+    r.add("mode_results_skip", test + """    beq mrs_stock
+""" + flag + f"""    beq mrs_stock
+    @b {TEXT + RESULTS_TURN:#x}
+mrs_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_results_skip")
+    middle.append((site, ["r12", "cr0"], "mode_results_skip"))
+
+    site = TEXT + RESULTS_QUIET
+    word = stock(site, RESULTS_QUIET_KNOWN)
+    r.add("mode_results_quiet", test + """    beq mrq_stock
+""" + flag + f"""    beq mrq_stock
+    @b {site + 4:#x}
+mrq_stock:
+    @bl {FN(PLAY_SOUND)}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_results_quiet")
+    middle.append((site, ["r12", "cr0", "lr"], "mode_results_quiet"))
+
+    site = TEXT + RESULTS_BACK
+    word = stock(site, RESULTS_BACK_KNOWN)
+    r.add("mode_results_back", test + """    beq mrb_stock
+""" + flag + f"""    beq mrb_stock
+    li 0, 0
+    cmpwi 0, 0
+    @b {site + 4:#x}
+mrb_stock:
+    .long {word:#010x}
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_results_back")
+    middle.append((site, ["r12", "cr0"], "mode_results_back"))
 
     # a machine's draw by the look this game draws its seat with (r29 the machine; f1 the alpha; r3 to r7 the call's)
     site = TEXT + LOOK

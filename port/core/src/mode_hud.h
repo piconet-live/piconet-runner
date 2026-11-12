@@ -54,13 +54,14 @@ static_assert(TAGS_AT + 30 <= GHOST_SOUNDS && GHOST_SOUNDS + 4 <= STATS && STATS
 
 // The story parts' values, STORY_RECORD bytes a seat in the tail of the block's page 7 (the modern HUD's slots were its
 // head until that HUD was retired, 2026-11-04; the head is unused and the page keeps its size, so STORY stays where it
-// was; it is the block's like the rest, so the undo log and the checksum have it): +0 show_distance's metres (binary32, 0 to 99999), +4 the
+// was; it is the block's like the rest, so the undo log and the checksum have it): +0 show_distance's metres (binary32, 0 to 99999; under `distance_label off` to 999999), +4 the
 // flags (STORY_DISTANCE, STORY_OBJECTS: the mode gave that value), +6 show_objects's n, +7 its of (0 to 99 each).
 // A page of zeros: the game's own values.
 constexpr u32 STORY = 7 * PAGE + 0xF10, STORY_RECORD = 8;
 constexpr u32 STORY_METRES = 0, STORY_FLAGS = 4, STORY_SHOWN = 6, STORY_OF = 7;
 constexpr u8 STORY_DISTANCE = 1, STORY_OBJECTS = 2;
 constexpr float DISTANCE_MOST = 99999.0f;  // the drawer's five digits (fn_1_CDC8C 0xCEACC)
+constexpr float DISTANCE_MOST_NO_LABEL = 999999.0f;  // under `distance_label off` six: the sixth stands where REST was
 constexpr u32 OBJECTS_MOST = 99;           // two digits each side of the slash
 static_assert(STORY + 30 * STORY_RECORD <= 8 * PAGE);
 
@@ -86,6 +87,13 @@ constexpr u32 HUD_CLEAN = 256;
 // SPREAD: start_gap above 0 or even: after the game places each slot, the story's own mid-course placement moves it round
 // the lap by the gap word (WINDOW_START_GAP) (sites_grid.py grid_spread).
 constexpr u32 SPREAD = 512;
+// NO_DISTANCE_LABEL: `distance_label off`: the DISTANCE part's label (REST) is not queued (sites_modehud.py
+// mode_distance_label); its number and m stay, and the number has a sixth digit in the label's room (mode_distance_digits;
+// show_distance holds the metres to DISTANCE_MOST_NO_LABEL by this same word).
+constexpr u32 NO_DISTANCE_LABEL = 1024;
+// NO_RESULTS_TIMES: `results_times off`: VS RESULTS, the results' page of race times, is passed over (sites_modehud.py
+// mode_results_skip): the results open on the points page.
+constexpr u32 NO_RESULTS_TIMES = 2048;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;

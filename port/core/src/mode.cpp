@@ -61,6 +61,7 @@ constexpr u32 M_RESTORING = 0x214, M_SURFACE = 0x218, M_BASE_SPEED = 0x224;   //
 constexpr u32 M_LAST_HIT = 0x4AC, M_SETTLED = 0x481, M_KOS = 0x482, M_CPU = 0x484;  // (u8, u8, the CPU block)
 constexpr u32 M_CONTACT = 0x58C, M_KO_WAIT = 0x593, M_MAX_ENERGY = 0x5DA;     // (u8 at 0x593; u16 at 0x5DA)
 constexpr u32 M_BOOST_LEFT = 0x18A;                                           // (u8: fn_1_26F34 counts it down)
+constexpr u32 M_BOOST_VALUE = 0x228;                                          // (the game's boost value)
 constexpr float MAX_ENERGY_LEAST = 1.0f, MAX_ENERGY_MOST = 1000.0f;
 constexpr u32 F_RESTORE = 0x1, F_AIRBORNE = 0x2, F_SPIN = 0x8, F_BOOSTING = 0x20, F_BROKEN = 0x80, F_DRIVEN = 0x400,
               F_FALLEN = 0x800, F_FROZEN = 0x8000, F_FINISHED = 0x10000, F_SIDE = 0x20000, F_WALL = 0x00800000,
@@ -918,6 +919,8 @@ private:
       case SEAT_TOPSPEED: return m_g.Read32(m + M_TOP_SPEED);
       case SEAT_MAXENERGY: return Bits(static_cast<float>(m_g.Read16(m + M_MAX_ENERGY)));
       case SEAT_BOOSTLEFT: return m_g.Read8(m + M_BOOST_LEFT);
+      case SEAT_BASESPEED: return m_g.Read32(m + M_BASE_SPEED);
+      case SEAT_BOOSTVALUE: return m_g.Read32(m + M_BOOST_VALUE);
       case SEAT_LASTHITENERGY: return m_g.Read32(m + M_LAST_HIT);
       case SEAT_FALLEN: return (Flags() & F_FALLEN) != 0;
       case SEAT_SPINNING: return (Flags() & F_SPIN) != 0;
@@ -1795,9 +1798,20 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
       {
         if (!Finite(a.value[0]))
           return m.Fail(FAULT_REAL);
-        const float v = std::clamp(Real(a.value[0]), 0.0f, MOST_SPEED);
+        const float v = std::clamp(Real(a.value[0]), 0.0f, p.speed_open ? MOST_SPEED_OPEN : MOST_SPEED);
         g.Write32(record, g.Read32(record) | HELD);
         g.Write32(record + 12, std::bit_cast<u32>(v + 0.0f));  // (-0 as 0)
+        break;
+      }
+      case ACTION_SEATBASESPEED:
+      {
+        if (!Finite(a.value[0]))
+          return m.Fail(FAULT_REAL);
+        // the engine's speed, nothing held: not a seat seat.speed would not hold (the image's NOT_HELD, sites_mode.py)
+        if ((flags & (F_FROZEN | F_BROKEN | F_FALLEN | F_FINISHED | F_RETIRED | F_DESTROYED)) || g.Read16(machine + M_RESTORING) != 0 ||
+            (g.Read32(machine + M_CONTACT) & M_DESTROY_RECORD))
+          break;
+        g.Write32(machine + M_BASE_SPEED, Bits(std::clamp(Real(a.value[0]), 0.0f, MOST_BASE_SPEED) + 0.0f));  // (-0 as 0)
         break;
       }
       case ACTION_RETIRE:
@@ -1956,7 +1970,9 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         if (i >= STATS_FIRST && !p.stats_page)
           return m.Fail(FAULT_CODE);
         const u32 stat = block + STATS + seat * STAT, changed = g.Read32(stat);
-        const float v = std::clamp(Real(a.value[0]), STAT_RANGES[i].low, STAT_RANGES[i].high) + 0.0f;  // (-0 as 0)
+        // max speed to MOST_MAX_SPEED_OPEN with the file's setup word max_speed_open (0.6.1)
+        const float high = i == STAT_MAX_SPEED && p.max_speed_open ? MOST_MAX_SPEED_OPEN : STAT_RANGES[i].high;
+        const float v = std::clamp(Real(a.value[0]), STAT_RANGES[i].low, high) + 0.0f;  // (-0 as 0)
         const u32 field = StatField(g, machine, seat, i);
         if (!(changed >> i & 1))
           g.Write32(block + StatBaseAt(seat, i), field);
@@ -1984,30 +2000,85 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
   }
 }
 
+// A seat at row n of the standing, in every copy the ranking pass (fn_1_8B9B8) keeps: R+0xE, R+0x2C, P+0x115,
+// CM+0x23C, CM+0x21C.
+void WriteStanding(Mem& g, u32 module, u32 n, u32 seat)
+{
+  const u32 r = module + R_BASE, cm = module + CM_BASE;
+  const u32 progress =
+      g.Read32(g.Read32(module + net::MACHINES) + seat * game::MACHINE_SIZE + game::MACHINE_PROGRESS);
+  g.Write8(r + R_ORDER + n, static_cast<u8>(seat));
+  g.Write32(r + R_ORDER_P + 4 * n, progress);
+  g.Write8(progress + P_STANDING, static_cast<u8>(n));
+  g.Write8(cm + CM_ORDER + n, static_cast<u8>(seat));
+  g.Write8(cm + CM_RANK + seat, static_cast<u8>(n));
+}
+
 // The end clause's order held in the standing (the ranking pass rewrites it every step; the mode point comes after
 // it): R+0xE, R+0x2C, P+0x115, CM+0x23C, CM+0x21C from the block's END_ORDER.
 void HoldOrder(Mem& g, u32 block, u32 module)
 {
-  const u32 machines = g.Read32(module + net::MACHINES);
   const u32 count = std::min<u32>(g.Read8(module + net::MACHINE_COUNT), SEATS);
-  const u32 r = module + R_BASE, cm = module + CM_BASE;
+  const u32 r = module + R_BASE;
   for (u32 n = 0; n < count; ++n)
   {
     const u32 seat = g.Read8(block + END_ORDER + n);
     if (seat >= count)
       continue;
-    const u32 progress = g.Read32(machines + seat * game::MACHINE_SIZE + game::MACHINE_PROGRESS);
-    g.Write8(r + R_ORDER + n, static_cast<u8>(seat));
-    g.Write32(r + R_ORDER_P + 4 * n, progress);
-    g.Write8(progress + P_STANDING, static_cast<u8>(n));
-    g.Write8(cm + CM_ORDER + n, static_cast<u8>(seat));
-    g.Write8(cm + CM_RANK + seat, static_cast<u8>(n));
+    WriteStanding(g, module, n, seat);
     // a seat the mode placed keeps its place in the results, when the game books its out after the end (a seat
     // eliminated in the run that ended the race)
     const u32 place = r + R_RECORDS + R_RECORD * seat + 0xE + g.Read8(r + R_SLOT);
     if (g.Read8(block + PLACES + seat) != 0 && g.Read8(place) == 0xFE)
       g.Write8(place, static_cast<u8>(n));
   }
+}
+
+// live_places: the places the mode has given, in the standing during the race. The seats it placed at their rows (a
+// place is a row, as the end clause's), every other seat in the ranking pass's order of this step; written after the
+// pass, so the HUD's place and the faces show it until the pass's next run. No seat placed: the pass's order stays.
+void ShowPlaces(Machine& m, Mem& g, u32 block, u32 module)
+{
+  const u32 count = m.Count();
+  std::array<u32, SEATS> order{};
+  order.fill(NONE);
+  std::array<bool, SEATS> taken{};
+  bool any = false;
+  for (u32 place = 1; place <= SEATS; ++place)
+    for (u32 seat = 0; seat < count; ++seat)
+      if (g.Read8(block + PLACES + seat) == place)
+      {
+        u32 at = place - 1;
+        while (at < count && order[at] != NONE)
+          ++at;
+        if (at < count)
+        {
+          order[at] = seat;
+          taken[seat] = true;
+          any = true;
+        }
+      }
+  if (!any)
+    return;
+  // the rest by the pass's order; a seat the pass does not name (never in a race), by its number
+  u32 at = 0;
+  const auto next = [&](u32 seat) {
+    while (at < count && order[at] != NONE)
+      ++at;
+    if (at < count)
+      order[at] = seat;
+    taken[seat] = true;
+  };
+  for (u32 rank = 0; rank < count; ++rank)
+    for (u32 seat = 0; seat < count; ++seat)
+      if (!taken[seat] && m.Rank(seat) == rank)
+        next(seat);
+  for (u32 seat = 0; seat < count; ++seat)
+    if (!taken[seat])
+      next(seat);
+  for (u32 n = 0; n < count; ++n)
+    if (order[n] != NONE)
+      WriteStanding(g, module, n, order[n]);
 }
 
 // The end clause (mode-conflicts-answers 4.3): the mode's order (the seats it placed by their places, then every other
@@ -2198,6 +2269,8 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
   }
   if (end && m.Faulted() == FAULT_NONE)
     EndClause(m, g, block, module, p.race_waits);
+  else if (p.live_places && m.Faulted() == FAULT_NONE)
+    ShowPlaces(m, g, block, module);
 }
 
 // The setup words that act on the race from its start, in game_start's pass.
