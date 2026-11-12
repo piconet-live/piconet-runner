@@ -226,7 +226,7 @@ void TestTheDisplayWordsRun()
   CHECK(g.Read32(Record(OUT_SEAT) + hud::MAP_MARK) == (hud::MARKED | 0xFF0000));
   // `tag`: the text's number on the out seat's byte (after `tag s off`), none on the others', and no other word moved
   CHECK(g.Read8(BLOCK + hud::TAGS_AT + OUT_SEAT) == 1);
-  CHECK((p->tag_texts == std::vector<std::string>{"OUT", "KOS"}));  // (KOS: show_score's label, the same table)
+  CHECK((p->tag_texts == std::vector<std::string>{"OUT", "KOS", "GO", "WAVE 2"}));  // (KOS: show_score's label; GO, WAVE 2: show_text's texts: the same table)
   for (u32 seat = 0; seat < 30; ++seat)
     if (seat != OUT_SEAT)
       CHECK(g.Read8(BLOCK + hud::TAGS_AT + seat) == 0);
@@ -510,6 +510,20 @@ void TestTheDisplayWordsRun()
     CHECK(g.Read32(record + hud::SCORE_VALUE) == 1 && g.Read32(record + hud::SCORE_LABEL) == 2);
     hud::Hud(g);
     CHECK(g.Read32(window + hud::WINDOW_SCORE) == 1 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_TAG_TEXTS + hud::WINDOW_TAG_TEXT);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE_FONT) == 5);  // (no font given: BLOCK, the game's font 5)
+    // the label's font: one of the choice, carried in the label word's next byte; the window gets the game's font number
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 9, 2, modes::FONT_BIG_SERIF));
+    CHECK(g.Read32(record + hud::SCORE_LABEL) == hud::PackText(2, modes::FONT_BIG_SERIF) && hud::TextOf(g.Read32(record + hud::SCORE_LABEL)) == 2);
+    f = hud::Read(g, BLOCK, viewed);
+    CHECK(f.score == 9 && f.score_label == 2 && f.score_font == modes::FONT_BIG_SERIF);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE_FONT) == 8 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_TAG_TEXTS + hud::WINDOW_TAG_TEXT);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 9, 2, modes::FONT_COUNT + 3));  // no such font: BLOCK
+    CHECK(hud::Read(g, BLOCK, viewed).score_font == 0);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE_FONT) == 5);
+    CHECK(hud::FONT_IDS[modes::FONT_BLOCK] == 5 && hud::FONT_IDS[modes::FONT_CAPS] == 4 && hud::FONT_IDS[modes::FONT_PLAIN] == 3 &&
+          hud::FONT_IDS[modes::FONT_NARROW] == 2 && hud::FONT_IDS[modes::FONT_SERIF] == 7 && hud::FONT_IDS[modes::FONT_BIG_SERIF] == 8);
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 42, modes::TAG_TEXTS + 1));  // no such text: the default label
     CHECK(g.Read32(record + hud::SCORE_LABEL) == 0);
     hud::Hud(g);
@@ -524,6 +538,41 @@ void TestTheDisplayWordsRun()
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCOREOFF, (viewed + 1) % 30, 0));
     CHECK(hud::IsDisplay(modes::ACTION_SHOWSCORE) && hud::IsDisplay(modes::ACTION_SHOWSCOREOFF));
     CHECK(hud::PART_BITS[modes::PART_SCORE] == 0);  // no mask bit: its record draws it
+  }
+
+  // show_text: the text's number and its font in the seat's text word (a text the package has not: none shown; a font not
+  // of the choice: the first); the viewed racer's text's address and the game's font number into the window for the image;
+  // show_text off takes it off
+  {
+    const u32 viewed = net::ViewedRacer(g), window = layout::MODE_HUD;
+    const u32 record = BLOCK + hud::TEXTS + viewed * hud::TEXT_RECORD;
+    CHECK(hud::TEXTS == hud::SCORES + 30 * hud::SCORE_RECORD && hud::TEXTS + 30 * hud::TEXT_RECORD <= hud::STORY);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, 3, modes::FONT_SERIF));
+    CHECK(g.Read32(record) == hud::PackText(3, modes::FONT_SERIF));
+    hud::Frame f = hud::Read(g, BLOCK, viewed);
+    CHECK(f.text_shown && f.text == 3 && f.text_font == modes::FONT_SERIF);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == window + hud::WINDOW_TAG_TEXTS + 2 * hud::WINDOW_TAG_TEXT && g.Read32(window + hud::WINDOW_TEXT_FONT) == 7);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, 4, 0));
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == window + hud::WINDOW_TAG_TEXTS + 3 * hud::WINDOW_TAG_TEXT && g.Read32(window + hud::WINDOW_TEXT_FONT) == 5);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, 4, modes::FONT_COUNT));  // no such font: BLOCK
+    CHECK(hud::Read(g, BLOCK, viewed).text_font == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, modes::TAG_TEXTS + 1, 0));  // no such text: none
+    CHECK(g.Read32(record) == 0 && !hud::Read(g, BLOCK, viewed).text_shown);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, 1, modes::FONT_CAPS));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, (viewed + 1) % 30, 2, 0));  // another seat's: not this picture's
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == window + hud::WINDOW_TAG_TEXTS && g.Read32(window + hud::WINDOW_TEXT_FONT) == 4);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXTOFF, viewed, 0));
+    CHECK(g.Read32(record) == 0 && !hud::Read(g, BLOCK, viewed).text_shown);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXTOFF, (viewed + 1) % 30, 0));
+    CHECK(hud::IsDisplay(modes::ACTION_SHOWTEXT) && hud::IsDisplay(modes::ACTION_SHOWTEXTOFF));
+    CHECK(hud::PART_BITS[modes::PART_TEXT] == 0);  // no mask bit: its record draws it
   }
 
   // the story's pictures: the vector shows DISTANCE

@@ -225,11 +225,11 @@ class TheObjectsCounts(Build):
 
 
 class TheScore(Build):
-    """race_time_score (sites_hudmove.py): the race time's call, then SCORE from the window's words."""
+    """race_time_score (sites_hudmove.py): the race time's call, then SCORE and TEXT from the window's words."""
     TEMPLATE = [0, 0, 0, 0x3DCCCCCD, 0x3F800000, 0x3F800000, 0, 0, 0x3F800000, 0x3F800000, 0, 0x3F800000, 5, 0, 0xFFFFFFFF] + [0] * 7
-    LABEL = 0x80D20000
+    LABEL, MESSAGE = 0x80D20000, 0x80D20020
 
-    def draw(self, number_plus_one, mode=1, block=BLOCK, hud_on=1, move=0, label=None):
+    def draw(self, number_plus_one, mode=1, block=BLOCK, hud_on=1, move=0, label=None, font=5, text=0, text_font=5, viewports=1):
         """What the routine queues: the game addresses reached with (image, x, y, z) for a picture and r3 for a call."""
         import struct
         import sites_hudmove as hm
@@ -238,6 +238,9 @@ class TheScore(Build):
         put(memory, memmap.MODES + 4, block)
         put(memory, memmap.MODE_HUD_SCORE, number_plus_one)
         put(memory, memmap.MODE_HUD_SCORE_LABEL, label or self.LABEL)
+        put(memory, memmap.MODE_HUD_SCORE_FONT, font)
+        put(memory, memmap.MODE_HUD_TEXT, text)
+        put(memory, memmap.MODE_HUD_TEXT_FONT, text_font)
         put(memory, memmap.MODE_HUD_MOVE, move)
         put(memory, memmap.REL + memmap._facts.HUD_PARTS, hud_on)
         for i, w in enumerate(self.TEMPLATE):
@@ -256,6 +259,9 @@ class TheScore(Build):
                 reached.append((at, cpu.f[1], cpu.f[2]))
             elif at == hm.TEXT_SCALE:
                 reached.append((at, round(cpu.f[1], 3)))
+            elif at == hm.VIEWPORTS:
+                cpu.r[3] = viewports
+                reached.append((at,))
             else:
                 reached.append((at, cpu.r[3]))
         m = HudCpu(self.image, memory, game)
@@ -299,6 +305,52 @@ class TheScore(Build):
         host = [g for g in got if g[0] == memmap.HOST_HUD - TEXT]
         self.assertEqual([g[1] for g in host], [hm.PUSH, hm.POP])
         self.assertEqual(self.draw(5 + 1, move=0).count((memmap.HOST_HUD - TEXT, hm.PUSH)), 0)
+
+    def test_the_label_is_drawn_in_the_windows_font(self):
+        import sites_hudmove as hm
+        got = self.draw(12 + 1, font=8)
+        self.assertEqual([g for g in got if g[0] == hm.TEXT_FONT], [(hm.TEXT_FONT, 8)])
+        self.assertIn((hm.TEXT_SCALE, 0.75), got)  # (the scale set after the font, which resets it)
+        self.assertLess(got.index((hm.TEXT_FONT, 8)), got.index((hm.TEXT_SCALE, 0.75)))
+
+    def test_the_text_is_centred_at_its_home_in_its_font_inside_the_centre_group(self):
+        import sites_hudmove as hm
+        got = self.draw(0, text=self.MESSAGE, text_font=7)
+        self.assertEqual(got[0], (hm.RACE_TIME_DRAW, 444))
+        self.assertNotIn(hm.QUEUE_PICTURE, [g[0] for g in got])  # no score: no digits
+        calls = [g for g in got if g[0] in (hm.VIEWPORTS, hm.ANCHOR_CLEAR, hm.ANCHOR_SET, hm.TEXT_BEGIN, hm.TEXT_FONT, hm.TEXT_UPPER,
+                                            hm.TEXT_COLOUR, hm.TEXT_ALIGN, hm.TEXT_AT, hm.TEXT_PUTS)]
+        self.assertEqual([c[0] for c in calls], [hm.VIEWPORTS, hm.ANCHOR_CLEAR, hm.ANCHOR_SET, hm.TEXT_BEGIN, hm.TEXT_FONT, hm.TEXT_UPPER,
+                                                 hm.TEXT_COLOUR, hm.TEXT_ALIGN, hm.TEXT_AT, hm.TEXT_PUTS, hm.ANCHOR_CLEAR, hm.ANCHOR_SET])
+        self.assertEqual([c[1] for c in calls if c[0] == hm.ANCHOR_SET], [hm.ANCHOR_CENTRE, hm.ANCHOR_RIGHT])
+        self.assertIn((hm.TEXT_FONT, 7), calls)
+        self.assertIn((hm.TEXT_ALIGN, 9), calls)
+        self.assertIn((hm.TEXT_AT, 320.0, 116.0), calls)
+        self.assertIn((hm.TEXT_PUTS, self.MESSAGE), calls)
+        self.assertNotIn(hm.TEXT_SCALE, [c[0] for c in got])  # the font's own size
+        self.assertNotIn(memmap.HOST_HUD - TEXT, [g[0] for g in got])
+
+    def test_the_text_in_a_split_screen_sets_no_anchor(self):
+        import sites_hudmove as hm
+        got = self.draw(0, text=self.MESSAGE, viewports=2)
+        self.assertNotIn(hm.ANCHOR_SET, [g[0] for g in got])
+        self.assertNotIn(hm.ANCHOR_CLEAR, [g[0] for g in got])
+        self.assertIn((hm.TEXT_PUTS, self.MESSAGE), got)
+
+    def test_both_parts_are_drawn_each_between_its_own_push_and_pop(self):
+        import sites_hudmove as hm
+        got = self.draw(7 + 1, text=self.MESSAGE, move=1)
+        host = [g[1] for g in got if g[0] == memmap.HOST_HUD - TEXT]
+        self.assertEqual(host, [hm.PUSH, hm.POP, hm.PUSH, hm.POP])
+        puts = [g for g in got if g[0] == hm.TEXT_PUTS]
+        self.assertEqual(puts, [(hm.TEXT_PUTS, self.LABEL), (hm.TEXT_PUTS, self.MESSAGE)])
+        self.assertEqual([g for g in got if g[0] == hm.QUEUE_PICTURE][0][1], 0x9447)
+        self.assertEqual(self.draw(7 + 1, text=self.MESSAGE, move=0).count((memmap.HOST_HUD - TEXT, hm.PUSH)), 0)
+
+    def test_no_text_without_a_mode_or_the_hud(self):
+        import sites_hudmove as hm
+        for kw in ({"mode": 0}, {"block": 0}, {"hud_on": 0}):
+            self.assertEqual(self.draw(0, text=self.MESSAGE, **kw), [(hm.RACE_TIME_DRAW, 444)])
 
 
 if __name__ == "__main__":
