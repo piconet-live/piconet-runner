@@ -147,6 +147,7 @@ void TestTheCourseMapsViewTilts();
 void TestTheCourseMapStaysInItsSquare();
 void TestAKnockedOutRacerNeverScrubs();
 void TestTheLeaderAndTheClosestBattle();
+void TestAWatcherPicksNoRacerWhoseBodyIsGone();
 void TestTheRacerBeforeAndAfter();
 void TestTheFollowModes();
 void TestTheCameraKinds();
@@ -441,6 +442,7 @@ void TestTheSpectatorControls()
   TestAKnockedOutRacerNeverScrubs();
   TestTheLeaderAndTheClosestBattle();
   TestTheRacerBeforeAndAfter();
+  TestAWatcherPicksNoRacerWhoseBodyIsGone();
   TestTheFollowModes();
   TestTheCameraKinds();
   TestTheOverlaysFollowButtons();

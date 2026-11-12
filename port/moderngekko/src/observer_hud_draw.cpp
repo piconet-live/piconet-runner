@@ -121,7 +121,7 @@ void Tower(ImDrawList* list, const fzgx::SpectatorShow& show, const Layout& l, f
     const ImDrawFlags corners = last ? ImDrawFlags_RoundCornersBottom : ImDrawFlags_RoundCornersNone;
     if (followed)
       Fill(list, b, ov::Colour(ov::ACCENT, 0.18f * a), last ? corner : 0, corners);
-    else if (b.Has(hx, hy) && show.follow_others)
+    else if (b.Has(hx, hy) && show.follow_others && r.pickable)  // (a racer out whose body is gone: no click takes it)
       Fill(list, b, ov::Colour(ov::HOVER, 0.9f * a), last ? corner : 0, corners);
     else if (l.row[i] % 2 == 1)
       Fill(list, b, ov::Colour(ov::TEXT, 0.03f * a), last ? corner : 0, corners);

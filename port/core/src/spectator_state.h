@@ -51,5 +51,6 @@ struct SpectatorState
   // for the log; and the pad of the frame before, for the presses a racer who is out may not make (scrub, pause, live)
   u32 follows = 0, kind_changes = 0, clicks = 0, refused = 0, kinds_used = 0, held_back = 0;
   u16 pad_before = 0;
+  u32 gone = 0;  // for the log: the racers (a bit each) a watcher may not pick, out with the body gone (Pickable)
 };
 }  // namespace fzgx::net
