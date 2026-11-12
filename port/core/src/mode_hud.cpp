@@ -165,10 +165,12 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second)
       return true;
     case ACTION_SHOWDISTANCE:
     {
-      // whole metres the drawer's five digits can show: below 0 (and NaN) 0, above 99999 99999
+      // whole metres the drawer's digits can show: below 0 (and NaN) 0, above 99999 99999; under `distance_label off`
+      // (the window's word, which the drawer's sixth digit goes by too; the mode's from boot) 999999
       const float metres = std::bit_cast<float>(value);
       const u32 st = Story(block, seat);
-      g.Write32(st + STORY_METRES, std::bit_cast<u32>(metres > 0 ? std::min(metres, DISTANCE_MOST) : 0.0f));
+      const float most = (g.Read32(layout::MODE_HUD + WINDOW_FLAGS) & NO_DISTANCE_LABEL) != 0 ? DISTANCE_MOST_NO_LABEL : DISTANCE_MOST;
+      g.Write32(st + STORY_METRES, std::bit_cast<u32>(metres > 0 ? std::min(metres, most) : 0.0f));
       g.Write8(st + STORY_FLAGS, g.Read8(st + STORY_FLAGS) | STORY_DISTANCE);
       return true;
     }

@@ -132,6 +132,31 @@ class TheDistanceLabel(Build):
             self.assertEqual(self.reached(*args), [hud.QUEUE_PICTURE, hud.DISTANCE_LABEL + 4])
 
 
+class TheDistanceDigits(Build):
+    def most(self, flags, mode=1):
+        """The digits the loop draws at the most: the first count the site's compare ends the loop at."""
+        for drawn in range(1, 8):
+            memory = {}
+            put(memory, memmap.MODE, mode)
+            put(memory, memmap.MODE_HUD_FLAGS, flags)
+            reached = []
+            m = HudCpu(self.image, memory, lambda address, cpu: reached.append((address - TEXT, cpu.cr0)))
+            m.r[26] = drawn
+            m.run(self.symbols["mode_distance_digits"])
+            self.assertEqual([at for at, _ in reached], [hud.DISTANCE_DIGITS + 4])
+            if not reached[0][1][0]:   # not less: the drawer's `bge` leaves
+                return drawn
+        return None
+
+    def test_a_mode_without_the_label_has_six(self):
+        for flags in (memmap.MODE_NO_DISTANCE_LABEL, memmap.MODE_NO_DISTANCE_LABEL | memmap.MODE_STORY_PICTURES):
+            self.assertEqual(self.most(flags), 6)
+
+    def test_every_other_race_keeps_five(self):
+        for args in ((0,), (memmap.MODE_STORY_PICTURES | memmap.MODE_SPREAD,), (memmap.MODE_NO_DISTANCE_LABEL, 0)):
+            self.assertEqual(self.most(*args), 5)
+
+
 class TheObjectsCounts(Build):
     def counts(self, of_plus_one, gone, mode=1, block=BLOCK):
         """Both sites' answers (r3 at the drawer's next word) and the game addresses each reached."""
