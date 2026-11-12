@@ -75,6 +75,7 @@ void TestRumble();
 void TestTheStatusBoardOfAPlainStart();
 void TestABoardThatIsNotThisVersionsIsLeft();
 void TestTheRaceOnTheBoard();
+void TestTheModesPlacesAndScoresOnTheSnapshot();
 void TestTheCameraViewOnTheBoard();
 void TestTheLocalPadOnTheBoard();
 void TestTheSessionsPhasesOnTheBoard();
@@ -399,6 +400,7 @@ void TestARaceAgainstARelay()
   TestTheStatusBoardOfAPlainStart();
   TestABoardThatIsNotThisVersionsIsLeft();
   TestTheRaceOnTheBoard();
+  TestTheModesPlacesAndScoresOnTheSnapshot();
   TestTheCameraViewOnTheBoard();
   TestTheLocalPadOnTheBoard();
   TestTheSessionsPhasesOnTheBoard();

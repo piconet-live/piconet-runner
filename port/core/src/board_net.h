@@ -12,6 +12,11 @@
 #include "fzgx/board.h"
 #include "fzgx/guest.h"
 
+namespace fzgx::mode
+{
+struct Package;
+}
+
 namespace fzgx::board
 {
 // Init: maps the launch file's board and takes it (an empty path: none, and nothing else here does anything). A
@@ -31,6 +36,9 @@ void Waits();
 void Desync(u32 step);
 // Every displayed frame of a race (not a replay), on the game's thread: the race as this game simulates it.
 void Race(Guest& g, u32 step, int local_seat);
+// Race's reading of the race's mode onto the snapshot (its places and scores: what the HUD shows), for the tests: `p`
+// the mode (null: none), `block` the mode's block (0: none).
+void ModeOnTheSnapshot(const Guest& g, const mode::Package* p, u32 block, Snapshot& s);
 // Every displayed frame of a race (not a replay), on the game's thread, after Race: the local racer's chase camera
 // view (1 to 3) as a Camera event, at its first reading in the race and when it changed. `racing`: the local racer
 // races (its camera is the player's own: neither a spectator's nor a finished or out racer's).

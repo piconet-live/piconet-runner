@@ -8,8 +8,13 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstring>
+#include <string_view>
 
+#include "files.h"
 #include "fzgx/freeze.h"
+#include "mode.h"
+#include "mode_hud.h"
 #include "net_internal.h"
 #include "out_test.h"
 
@@ -30,7 +35,7 @@ u32 s_view = 0;  // the view last said (CameraView, as the launcher keeps it: 1 
 // speed +0x17C, energy +0x184, maximum energy +0x5DA (u16), top speed +0xD8, knockouts in the current attack +0x212
 // (u8); and the progress records (+0x49C): rank +0x115, distance covered over all laps +0xF8 (what orders the racers
 // still racing), laps completed +0x118, current lap time +0x160, best lap +0x1CC, sum of the laps +0x1D8 (the finish
-// time), race time +0x1E4. Picture only.
+// time), race time +0x1E4; then the race's mode on it (ModeOnTheSnapshot). Picture only.
 void Race(Guest& g, u32 step, int local_seat)
 {
   if (!Taken())
@@ -82,8 +87,94 @@ void Race(Guest& g, u32 step, int local_seat)
     r.z = f(base + game::MACHINE_POSITION_Z);
     r.distance = f(m + game::PROGRESS_DISTANCE);
   }
+  const boot::Match* match = boot::Get();
+  ModeOnTheSnapshot(g, match && match->game_mode ? &*match->game_mode : nullptr, g.Read32(layout::MODES + 4), s);
   ++s.serial;
   PutSnapshot(s);
+}
+
+// The race's mode on the snapshot: what the game's HUD shows of the mode's places and numbers, so that the launcher's
+// standings (its own, the lobby's watchers', the coordinator's start grid) stand in the same order as the position
+// on the screen and show the same score, whatever the mode scores by (the owner, 2026-11-12). No mode (`p` null) or
+// no block: every place 0, no score.
+// The places (Racer place, 1 first): the standing's rows (rank, P+0x115) once the mode orders the standing: with
+// live_places and a seat placed (mode.cpp ShowPlaces writes the rows after the ranking pass), or once the mode ended
+// the race (END 2: EndClause's order, held every run). Else 0: the launcher orders by finish times and distances, as
+// the game's own ranking byte is not the race position.
+// The score (Snapshot score_kind, Racer score with RACER_FLAGS_HAS_SCORE): each seat's show_score number when any seat
+// shows one (Points, under the label the HUD draws: the tag text its word names, else POINTS), else each seat's
+// show_distance metres when any seat shows them (Metres; Overdrive); a seat that shows neither has no score. Points
+// before metres: Crown shows every seat's points and the holder's keep-moving metres. Reads the block only.
+void ModeOnTheSnapshot(const Guest& g, const mode::Package* p, u32 block, Snapshot& s)
+{
+  using namespace mode::hud;
+  s.score_kind = ScoreKind::None;
+  s.score_label_length = 0;
+  s.score_label.fill(0);
+  const u32 count = std::min<u32>(s.count, 30);
+  for (u32 i = 0; i < count; ++i)
+  {
+    s.racers[i].place = 0;
+    s.racers[i].score = 0.0f;
+    s.racers[i].flags &= static_cast<u8>(~RACER_FLAGS_HAS_SCORE);
+  }
+  if (!p || block == 0)
+    return;
+  bool placed = g.Read32(block + mode::END) == 2;
+  for (u32 i = 0; i < count && !placed && p->live_places; ++i)
+    placed = g.Read8(block + mode::PLACES + s.racers[i].seat) != 0;
+  if (placed)
+    for (u32 i = 0; i < count; ++i)
+      s.racers[i].place = s.racers[i].rank < count ? static_cast<u8>(s.racers[i].rank + 1) : 0;
+  bool points = false, metres = false;
+  u32 label = 0;
+  for (u32 i = 0; i < count; ++i)
+  {
+    const u32 seat = s.racers[i].seat;
+    if (g.Read32(block + SCORES + seat * SCORE_RECORD + SCORE_VALUE) != 0)
+    {
+      // (the label: the first seat's that names one; a mode labels every seat alike)
+      if (TextOf(label) == 0)
+        label = g.Read32(block + SCORES + seat * SCORE_RECORD + SCORE_LABEL);
+      points = true;
+    }
+    else if (g.Read8(block + STORY + seat * STORY_RECORD + STORY_FLAGS) & STORY_DISTANCE)
+      metres = true;
+  }
+  if (!points && !metres)
+    return;
+  s.score_kind = points ? ScoreKind::Points : ScoreKind::Metres;
+  for (u32 i = 0; i < count; ++i)
+  {
+    Racer& r = s.racers[i];
+    if (points)
+    {
+      const u32 sc = g.Read32(block + SCORES + r.seat * SCORE_RECORD + SCORE_VALUE);
+      if (sc == 0)
+        continue;
+      r.score = static_cast<float>(std::min(sc - 1, SCORE_MOST));
+    }
+    else
+    {
+      const u32 st = block + STORY + r.seat * STORY_RECORD;
+      if (!(g.Read8(st + STORY_FLAGS) & STORY_DISTANCE))
+        continue;
+      const float metres_made = std::bit_cast<float>(g.Read32(st + STORY_METRES));
+      r.score = std::isfinite(metres_made) ? metres_made : 0.0f;
+    }
+    r.flags |= RACER_FLAGS_HAS_SCORE;
+  }
+  if (!points)
+    return;
+  // the label as the HUD draws it (mode_hud.cpp: the tag text the word names from 1, else POINTS), cut at a character
+  const u32 text = TextOf(label);
+  const std::string_view shown =
+      text >= 1 && text <= p->tag_texts.size() ? std::string_view(p->tag_texts[text - 1]) : std::string_view(DEFAULT_SCORE_LABEL);
+  u32 n = static_cast<u32>(std::min<size_t>(shown.size(), s.score_label.size()));
+  while (n > 0 && n < shown.size() && (static_cast<u8>(shown[n]) & 0xC0) == 0x80)
+    --n;
+  std::memcpy(s.score_label.data(), shown.data(), n);
+  s.score_label_length = n;
 }
 
 // The view of viewport 0's chase camera record ([.bss 0xF6C] +0xA4), which follows the local racer while it races

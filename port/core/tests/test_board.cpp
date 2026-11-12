@@ -8,6 +8,8 @@
 
 #include "board_net.h"
 #include "fzgx/board.h"
+#include "mode.h"
+#include "mode_hud.h"
 #include "net_internal.h"
 
 namespace
@@ -77,7 +79,7 @@ void TestTheStatusBoardOfAPlainStart()
   Options o;
   o.board = path;
   Init(host, o);
-  CHECK(board::Taken() && host.notices.find("fzgx: board: taken (game.board, version 5)") != std::string::npos);
+  CHECK(board::Taken() && host.notices.find("fzgx: board: taken (game.board, version 6)") != std::string::npos);
   {
     Seen s(path);
     CHECK(s.view().HeaderRunnerVersion() == board::VERSION && s.view().HeaderRunnerPid() == board::ProcessId() &&
@@ -142,7 +144,7 @@ void TestABoardThatIsNotThisVersionsIsLeft()
   o.board = MakeBoard(dir, board::VERSION + 1);
   Init(host, o);
   CHECK(!board::Taken() && host.log.find("fzgx: board: game.board refused: the launcher's layout is another version (its "
-                                         "version 6, this game's 5") != std::string::npos);
+                                         "version 7, this game's 6") != std::string::npos);
   CHECK(Seen(o.board).view().HeaderRunnerVersion() == board::VERSION);
   board::Field();
   board::Stopped(board::StopReason::Escape);
@@ -211,8 +213,81 @@ void TestTheRaceOnTheBoard()
         b.best_lap_ms == 59999 && b.lap_ms == 62345 && b.speed == 301.5f && b.energy == 80.0f && b.max_energy == 100 &&
         b.x == -12.5f && b.distance == 1000.0f);
   CHECK(c.state == board::RacerState::Out && c.speed == 0.0f && c.lap == 2);  // (a speed that is no number: 0)
+  // no mode in this start: no places (the launcher orders by times and distances) and no score
+  CHECK(snap.score_kind == board::ScoreKind::None && snap.score_label_length == 0 && a.place == 0 && b.place == 0 && c.place == 0 &&
+        (b.flags & board::RACER_FLAGS_HAS_SCORE) == 0);
   Shutdown();
   board::Close();
+}
+
+// The race's mode on the snapshot (board.toml version 6): the standing's rows as the places once the mode orders the
+// standing (live_places with a seat placed, or the race ended by the mode), each seat's points under the HUD's label
+// when any seat shows a score, else each seat's metres when any shows a distance; nothing of a mode that shows none.
+void TestTheModesPlacesAndScoresOnTheSnapshot()
+{
+  TestHost host;
+  Guest g(host, Data());
+  constexpr u32 BLOCK = 0x80A00000;
+  using namespace mode::hud;
+  board::Snapshot s;
+  s.count = 3;
+  for (u32 i = 0; i < 3; ++i)
+  {
+    s.racers[i].seat = static_cast<u8>(i);
+    s.racers[i].rank = static_cast<u8>(2 - i);  // the standing's rows: seat 2 first
+    s.racers[i].flags = board::RACER_FLAGS_HAS_BEST_LAP;
+  }
+  mode::Package p;
+  // no mode, or no block: nothing
+  board::ModeOnTheSnapshot(g, nullptr, BLOCK, s);
+  board::ModeOnTheSnapshot(g, &p, 0, s);
+  CHECK(s.score_kind == board::ScoreKind::None && s.racers[0].place == 0 && s.racers[2].place == 0);
+  // a mode without live_places, no seat placed, no score shown: the same
+  board::ModeOnTheSnapshot(g, &p, BLOCK, s);
+  CHECK(s.score_kind == board::ScoreKind::None && s.racers[2].place == 0);
+  // live_places, but no seat placed yet (ShowPlaces leaves the pass's order): no places
+  p.live_places = true;
+  board::ModeOnTheSnapshot(g, &p, BLOCK, s);
+  CHECK(s.racers[2].place == 0);
+  // a seat placed: every seat's place is its row, 1 first; a seat without a score has none, the rest theirs
+  g.Write8(BLOCK + mode::PLACES + 2, 1);
+  g.Write32(BLOCK + SCORES + 2 * SCORE_RECORD + SCORE_VALUE, 12 + 1);
+  g.Write32(BLOCK + SCORES + 2 * SCORE_RECORD + SCORE_LABEL, 0);  // the default label
+  g.Write32(BLOCK + SCORES + 0 * SCORE_RECORD + SCORE_VALUE, 0 + 1);
+  g.Write8(BLOCK + STORY + 1 * STORY_RECORD + STORY_FLAGS, STORY_DISTANCE);  // (Crown's holder: metres beside the points)
+  g.Write32(BLOCK + STORY + 1 * STORY_RECORD + STORY_METRES, std::bit_cast<u32>(250.0f));
+  board::ModeOnTheSnapshot(g, &p, BLOCK, s);
+  CHECK(s.racers[0].place == 3 && s.racers[1].place == 2 && s.racers[2].place == 1);
+  CHECK(s.score_kind == board::ScoreKind::Points && s.score_label_length == 6 &&
+        std::string(reinterpret_cast<const char*>(s.score_label.data()), 6) == "POINTS");
+  CHECK((s.racers[2].flags & board::RACER_FLAGS_HAS_SCORE) != 0 && s.racers[2].score == 12.0f);
+  CHECK((s.racers[0].flags & board::RACER_FLAGS_HAS_SCORE) != 0 && s.racers[0].score == 0.0f);
+  CHECK((s.racers[1].flags & board::RACER_FLAGS_HAS_SCORE) == 0 && s.racers[1].score == 0.0f &&
+        (s.racers[1].flags & board::RACER_FLAGS_HAS_BEST_LAP) != 0);
+  // the mode's own label (the tag text the word names, from 1)
+  p.tag_texts = {"CUTS"};
+  g.Write32(BLOCK + SCORES + 2 * SCORE_RECORD + SCORE_LABEL, 1);
+  board::ModeOnTheSnapshot(g, &p, BLOCK, s);
+  CHECK(s.score_label_length == 4 && std::string(reinterpret_cast<const char*>(s.score_label.data()), 4) == "CUTS");
+  // no score shown: the metres shown are the score (Overdrive), with no label; a seat not fed has none
+  g.Write32(BLOCK + SCORES + 2 * SCORE_RECORD + SCORE_VALUE, 0);
+  g.Write32(BLOCK + SCORES + 0 * SCORE_RECORD + SCORE_VALUE, 0);
+  board::ModeOnTheSnapshot(g, &p, BLOCK, s);
+  CHECK(s.score_kind == board::ScoreKind::Metres && s.score_label_length == 0 && s.score_label[0] == 0);
+  CHECK((s.racers[1].flags & board::RACER_FLAGS_HAS_SCORE) != 0 && s.racers[1].score == 250.0f &&
+        (s.racers[2].flags & board::RACER_FLAGS_HAS_SCORE) == 0 && s.racers[2].score == 0.0f);
+  // the race ended by the mode: the places whether or not live_places (the end clause holds its order)
+  p.live_places = false;
+  g.Write8(BLOCK + mode::PLACES + 2, 0);
+  board::ModeOnTheSnapshot(g, &p, BLOCK, s);
+  CHECK(s.racers[2].place == 0);
+  g.Write32(BLOCK + mode::END, 2);
+  board::ModeOnTheSnapshot(g, &p, BLOCK, s);
+  CHECK(s.racers[0].place == 3 && s.racers[2].place == 1);
+  // a rank past the rows (a seat the standing does not name): no place
+  s.racers[0].rank = 7;
+  board::ModeOnTheSnapshot(g, &p, BLOCK, s);
+  CHECK(s.racers[0].place == 0 && s.racers[1].place == 2);
 }
 
 // The local racer's camera view for the launcher: a Camera event at the first view read and at each change, only
