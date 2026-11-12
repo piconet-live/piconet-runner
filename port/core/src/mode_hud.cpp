@@ -72,6 +72,8 @@ bool IsDisplay(u8 id)
     case ACTION_MAPCHAROFF:
     case ACTION_SHOWSCORE:
     case ACTION_SHOWSCOREOFF:
+    case ACTION_SHOWTEXT:
+    case ACTION_SHOWTEXTOFF:
       return true;
     default:
       return false;
@@ -237,15 +239,22 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 thir
     case ACTION_SHOWSCORE:
     {
       // the number held to the race time's six digits (a negative number reads 0); the label a text the package holds,
-      // anything else the default
+      // anything else the default; the font one of the choice, anything else the first
       const u32 sc = block + SCORES + seat * SCORE_RECORD;
       g.Write32(sc + SCORE_VALUE, (static_cast<s32>(value) < 0 ? 0 : std::min(value, SCORE_MOST)) + 1);
-      g.Write32(sc + SCORE_LABEL, second >= 1 && second <= TAG_TEXTS ? second : 0);
+      g.Write32(sc + SCORE_LABEL, PackText(second >= 1 && second <= TAG_TEXTS ? second : 0, third < FONT_COUNT ? third : 0));
       return true;
     }
     case ACTION_SHOWSCOREOFF:
       g.Write32(block + SCORES + seat * SCORE_RECORD + SCORE_VALUE, 0);
       g.Write32(block + SCORES + seat * SCORE_RECORD + SCORE_LABEL, 0);
+      return true;
+    case ACTION_SHOWTEXT:
+      // a text the package holds, anything else none shown; the font one of the choice, anything else the first
+      g.Write32(block + TEXTS + seat * TEXT_RECORD, PackText(value >= 1 && value <= TAG_TEXTS ? value : 0, second < FONT_COUNT ? second : 0));
+      return true;
+    case ACTION_SHOWTEXTOFF:
+      g.Write32(block + TEXTS + seat * TEXT_RECORD, 0);
       return true;
     default:
       return false;
@@ -396,7 +405,14 @@ Frame Read(const Guest& g, u32 block, u32 viewed)
     f.score_shown = true;
     f.score = std::min(sc - 1, SCORE_MOST);
     const u32 label = g.Read32(block + SCORES + viewed * SCORE_RECORD + SCORE_LABEL);
-    f.score_label = label >= 1 && label <= TAG_TEXTS ? label : 0;
+    f.score_label = TextOf(label) >= 1 && TextOf(label) <= TAG_TEXTS ? TextOf(label) : 0;
+    f.score_font = FontOf(label);
+  }
+  if (const u32 text = g.Read32(block + TEXTS + viewed * TEXT_RECORD); TextOf(text) >= 1 && TextOf(text) <= TAG_TEXTS)
+  {
+    f.text_shown = true;
+    f.text = TextOf(text);
+    f.text_font = FontOf(text);
   }
   // the danger zone's display (vocabulary 4.4): while its count runs (the race side's, mode.h DANGER: from 60 x
   // seconds + 60 down, the machine exploding at 60) the big digit and the warning, as story chapter 6's, whose digit
@@ -577,6 +593,10 @@ void Hud(Guest& g)
                                                             : window + WINDOW_SCORE_TEXT);
   for (u32 k = 0; k < WINDOW_SCORE_TEXT_SIZE; ++k)
     g.Write8(window + WINDOW_SCORE_TEXT + k, k < sizeof(DEFAULT_SCORE_LABEL) ? static_cast<u8>(DEFAULT_SCORE_LABEL[k]) : 0);
+  g.Write32(window + WINDOW_SCORE_FONT, FONT_IDS[f.score_font]);
+  // TEXT: the text's address (0: none) and its font, the game's font number, for the same routine
+  g.Write32(window + WINDOW_TEXT, f.text_shown ? window + WINDOW_TAG_TEXTS + (f.text - 1) * WINDOW_TAG_TEXT : 0);
+  g.Write32(window + WINDOW_TEXT_FONT, FONT_IDS[f.text_font]);
   // a seat's colour tints its machine drawn normally; a ghost has seat.ghost_tint (0: Time Attack's yellow)
   for (u32 seat = 0; seat < SEATS; ++seat)
   {

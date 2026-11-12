@@ -90,11 +90,12 @@ void TestTheClassicHudMoves()
     places[modes::PART_RANK] = {};
     e = Effective(layout, places, RANK);
     CHECK(e.given && !e.to_point && Near(e.dx, 5) && Near(e.angle, 30));
-    // the mode's part p is the classic HUD's part p + 1; SCORE, the last one a mode names, then BOOST and STORY_OTHER
+    // the mode's part p is the classic HUD's part p + 1; TEXT, the last one a mode names, then BOOST and STORY_OTHER
     CHECK(PARTS[modes::PART_DISTANCE + 1] == "DISTANCE" && PARTS[modes::PART_FACES + 1] == "FACES" && PARTS[modes::PART_SPARE + 1] == "SPARE" &&
           PARTS[modes::PART_SKULLS + 1] == "SKULLS" && PARTS[modes::PART_WRONG_WAY + 1] == "WRONG_WAY" && PARTS[modes::PART_BANNERS + 1] == "BANNERS" &&
           PARTS[modes::PART_FINISH + 1] == "FINISH" && PARTS[modes::PART_CHECK + 1] == "CHECK" && PARTS[modes::PART_SCORE + 1] == "SCORE" &&
-          PARTS[SCORE] == "SCORE" && PARTS[BOOST] == "BOOST" && PARTS[STORY_OTHER] == "STORY_OTHER");
+          PARTS[modes::PART_TEXT + 1] == "TEXT" && PARTS[SCORE] == "SCORE" && PARTS[TEXT] == "TEXT" && PARTS[BOOST] == "BOOST" &&
+          PARTS[STORY_OTHER] == "STORY_OTHER");
   }
   // a place: the part's centre to the point on the screen, in 4:3 and in Wide Screen alike. SPARE's box 24,432-88,456
   // (centre 56, 444) in the left group (anchor 96): placed at (320, 444) its two ends land 32 units either side of

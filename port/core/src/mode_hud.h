@@ -26,7 +26,7 @@
 //   +28 the race clock when +11 was asked: the HUD pass shows the gap popup's part and starts the wrong-way sign from it
 // At +TAGS_AT (after the records), a byte a seat: `tag`'s text, its number in the package's tag_texts from 1 (0: none).
 // The story parts' values (show_distance, show_objects) are in page 7's tail (STORY, below): the record is full. So are
-// hud_move's places, map_char's characters and show_score's records, in page 7's head (MOVES, MAP_CHARS, SCORES).
+// hud_move's places, map_char's characters, show_score's and show_text's records, in page 7's head (MOVES, MAP_CHARS, SCORES, TEXTS).
 // The danger zone's display reads the race side's state (mode.h DANGER: its count, as story chapter 6's).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -70,11 +70,22 @@ constexpr u32 STORY = 7 * PAGE + 0xF10, STORY_RECORD = 8;
 // point, or MAP_SHAPES + n for a named shape, the compiler's MapSymbols). The block's like the rest: undo log and
 // checksum. (A word a part, not three s16: thirty seats' records of every part fit the head before STORY.)
 // Then SCORES: show_score's record a seat, SCORE_RECORD bytes: +0 the number + 1 (u32; 0: SCORE is not shown; the number
-// held to 0 .. SCORE_MOST, the race time's six digits), +4 the label's number in the package's tag_texts from 1 (0: the
-// default label, SCORE). The block's like the rest.
+// held to 0 .. SCORE_MOST, the race time's six digits), +4 a word: the label's number in the package's tag_texts from 1 in
+// its low byte (0: the default label, SCORE), the label's font (a modes::FONT_*) in the next. Then TEXTS: show_text's word a
+// seat: the text's number in tag_texts from 1 in its low byte (0: TEXT is not shown), its font in the next. The block's like
+// the rest. FONT_IDS: the game's font table number (bitmap.c lbl_1_data_1AEA8) of each modes::FONT_*, all of the common
+// sheet (image group 0, bmp_com.tpl, loaded all game): the image draws the text in it.
 constexpr u32 MOVES = 7 * PAGE + 0x10, MOVE_PLACES = 4, MOVE_RECORD = MOVE_PLACES + 4 * modes::PART_COUNT,
-              MAP_CHARS = MOVES + 30 * MOVE_RECORD, SCORES = MAP_CHARS + 30 * 4, SCORE_RECORD = 8, SCORE_VALUE = 0, SCORE_LABEL = 4;
+              MAP_CHARS = MOVES + 30 * MOVE_RECORD, SCORES = MAP_CHARS + 30 * 4, SCORE_RECORD = 8, SCORE_VALUE = 0, SCORE_LABEL = 4,
+              TEXTS = SCORES + 30 * SCORE_RECORD, TEXT_RECORD = 4;
 constexpr u32 SCORE_MOST = 999999;
+constexpr u32 FONT_SHIFT = 8;  // (the font's byte of a label or text word)
+constexpr std::array<u32, modes::FONT_COUNT> FONT_IDS = {5, 4, 3, 2, 7, 8};  // BLOCK, CAPS, PLAIN, NARROW, SERIF, BIG_SERIF
+static_assert(modes::FONT_COUNT < 256 && modes::TAG_TEXTS < 256);
+// A label or text word, and its parts back (pure, for the tests): the text's number (0: none) and the font, held to the choice.
+constexpr u32 PackText(u32 text, u32 font) { return text | font << FONT_SHIFT; }
+constexpr u32 TextOf(u32 word) { return word & 0xFF; }
+constexpr u32 FontOf(u32 word) { return (word >> FONT_SHIFT & 0xFF) < modes::FONT_COUNT ? word >> FONT_SHIFT & 0xFF : 0; }
 constexpr s32 MOVE_MOST = 1000;
 constexpr u32 MOVE_BITS = 11, MOVE_BIAS = 1 << (MOVE_BITS - 1), MOVE_MASK = (1 << MOVE_BITS) - 1, MOVE_ANGLE_BITS = 9;
 static_assert(MOVE_MOST + MOVE_BIAS <= MOVE_MASK && 359 < (1 << MOVE_ANGLE_BITS) && 2 * MOVE_BITS + MOVE_ANGLE_BITS <= 32 &&
@@ -88,7 +99,8 @@ constexpr s32 PlaceX(u32 word) { return static_cast<s32>(word & MOVE_MASK) - MOV
 constexpr s32 PlaceY(u32 word) { return static_cast<s32>(word >> MOVE_BITS & MOVE_MASK) - MOVE_BIAS; }
 constexpr u32 PlaceAngle(u32 word) { return word >> (2 * MOVE_BITS); }
 constexpr u32 MAP_SHAPES = 0x110000, MAP_CROWN = MAP_SHAPES;
-static_assert(MOVES % PAGE >= 4 && MAP_CHARS + 30 * 4 <= SCORES && SCORES + 30 * SCORE_RECORD <= STORY);  // (clear of the stamp; below STORY)
+static_assert(MOVES % PAGE >= 4 && MAP_CHARS + 30 * 4 <= SCORES && SCORES + 30 * SCORE_RECORD <= TEXTS &&
+              TEXTS + 30 * TEXT_RECORD <= STORY);  // (clear of the stamp; below STORY)
 constexpr u32 STORY_METRES = 0, STORY_FLAGS = 4, STORY_SHOWN = 6, STORY_OF = 7;
 constexpr u8 STORY_DISTANCE = 1, STORY_OBJECTS = 2;
 constexpr float DISTANCE_MOST = 99999.0f;  // the drawer's five digits (fn_1_CDC8C 0xCEACC)
@@ -159,9 +171,12 @@ constexpr u32 WINDOW_DISTANCE = 0x270, WINDOW_OBJECTS = 0x27C;
 // the boot, read at the race's set-up (sites_grid.py grid_spread).
 constexpr u32 WINDOW_START_GAP = 0x290;
 // +0x298: SCORE for the racer the picture follows: the number + 1 (0: not drawn); +0x29C the label's address, a
-// NUL-terminated text of the game's font 5 (one of WINDOW_TAG_TEXTS, or WINDOW_SCORE_TEXT, +0x2A0, where the pass writes
-// the default label SCORE). Read by the image's race_time_score (sites_hudmove.py) in the race time's call.
-constexpr u32 WINDOW_SCORE = 0x298, WINDOW_SCORE_LABEL = 0x29C, WINDOW_SCORE_TEXT = 0x2A0, WINDOW_SCORE_TEXT_SIZE = 8;
+// NUL-terminated text of the game's text drawer (one of WINDOW_TAG_TEXTS, or WINDOW_SCORE_TEXT, +0x2A0, where the pass writes
+// the default label SCORE); +0x2A8 the label's font, the game's font table number (FONT_IDS). +0x2AC TEXT for that racer: the
+// text's address (one of WINDOW_TAG_TEXTS; 0: not drawn), +0x2B0 its font. Read by the image's race_time_score
+// (sites_hudmove.py) in the race time's call.
+constexpr u32 WINDOW_SCORE = 0x298, WINDOW_SCORE_LABEL = 0x29C, WINDOW_SCORE_TEXT = 0x2A0, WINDOW_SCORE_TEXT_SIZE = 8,
+              WINDOW_SCORE_FONT = 0x2A8, WINDOW_TEXT = 0x2AC, WINDOW_TEXT_FONT = 0x2B0;
 inline constexpr char DEFAULT_SCORE_LABEL[] = "SCORE";
 static_assert(sizeof(DEFAULT_SCORE_LABEL) <= WINDOW_SCORE_TEXT_SIZE);
 constexpr u32 STANDIN_P = WINDOW_DISTANCE - 0xF8, STANDIN_R = WINDOW_DISTANCE + 8 - 4;
@@ -169,7 +184,7 @@ static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WIND
               WINDOW_TAG_TEXTS + modes::TAG_TEXTS * WINDOW_TAG_TEXT <= WINDOW_GHOSTS &&
               WINDOW_GHOSTS + 30 * 8 <= WINDOW_DISTANCE && WINDOW_DISTANCE + 12 <= WINDOW_OBJECTS &&
               WINDOW_OBJECTS + 8 <= WINDOW_START_GAP && WINDOW_START_GAP + 4 <= WINDOW_SCORE &&
-              WINDOW_SCORE_TEXT + WINDOW_SCORE_TEXT_SIZE <= 0x300 &&
+              WINDOW_SCORE_TEXT + WINDOW_SCORE_TEXT_SIZE <= WINDOW_SCORE_FONT && WINDOW_TEXT_FONT + 4 <= 0x300 &&
               WINDOW_OBJECTS + 8 <= 0x700);  // (0x300: hud_move.cpp's word)  // (0x700: RACE, the next in the window)
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
@@ -181,10 +196,11 @@ static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WIND
 // GHOST_GAP has no bit: the ghost task draws it (WINDOW_GAP). SPARE (a part since 0.6.1, for hud_move) has none either: the
 // compiler refuses show and hide on it, and show_number's record draws and hides it. Nor have SKULLS, WRONG_WAY, BANNERS,
 // FINISH and CHECK (0.6.1, for hud_move alone: the compiler refuses show and hide on them; the game draws each as it does).
-// SCORE (0.6.1) has none: show_score's record draws and hides it (the image's race_time_score, from WINDOW_SCORE).
+// SCORE and TEXT (0.6.1) have none: show_score's and show_text's records draw and hide them (the image's race_time_score,
+// from WINDOW_SCORE and WINDOW_TEXT).
 constexpr std::array<u32, modes::PART_COUNT> PART_BITS = {0x20000, 0x1000, 0x8, 0x400, 0x200, 0x100, 0x80, 0x2000,
                                                           0x4000, 0x400000, 0, 0x20000000, 0x04000000, 0x08000000, 0x40000000,
-                                                          0x01000000, 0x02000000, 0x80000000, 0, 0, 0, 0, 0, 0, 0};  // (SPARE on: no bit)
+                                                          0x01000000, 0x02000000, 0x80000000, 0, 0, 0, 0, 0, 0, 0, 0};  // (SPARE on: no bit)
 // Every bit of the story's parts (the two drawers' tests and TIMER's), which the game's default mask 0xFF9FFFFF has
 // on: once group 0xBA is loaded they would draw, DIGIT a "0" from a source of none, so the pass clears every one
 // the mode does not show.
@@ -203,7 +219,7 @@ bool IsDisplay(u8 id);
 u32 SeatParts(const Guest& g, u32 seat);
 // A display word into the seat's record: true when `id` is one.
 // `second`: a two-number word's second (show_objects's of).
-// `third`, `fourth`: hud_move's y and angle.
+// `third`, `fourth`: hud_move's y and angle; `third` show_score's font, `second` show_text's.
 bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second = 0, u32 third = 0, u32 fourth = 0);
 // The start of every run: the banners asked at the last one are gone.
 void BeginRun(Guest& g, u32 block);
@@ -271,7 +287,11 @@ struct Frame
   u32 objects_shown = 0, objects_of = 0;  // ...these
   bool score_shown = false;          // the viewed racer sees SCORE...
   u32 score = 0;                     // ...this number (0 to SCORE_MOST)
-  u32 score_label = 0;               // ...under the tag text of this number from 1 (0: the default label)
+  u32 score_label = 0;               // ...under the tag text of this number from 1 (0: the default label)...
+  u32 score_font = 0;                // ...in this font (a modes::FONT_*)
+  bool text_shown = false;           // the viewed racer sees TEXT...
+  u32 text = 0;                      // ...the tag text of this number from 1...
+  u32 text_font = 0;                 // ...in this font (a modes::FONT_*)
 };
 Frame Read(const Guest& g, u32 block, u32 viewed);
 
