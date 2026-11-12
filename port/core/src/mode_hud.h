@@ -62,14 +62,26 @@ constexpr u32 STORY = 7 * PAGE + 0xF10, STORY_RECORD = 8;
 // hud_move's places, in the page 7's head (unused since the modern HUD's slots left it) after the page's step stamp (its
 // first word, which mode.cpp's Stamp writes at every run: read as seat 0's TIMER move it slid the clock down a unit a
 // step, off the screen within seconds): a record of MOVE_RECORD bytes a seat at MOVES: +0 the placed parts, a bit a
-// modes::PART_* p (u32), then at MOVE_PLACES + 6 p the part's x, y (the centre's place on the 640 x 480 screen, whole
-// units held to -MOVE_MOST .. MOVE_MOST) and angle (whole degrees clockwise, 0 to 359), s16 each. A part whose bit is
-// off is not placed, whatever its three (hud_move off clears them). Then MAP_CHARS: map_char's code a seat, u32 (0:
-// none; a Unicode code point, or MAP_SHAPES + n for a named shape, the compiler's MapSymbols). The block's like the
-// rest: undo log and checksum.
-constexpr u32 MOVES = 7 * PAGE + 0x10, MOVE_PLACES = 4, MOVE_RECORD = (MOVE_PLACES + 6 * modes::PART_COUNT + 3) & ~3u,
+// modes::PART_* p (u32), then at MOVE_PLACES + 4 p the part's place in a word: x + MOVE_BIAS in its low MOVE_BITS, y +
+// MOVE_BIAS in the next MOVE_BITS, the angle above them (x, y the centre's place on the 640 x 480 screen, whole units
+// held to -MOVE_MOST .. MOVE_MOST; the angle whole degrees clockwise, 0 to 359). A part whose bit is off is not placed,
+// whatever its word (hud_move off clears it). Then MAP_CHARS: map_char's code a seat, u32 (0: none; a Unicode code
+// point, or MAP_SHAPES + n for a named shape, the compiler's MapSymbols). The block's like the rest: undo log and
+// checksum. (A word a part, not three s16: thirty seats' records of every part fit the head before STORY.)
+constexpr u32 MOVES = 7 * PAGE + 0x10, MOVE_PLACES = 4, MOVE_RECORD = MOVE_PLACES + 4 * modes::PART_COUNT,
               MAP_CHARS = MOVES + 30 * MOVE_RECORD;
-constexpr s32 MOVE_MOST = 1280;
+constexpr s32 MOVE_MOST = 1000;
+constexpr u32 MOVE_BITS = 11, MOVE_BIAS = 1 << (MOVE_BITS - 1), MOVE_MASK = (1 << MOVE_BITS) - 1, MOVE_ANGLE_BITS = 9;
+static_assert(MOVE_MOST + MOVE_BIAS <= MOVE_MASK && 359 < (1 << MOVE_ANGLE_BITS) && 2 * MOVE_BITS + MOVE_ANGLE_BITS <= 32 &&
+              modes::PART_COUNT <= 32);  // (the places fit a word; the placed parts a mask)
+// A part's place from its word, and back (pure, for the tests).
+constexpr u32 PackPlace(s32 x, s32 y, u32 angle)
+{
+  return static_cast<u32>(x + MOVE_BIAS) | static_cast<u32>(y + MOVE_BIAS) << MOVE_BITS | angle << (2 * MOVE_BITS);
+}
+constexpr s32 PlaceX(u32 word) { return static_cast<s32>(word & MOVE_MASK) - MOVE_BIAS; }
+constexpr s32 PlaceY(u32 word) { return static_cast<s32>(word >> MOVE_BITS & MOVE_MASK) - MOVE_BIAS; }
+constexpr u32 PlaceAngle(u32 word) { return word >> (2 * MOVE_BITS); }
 constexpr u32 MAP_SHAPES = 0x110000, MAP_CROWN = MAP_SHAPES;
 static_assert(MOVES % PAGE >= 4 && MAP_CHARS + 30 * 4 <= STORY);  // (clear of the stamp; below STORY)
 constexpr u32 STORY_METRES = 0, STORY_FLAGS = 4, STORY_SHOWN = 6, STORY_OF = 7;
@@ -155,10 +167,11 @@ static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WIND
 // From PART_RANK on the standard parts, read from the drawers' tests of the same mask (rank, laps and speed in their drawers; energy
 // fn_1_C8F34, race time 0xCBC24, lap times 0xCB424 and 0xCB028); FACES the whole board's bit (fn_1_C6F8C 0xC70C8: rings, numbers, highlight), with the heads' task off too (WINDOW_FACES).
 // GHOST_GAP has no bit: the ghost task draws it (WINDOW_GAP). SPARE (a part since 0.6.1, for hud_move) has none either: the
-// compiler refuses show and hide on it, and show_number's record draws and hides it.
+// compiler refuses show and hide on it, and show_number's record draws and hides it. Nor have SKULLS, WRONG_WAY, BANNERS,
+// FINISH and CHECK (0.6.1, for hud_move alone: the compiler refuses show and hide on them; the game draws each as it does).
 constexpr std::array<u32, modes::PART_COUNT> PART_BITS = {0x20000, 0x1000, 0x8, 0x400, 0x200, 0x100, 0x80, 0x2000,
                                                           0x4000, 0x400000, 0, 0x20000000, 0x04000000, 0x08000000, 0x40000000,
-                                                          0x01000000, 0x02000000, 0x80000000, 0};  // (SPARE: show_number's, no bit)
+                                                          0x01000000, 0x02000000, 0x80000000, 0, 0, 0, 0, 0, 0};  // (SPARE on: no bit)
 // Every bit of the story's parts (the two drawers' tests and TIMER's), which the game's default mask 0xFF9FFFFF has
 // on: once group 0xBA is loaded they would draw, DIGIT a "0" from a source of none, so the pass clears every one
 // the mode does not show.
@@ -259,7 +272,7 @@ void Board(const Guest& g);
 // `symbol`: each seat's map_char (0: none; mode_hud.h MAP_CHARS).
 void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour,
                std::array<u32, 30>& symbol);
-// The viewed racer's hud_move moves (dx, dy by modes::PART_*; all 0 with no mode or before the intro), for the classic
-// HUD's moves (hud_move.h SetMode). Once a frame at the drawing.
+// The viewed racer's hud_move places (by modes::PART_*; none with no mode or before the intro), for the classic HUD's
+// moves (hud_move.h SetMode). Once a frame at the drawing.
 hud_move::ModePlaces ViewedMoves(Guest& g);
 }  // namespace fzgx::mode::hud

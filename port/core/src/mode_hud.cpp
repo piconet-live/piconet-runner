@@ -206,23 +206,21 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 thir
     case ACTION_HUDMOVE:
     case ACTION_HUDMOVEOFF:
     {
-      // the place: whole units held to twice the screen either way; the angle whole degrees, 0 to 359 (NaN: 0)
+      // the place: whole units held to MOVE_MOST either way (beyond the screen); the angle whole degrees, 0 to 359 (NaN: 0)
       const auto unit = [](u32 v) {
         const float f = std::bit_cast<float>(v);
-        return static_cast<s16>(f == f ? std::clamp(std::lround(f), -long{MOVE_MOST}, long{MOVE_MOST}) : 0);
+        return static_cast<s32>(f == f ? std::clamp(std::lround(f), -long{MOVE_MOST}, long{MOVE_MOST}) : 0);
       };
       const auto degrees = [](u32 v) {
         const float f = std::bit_cast<float>(v);
-        return static_cast<s16>(f == f ? ((std::lround(std::fmod(f, 360.0f)) % 360) + 360) % 360 : 0);
+        return static_cast<u32>(f == f ? ((std::lround(std::fmod(f, 360.0f)) % 360) + 360) % 360 : 0);
       };
       if (value < PART_COUNT)
       {
-        const u32 record = block + MOVES + seat * MOVE_RECORD, at = record + MOVE_PLACES + 6 * value;
+        const u32 record = block + MOVES + seat * MOVE_RECORD, at = record + MOVE_PLACES + 4 * value;
         const bool on = id == ACTION_HUDMOVE;
         g.Write32(record, on ? g.Read32(record) | 1u << value : g.Read32(record) & ~(1u << value));
-        g.Write16(at, on ? static_cast<u16>(unit(second)) : 0);
-        g.Write16(at + 2, on ? static_cast<u16>(unit(third)) : 0);
-        g.Write16(at + 4, on ? static_cast<u16>(degrees(fourth)) : 0);
+        g.Write32(at, on ? PackPlace(unit(second), unit(third), degrees(fourth)) : 0);
       }
       return true;
     }
@@ -252,9 +250,9 @@ hud_move::ModePlaces ViewedMoves(Guest& g)
   const u32 record = block + MOVES + viewed * MOVE_RECORD, placed = g.Read32(record);
   for (u32 p = 0; p < PART_COUNT; ++p)
   {
-    const u32 at = record + MOVE_PLACES + 6 * p;
-    moves[p] = {(placed >> p & 1) != 0, static_cast<s16>(g.Read16(at)), static_cast<s16>(g.Read16(at + 2)),
-                static_cast<s16>(g.Read16(at + 4))};
+    // (a part whose bit is off is not placed, whatever its word)
+    if (const u32 word = g.Read32(record + MOVE_PLACES + 4 * p); placed >> p & 1)
+      moves[p] = {true, static_cast<s16>(PlaceX(word)), static_cast<s16>(PlaceY(word)), static_cast<s16>(PlaceAngle(word))};
   }
   return moves;
 }

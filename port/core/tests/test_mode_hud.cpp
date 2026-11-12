@@ -440,8 +440,8 @@ void TestTheDisplayWordsRun()
   CHECK(symbol[2] == 0 && symbol[3] == 0x265B);
   CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 3, 0) && hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 4, 0));
 
-  // hud_move: the place in whole units held to 1280 either way, the angle whole degrees 0 to 359, the part's bit, in the
-  // seat's record; the viewed racer's places for the HUD; hud_move off clears the part's
+  // hud_move: the place in whole units held to MOVE_MOST (1000) either way, the angle whole degrees 0 to 359, the part's
+  // bit, in the seat's record (a word a part); the viewed racer's places for the HUD; hud_move off clears the part's
   {
     const u32 viewed = net::ViewedRacer(g);
     CHECK(viewed < 30);
@@ -449,16 +449,27 @@ void TestTheDisplayWordsRun()
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_DISTANCE, real(10.6f), real(-60), real(-90)));
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_RANK, real(5000), real(-5000), real(725.4f)));
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_SPARE, real(320), real(444), real(0)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_CHECK, real(-1000), real(1000), real(359)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_SKULLS, real(-0.4f), real(0.4f), real(-0.4f)));
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_COUNT, real(1), real(1), real(1)));  // no such part
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, (viewed + 1) % 30, modes::PART_LAPS, real(7), real(7), real(7)));
     auto places = hud::ViewedMoves(g);
     CHECK(places[modes::PART_DISTANCE].given && places[modes::PART_DISTANCE].x == 11 && places[modes::PART_DISTANCE].y == -60 && places[modes::PART_DISTANCE].angle == 270);
-    CHECK(places[modes::PART_RANK].given && places[modes::PART_RANK].x == 1280 && places[modes::PART_RANK].y == -1280 && places[modes::PART_RANK].angle == 5);
+    CHECK(places[modes::PART_RANK].given && places[modes::PART_RANK].x == 1000 && places[modes::PART_RANK].y == -1000 && places[modes::PART_RANK].angle == 5);
     CHECK(places[modes::PART_SPARE].given && places[modes::PART_SPARE].x == 320 && places[modes::PART_SPARE].y == 444 && places[modes::PART_SPARE].angle == 0);
+    CHECK(places[modes::PART_CHECK].given && places[modes::PART_CHECK].x == -1000 && places[modes::PART_CHECK].y == 1000 && places[modes::PART_CHECK].angle == 359);
+    CHECK(places[modes::PART_SKULLS].given && places[modes::PART_SKULLS].x == 0 && places[modes::PART_SKULLS].y == 0 && places[modes::PART_SKULLS].angle == 0);
+    CHECK(!places[modes::PART_WRONG_WAY].given && !places[modes::PART_BANNERS].given && !places[modes::PART_FINISH].given);
+    // the records of every seat and part, then map_char's, lie before the story values
+    CHECK(hud::MAP_CHARS + 30 * 4 <= hud::STORY && hud::MOVE_RECORD == 4 + 4 * modes::PART_COUNT);
+    CHECK(hud::PlaceX(hud::PackPlace(-1000, 1000, 359)) == -1000 && hud::PlaceY(hud::PackPlace(-1000, 1000, 359)) == 1000 &&
+          hud::PlaceAngle(hud::PackPlace(-1000, 1000, 359)) == 359 && hud::PlaceX(hud::PackPlace(7, -7, 0)) == 7 && hud::PlaceY(hud::PackPlace(7, -7, 0)) == -7);
     CHECK(!places[modes::PART_LAPS].given && places[modes::PART_LAPS].x == 0);  // another seat's
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_DISTANCE));
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_RANK));
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_SPARE));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_CHECK));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_SKULLS));
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, (viewed + 1) % 30, modes::PART_LAPS));
     places = hud::ViewedMoves(g);
     CHECK(std::all_of(places.begin(), places.end(), [](const hud_move::Place& p) { return !p.given && p.x == 0 && p.y == 0 && p.angle == 0; }));

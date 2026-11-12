@@ -60,11 +60,13 @@ constexpr std::array<Pivot, PARTS.size()> PIVOTS = [] {
   p[16] = {556.8f, 126.6f};  // LAP_TIMES 495,110-618,143 (the first row and its labels)
   p[17] = {532, 86};      // RACE_TIME 444,67-620,105
   p[18] = {51, 214};      // FACES 0,0-102,428 (the rings)
-  p[19] = {56, 444};      // SPARE 24,432-88,456
-  p[20] = {608, 120};     // SKULLS: the first skull, 616 - its width, at y 108
-  p[23] = {320, 150};     // BANNERS: the game's (320, 150)
-  p[24] = {320, 240};     // FINISH 120,202-520,278
-  p[22] = {320, 240};     // WRONG_WAY: the game's (320, 240)
+  p[SPARE] = {56, 444};      // SPARE 24,432-88,456
+  p[SKULLS] = {608, 120};    // SKULLS: the first skull, 616 - its width, at y 108
+  p[BANNERS] = {320, 150};   // BANNERS: the game's (320, 150)
+  p[FINISH] = {320, 240};    // FINISH 120,202-520,278
+  p[WRONG_WAY] = {320, 240}; // WRONG_WAY: the game's (320, 240)
+  p[CHECK] = {320, 445};     // CHECK: the screen's middle at the sign's row (y 445; its x follows the rival it points at,
+                             // so a place moves its row and the sign still slides sideways after that rival)
   return p;
 }();
 
@@ -447,21 +449,21 @@ u32 Word(const Layout& l)
 
 Move Effective(const Layout& layout, const ModePlaces& places, std::size_t part)
 {
-  // the mode's part whose packets are this part's (LEADER_GAP is drawn with the banners)
-  for (std::size_t p = 0; p < places.size(); ++p)
-  {
-    const std::size_t drawn = p + 1 == LEADER_GAP ? BANNERS : p + 1;
-    if (drawn == part && places[p].given)
-    {
-      Move m;
-      m.given = true;
-      m.to_point = true;
-      m.tx = places[p].x;
-      m.ty = places[p].y;
-      m.angle = places[p].angle;
-      return m;
-    }
-  }
+  // the mode's part whose packets are this part's: the part itself, else LEADER_GAP's place for the banners (the gap
+  // popup is drawn with them)
+  const auto place = [&](std::size_t p) {
+    Move m;
+    m.given = true;
+    m.to_point = true;
+    m.tx = places[p].x;
+    m.ty = places[p].y;
+    m.angle = places[p].angle;
+    return m;
+  };
+  if (part >= 1 && part <= places.size() && part != LEADER_GAP && places[part - 1].given)
+    return place(part - 1);  // (LEADER_GAP tags no packet of its own: its place is the banners')
+  if (part == BANNERS && places[LEADER_GAP - 1].given)
+    return place(LEADER_GAP - 1);
   return part < layout.parts.size() ? layout.parts[part] : Move{};
 }
 

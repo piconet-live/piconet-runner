@@ -76,11 +76,24 @@ void TestTheClassicHudMoves()
     e = Effective(layout, places, BANNERS);
     CHECK(e.given && e.to_point && Near(e.tx, 320) && Near(e.ty, 130));
     CHECK(!Effective(layout, places, LEADER_GAP).given && !Effective(layout, places, ENERGY).given);
+    // a BANNERS place of its own wins over LEADER_GAP's; the game's own signs are placed by their own names (0.6.1)
+    places[modes::PART_BANNERS] = {true, 320, 400, 180};
+    e = Effective(layout, places, BANNERS);
+    CHECK(e.given && e.to_point && Near(e.tx, 320) && Near(e.ty, 400) && Near(e.angle, 180));
+    places[modes::PART_CHECK] = {true, 320, 100, 0};
+    places[modes::PART_SKULLS] = {true, 100, 100, 45};
+    e = Effective(layout, places, CHECK);
+    CHECK(e.given && e.to_point && Near(e.tx, 320) && Near(e.ty, 100));
+    e = Effective(layout, places, SKULLS);
+    CHECK(e.given && e.to_point && Near(e.tx, 100) && Near(e.angle, 45));
+    CHECK(!Effective(layout, places, WRONG_WAY).given && !Effective(layout, places, FINISH).given && !Effective(layout, places, BOOST).given);
     places[modes::PART_RANK] = {};
     e = Effective(layout, places, RANK);
     CHECK(e.given && !e.to_point && Near(e.dx, 5) && Near(e.angle, 30));
-    // the mode's part p is the classic HUD's part p + 1; SPARE, the last one a mode names, is the counter's tag
-    CHECK(PARTS[modes::PART_DISTANCE + 1] == "DISTANCE" && PARTS[modes::PART_FACES + 1] == "FACES" && PARTS[modes::PART_SPARE + 1] == "SPARE");
+    // the mode's part p is the classic HUD's part p + 1; CHECK, the last one a mode names, then BOOST and STORY_OTHER
+    CHECK(PARTS[modes::PART_DISTANCE + 1] == "DISTANCE" && PARTS[modes::PART_FACES + 1] == "FACES" && PARTS[modes::PART_SPARE + 1] == "SPARE" &&
+          PARTS[modes::PART_SKULLS + 1] == "SKULLS" && PARTS[modes::PART_WRONG_WAY + 1] == "WRONG_WAY" && PARTS[modes::PART_BANNERS + 1] == "BANNERS" &&
+          PARTS[modes::PART_FINISH + 1] == "FINISH" && PARTS[modes::PART_CHECK + 1] == "CHECK");
   }
   // a place: the part's centre to the point on the screen, in 4:3 and in Wide Screen alike. SPARE's box 24,432-88,456
   // (centre 56, 444) in the left group (anchor 96): placed at (320, 444) its two ends land 32 units either side of

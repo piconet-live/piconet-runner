@@ -10,7 +10,7 @@ the drawing's, written by the drawing in the same frame (classic-hud-draw notes)
 
 | Site | Where | What |
 |---|---|---|
-| `hm_*` (wraps) | each part's `bl` in fn_1_C72D4 (one viewport), fn_1_C771C (its other layout), fn_1_C6F8C (faces board, timer), fn_1_CDC8C (its timer), fn_1_15C36C (banners, FINISH/RETIRED) | the part's call between the host's PUSH and POP |
+| `hm_*` (wraps) | each part's `bl` in fn_1_C72D4 (one viewport), fn_1_C771C (its other layout), fn_1_C6F8C (faces board, timer), fn_1_CDC8C (its timer), fn_1_15C36C (banners, FINISH/RETIRED), and the CHECK sign's own `bl fn_1_4F734` in fn_1_12907C (the Check task's drawing, a task callback: the one packet it queues) | the part's call between the host's PUSH and POP |
 | `hs_*` (story blocks) | each mask test's `bl fn_1_5910` in fn_1_CDC8C and fn_1_CEB38, where one story part's block starts | the host's SET: the packets from here on are that part's (a block of the story's own, no mode part: STORY_OTHER) |
 | `hm_sprite` | fn_1_4DEC0 0x4DF24, a pool sprite's packet queued (`bl fn_1_4F734`, r30 the sprite) | between SPRITE (the host names the part by the sprite's step callback: the boost lightning, wrong way) and POP |
 | `ax_rank`, `ax_faces` | called by the wraps at 0xC7350 (fn_1_C72D4's rank) and 0xC7144 (fn_1_C6F8C's faces board) | under `hud_layout ax` (the window's HUD_AX): the rank by fn_1_CA690 at (24, 412) in the left Wide Screen group, and the board's rows copied from .rodata 0x5A08 over the stack copy of 0x59C0, as the game's AX layout (fn_1_C771C, fn_1_C6F8C's other branch, chosen by the menu's arcade bit .bss 0x8B3A0 +0x94 0x40000000, which is never set: it changes more than the drawing); else the game's own call |
@@ -23,10 +23,11 @@ import memmap
 
 PUSH, POP, SET, SPRITE, FLUSH = 1, 2, 3, 4, 5
 FACES_HIDDEN = 2   # MODE_HUD_MOVE's bit: the layout hides the faces board (its 3D heads: sites_modehud.py mode_faces)
-# The parts, by number (hud_move.cpp PARTS): the protocol's `part` choices first, in its order, then the rest of the HUD
+# The parts, by number (hud_move.cpp PARTS, the same list: the image's tests hold them equal): NONE, the protocol's `part`
+# choice in its order (CHECK the last a mode names), then the two of the HUD no mode names (BOOST, STORY_OTHER)
 PARTS = ["NONE", "TIMER", "DISTANCE", "DIGIT", "WARNING", "SUCCESS", "FAILED", "TIME_OVER", "SPEED_GAUGE", "OBJECTS",
          "LEADER_GAP", "GHOST_GAP", "RANK", "LAPS", "SPEED", "ENERGY", "LAP_TIMES", "RACE_TIME", "FACES",
-         "SPARE", "SKULLS", "BOOST", "WRONG_WAY", "BANNERS", "FINISH", "STORY_OTHER"]
+         "SPARE", "SKULLS", "WRONG_WAY", "BANNERS", "FINISH", "CHECK", "BOOST", "STORY_OTHER"]
 P = {name: i for i, name in enumerate(PARTS)}
 
 # (site, the called function, part): main.rel .text offsets
@@ -41,6 +42,10 @@ WRAPS = [
     (0xC7144, 0xC8294, "FACES"), (0xC7184, 0xC8294, "FACES"), (0xC7204, 0xCF5B0, "TIMER"),
     (0xCDCEC, 0xCF5B0, "TIMER"),
     (0x15C458, 0x15EFEC, "BANNERS"), (0x15C47C, 0x15DFD4, "FINISH"),
+    # the CHECK sign (image 0x944F at the screen's foot, x the rival's): fn_1_12907C runs as a task callback (fn_1_3522C
+    # registers it), so its site is the queueing call itself, between PUSH and POP as hm_sprite's; r3 the packet on its
+    # stack, r4 the image group, both kept
+    (0x129948, 0x4F734, "CHECK"),
 ]
 # (site, part): a story block's `bl fn_1_5910`, before its test of the part mask (the bit in the comment)
 VIEWPORT = 0x5910
