@@ -157,6 +157,28 @@ class TheDistanceDigits(Build):
             self.assertEqual(self.most(*args), 5)
 
 
+class TheResultsTime(Build):
+    def reached(self, flags, mode=1):
+        """Where the site goes on, and r0 there (the row's time, 0x123456, when the stock word ran)."""
+        memory = {}
+        put(memory, memmap.MODE, mode)
+        put(memory, memmap.MODE_HUD_FLAGS, flags)
+        put(memory, 0x80700030, 0x123456)
+        reached = []
+        m = HudCpu(self.image, memory, lambda address, cpu: reached.append((address - TEXT, cpu.r[0])))
+        m.r[27] = 0x80700000
+        m.run(self.symbols["mode_results_time"])
+        return reached
+
+    def test_a_mode_without_times_leaves_the_drawer(self):
+        for flags in (memmap.MODE_NO_RESULTS_TIMES, memmap.MODE_NO_RESULTS_TIMES | memmap.MODE_POINTS_PAGE):
+            self.assertEqual([at for at, _ in self.reached(flags)], [hud.RESULTS_TIME_END])
+
+    def test_every_other_race_draws_the_time(self):
+        for args in ((0,), (memmap.MODE_POINTS_PAGE | memmap.MODE_NO_DISTANCE_LABEL,), (memmap.MODE_NO_RESULTS_TIMES, 0)):
+            self.assertEqual(self.reached(*args), [(hud.RESULTS_TIME + 4, 0x123456)])
+
+
 class TheObjectsCounts(Build):
     def counts(self, of_plus_one, gone, mode=1, block=BLOCK):
         """Both sites' answers (r3 at the drawer's next word) and the game addresses each reached."""

@@ -13,6 +13,7 @@ the game does. Native form only. sites.py calls add().
 
 | `mode_distance_label` | fn_1_CDC8C 0xCE948, the DISTANCE part's label (`bl fn_1_4F734`, the picture 0xBA13: REST, the game's metres to the finish) | the label drawn | not drawn in a mode that says `distance_label off` (the window's flag MODE_NO_DISTANCE_LABEL): the number and its m stay where they are, the game's metres or show_distance's |
 | `mode_distance_digits` | fn_1_CDC8C 0xCEACC, the DISTANCE part's digit loop (`cmpwi r26, 5`: the digits drawn so far, the most significant last at x0 + 14 + 19 a place) | five digits at the most | six in a mode that says `distance_label off` (the same window word): the sixth stands where the label was, and the core holds show_distance's metres to 999999 there (mode_hud.h DISTANCE_MOST_NO_LABEL) |
+| `mode_results_time` | fn_1_148950 0x148DCC, a results row's race time (`lwz r0, 0x30(r27)`, its text made and drawn from there; the times list and VS RESULTS, layouts 7 and 2 in r26) | the time drawn | not drawn in a mode that says `results_times off` (the window's flag MODE_NO_RESULTS_TIMES): the drawer leaves by its own end (0x1490E4), the row's other columns are other calls |
 | `mode_objects_of`, `mode_objects_gone` | fn_1_CDC8C 0xCDD7C and 0xCDD88, the OBJECTS part's two counts (`bl fn_1_E5430`, `bl fn_1_E5568`, argument 1: the course objects' table .bss 0x7AE88) | the course's count and what it subtracts (00/00 on every course of the pool) | while the viewed racer's OBJECTS is the mode's (show_objects; the window's MODE_HUD_OBJECTS: of + 1, then of - n, the core's HUD pass) those two numbers, so the part reads n/of; else the stock calls |
 | `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
 | `mode_points_free` | fn_1_14A328 0x14A5A4, the race type switch's `b` to leaving, reached only with the rule read as clear | leave | race type 3 (`laps unlimited`) goes to VS RESULTS as type 6 does; a stock path has the rule set and never gets here with type 3 |
@@ -39,6 +40,7 @@ OBJECTS_GONE, OBJECTS_GONE_KNOWN = 0xCDD88, 0x480177E1  # fn_1_CDC8C: bl fn_1_E5
 OBJECTS_OF_GET, OBJECTS_GONE_GET = 0xE5430, 0xE5568
 DISTANCE_LABEL, DISTANCE_LABEL_KNOWN, QUEUE_PICTURE = 0xCE948, 0x4BF80DED, 0x4F734  # fn_1_CDC8C: bl fn_1_4F734 (REST)
 DISTANCE_DIGITS, DISTANCE_DIGITS_KNOWN = 0xCEACC, 0x2C1A0005   # fn_1_CDC8C: cmpwi r26, 5 (the digits drawn so far)
+RESULTS_TIME, RESULTS_TIME_KNOWN, RESULTS_TIME_END = 0x148DCC, 0x801B0030, 0x1490E4   # fn_1_148950: lwz r0, 0x30(r27); its epilogue
 LOOK, LOOK_KNOWN = 0x84F9C, 0x48002121       # fn_1_84860: bl fn_1_870BC
 POINTS, POINTS_KNOWN = 0x14A37C, 0x5400014B  # fn_1_14A328: rlwinm. r0, r0, 0, 5, 5
 POINTS_TYPE, POINTS_TYPE_KNOWN = 0x14A5A4, 0x48000400  # fn_1_14A328: b 0x14A9A4, its race type switch's "leave"
@@ -170,6 +172,21 @@ mdd_stock:
 """)
     patch(site, word, 0, "mode_distance_digits")
     middle.append((site, ["r12", "cr0", "lr"], "mode_distance_digits"))
+
+    # a results row's race time: left out in a mode that says `results_times off` (r0 is the stock word's own)
+    site = TEXT + RESULTS_TIME
+    word = stock(site, RESULTS_TIME_KNOWN)
+    r.add("mode_results_time", test + """    beq mrt_stock
+""" + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {memmap.MODE_NO_RESULTS_TIMES}
+    beq mrt_stock
+    @b {TEXT + RESULTS_TIME_END:#x}
+mrt_stock:
+    lwz 0, 0x30(27)
+    @b {site + 4:#x}
+""")
+    patch(site, word, 0, "mode_results_time")
+    middle.append((site, ["r12", "cr0", "lr"], "mode_results_time"))
 
     # a machine's draw by the look this game draws its seat with (r29 the machine; f1 the alpha; r3 to r7 the call's)
     site = TEXT + LOOK

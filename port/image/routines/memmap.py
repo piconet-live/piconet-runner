@@ -318,6 +318,7 @@ MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_
 MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_SAME_SPOT, MODE_GHOST_TASK = 1, 2, 4, 8, 32, 64
 MODE_SPREAD = 512                        # start_gap above 0 or even (mode_hud.h SPREAD; sites_grid.py grid_spread)
 MODE_NO_DISTANCE_LABEL = 1024            # `distance_label off` (mode_hud.h NO_DISTANCE_LABEL; sites_modehud.py)
+MODE_NO_RESULTS_TIMES = 2048             # `results_times off` (mode_hud.h NO_RESULTS_TIMES; sites_modehud.py)
 MODE_HUD_RANK = MODE_HUD + 8             # not 0: the viewed racer's RANK is hidden, the rank icons with it (mode_hud.h)
 MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
 MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
