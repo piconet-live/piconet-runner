@@ -67,8 +67,9 @@ constexpr std::array<Pivot, PARTS.size()> PIVOTS = [] {
   p[WRONG_WAY] = {320, 240}; // WRONG_WAY: the game's (320, 240)
   p[CHECK] = {320, 445};     // CHECK: the screen's middle at the sign's row (y 445; its x follows the rival it points at,
                              // so a place moves its row and the sign still slides sideways after that rival)
-  p[SCORE] = {552, 86};      // SCORE 486,67-618,105: the label at TIME's place and six digits at the race time's (sites_hudmove.py
-                             // race_time_score), a fixed box whatever the number's digits, as RANK's full width
+  p[SCORE] = {552, 86};      // SCORE 486,67-618,105: the label on TIME's row, its right edge at 615 (lined up with ENERGY), and six digits at the
+                             // race time's (sites_hudmove.py race_time_score), a fixed box whatever the number's digits or the
+                             // label's width, as RANK's full width
   p[TEXT] = {320, 116};      // TEXT: show_text's home, the text centred on it by the game's drawer (sites_hudmove.py
                              // race_time_score): the top of the screen under RANK's box (275,24-366,100), whatever the text's width
   return p;

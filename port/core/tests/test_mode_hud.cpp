@@ -494,7 +494,7 @@ void TestTheDisplayWordsRun()
 
   // show_score: the number + 1 in the seat's score record (held to the race time's six digits, a negative number 0), the
   // label a tag text's number (another: the default); the viewed racer's into the window for the image, with the label's
-  // address (its tag text, or the default SCORE the pass writes); show_score off takes it off
+  // address (its tag text, or the default POINTS the pass writes); show_score off takes it off
   {
     const u32 viewed = net::ViewedRacer(g), window = layout::MODE_HUD;
     const u32 record = BLOCK + hud::SCORES + viewed * hud::SCORE_RECORD;
@@ -505,7 +505,7 @@ void TestTheDisplayWordsRun()
     CHECK(f.score_shown && f.score == hud::SCORE_MOST && f.score_label == 0);
     hud::Hud(g);
     CHECK(g.Read32(window + hud::WINDOW_SCORE) == hud::SCORE_MOST + 1 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_SCORE_TEXT);
-    CHECK(g.Read8(window + hud::WINDOW_SCORE_TEXT) == 'S' && g.Read8(window + hud::WINDOW_SCORE_TEXT + 4) == 'E' && g.Read8(window + hud::WINDOW_SCORE_TEXT + 5) == 0);
+    CHECK(g.Read8(window + hud::WINDOW_SCORE_TEXT) == 'P' && g.Read8(window + hud::WINDOW_SCORE_TEXT + 5) == 'S' && g.Read8(window + hud::WINDOW_SCORE_TEXT + 6) == 0);
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, static_cast<u32>(-5), 2));
     CHECK(g.Read32(record + hud::SCORE_VALUE) == 1 && g.Read32(record + hud::SCORE_LABEL) == 2);
     hud::Hud(g);

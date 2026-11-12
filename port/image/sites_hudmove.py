@@ -68,15 +68,57 @@ AX_ROWS, ROWS_SIZE = RODATA + 0x5A08, 0x48       # .rodata 0x5A08: the AX layout
 # SCORE (mode_hud.h WINDOW_SCORE), drawn in the race time's call (fn_1_CBC24) by race_time_score: the race time's packet
 # template (.rodata 0x26F8, 22 words: flags 5, z 0.1, white), its digit pictures (.rodata 0x5E98: 0x9440 to 0x9449), their
 # shadow 0x9430 at z + 0.01 (.rodata 0x5DC8), the digits' y 81 (the race time's 67 + 14), the last digit's x 596 (its 444 +
-# 152), 22 units a digit; the label at the TIME picture's place (586, 67) in the window's font (mode_hud.h FONT_IDS: 5, the
-# 18 x 18 ASCII of the ghost names and our name tags, unless the mode chose another of the common sheet's), queued through
-# fn_1_51E60 and fn_1_4A0D8 as the race time and the rank are. TEXT (mode_hud.h WINDOW_TEXT) after it, by the same routine:
-# the text at its home (320, 116), centred on the point by the drawer's own alignment (fn_1_495C8: 1 the middle across, 8
-# the middle down), in the centre Wide Screen group
+# 152), 22 units a digit; the label on the TIME picture's row (y 67), its right edge at 615 (lined up with ENERGY and TIME as drawn, measured in a race), in the
+# letters of the game's own HUD labels (below), queued through fn_1_51E60 as the race time is; a label with a letter those
+# have not got is written by fn_1_4A0D8 (the text drawer the rank and the ghost names use) in the window's font (mode_hud.h
+# FONT_IDS: 5, the 18 x 18 ASCII of the name tags, unless the mode chose another of the common sheet's), the HUD labels'
+# cyan, two thirds of the font's size, its right edge at the same x (the drawer's own alignment 2). TEXT (mode_hud.h
+# WINDOW_TEXT) after it, by the same routine: the text at its home (320, 116), centred on the point by the drawer's own
+# alignment (fn_1_495C8: 1 the middle across, 8 the middle down), in the centre Wide Screen group
 RACE_TIME_SITES, RACE_TIME_DRAW = (0xC73D8, 0xC7820), 0xCBC24
 SCORE_TEMPLATE, SCORE_DIGITS, SCORE_SHADOW_DZ, SCORE_SHADOW = RODATA + 0x26F8, RODATA + 0x5E98, RODATA + 0x5DC8, 0x9430
-SCORE_LAST_X, SCORE_STEP, SCORE_Y, SCORE_LABEL_X, SCORE_LABEL_Y = 596.0, 22.0, 81.0, 586.0, 67.0
-SCORE_LABEL_SCALE = 0.75
+SCORE_LAST_X, SCORE_STEP, SCORE_Y, SCORE_LABEL_RIGHT, SCORE_LABEL_Y = 596.0, 22.0, 81.0, 615.0, 67.0
+SCORE_LABEL_SCALE, SCORE_LABEL_COLOUR, SCORE_LABEL_RIGHT_ALIGNED = 2.0 / 3.0, 0x00FFFFFF, 2
+# The label's letters: cut from the game's own HUD label pictures (bitmap group 0x94, bmp_rac.tpl, loaded with the race HUD,
+# so in every race: 0x9400 ENERGY, 0x9401 km/h, 0x9402 LAP, 0x9403 NAME, 0x9404 ND, 0x9405 POS., 0x9406 RD, 0x9407 RIVAL
+# (yellow, not used), 0x9408 ST, 0x9409 TH, 0x940A TIME; 12 rows each, the cyan italic capitals with a navy edge). A letter
+# is one packet of its picture with the letter's texel columns x0 to x1 as the packet's u0 and u1 and (x1 - x0) / width as
+# its scale_x: the drawer's quad is the picture's width times scale_x (fn_1_4EDAC), flags 5 the left edge on x and the top
+# on y, so the letter is drawn at the sheet's own size, and the letters abut as they do in the pictures. Letter: (picture,
+# x0, x1), read from the sheet's column profiles (score-look, 2026-11-12). The letters the labels have: A D E G H I L M N O
+# P R S T Y and the full stop; a space is 4 units of nothing. Any other character (B C F J K Q U V W X Z, a digit, -) sends
+# the whole label to the text drawer.
+LABEL_PICTURES = {0: 48, 2: 24, 3: 36, 4: 20, 5: 28, 9: 20, 10: 32}   # picture (0x9400 + n): its width in texels
+LABEL_LETTERS = {"E": (0, 0, 7), "N": (0, 7, 15), "R": (0, 22, 30), "G": (0, 30, 38), "Y": (0, 38, 47), "L": (2, 0, 7),
+                 "A": (3, 8, 17), "M": (3, 17, 26), "D": (4, 8, 17), "P": (5, 0, 8), "O": (5, 8, 17), "S": (5, 17, 24),
+                 ".": (5, 24, 28), "T": (10, 0, 8), "I": (10, 8, 13), "H": (9, 8, 17)}
+LABEL_SPACE, LABEL_NO_PICTURE = 4, 15   # a space: LABEL_SPACE units of nothing (its entry's picture LABEL_NO_PICTURE)
+
+
+def label_table():
+    """The letters' table: a word a letter (the character in the top byte, the picture's number in the next four
+    bits, x0 and x1 in six bits each, the picture's width in the low byte), then a 0. The routine walks it for each
+    character and makes the packet's u0, u1 and scale_x from the three numbers (the image has no room for them as
+    floats: 57,344 bytes, the test logs after)."""
+    words = [ord(" ") << 24 | LABEL_NO_PICTURE << 20 | LABEL_SPACE << 8 | 1]
+    for c, (picture, x0, x1) in sorted(LABEL_LETTERS.items()):
+        w = LABEL_PICTURES[picture]
+        assert 0 <= x0 < x1 <= w < 256 and x1 < 64 and picture < LABEL_NO_PICTURE
+        words.append(ord(c) << 24 | picture << 20 | x0 << 14 | x1 << 8 | w)
+    return words + [0]
+
+
+def label_width(text):
+    """How wide the letters draw `text` (units of the 640 x 480 screen), or None when a character is not theirs."""
+    total = 0.0
+    for c in text:
+        if c == " ":
+            total += LABEL_SPACE
+        elif c in LABEL_LETTERS:
+            total += LABEL_LETTERS[c][2] - LABEL_LETTERS[c][1]
+        else:
+            return None
+    return total
 TEXT_HOME_X, TEXT_HOME_Y, TEXT_CENTRED = 320.0, 116.0, 9
 QUEUE_PICTURE = 0x51E60                          # fn_1_51E60(packet): a 640 x 480 picture into the viewport's queue
 TEXT_BEGIN, TEXT_FONT, TEXT_UPPER, TEXT_COLOUR, TEXT_SCALE, TEXT_AT, TEXT_PUTS = 0x49410, 0x494DC, 0x4962C, 0x49514, 0x4955C, 0x496FC, 0x4A0D8
@@ -150,11 +192,12 @@ axf_stock:
     import struct
     bits = lambda f: struct.unpack(">I", struct.pack(">f", f))[0]
     word = lambda reg, value: f"    lis {reg}, {value >> 16:#x}\n    ori {reg}, {reg}, {value & 0xFFFF:#x}\n"
-    r.add("race_time_score", f"""    stwu 1, -0xB0(1)
+    r.add("race_time_score", f"""    stwu 1, -0xC0(1)
     mflr 0
-    stw 0, 0xB4(1)
-    stmw 27, 0x90(1)
-    stfd 31, 0xA8(1)
+    stw 0, 0xC4(1)
+    stmw 26, 0x90(1)
+    stfd 30, 0xA8(1)
+    stfd 31, 0xB0(1)
     @bl {TEXT + RACE_TIME_DRAW:#x}
 """ + la(12, memmap.MODE) + f"""    lwz 12, 0(12)
     cmpwi 12, 0
@@ -176,26 +219,6 @@ axf_stock:
     li 4, {P["SCORE"]}
     @bl host_hud
 rts_label:
-    @bl {TEXT + TEXT_BEGIN:#x}
-    lwz 3, {memmap.MODE_HUD_SCORE_FONT - memmap.MODE_HUD:#x}(31)
-    @bl {TEXT + TEXT_FONT:#x}
-    @bl {TEXT + TEXT_UPPER:#x}
-    lis 0, -1
-    ori 0, 0, 0xFFFF
-    stw 0, 0x10(1)
-    addi 3, 1, 0x10
-    @bl {TEXT + TEXT_COLOUR:#x}
-""" + word(0, bits(SCORE_LABEL_SCALE)) + f"""    stw 0, 0x14(1)
-    lfs 1, 0x14(1)
-    fmr 2, 1
-    @bl {TEXT + TEXT_SCALE:#x}
-""" + word(0, bits(SCORE_LABEL_X)) + f"""    stw 0, 0x14(1)
-    lfs 1, 0x14(1)
-""" + word(0, bits(SCORE_LABEL_Y)) + f"""    stw 0, 0x14(1)
-    lfs 2, 0x14(1)
-    @bl {TEXT + TEXT_AT:#x}
-    lwz 3, {memmap.MODE_HUD_SCORE_LABEL - memmap.MODE_HUD:#x}(31)
-    @bl {TEXT + TEXT_PUTS:#x}
 """ + la(11, memmap.REL + SCORE_TEMPLATE) + f"""    addi 12, 1, 0x20
     li 29, 22
 rts_copy:
@@ -206,6 +229,104 @@ rts_copy:
     addi 29, 29, -1
     cmpwi 29, 0
     bne rts_copy
+    lis 0, 0x4330
+    stw 0, 0x78(1)
+    stw 0, 0x80(1)
+    lis 0, -0x8000
+    stw 0, 0x7C(1)
+    lfd 30, 0x78(1)
+    @la 28, rts_letters
+    lwz 29, {memmap.MODE_HUD_SCORE_LABEL - memmap.MODE_HUD:#x}(31)
+    mr 26, 29
+rts_check:
+    lbz 0, 0(29)
+    cmpwi 0, 0
+    beq rts_checked
+    bl rts_find
+    cmpwi 27, 0
+    beq rts_font
+    addi 29, 29, 1
+    b rts_check
+rts_checked:
+""" + word(0, bits(SCORE_LABEL_RIGHT)) + f"""    stw 0, 0x14(1)
+    lfs 31, 0x14(1)
+""" + word(0, bits(SCORE_LABEL_Y)) + f"""    stw 0, 0x28(1)
+rts_letter:
+    cmpw 29, 26
+    beq rts_digits
+    addi 29, 29, -1
+    lbz 0, 0(29)
+    bl rts_find
+    rlwinm 11, 27, 18, 26, 31
+    rlwinm 12, 27, 24, 26, 31
+    xoris 11, 11, 0x8000
+    stw 11, 0x84(1)
+    lfd 3, 0x80(1)
+    fsub 3, 3, 30
+    xoris 12, 12, 0x8000
+    stw 12, 0x84(1)
+    lfd 4, 0x80(1)
+    fsub 4, 4, 30
+    fsubs 4, 4, 3
+    fsubs 31, 31, 4
+    rlwinm 0, 27, 12, 28, 31
+    cmpwi 0, {LABEL_NO_PICTURE}
+    beq rts_letter
+    ori 0, 0, 0x9400
+    stw 0, 0x20(1)
+    stfs 31, 0x24(1)
+    rlwinm 0, 27, 0, 24, 31
+    xoris 0, 0, 0x8000
+    stw 0, 0x84(1)
+    lfd 5, 0x80(1)
+    fsub 5, 5, 30
+    fdivs 3, 3, 5
+    stfs 3, 0x38(1)
+    fdivs 4, 4, 5
+    stfs 4, 0x30(1)
+    fadds 3, 3, 4
+    stfs 3, 0x40(1)
+    addi 3, 1, 0x20
+    @bl {TEXT + QUEUE_PICTURE:#x}
+    b rts_letter
+rts_find:
+    mr 12, 28
+rts_find_next:
+    lwz 27, 0(12)
+    cmpwi 27, 0
+    beqlr
+    rlwinm 11, 27, 8, 24, 31
+    cmpw 11, 0
+    beqlr
+    addi 12, 12, 4
+    b rts_find_next
+rts_font:
+    @bl {TEXT + TEXT_BEGIN:#x}
+    lwz 3, {memmap.MODE_HUD_SCORE_FONT - memmap.MODE_HUD:#x}(31)
+    @bl {TEXT + TEXT_FONT:#x}
+    @bl {TEXT + TEXT_UPPER:#x}
+    li 3, {SCORE_LABEL_RIGHT_ALIGNED}
+    @bl {TEXT + TEXT_ALIGN:#x}
+""" + word(0, SCORE_LABEL_COLOUR) + f"""    stw 0, 0x10(1)
+    addi 3, 1, 0x10
+    @bl {TEXT + TEXT_COLOUR:#x}
+""" + word(0, bits(SCORE_LABEL_SCALE)) + f"""    stw 0, 0x14(1)
+    lfs 1, 0x14(1)
+    fmr 2, 1
+    @bl {TEXT + TEXT_SCALE:#x}
+""" + word(0, bits(SCORE_LABEL_RIGHT)) + f"""    stw 0, 0x14(1)
+    lfs 1, 0x14(1)
+""" + word(0, bits(SCORE_LABEL_Y)) + f"""    stw 0, 0x14(1)
+    lfs 2, 0x14(1)
+    @bl {TEXT + TEXT_AT:#x}
+    lwz 3, {memmap.MODE_HUD_SCORE_LABEL - memmap.MODE_HUD:#x}(31)
+    @bl {TEXT + TEXT_PUTS:#x}
+rts_digits:
+    li 0, 0
+    stw 0, 0x38(1)
+    lis 0, 0x3F80
+    stw 0, 0x40(1)
+    stw 0, 0x30(1)
 """ + word(0, bits(SCORE_Y)) + f"""    stw 0, 0x28(1)
 """ + word(0, bits(SCORE_LAST_X)) + f"""    stw 0, 0x14(1)
     lfs 31, 0x14(1)
@@ -296,13 +417,15 @@ rts_placed:
     li 4, {P["TEXT"]}
     @bl host_hud
 rts_out:
-    lfd 31, 0xA8(1)
-    lmw 27, 0x90(1)
-    lwz 0, 0xB4(1)
+    lfd 31, 0xB0(1)
+    lfd 30, 0xA8(1)
+    lmw 26, 0x90(1)
+    lwz 0, 0xC4(1)
     mtlr 0
-    addi 1, 1, 0xB0
+    addi 1, 1, 0xC0
     blr
-""")
+rts_letters:
+""" + r.words("rts_letters", label_table()))
 
     for n, (at, target, part) in enumerate(WRAPS):
         site, fn = TEXT + at, TEXT + target

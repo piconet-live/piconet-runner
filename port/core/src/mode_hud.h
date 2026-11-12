@@ -171,13 +171,15 @@ constexpr u32 WINDOW_DISTANCE = 0x270, WINDOW_OBJECTS = 0x27C;
 // the boot, read at the race's set-up (sites_grid.py grid_spread).
 constexpr u32 WINDOW_START_GAP = 0x290;
 // +0x298: SCORE for the racer the picture follows: the number + 1 (0: not drawn); +0x29C the label's address, a
-// NUL-terminated text of the game's text drawer (one of WINDOW_TAG_TEXTS, or WINDOW_SCORE_TEXT, +0x2A0, where the pass writes
-// the default label SCORE); +0x2A8 the label's font, the game's font table number (FONT_IDS). +0x2AC TEXT for that racer: the
+// NUL-terminated text (one of WINDOW_TAG_TEXTS, or WINDOW_SCORE_TEXT, +0x2A0, where the pass writes the default label POINTS:
+// the image draws a label in the letters of the game's own HUD labels, those of ENERGY, LAP, NAME, POS., TIME and the rest,
+// and a label with any other character in the game's text drawer); +0x2A8 the label's font for the drawer, the game's font
+// table number (FONT_IDS). +0x2AC TEXT for that racer: the
 // text's address (one of WINDOW_TAG_TEXTS; 0: not drawn), +0x2B0 its font. Read by the image's race_time_score
 // (sites_hudmove.py) in the race time's call.
 constexpr u32 WINDOW_SCORE = 0x298, WINDOW_SCORE_LABEL = 0x29C, WINDOW_SCORE_TEXT = 0x2A0, WINDOW_SCORE_TEXT_SIZE = 8,
               WINDOW_SCORE_FONT = 0x2A8, WINDOW_TEXT = 0x2AC, WINDOW_TEXT_FONT = 0x2B0;
-inline constexpr char DEFAULT_SCORE_LABEL[] = "SCORE";
+inline constexpr char DEFAULT_SCORE_LABEL[] = "POINTS";
 static_assert(sizeof(DEFAULT_SCORE_LABEL) <= WINDOW_SCORE_TEXT_SIZE);
 constexpr u32 STANDIN_P = WINDOW_DISTANCE - 0xF8, STANDIN_R = WINDOW_DISTANCE + 8 - 4;
 static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WINDOW_TAG_TEXTS &&

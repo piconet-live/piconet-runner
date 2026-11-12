@@ -238,6 +238,7 @@ class TheScore(Build):
         put(memory, memmap.MODES + 4, block)
         put(memory, memmap.MODE_HUD_SCORE, number_plus_one)
         put(memory, memmap.MODE_HUD_SCORE_LABEL, label or self.LABEL)
+        memory.update(getattr(self, "_label_bytes", None) or {self.LABEL + i: c for i, c in enumerate(b"POINTS\0")})
         put(memory, memmap.MODE_HUD_SCORE_FONT, font)
         put(memory, memmap.MODE_HUD_TEXT, text)
         put(memory, memmap.MODE_HUD_TEXT_FONT, text_font)
@@ -254,9 +255,12 @@ class TheScore(Build):
             at = address - TEXT
             if at == hm.QUEUE_PICTURE:
                 fl = lambda o: struct.unpack(">f", cpu.read(cpu.r[3] + o, 4).to_bytes(4, "big"))[0]
-                reached.append((at, cpu.read(cpu.r[3], 4), fl(4), fl(8), round(fl(0xC), 3), cpu.read(cpu.r[3] + 0x30, 4)))
+                reached.append((at, cpu.read(cpu.r[3], 4), fl(4), fl(8), round(fl(0xC), 3), cpu.read(cpu.r[3] + 0x30, 4),
+                                (round(fl(0x18), 4), round(fl(0x20), 4), round(fl(0x10), 4))))
             elif at == hm.TEXT_AT:
                 reached.append((at, cpu.f[1], cpu.f[2]))
+            elif at == hm.TEXT_COLOUR:
+                reached.append((at, cpu.read(cpu.r[3], 4)))
             elif at == hm.TEXT_SCALE:
                 reached.append((at, round(cpu.f[1], 3)))
             elif at == hm.VIEWPORTS:
@@ -269,15 +273,27 @@ class TheScore(Build):
         m.run(self.symbols["race_time_score"])
         return reached
 
+    def label(self, text, font=5, number=7):
+        """What the routine queues for the label `text` (the window's text at LABEL): the letters' packets as (picture,
+        x, u0, u1, scale_x) on the label's row, and the text drawer's calls."""
+        import sites_hudmove as hm
+        memory_text = {}
+        for i, c in enumerate(text.encode() + b"\0"):
+            memory_text[self.LABEL + i] = c
+        self._label_bytes = memory_text
+        got = self.draw(number + 1, font=font)
+        del self._label_bytes
+        letters = [(g[1], g[2], *g[6]) for g in got if g[0] == hm.QUEUE_PICTURE and g[3] == hm.SCORE_LABEL_Y]
+        drawer = [g for g in got if g[0] in (hm.TEXT_BEGIN, hm.TEXT_FONT, hm.TEXT_UPPER, hm.TEXT_ALIGN, hm.TEXT_COLOUR, hm.TEXT_SCALE,
+                                             hm.TEXT_AT, hm.TEXT_PUTS)]
+        return letters, drawer
+
     def test_the_number_in_the_race_times_digits_under_the_label(self):
         import sites_hudmove as hm
         got = self.draw(1234 + 1)
         self.assertEqual(got[0], (hm.RACE_TIME_DRAW, 444))                       # the race time first, its arguments kept
-        self.assertEqual([g for g in got if g[0] == hm.TEXT_FONT], [(hm.TEXT_FONT, 5)])
-        self.assertIn((hm.TEXT_AT, 586.0, 67.0), got)
-        self.assertIn((hm.TEXT_SCALE, 0.75), got)
-        self.assertEqual([g for g in got if g[0] == hm.TEXT_PUTS], [(hm.TEXT_PUTS, self.LABEL)])
-        pictures = [g[1:] for g in got if g[0] == hm.QUEUE_PICTURE]
+        self.assertNotIn(hm.TEXT_PUTS, [g[0] for g in got])                      # the label POINTS in the HUD labels' letters, not the drawer's
+        pictures = [g[1:6] for g in got if g[0] == hm.QUEUE_PICTURE and g[3] != hm.SCORE_LABEL_Y]
         # the units from the right: each digit over its shadow, 22 units apart, the template's flags and white kept
         self.assertEqual(pictures, [(0x9444, 596.0, 81.0, 0.1, 5), (0x9430, 596.0, 81.0, 0.11, 5),
                                     (0x9443, 574.0, 81.0, 0.1, 5), (0x9430, 574.0, 81.0, 0.11, 5),
@@ -287,12 +303,13 @@ class TheScore(Build):
 
     def test_zero_is_one_digit_and_the_most_six(self):
         import sites_hudmove as hm
-        digits = lambda got: [g[1] - 0x9440 for g in got if g[0] == hm.QUEUE_PICTURE and g[1] != hm.SCORE_SHADOW]
+        row = lambda got: [g for g in got if g[0] == hm.QUEUE_PICTURE and g[3] == hm.SCORE_Y and g[1] != hm.SCORE_SHADOW]
+        digits = lambda got: [g[1] - 0x9440 for g in row(got)]
         self.assertEqual(digits(self.draw(0 + 1)), [0])
         self.assertEqual(digits(self.draw(999999 + 1)), [9] * 6)
         self.assertEqual(digits(self.draw(1000000 + 1)), [0, 0, 0, 0, 0, 0, 1])  # (the core holds it to 999999 before here)
         got = self.draw(100 + 1)
-        self.assertEqual([(g[1], g[2]) for g in got if g[0] == hm.QUEUE_PICTURE and g[1] != hm.SCORE_SHADOW], [(0x9440, 596.0), (0x9440, 574.0), (0x9441, 552.0)])
+        self.assertEqual([(g[1], g[2]) for g in row(got)], [(0x9440, 596.0), (0x9440, 574.0), (0x9441, 552.0)])
 
     def test_nothing_but_the_race_time_without_a_score_a_mode_or_the_hud(self):
         import sites_hudmove as hm
@@ -306,12 +323,43 @@ class TheScore(Build):
         self.assertEqual([g[1] for g in host], [hm.PUSH, hm.POP])
         self.assertEqual(self.draw(5 + 1, move=0).count((memmap.HOST_HUD - TEXT, hm.PUSH)), 0)
 
-    def test_the_label_is_drawn_in_the_windows_font(self):
+    def test_the_label_is_the_hud_labels_letters_ending_at_times_right_edge(self):
         import sites_hudmove as hm
-        got = self.draw(12 + 1, font=8)
-        self.assertEqual([g for g in got if g[0] == hm.TEXT_FONT], [(hm.TEXT_FONT, 8)])
-        self.assertIn((hm.TEXT_SCALE, 0.75), got)  # (the scale set after the font, which resets it)
-        self.assertLess(got.index((hm.TEXT_FONT, 8)), got.index((hm.TEXT_SCALE, 0.75)))
+        letters, drawer = self.label("POINTS")
+        self.assertEqual(drawer, [])
+        # from the right: S (POS. 17-24), T (TIME 0-8), N (ENERGY 7-15), I (TIME 8-13), O (POS. 8-17), P (POS. 0-8); u0, u1 the
+        # columns over the picture's width, scale_x the letter's share of it, each letter's left edge a letter's width before
+        self.assertEqual(letters, [(0x9405, 608.0, round(17 / 28, 4), round(24 / 28, 4), round(7 / 28, 4)),
+                                   (0x940A, 600.0, 0.0, 0.25, 0.25),
+                                   (0x9400, 592.0, round(7 / 48, 4), round(15 / 48, 4), round(8 / 48, 4)),
+                                   (0x940A, 587.0, 0.25, round(13 / 32, 4), round(5 / 32, 4)),
+                                   (0x9405, 578.0, round(8 / 28, 4), round(17 / 28, 4), round(9 / 28, 4)),
+                                   (0x9405, 570.0, 0.0, round(8 / 28, 4), round(8 / 28, 4))])
+        self.assertEqual(hm.label_width("POINTS"), 615 - 570)
+        # every letter the table has draws, in the picture its row names; a space is 4 units of nothing
+        letters, drawer = self.label("A DEGHILMNOPRSTY.")
+        self.assertEqual(drawer, [])
+        self.assertEqual(len(letters), 16)
+        self.assertEqual(letters[-1][1], 615.0 - hm.label_width("A DEGHILMNOPRSTY."))
+        self.assertEqual(letters[-2][1], letters[-1][1] + (hm.LABEL_LETTERS["A"][2] - hm.LABEL_LETTERS["A"][1]) + hm.LABEL_SPACE)
+        # the digits after it, with the packet's corners and scale put back
+        got = self.draw(42 + 1)
+        digits = [g for g in got if g[0] == hm.QUEUE_PICTURE and g[3] == hm.SCORE_Y]
+        self.assertEqual([(g[1], g[2], g[6]) for g in digits][:2], [(0x9442, 596.0, (0.0, 1.0, 1.0)), (0x9430, 596.0, (0.0, 1.0, 1.0))])
+
+    def test_a_label_with_another_character_goes_to_the_text_drawer_right_aligned_in_the_hud_labels_cyan(self):
+        import sites_hudmove as hm
+        for text in ("KOS", "WAVE 2", "SCORE", "A-B"):
+            letters, drawer = self.label(text, font=8)
+            self.assertEqual(letters, [], text)
+            self.assertEqual([d[0] for d in drawer], [hm.TEXT_BEGIN, hm.TEXT_FONT, hm.TEXT_UPPER, hm.TEXT_ALIGN, hm.TEXT_COLOUR,
+                                                      hm.TEXT_SCALE, hm.TEXT_AT, hm.TEXT_PUTS], text)
+            self.assertIn((hm.TEXT_FONT, 8), drawer)
+            self.assertIn((hm.TEXT_ALIGN, hm.SCORE_LABEL_RIGHT_ALIGNED), drawer)
+            self.assertIn((hm.TEXT_COLOUR, hm.SCORE_LABEL_COLOUR), drawer)
+            self.assertIn((hm.TEXT_SCALE, round(hm.SCORE_LABEL_SCALE, 3)), drawer)   # (set after the font, which resets it)
+            self.assertIn((hm.TEXT_AT, hm.SCORE_LABEL_RIGHT, hm.SCORE_LABEL_Y), drawer)
+            self.assertIn((hm.TEXT_PUTS, self.LABEL), drawer)
 
     def test_the_text_is_centred_at_its_home_in_its_font_inside_the_centre_group(self):
         import sites_hudmove as hm
@@ -343,8 +391,11 @@ class TheScore(Build):
         host = [g[1] for g in got if g[0] == memmap.HOST_HUD - TEXT]
         self.assertEqual(host, [hm.PUSH, hm.POP, hm.PUSH, hm.POP])
         puts = [g for g in got if g[0] == hm.TEXT_PUTS]
-        self.assertEqual(puts, [(hm.TEXT_PUTS, self.LABEL), (hm.TEXT_PUTS, self.MESSAGE)])
-        self.assertEqual([g for g in got if g[0] == hm.QUEUE_PICTURE][0][1], 0x9447)
+        self.assertEqual(puts, [(hm.TEXT_PUTS, self.MESSAGE)])                   # (the label POINTS is letters, not the drawer's)
+        pictures = [g for g in got if g[0] == hm.QUEUE_PICTURE]
+        self.assertEqual([g[1] for g in pictures][:7], [0x9405, 0x940A, 0x9400, 0x940A, 0x9405, 0x9405, 0x9447])   # the label, then the digit
+        before = [g for g in got if g[0] in (memmap.HOST_HUD - TEXT, hm.QUEUE_PICTURE, hm.TEXT_PUTS)]
+        self.assertEqual([g[0] for g in before], [memmap.HOST_HUD - TEXT] + [hm.QUEUE_PICTURE] * 8 + [memmap.HOST_HUD - TEXT] * 2 + [hm.TEXT_PUTS, memmap.HOST_HUD - TEXT])
         self.assertEqual(self.draw(7 + 1, text=self.MESSAGE, move=0).count((memmap.HOST_HUD - TEXT, hm.PUSH)), 0)
 
     def test_no_text_without_a_mode_or_the_hud(self):
