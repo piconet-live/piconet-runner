@@ -86,6 +86,9 @@ constexpr u32 HUD_CLEAN = 256;
 // SPREAD: start_gap above 0 or even: after the game places each slot, the story's own mid-course placement moves it round
 // the lap by the gap word (WINDOW_START_GAP) (sites_grid.py grid_spread).
 constexpr u32 SPREAD = 512;
+// NO_DISTANCE_LABEL: `distance_label off`: the DISTANCE part's label (REST) is not queued (sites_modehud.py
+// mode_distance_label); its number and m stay.
+constexpr u32 NO_DISTANCE_LABEL = 1024;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;

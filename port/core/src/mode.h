@@ -231,6 +231,7 @@ struct Package
   u32 clock_limit = 0;              // steps, 0 none
   bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
   bool hud_clean = false;           // `hud clean`: no CHECK sign and no name tags (clean_picture.h)
+  bool distance_label_off = false;  // `distance_label off`: DISTANCE without the game's REST label (mode_hud.h NO_DISTANCE_LABEL)
   bool results_points = false;      // `results points`: the first results page passes by itself
   std::string results_heading;      // `results_heading "TEXT"`: the string for the game's PRACTICE page; empty, RESULTS
   std::string results_title;        // `results_title "TEXT"`: the string for VS TOTAL RANKING; empty, the game's

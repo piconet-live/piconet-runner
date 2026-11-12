@@ -113,22 +113,22 @@ class TheLapShown(Build):
 
 
 class TheDistanceLabel(Build):
-    def reached(self, fed, mode=1, block=BLOCK):
+    def reached(self, flags, mode=1):
         """The game addresses the label's site reaches, to the drawer's next word."""
         memory = {}
         put(memory, memmap.MODE, mode)
-        put(memory, memmap.MODES + 4, block)
-        put(memory, memmap.MODE_HUD_DISTANCE + 8, fed)
+        put(memory, memmap.MODE_HUD_FLAGS, flags)
         reached = []
         m = HudCpu(self.image, memory, lambda address, cpu: reached.append(address - TEXT))
         m.run(self.symbols["mode_distance_label"])
         return reached
 
-    def test_the_modes_metres_have_no_label(self):
-        self.assertEqual(self.reached(0x01000000), [hud.DISTANCE_LABEL + 4])
+    def test_a_mode_that_says_off_has_no_label(self):
+        for flags in (memmap.MODE_NO_DISTANCE_LABEL, memmap.MODE_NO_DISTANCE_LABEL | memmap.MODE_STORY_PICTURES):
+            self.assertEqual(self.reached(flags), [hud.DISTANCE_LABEL + 4])
 
-    def test_the_games_metres_keep_theirs(self):
-        for args in ((0,), (0x01000000, 0), (0x01000000, 1, 0)):
+    def test_every_other_race_keeps_it(self):
+        for args in ((0,), (memmap.MODE_STORY_PICTURES | memmap.MODE_SPREAD,), (memmap.MODE_NO_DISTANCE_LABEL, 0)):
             self.assertEqual(self.reached(*args), [hud.QUEUE_PICTURE, hud.DISTANCE_LABEL + 4])
 
 

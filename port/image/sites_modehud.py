@@ -11,7 +11,7 @@ the game does. Native form only. sites.py calls add().
 | `mode_story` | the frame routine, after mode_preload (sites.py's `frame`) | — | the story's picture group 0xBA (bmp_sto: the big digit, DANGER, the distance's digits, MISSION CLEAR!/FAILED, Time is up...) loaded once, with fn_1_47F74, on the frame the block is taken, when the core says the mode shows one of them (MODE_STORY_PICTURES): every game and playback of the race at the same point, before step 0 |
 | `mode_banners` | the mode point (sites_mode.py's `mode_point`, after the host's run) | — | the banner stock_banner asked at this run for the local seat raised by the game's own registration, on port 0's HUD entry (follow.py: port 0's presentation is the local racer's): FINAL_LAP fn_1_15E5E4, BOOST_POWER fn_1_15E540, TIME_BONUS fn_1_15E764 (each refuses a second time in a race by the HUD entry's bit, which is cleared first). In the step, as the game raises them: banners.py's sites make the banner a function of the steps, its sound played once (mute.py) |
 
-| `mode_distance_label` | fn_1_CDC8C 0xCE948, the DISTANCE part's label (`bl fn_1_4F734`, the picture 0xBA13: REST, the game's metres to the finish) | the label drawn | not drawn while the viewed racer's metres are the mode's (show_distance; the window's MODE_HUD_DISTANCE +8, the stand-in's laps byte, the core's HUD pass): the number and its m stay where they are. What the number counts is the mode's, so the game's word for it is left out |
+| `mode_distance_label` | fn_1_CDC8C 0xCE948, the DISTANCE part's label (`bl fn_1_4F734`, the picture 0xBA13: REST, the game's metres to the finish) | the label drawn | not drawn in a mode that says `distance_label off` (the window's flag MODE_NO_DISTANCE_LABEL): the number and its m stay where they are, the game's metres or show_distance's |
 | `mode_objects_of`, `mode_objects_gone` | fn_1_CDC8C 0xCDD7C and 0xCDD88, the OBJECTS part's two counts (`bl fn_1_E5430`, `bl fn_1_E5568`, argument 1: the course objects' table .bss 0x7AE88) | the course's count and what it subtracts (00/00 on every course of the pool) | while the viewed racer's OBJECTS is the mode's (show_objects; the window's MODE_HUD_OBJECTS: of + 1, then of - n, the core's HUD pass) those two numbers, so the part reads n/of; else the stock calls |
 | `mode_wrong` | fn_1_CD51C 0xCD560, the wrong-way sign's test of P+0x10C (`lwz r0, 0x10c(r3)`) | the sign made while the machine goes the wrong way | the sign also made once when the core's HUD pass says WRONG_WAY was asked (MODE_HUD +0xC, cleared here); it blinks for 30 frames, the sign's own test then ending it |
 | `mode_points_free` | fn_1_14A328 0x14A5A4, the race type switch's `b` to leaving, reached only with the rule read as clear | leave | race type 3 (`laps unlimited`) goes to VS RESULTS as type 6 does; a stock path has the rule set and never gets here with type 3 |
@@ -138,15 +138,12 @@ mob{short}_stock:
         patch(site, word, 0, name)
         middle.append((site, ["r11", "r12", "cr0", "lr"], name))
 
-    # DISTANCE's label, REST: left out while the metres are the mode's (show_distance), whose number it does not name
+    # DISTANCE's label, REST: left out in a mode that says `distance_label off`
     site = TEXT + DISTANCE_LABEL
     word = stock(site, DISTANCE_LABEL_KNOWN)
     r.add("mode_distance_label", test + """    beq mdl_stock
-""" + la(12, memmap.MODES) + """    lwz 12, 4(12)
-    cmplwi 12, 0
-    beq mdl_stock
-""" + la(12, memmap.MODE_HUD_DISTANCE) + f"""    lwz 12, 8(12)
-    cmplwi 12, 0
+""" + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
+    andi. 12, 12, {memmap.MODE_NO_DISTANCE_LABEL}
     beq mdl_stock
     @b {site + 4:#x}
 mdl_stock:
