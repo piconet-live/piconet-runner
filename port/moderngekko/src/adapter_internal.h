@@ -127,6 +127,9 @@ void GiveEmulatorSettings();
 // "showFrameRate", the frame rate), given to the emulator's window before it is made (Common/WindowFrame.h); not
 // with "debug.windowControls", whose window is the system's own with its menu bar
 void GiveWindowFrame();
+// The child window the game's picture is drawn on (an HWND), once the window's thread has made it; nullptr before, and
+// on other systems. Read from any thread (the screen it is on: run_ahead.cpp).
+void* PictureWindow();
 // taskbar.cpp: with the launch file's "taskbar" the process takes the launcher's application id, before the window
 // is made; the window, once it exists, gets the app's icon and says what a pinned button starts (the launcher),
 // and has that taken off again when it goes (both from the frame's hook: not with "debug.windowControls")

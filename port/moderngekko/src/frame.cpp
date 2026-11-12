@@ -524,6 +524,11 @@ void GiveWindowFrame()
   host.message = WatchStops(&Message);  // (freeze_watch.cpp: a close says what asked for it)
   host.surface = &Surface;
 }
+
+void* PictureWindow()
+{
+  return s_frame.picture.load();
+}
 }  // namespace fzgx_port
 
 #else
@@ -532,6 +537,11 @@ namespace fzgx_port
 {
 void GiveWindowFrame()
 {
+}
+
+void* PictureWindow()
+{
+  return nullptr;
 }
 }  // namespace fzgx_port
 

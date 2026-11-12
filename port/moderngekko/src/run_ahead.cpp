@@ -7,7 +7,12 @@
 #include "lanes.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "Core/PowerPC/StaticRecomp/StaticRecompCore.h"
 #include "VideoCommon/AuroraPresent.h"
@@ -72,6 +77,41 @@ void Go(CPUState* c, u32 returned)
   c->lr = HOST_CALLS_END;
   c->pc = call.pc;
 }
+
+// The screen the game's window is on, for the core's rate (fzgx/runahead.h PicturesASecond): the monitor under the
+// picture's window (the same monitor the presenter's pace thread waits for the refreshes of, aurora_present.cpp
+// vblank_thread, so the names agree: "\\.\DISPLAY2"), and the rate the system has it at (a whole number: 240, 200,
+// 59). Asked at each pass's tick; the system is read once a second, between them the last answer stands (a window
+// that moved to another screen or a screen whose rate changed is followed within a second). No window yet: not known.
+fzgx::runahead::Screen TheScreen()
+{
+#ifdef _WIN32
+  using Clock = std::chrono::steady_clock;
+  static fzgx::runahead::Screen kept;
+  static Clock::time_point read_at{};
+  const Clock::time_point now = Clock::now();
+  if (read_at != Clock::time_point{} && now - read_at < std::chrono::seconds(1))
+    return kept;
+  read_at = now;
+  kept = {};
+  const HWND window = static_cast<HWND>(PictureWindow());
+  if (window == nullptr)
+    return kept;
+  MONITORINFOEXW info{};
+  info.cbSize = sizeof(info);
+  if (!GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &info))
+    return kept;
+  for (const wchar_t* c = info.szDevice; *c != L'\0'; ++c)
+    kept.name += *c < 128 ? static_cast<char>(*c) : '?';  // (the system's names are ASCII: "\\.\DISPLAY2")
+  DEVMODEW mode{};
+  mode.dmSize = sizeof(mode);
+  if (EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &mode) && mode.dmDisplayFrequency > 1)
+    kept.hz = static_cast<double>(mode.dmDisplayFrequency);
+  return kept;
+#else
+  return {};
+#endif
+}
 }  // namespace
 
 void StartRunAhead()
@@ -92,7 +132,7 @@ void StartRunAhead()
       std::memcpy(out.picture[k].machine, r.picture[k].machine.data(), sizeof out.picture[k].machine);
     }
     VideoCommon::AuroraPresent::Redraw(&out, r.view.data());
-  }, [] { return VideoCommon::FrameRedraw::WrittenPosition(); });
+  }, [] { return VideoCommon::FrameRedraw::WrittenPosition(); }, &TheScreen);
 }
 
 void StopRunAhead()
