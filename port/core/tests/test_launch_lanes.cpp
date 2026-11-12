@@ -77,6 +77,11 @@ void TestTheRollbackWorkerKeys()
   CHECK(!ParseLaunchFile(with(R"({"mode": "sync", "rule": "always", "watch": "805973D4:415-430"})"), &o) &&
         o.debug.worker_mode == "sync" && o.debug.worker_rule == "always" && o.debug.worker_watch == "805973D4:415-430");
   CHECK(Refused(with(R"({"mode": "on", "rule": "never"})"), "\"debug.rollbackWorker.rule\""));
+  // S7: a chain's next correction sync as it fits (the default), or on the worker however shallow
+  CHECK(!ParseLaunchFile(with(R"("on")"), &o) && o.debug.worker_chained == "fit");
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "chained": "worker"})"), &o) && o.debug.worker_chained == "worker");
+  CHECK(!ParseLaunchFile(with(R"({"mode": "on", "chained": "sync"})"), &o) && o.debug.worker_chained == "sync");
+  CHECK(Refused(with(R"({"mode": "on", "chained": "always"})"), "\"debug.rollbackWorker.chained\""));
   CHECK(Refused(with(R"({"depth": 3})"), "\"debug.rollbackWorker\" needs \"mode\""));
   CHECK(Refused(with(R"({"mode": "check", "depth": 0})"), "\"debug.rollbackWorker.depth\""));
   // S3: the adoptions compared with their sync rollbacks, the restarts' cap, the job's start
