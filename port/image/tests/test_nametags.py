@@ -52,13 +52,14 @@ class Race:
     """Seat 0 (the followed racer) at the origin, looking along +z; `machines` is {seat: (x, z)} on the road
     (y = 0), every one a player seat named after its seat unless `cpu` says otherwise."""
 
-    def __init__(self, t, machines, cpu=(), ai=(), finished=(), session=1):
+    def __init__(self, t, machines, cpu=(), ai=(), finished=(), session=1, tag_range=nametags.TAG_FAR):
         self.t, self.mem, self.draws = t, {}, []
         self.colours, self.depths, self.sizes = {}, {}, {}
         m = self.mem
         racers = max(machines) + 1
         put(m, 0x800030C8, MODULE); put(m, POINTER, MACHINES); m[COUNT] = racers
         put(m, SESSION, session); put(m, RUNNING, 1); put(m, STEP, 501)
+        self.range(tag_range)
         mask = 0
         for seat in range(racers):
             if seat not in cpu:
@@ -73,6 +74,13 @@ class Race:
         self.place({FOLLOWED: (0.0, 0.0), **machines})
         for seat in finished:
             put(m, MACHINES + seat * 0x620, 0x10000)
+
+    def range(self, far):
+        """The window's three words for a mode's tag range of `far` metres, as the core writes them at the boot
+        (mode_hud.h TagRangeWords: far^2, 1 / (far^2 - near^2) with near 0.75 far, 2 far^2); None: a window of zeros."""
+        words = (0.0, 0.0, 0.0) if far is None else (far * far, 1.0 / (far * far - (0.75 * far) ** 2), 2.0 * far * far)
+        for i, w in enumerate(words):
+            self.mem.update({memmap.MODE_HUD_TAG_RANGE + 4 * i + j: b for j, b in enumerate(struct.pack(">f", w))})
 
     def place(self, machines):
         for seat, (x, z) in machines.items():
@@ -322,6 +330,45 @@ class TheNameTags(Build):
         self.assertAlmostEqual(race.frame()["BOMB"], (far2 - d2) / (far2 - near2), delta=2 / 255)
         race.place({1: (0.0, nametags.TAG_FAR + 1.0)})
         self.assertEqual(race.frame(), {})                                  # past TAG_FAR
+
+    # a mode's tag_range: the window's words set how far a tag reads (the name tags keep their 15 to 40 m)
+    def test_a_tag_range_reads_from_as_far_as_the_window_says(self):
+        # (the least range, 1 m, is safe and shows nothing: a tag point under 1 unit before the camera is no candidate)
+        for far in (3.0, 20.0, 2000.0, 10000.0):
+            race = Race(self, {1: (0.0, 0.7 * far), 2: (1.0, 0.7 * far)}, tag_range=far)
+            self.tagged(race, {1: 1})
+            shown = race.frames(nametags.FADE_IN + 1)
+            self.assertEqual(set(shown), {"BOMB"} | ({"P2"} if 0.7 * far < nametags.FAR else set()), far)
+            self.assertAlmostEqual(shown["BOMB"], 1.0, delta=1 / 255)       # full to three quarters of the range
+            self.assertAlmostEqual(race.sizes["BOMB"], 1.2, delta=0.001)
+            race.place({1: (0.0, 0.9 * far)})
+            d2, near2, far2 = (0.9 * far) ** 2, (0.75 * far) ** 2, far ** 2
+            alpha = race.frame()["BOMB"]
+            self.assertAlmostEqual(alpha, (far2 - d2) / (far2 - near2), delta=2 / 255)
+            self.assertAlmostEqual(race.sizes["BOMB"], 0.9 + 0.3 * alpha, delta=0.01)   # never below 0.9
+            self.assertAlmostEqual(race.depths["BOMB"], 90000.1 - 9000.0, delta=0.01)   # through walls, as near
+            race.place({1: (0.0, 1.01 * far)})
+            self.assertEqual(set(race.frame()) - {"P2"}, set(), far)      # past the range
+            if 1.01 * far > 2.0:
+                self.assertEqual(set(race.frames(nametags.FADE_LEAVE + 2)) - {"P2"}, set(), far)
+
+    def test_a_tag_range_keeps_the_nearest_tags_first_and_the_names_after(self):
+        # 10 km: four tagged seats far out and a name close by; the three nearest tags show, in distance order, the
+        # name waits behind them (the order key's precision at this range: d^2 less 2 x 10^8, a few metres)
+        far = 10000.0
+        race = Race(self, {1: (0.0, 10.0), 5: (0.0, 6000.0), 6: (1.0, 5000.0), 7: (2.0, 7000.0), 8: (3.0, 5500.0)},
+                    tag_range=far)   # (x: the stand-in projection's 100 pixels a unit, clear of the 70-pixel overlap box)
+        self.tagged(race, {5: 1, 6: 2, 7: 3, 8: 4}, ("A", "B", "C", "D"))
+        shown = race.frames(nametags.FADE_IN + 1)
+        self.assertEqual(set(shown), {"B", "D", "A"})                      # 5000, 5500, 6000 m; C at 7000 and P1 wait
+        for text in ("B", "D", "A"):
+            self.assertAlmostEqual(shown[text], 1.0, delta=1 / 255)         # all within three quarters of 10 km: full
+
+    def test_a_window_of_zeros_shows_no_mode_tag(self):
+        # a core that wrote no range (none since the word): a tagged seat is past a range of 0, and the names draw as ever
+        race = Race(self, {1: (0.0, 10.0), 2: (2.0, 10.0)}, tag_range=None)
+        self.tagged(race, {1: 1})
+        self.assertEqual(set(race.frames(nametags.FADE_IN + 1)), {"P2"})
 
     def test_tags_come_first_in_the_limit(self):
         # the three names are closer and held; the tag, further, still takes a place at once

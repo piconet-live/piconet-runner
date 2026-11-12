@@ -284,6 +284,13 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             return Fail(why, "has two start gaps");
           p.start_gap_even = true;
         }
+        else if (id == modes::SETUP_TAGRANGE)
+        {
+          const float v = std::bit_cast<float>(arg(0));
+          if (setup_args.size() != 1 || !(v >= LEAST_TAG_RANGE && v <= MOST_TAG_RANGE))
+            return Fail(why, "has a tag range outside 1 to 10000 m");
+          p.tag_range = v;
+        }
         else if (id == modes::SETUP_TIMEGAPS)
         {
           p.time_gaps = true;
