@@ -341,6 +341,7 @@ void WindowWritten(u32 address, u64 value)
     {
       mode::hud::Hud(g);  // the game mode's displays: after the frame routine's HUD passes, before the drawing
       hud_move::SetMode(mode::hud::ViewedMoves(g));  // the mode's hud_move moves, for the racer the picture follows
+      mode::say::Frame(g);  // a mode's message and resume countdown, for the overlay
       hud_move::Frame(g);  // the classic HUD's moves: the window's word the image's sites test
       mode::hud::Board(g);  // and its values, for the launcher
       clean_picture::Frame(g);  // `hud clean`: after the mode's pass, whose tag bytes it takes off

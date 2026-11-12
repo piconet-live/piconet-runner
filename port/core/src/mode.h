@@ -76,6 +76,17 @@ constexpr u32 DANGER = ENGINE + 0xC60;    // a seat's danger zone: +0 below, +4 
 constexpr u32 ROLL_SAVE = ENGINE + 0xE40, ROLL_SAVE_SIZE = 8;  // a seat's steering (+0) before the rule hook while the rolling start holds it
 constexpr u32 DANGER_ON = 1, DANGER_ARMED = 2, DANGER_DONE = 4;
 constexpr u32 STATS_ON = ENGINE + 0xF30;  // not 0: this block has the stats page (written once at game_start; checksum.cpp)
+// A mode's pause (protocol modes.toml `pause`, 0.6.1). The image's frame routine reads PAUSED before every step's
+// simulation (port/image/routines/frame_replay.py `manager`, memmap.MODE_PAUSED): not 0, the step stands, its simulation
+// is not run and the mode's run is made in its place. A paused step is a step like any other (its number, its rows, the
+// relay, the replay), so every game stands at the same steps; the words are the block's, so a rollback puts them back.
+constexpr u32 PAUSED = ENGINE + 0xF34;         // not 0: the race stands from the next step on
+constexpr u32 PAUSE_RUN = ENGINE + 0xF38;      // the run whose actions paused (race.paused_steps counts from it)
+constexpr u32 RESUME_AT = ENGINE + 0xF3C;      // `resume after`: the run at whose end the race goes on (0: none)
+constexpr u32 RESUME_LENGTH = ENGINE + 0xF40;  // `resume after`'s steps, for its countdown's figure
+constexpr u32 SAY = ENGINE + 0xF44;            // `say`'s text, from 1 (0: none); drawing only (mode_say.cpp)
+constexpr u32 MOST_RESUME = 18000;             // `resume after`'s steps at most (five minutes)
+static_assert(STATS_ON + 4 <= PAUSED && SAY + 4 <= 6 * PAGE);
 // A seat's stat record (seat.stat.*, damage), in the display page's free room (mode_hud.h: the only page with room, and
 // no page more is stamped and summed at every step; the stand-in's rule hook wrapper and the mode point read it):
 // +0 the stats the mode changed, bit i for STAT_WORDS[i]; +4 their values; +STAT_BASE what each was before the first
@@ -249,6 +260,8 @@ struct Package
   bool max_speed_open = false;         // the file's max_speed_open: seat.stat.max_speed held to MOST_MAX_SPEED_OPEN
   bool live_places = false;            // the file's live_places: seat.place in the standing during the race too
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
+  std::vector<std::string> say_texts;  // the texts `say` names by their place from 1 (the compiler's say_texts), UTF-8
+  bool pauses = false;                 // the compiler's `pauses`: a rule writes pause (files_match.cpp: one player only)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // start_gap: the metres between the grid's slots round the lap (0: every machine on slot 0's spot, every no-contact row
   // on from before step 0); start_gap_even: the lap shared out among the machines (the image divides at the grid).
@@ -315,4 +328,10 @@ u32 RollSave(const Guest& g, u32 seat);
 // Seat `seat`'s stat record (STATS: read by the wrapper in the machine's task); 0 without a mode.
 u32 Stat(const Guest& g, u32 seat);
 // The run with no package past its end: the end clause's order held in the standing (a race the mode ended).
+
+namespace say
+{
+// A mode's message and its resume countdown for the overlay (fzgx/mode_say.h), once a drawn frame (mode_say.cpp).
+void Frame(Guest& g);
+}  // namespace say
 }  // namespace fzgx::mode

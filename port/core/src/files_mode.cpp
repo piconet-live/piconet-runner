@@ -364,6 +364,29 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             if (text.empty() || text.size() > modes::TAG_TEXT || text.front() == ' ' || text.back() == ' ')
               return Fail(why, "has a tag text the game cannot draw");
         }
+        else if (id == modes::SETUP_SAYTEXTS)
+        {
+          // one word a text, in order, a UTF-8 byte a value, as the compiler's ModeSayTexts writes them; the overlay
+          // draws them
+          std::string text;
+          for (const s32 c : setup_args)
+          {
+            if (c < 0 || c > 255)
+              return Fail(why, "has a say text that is not UTF-8");
+            if (c < 0x20 || c == 0x7F)
+              return Fail(why, "has a say text with a control character");
+            text.push_back(static_cast<char>(c));
+          }
+          if (text.empty() || text.size() > modes::SAY_TEXT || text.front() == ' ' || text.back() == ' ')
+            return Fail(why, "has a say text the overlay cannot show");
+          if (p.say_texts.size() == modes::SAY_TEXTS || std::ranges::find(p.say_texts, text) != p.say_texts.end())
+            return Fail(why, "has more say texts than the api's, or one twice");
+          p.say_texts.push_back(std::move(text));
+        }
+        else if (id == modes::SETUP_PAUSES)
+        {
+          p.pauses = true;
+        }
         else if (id == modes::SETUP_ROLLINGSTART)
         {
           const float v = std::bit_cast<float>(arg(0));

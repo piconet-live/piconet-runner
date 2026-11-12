@@ -170,6 +170,7 @@ void ApplyPresentation()
   // (screen.cpp), asked right before the present that acts on it
   s_moment_hook = GetVideoEvents().before_present_event.Register([](const PresentInfo&) {
     DrawPanel();  // (panel.cpp: before a race only; one load of a flag otherwise)
+    DrawModeSay();  // (mode_say.cpp: a mode's message; one load of a word when no mode says anything)
     DrawOverlays();  // (spectator_overlay.cpp: the course map, the replay bar, its lanes, the standings)
     FollowFullscreen();
   });

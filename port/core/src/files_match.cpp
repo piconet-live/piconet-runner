@@ -7,6 +7,7 @@
 #include "files.h"
 
 #include <algorithm>
+#include <bit>
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -434,6 +435,14 @@ bool FromMatch(Match& m, const picojson::object& json, const std::string& path, 
         std::memcpy(m.names.data() + seat * NAME_SIZE, name.data(), name.size());
       }
     }
+  }
+  // a mode that pauses the race (the compiler's `pauses`): in 0.6.1 one player races it, with CPUs or alone. The pause
+  // itself stands every game at the same step; the limit is the release's, until a lobby's pause is designed with them
+  if (m.game_mode && m.game_mode->pauses && std::popcount(m.game_mode->players) > 1)
+  {
+    Error("fzgx: {}: the mode \"{}\" pauses the race, and pausing modes are raced by one player: this match gives it {}: "
+          "refused", path, m.game_mode->name, std::popcount(m.game_mode->players));
+    return false;
   }
   u8* r = m.race.data();
   std::memcpy(r, "FZRC", 4);

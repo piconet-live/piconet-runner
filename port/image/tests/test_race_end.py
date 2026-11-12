@@ -424,7 +424,8 @@ class TheRacesEnd(unittest.TestCase):
         first, extra = calls[self.endtest][0], calls[self.endtest_extra][0]
         self.assertLess(first, extra)
         # between that question and the step, the frame routine counts the step just run: lwz, addi 1, stw of the clock
-        counted = [o for o in range(extra // 4, extra // 4 + 16) if words[o:o + 3] == [0x813E50A4, 0x39290001, 0x913E50A4]]
+        # (after the test of a step that stood, a mode's pause: frame_entry.py `extra_on`)
+        counted = [o for o in range(extra // 4, extra // 4 + 20) if words[o:o + 3] == [0x813E50A4, 0x39290001, 0x913E50A4]]
         self.assertEqual(len(counted), 1)
         self.assertEqual(words[first // 4 + 1], 0x90610020)                 # stw r3, 32(r1): the answer is kept
         # lwz r9, 32(r1); stw r3, 32(r1); cmpwi r3, 0; beq on; cmpwi r9, 0; beq cut

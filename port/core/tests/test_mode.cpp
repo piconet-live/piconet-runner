@@ -1958,3 +1958,192 @@ void TestAVecIsBuilt()
   CHECK(g.Read32(BLOCK + mode::MOVES) == 1);
   CHECK(at(0) == 2000.0f && at(1) == -1000.0f && at(2) == 0.0f);   // cross((1, 2, 0), (0, 0, 1)) x 216 = (2, -1, 0) x 216
 }
+
+namespace
+{
+// A step's row in the input buffer (the relay's, as rollback.cpp writes it): the bits, the stick, the accelerator and
+// the brake, at the step the mode point runs on (net::STEP, counted on after every step as the image's net_step does).
+void Row(Guest& g, u32 seat, u8 bits, std::int8_t stick, u8 accel, u8 brake)
+{
+  const u32 at = layout::INPUTS + ((g.Read32(net::STEP) & 1023) * 30 + seat) * 8;
+  const u8 row[6] = {bits, static_cast<u8>(stick), 0, 0, accel, brake};
+  g.CopyTo(at, row, sizeof row);
+}
+
+// One step as the image runs it: the mode's run (the mode point in the race pass, or the stand's call in its place),
+// then the step's number on. The race clock is counted only when the step ran (frame_entry.py: a step that stood is
+// not counted); `ran` says what the image's manager did, from the block's pause word before the run.
+bool ModeStep(Guest& g, const mode::Package& p)
+{
+  const bool ran = g.Read32(BLOCK + mode::PAUSED) == 0;
+  mode::Run(g, p, BLOCK, MODULE);
+  g.Write32(net::STEP, g.Read32(net::STEP) + 1);
+  if (ran)
+    g.Write32(MODULE + game::RACE_CLOCK, g.Read32(MODULE + game::RACE_CLOCK) + 1);
+  return ran;
+}
+}  // namespace
+
+// A mode that stands the race (pause.fzmode): at GO the block says paused with its first text; the steps go on (their
+// number, the mode's runs) while the race clock stands; A held after a release resumes it after a second's countdown;
+// a timed stand ends by itself. A rerun from the same memory and the same rows is the same, step by step.
+void TestAModeStandsTheRace()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("pause.mode.json"), &why);
+  CHECK(p.has_value() && p->pauses && p->say_texts.size() == 3);
+  if (!p)
+    return;
+  CHECK(p->say_texts[0] == "Hold A to accelerate. Press A to start.");
+  p->players = 1;
+  // the rows the player gives: nothing for 30 steps, then A held (the accelerator full)
+  const auto rows = [](u32 step) -> u8 { return step >= 30 ? 100 : 0; };
+  const auto race = [&](std::vector<std::vector<u8>>* blocks) {
+    auto host = std::make_unique<TestHost>();
+    ModData data;
+    Guest g(*host, data);
+    FakeModeRace(g, 1, 601);
+    g.Write32(net::STEP, 0);
+    u32 stood = 0, first_run = 0;
+    for (u32 step = 0; step < 200; ++step)
+    {
+      Row(g, 0, 0, 0, rows(step), 0);
+      const bool ran = ModeStep(g, *p);
+      if (!ran)
+        ++stood;
+      else if (stood > 0 && first_run == 0)
+        first_run = step;
+      if (blocks)
+        blocks->push_back(BlockOf(g));
+      if (step == 0)
+      {
+        // GO: race_start stood the race with its text
+        CHECK(g.Read32(BLOCK + mode::PAUSED) == 1 && g.Read32(BLOCK + mode::SAY) == 1);
+        CHECK(g.Read32(BLOCK + mode::PAUSE_RUN) == g.Read32(BLOCK + mode::RUNS));
+      }
+      if (step == 29)
+      {
+        // standing: the steps go on, the clock stands, the mode runs on every one
+        CHECK(g.Read32(net::STEP) == 30 && g.Read32(MODULE + game::RACE_CLOCK) == 602);
+        CHECK(g.Read32(BLOCK + mode::PAUSED) == 1 && g.Read32(BLOCK + mode::SAY) == 1);
+        CHECK(g.Read32(BLOCK + mode::RUNS) - g.Read32(BLOCK + mode::PAUSE_RUN) == 29);
+      }
+      if (step == 30)
+      {
+        // A, after the release: the text goes, the countdown of a second starts (still standing)
+        CHECK(g.Read32(BLOCK + mode::SAY) == 0 && g.Read32(BLOCK + mode::PAUSED) == 1);
+        CHECK(g.Read32(BLOCK + mode::RESUME_AT) == g.Read32(BLOCK + mode::RUNS) + 60);
+        CHECK(g.Read32(BLOCK + mode::RESUME_LENGTH) == 60);
+      }
+    }
+    CHECK(g.Read32(BLOCK + mode::END) == 0 && g.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
+    CHECK(g.Read32(BLOCK + mode::PAUSED) == 0 && g.Read32(BLOCK + mode::RESUME_AT) == 0);
+    // GO's step ran (the stand began in its mode run); then 29 steps waiting, A's, and the countdown's 60 stood
+    CHECK(stood == 90 && first_run == 91);
+    CHECK(g.Read32(MODULE + game::RACE_CLOCK) == 601 + 200 - 90 && g.Read32(net::STEP) == 200);
+    return host;
+  };
+  std::vector<std::vector<u8>> first, again;
+  const auto a = race(&first);
+  const auto b = race(&again);
+  CHECK(first == again && a->ram == b->ram);  // a playback: the same block at every step
+}
+
+// A press while standing reaches the mode from the step's row, as the relay gives it: the stick, the accelerator, the
+// brake and the boost; a row the AI drives reads nothing. A rollback that runs standing steps again finds the same.
+void TestAPressWhileStandingReachesTheMode()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("pause.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  p->players = 1;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 1, 601);
+  Row(g, 0, 0, 0, 0, 0);
+  ModeStep(g, *p);  // GO: standing
+  Row(g, 0, 0x40, 0, 0, 0);  // boost held: no release, so not armed
+  ModeStep(g, *p);
+  CHECK(g.Read32(BLOCK + mode::SeatWord(0, 0)) == 0);
+  Row(g, 0, 0, 0, 0, 30);  // the brake past 0.2: not armed either
+  ModeStep(g, *p);
+  CHECK(g.Read32(BLOCK + mode::SeatWord(0, 0)) == 0);
+  Row(g, 0, 0, static_cast<std::int8_t>(-128), 100, 0);  // the AI's row: reads 0 (a release)
+  ModeStep(g, *p);
+  CHECK(g.Read32(BLOCK + mode::SeatWord(0, 0)) == 1);
+  // the undo point, then A: the countdown; the same two steps again from the undo point: the same memory
+  const auto before = host.ram;
+  const u32 step = g.Read32(net::STEP), clock = g.Read32(MODULE + game::RACE_CLOCK);
+  Row(g, 0, 0, 0, 100, 0);
+  ModeStep(g, *p);
+  Row(g, 0, 0, 0, 100, 0);
+  ModeStep(g, *p);
+  CHECK(g.Read32(BLOCK + mode::RESUME_AT) != 0 && g.Read32(BLOCK + mode::SAY) == 0);
+  const auto after = host.ram;
+  host.ram = before;
+  g.Write32(net::STEP, step);  // (the session sets the step word: it is not main memory)
+  CHECK(g.Read32(MODULE + game::RACE_CLOCK) == clock);
+  Row(g, 0, 0, 0, 100, 0);
+  ModeStep(g, *p);
+  Row(g, 0, 0, 0, 100, 0);
+  ModeStep(g, *p);
+  CHECK(host.ram == after);
+}
+
+// Two seats see one stand (pause_vote.fzmode, the lap vote): the first into lap 2 stands the race for everyone; each
+// seat's stick during the stand picks its own option (seat 0 left: top speed, seat 1 right: boost), applied with the
+// stat words before the race runs on after a second, at the same step for both.
+void TestTwoSeatsVoteWhileStanding()
+{
+  BEGIN_TEST();
+  std::string why;
+  std::optional<mode::Package> p = mode::Read(Vector("pause_vote.mode.json"), &why);
+  CHECK(p.has_value() && p->pauses);
+  if (!p)
+    return;
+  p->players = 0x3;
+  TestHost host;
+  ModData data;
+  Guest g(host, data);
+  FakeModeRace(g, 2, 601);
+  const auto machine = [](u32 seat) { return MACHINES + seat * game::MACHINE_SIZE; };
+  const auto value = [&](u32 seat, u32 i) {
+    return std::bit_cast<float>(g.Read32(BLOCK + mode::STATS + seat * mode::STAT + mode::STAT_VALUES + 4 * i));
+  };
+  for (u32 seat = 0; seat < 2; ++seat)
+    for (u32 i = 0; i < mode::STATS_FIRST; ++i)
+      g.Write32(machine(seat) + mode::STAT_FIELDS[i], std::bit_cast<u32>(i == 0 ? 1000.0f : 0.5f));
+  for (u32 step = 0; step < 5; ++step)
+  {
+    Row(g, 0, 0, 0, 100, 0);
+    Row(g, 1, 0, 0, 100, 0);
+    CHECK(ModeStep(g, *p));
+  }
+  // seat 1 into lap 2 first: the stand
+  g.Write32(PROGRESS + game::PROGRESS_SIZE + game::PROGRESS_LAPS, 1);
+  u32 stood = 0;
+  std::vector<u32> standing;
+  for (u32 step = 0; step < 600; ++step)
+  {
+    Row(g, 0, 0, -100, 0, 0);
+    Row(g, 1, 0, 100, 0, 0);
+    if (!ModeStep(g, *p))
+      ++stood;
+    standing.push_back(g.Read32(BLOCK + mode::PAUSED));
+  }
+  CHECK(g.Read32(BLOCK + mode::END) == 0 && g.Read32(BLOCK + mode::FAULT) == mode::FAULT_NONE);
+  CHECK(g.Read32(BLOCK + mode::GLOBALS) == 1);          // votes: the one held
+  // the stand's steps: from the lap's step, 7 s of the vote and 1 s of countdown, the same for both seats (one word)
+  CHECK(stood == 7 * 60 + 60);
+  CHECK(std::count(standing.begin(), standing.end(), 1u) == static_cast<long>(stood) && standing[0] == 1);
+  // each seat's own pick: seat 0 10% more top speed (stat 2), seat 1 20% more boost strength (stat 7)
+  CHECK(value(0, 2) == static_cast<float>(0.5 * 1.1) || value(0, 2) == 0.5f * 1.1f);
+  const auto changed = [&](u32 seat) { return g.Read32(BLOCK + mode::STATS + seat * mode::STAT); };
+  CHECK(changed(0) == 1u << 2 && changed(1) == 1u << 7);  // and no other stat of either
+  CHECK(value(1, 7) == static_cast<float>(0.5 * 1.2) || value(1, 7) == 0.5f * 1.2f);
+}

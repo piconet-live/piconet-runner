@@ -60,6 +60,9 @@ MODE_END = MODE_SEATS + 30 * MODE_SEAT   # the block's word: not 0, the mode end
 MODE_RUNS = MODE_END + 12                # the interpreter's runs so far; 0: game_start has not run (mode_begin)
 # the engine page's words the image reads and writes (port/core/src/mode.h: the same offsets)
 MODE_ENGINE = 0x5000
+# a mode's pause (mode.h PAUSED): not 0, the race stands, and the frame routine runs no simulation in the next step
+# (frame_replay.py `manager`): it makes the mode point's host call in the simulation's place
+MODE_PAUSED = MODE_ENGINE + 0xF34
 MODE_WAITS = MODE_ENGINE                 # race_waits: not 0, the race-over test counts every seat (raceend.py)
 MODE_NC_ANY = MODE_ENGINE + 0xC          # the OR of the no-contact rows: 0, the pair gate takes the stock path
 MODE_NC = MODE_ENGINE + 0x10             # a seat's no-contact row (bit 0x80000000 >> j)
@@ -242,6 +245,7 @@ TRUE_ASPECT = _facts.TRUE_ASPECT  # the host's, for the picture only (sites_view
 PLAIN_DRAW = _facts.PLAIN_DRAW    # the host's, in a plain start only (offline play), for the picture only: not 0, the
                                  # frame tick (sites.py mode_machine) and the two DRAW_ASK stores (sites_present.py) are
                                  # made as in a race, for high refresh's pictures between; nothing else of a race is on
+STOOD = _facts.STOOD              # the image's (frame_replay.py `manager`): 1, the step just run stood (a mode's pause)
 # The spectator's choices (frame_spectate.py) and the racing view's scratch (raceview.py). The image's own, for the
 # picture only: no rollback puts them back, the checksum does not cover them, and the race's tasks read none.
 # `speccontrols` writes the choices once a displayed frame, on entry, from this game's pad; `specstep` writes them
@@ -302,7 +306,7 @@ assert FINISH_COUNT + 4 == RESULTS_KEEP and RESULTS_CAMERA + 4 == DRAW_ASK and D
 SIM_GENERATOR = _facts.SIM_GENERATOR              # the word the race's draws step (seeded before every step)
 SIM_GENERATOR_SHIFT = _facts.SIM_GENERATOR_SHIFT  # 0 (the draws take 0x801A63C0) or SIM_GENERATOR - 0x801A63C0
 assert TRUE_ASPECT + 4 <= SIM_GENERATOR and SIM_GENERATOR + 4 == SIM_GENERATOR_SHIFT and SIM_GENERATOR_SHIFT + 4 == PLAIN_DRAW
-assert PLAIN_DRAW + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
+assert PLAIN_DRAW + 4 == STOOD and STOOD + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
 hi = lambda a: (a >> 16) & 0xFFFF
 lo = lambda a: a & 0xFFFF
 # A story stage's name (the core writes it, port/core/src/boot.cpp; the protocol's courses.toml): the course intro's

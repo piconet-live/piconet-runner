@@ -154,6 +154,8 @@ void StopWatchingPictures();
 // And every field of a race or replay start, on the game's thread: the load's progress read (fzgx::LoadField), and
 // while LOADING is up a present asked for, at most once in 8 ms, so that the meter moves.
 void DrawPanel();
+// A mode's message over the picture (mode_say.cpp; fzgx/mode_say.h), before every present on the thread that presents.
+void DrawModeSay();
 void PresentPanel();
 void PanelField();
 fzgx::u32 TakePictureIntervals(fzgx::u32* out, fzgx::u32 most);
