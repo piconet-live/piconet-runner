@@ -35,7 +35,11 @@ leaves by a branch to `out` or to `racing`, never by falling through. It reads t
 is a word below 0x3F800000 as a signed number, but for a negative NaN (a sign bit and more than 0x7F800000 under
 it), which is not below. `out(...)` is the same verdict in Python, for the tests; port/core/src/out_test.h is it
 in C++, for what the core shows (the scrubber, the replay's racer watched, the live feed). Both and this text are
-held to one list of cases, tests/out-cases.tsv."""
+held to one list of cases, tests/out-cases.tsv.
+
+`clause(..., restore=False)` is the same text without the two Restore tests: what the game without Restore would say
+of the machine, which sites_wreck.py asks of a wreck that gets restores (its restore starts when that game would
+have taken it out). `out(..., restore=False)` is that in Python."""
 import struct
 import memmap
 
@@ -49,19 +53,20 @@ RESPAWNS = memmap.MACHINE_FLAG_RESTORE  # a machine's own Restore (flag 0x1)
 ONE = 0x3F800000                      # 1.0, .rodata 0xBE4
 
 
-def clause(m, bss, t0, t1, out, racing):
+def clause(m, bss, t0, t1, out, racing, restore=True):
     assert 0 not in (m, bss) and len({m, bss, t0, t1}) == 4
+    restores = f"""    lwz {t1}, 0x3C30({bss})
+    andi. {t1}, {t1}, {RESTORE}
+    bne {racing}
+    andi. {t1}, {t0}, {RESPAWNS}
+    bne {racing}
+""" if restore else ""
     return f"""    lwz {t0}, 0({m})
     andis. {t1}, {t0}, {FINISHED >> 16}
     bne {racing}
     andis. {t1}, {t0}, {TIME_OVER >> 16}
     bne {out}
-    lwz {t1}, 0x3C30({bss})
-    andi. {t1}, {t1}, {RESTORE}
-    bne {racing}
-    andi. {t1}, {t0}, {RESPAWNS}
-    bne {racing}
-    andis. {t1}, {t0}, {RETIRED >> 16}
+{restores}    andis. {t1}, {t0}, {RETIRED >> 16}
     bne {out}
     andi. {t1}, {t0}, {OUT}
     bne {out}
@@ -89,13 +94,14 @@ def clause(m, bss, t0, t1, out, racing):
 """
 
 
-def out(flags, fallen=0, speed=0.0, rules=0, race_type=6):
-    """The game's verdict (fn_1_32600 as called by fn_1_32A40) on a machine; `speed` a float or a word of its bits."""
+def out(flags, fallen=0, speed=0.0, rules=0, race_type=6, restore=True):
+    """The game's verdict (fn_1_32600 as called by fn_1_32A40) on a machine; `speed` a float or a word of its bits.
+    Without `restore`, the verdict of the game without Restore (the rule and the machine's own are not asked)."""
     if flags & FINISHED:
         return False
     if flags & TIME_OVER:
         return True
-    if rules & RESTORE or flags & RESPAWNS:
+    if restore and (rules & RESTORE or flags & RESPAWNS):
         return False
     if flags & (RETIRED | OUT) or fallen & FALLEN:
         return True

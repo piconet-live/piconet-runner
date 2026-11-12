@@ -347,8 +347,26 @@ void TestTheFinishLimitInTheRaceBlock()
       CHECK(Data().Read(layout::RACE_SIM_GENERATOR_AT, 4) == static_cast<u32>(t.word));
     }
     else
-      CHECK(host.log.find(t.word == -1 ? "or its generator is not true or false" : t.word == -2 ? "which only version 9 does"
+      CHECK(host.log.find(t.word == -1 ? "or its generator or wreck slide is not true or false" : t.word == -2 ? "which only version 9 does"
                                                                                                : "and version 9 is a race of one") != std::string::npos);
+    Shutdown();
+  }
+  // wrecks slide before a restore (files.h RACE_WRECK_SLIDE): a recording without the key restored a seat at its
+  // breakdown's step (before it) and plays so; a key that is not true or false is refused
+  for (const auto& [slide, word] : {std::pair{"", 0}, std::pair{", \"wreckSlide\": true", 1},
+                                    std::pair{", \"wreckSlide\": false", 0}, std::pair{", \"wreckSlide\": 1", -1}})
+  {
+    WriteReplay(options.play_file, {1, 0}, "", std::string(", \"flow\": 1") + slide);
+    host.log.clear();
+    Init(host, options);
+    CHECK(Active() == (word >= 0));
+    if (word >= 0)
+    {
+      FrameTick();
+      CHECK(Data().Read(layout::RACE_WRECK_SLIDE_AT, 4) == static_cast<u32>(word));
+    }
+    else
+      CHECK(host.log.find("or its generator or wreck slide is not true or false") != std::string::npos);
     Shutdown();
   }
   Init(host, Options{});

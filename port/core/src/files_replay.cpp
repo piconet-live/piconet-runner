@@ -144,16 +144,21 @@ std::optional<Match> MatchOfHeader(const picojson::object& header, const std::st
   // race's random numbers from the executable's word, which it plays with
   const auto sim = header.find(h::SIM_GENERATOR);
   const bool sim_said = sim != header.end();
+  // wrecks slide before a restore (files.h RACE_WRECK_SLIDE): a recording made before it names none and restored a
+  // seat at its breakdown's step, which it plays with
+  const auto slide = header.find(h::WRECK_SLIDE);
+  const bool slide_said = slide != header.end();
   if (!seat || !delay || !mask || !flow || (band_said && !band->second.is<bool>()) ||
-      (sim_said && !sim->second.is<bool>()))
+      (sim_said && !sim->second.is<bool>()) || (slide_said && !slide->second.is<bool>()))
   {
     Error("fzgx: {}: the header's seat, input delay, player seats, flow or rubber band is not a number in its range "
-          "(the band: true or false), or its generator is not true or false: refused", path);
+          "(the band: true or false), or its generator or wreck slide is not true or false: refused", path);
     return std::nullopt;
   }
   Put32(m.race.data() + RACE_FLOW, *flow);
   Put32(m.race.data() + RACE_RUBBER_BAND_ON, band_said && !band->second.get<bool>() ? 0 : 1);
   Put32(m.race.data() + RACE_SIM_GENERATOR, sim_said && sim->second.get<bool>() ? 1 : 0);
+  Put32(m.race.data() + RACE_WRECK_SLIDE, slide_said && slide->second.get<bool>() ? 1 : 0);
   m.seat = static_cast<int>(*seat);
   m.delay = *delay;
   m.player_mask = *mask;

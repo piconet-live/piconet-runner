@@ -173,7 +173,7 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         }
         else if (id == modes::SETUP_BOOST || id == modes::SETUP_RESTORE || id == modes::SETUP_CONTACT ||
                  id == modes::SETUP_CPUS || id == modes::SETUP_SOLO || id == modes::SETUP_PAUSE || id == modes::SETUP_SAVESTATE ||
-                 id == modes::SETUP_DISTANCELABEL || id == modes::SETUP_RESULTSTIMES)
+                 id == modes::SETUP_DISTANCELABEL || id == modes::SETUP_RESULTSTIMES || id == modes::SETUP_WRECKSLIDE)
         {
           // on, off or a switch parameter's value (a package from before these took a value has none: refused);
           // cpus has a third, always (2: modes.toml's `always`), from the rule set it arrived in (a package of an
@@ -198,6 +198,8 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             p.distance_label_off = !on;
           else if (id == modes::SETUP_RESULTSTIMES)
             p.results_times_off = !on;
+          else if (id == modes::SETUP_WRECKSLIDE)
+            p.instant_restore = !on;
           else
             p.save_state = on;
         }

@@ -253,6 +253,7 @@ struct Package
   std::array<std::optional<u32>, 4> combat{};  // damage, knockback, wall_damage, wall_bounce: binary32 bits
   bool spin_off = false, side_off = false, spin_immune = false;
   bool no_cap = false;              // damage_cap off: a player's hit is not held to fn_1_24F10's 20
+  bool instant_restore = false;     // wreck_slide off: a restore starts at the breakdown's step (files.h RACE_WRECK_SLIDE 0)
   std::optional<u16> max_energy;    // max_energy: every seat's M+0x5DA and M+0x184 at game_start; none, the game's
   bool stats_page = false;          // the compiler's stats_page: the block has the stats page, its last (a rule writes one of its stats)
   bool time_gaps = false;              // the compiler's: a rule reads a time gap: the block's gap page is kept (mode_gap.h)
