@@ -13,6 +13,7 @@ the drawing's, written by the drawing in the same frame (classic-hud-draw notes)
 | `hm_*` (wraps) | each part's `bl` in fn_1_C72D4 (one viewport), fn_1_C771C (its other layout), fn_1_C6F8C (faces board, timer), fn_1_CDC8C (its timer), fn_1_15C36C (banners, FINISH/RETIRED), and the CHECK sign's own `bl fn_1_4F734` in fn_1_12907C (the Check task's drawing, a task callback: the one packet it queues) | the part's call between the host's PUSH and POP |
 | `hs_*` (story blocks) | each mask test's `bl fn_1_5910` in fn_1_CDC8C and fn_1_CEB38, where one story part's block starts | the host's SET: the packets from here on are that part's (a block of the story's own, no mode part: STORY_OTHER) |
 | `hm_sprite` | fn_1_4DEC0 0x4DF24, a pool sprite's packet queued (`bl fn_1_4F734`, r30 the sprite) | between SPRITE (the host names the part by the sprite's step callback: the boost lightning, wrong way) and POP |
+| `race_time_score` | called by the wraps at 0xC73D8 and 0xC7820 (the race time, `bl fn_1_CBC24`, in both one-viewport layouts) | the game's call, then, in a race with a mode whose window says SCORE is shown for the racer the picture follows (memmap.MODE_HUD_SCORE: the number + 1; the HUD part mask not 0, so the HUD is on), the part SCORE between the host's PUSH and POP: its label (the text at MODE_HUD_SCORE_LABEL: a `tag` text or the default SCORE) in the game's font 5 at TIME's place (586, 67), upper case, white, 0.75 of its 18 units, and the number in the race time's digit pictures (0x9440 + d, each over its shadow 0x9430 as the race time draws them) at y 81, right-aligned at the race time's last digit (x 596), 22 units a digit, one to six digits. Drawn inside the race time's right Wide Screen group, as the race time is |
 | `ax_rank`, `ax_faces` | called by the wraps at 0xC7350 (fn_1_C72D4's rank) and 0xC7144 (fn_1_C6F8C's faces board) | under `hud_layout ax` (the window's HUD_AX): the rank by fn_1_CA690 at (24, 412) in the left Wide Screen group, and the board's rows copied from .rodata 0x5A08 over the stack copy of 0x59C0, as the game's AX layout (fn_1_C771C, fn_1_C6F8C's other branch, chosen by the menu's arcade bit .bss 0x8B3A0 +0x94 0x40000000, which is never set: it changes more than the drawing); else the game's own call |
 | `hm_flush` | fn_1_4FD64's entry, the queue drawn (`stwu r1, -0x60(r1)`) | the host's FLUSH: every queued packet of a moved part rewritten, the parts' record cleared |
 
@@ -27,7 +28,7 @@ FACES_HIDDEN = 2   # MODE_HUD_MOVE's bit: the layout hides the faces board (its 
 # choice in its order (CHECK the last a mode names), then the two of the HUD no mode names (BOOST, STORY_OTHER)
 PARTS = ["NONE", "TIMER", "DISTANCE", "DIGIT", "WARNING", "SUCCESS", "FAILED", "TIME_OVER", "SPEED_GAUGE", "OBJECTS",
          "LEADER_GAP", "GHOST_GAP", "RANK", "LAPS", "SPEED", "ENERGY", "LAP_TIMES", "RACE_TIME", "FACES",
-         "SPARE", "SKULLS", "WRONG_WAY", "BANNERS", "FINISH", "CHECK", "BOOST", "STORY_OTHER"]
+         "SPARE", "SKULLS", "WRONG_WAY", "BANNERS", "FINISH", "CHECK", "SCORE", "BOOST", "STORY_OTHER"]
 P = {name: i for i, name in enumerate(PARTS)}
 
 # (site, the called function, part): main.rel .text offsets
@@ -61,8 +62,20 @@ AX_FLAG = 4096
 AX_RANK, AX_FACES = 0xC7350, 0xC7144            # fn_1_C72D4's bl fn_1_CA2A4; fn_1_C6F8C's bl fn_1_C8294 (r3 the rows' copy)
 AX_RANK_DRAW = 0xCA690                          # fn_1_CA690(mode, x, y): the AX layout's rank, called at (24, 412)
 VIEWPORTS, ANCHOR_SET, ANCHOR_CLEAR = 0x58C4, 0x52070, 0x52088
-AX_ROWS, ROWS_SIZE = 0x15F710 + 0x5A08, 0x48     # .rodata 0x5A08 (from main.rel's base): the AX layout's faces rows
-CALLEE = {AX_RANK: "ax_rank", AX_FACES: "ax_faces"}
+RODATA = 0x15F710                               # main.rel's .rodata, from its base
+AX_ROWS, ROWS_SIZE = RODATA + 0x5A08, 0x48       # .rodata 0x5A08: the AX layout's faces rows
+# SCORE (mode_hud.h WINDOW_SCORE), drawn in the race time's call (fn_1_CBC24) by race_time_score: the race time's packet
+# template (.rodata 0x26F8, 22 words: flags 5, z 0.1, white), its digit pictures (.rodata 0x5E98: 0x9440 to 0x9449), their
+# shadow 0x9430 at z + 0.01 (.rodata 0x5DC8), the digits' y 81 (the race time's 67 + 14), the last digit's x 596 (its 444 +
+# 152), 22 units a digit; the label at the TIME picture's place (586, 67) in font 5 (18 x 18 ASCII, the ghost names' and our
+# name tags'), queued through fn_1_51E60 and fn_1_4A0D8 as the race time and the rank are
+RACE_TIME_SITES, RACE_TIME_DRAW = (0xC73D8, 0xC7820), 0xCBC24
+SCORE_TEMPLATE, SCORE_DIGITS, SCORE_SHADOW_DZ, SCORE_SHADOW = RODATA + 0x26F8, RODATA + 0x5E98, RODATA + 0x5DC8, 0x9430
+SCORE_LAST_X, SCORE_STEP, SCORE_Y, SCORE_LABEL_X, SCORE_LABEL_Y = 596.0, 22.0, 81.0, 586.0, 67.0
+SCORE_FONT, SCORE_LABEL_SCALE = 5, 0.75
+QUEUE_PICTURE = 0x51E60                          # fn_1_51E60(packet): a 640 x 480 picture into the viewport's queue
+TEXT_BEGIN, TEXT_FONT, TEXT_UPPER, TEXT_COLOUR, TEXT_SCALE, TEXT_AT, TEXT_PUTS = 0x49410, 0x494DC, 0x4962C, 0x49514, 0x4955C, 0x496FC, 0x4A0D8
+CALLEE = {AX_RANK: "ax_rank", AX_FACES: "ax_faces", **{at: "race_time_score" for at in RACE_TIME_SITES}}
 SPRITE_SITE, QUEUE = 0x4DF24, 0x4F734           # fn_1_4DEC0: bl fn_1_4F734 (r30 the sprite)
 FLUSH_SITE, FLUSH_KNOWN = 0x4FD64, 0x9421FFA0   # fn_1_4FD64: stwu r1, -0x60(r1)
 
@@ -123,6 +136,116 @@ axf_copy:
     bdnz axf_copy
 axf_stock:
     @b {TEXT + 0xC8294:#x}
+""")
+
+    # SCORE after the race time: the stock call first (r3 to r7 its arguments, untouched), then the counter when the
+    # window shows one and the HUD is on (the part mask of viewport 0, which the drawers test themselves)
+    import struct
+    bits = lambda f: struct.unpack(">I", struct.pack(">f", f))[0]
+    word = lambda reg, value: f"    lis {reg}, {value >> 16:#x}\n    ori {reg}, {reg}, {value & 0xFFFF:#x}\n"
+    r.add("race_time_score", f"""    stwu 1, -0xB0(1)
+    mflr 0
+    stw 0, 0xB4(1)
+    stmw 27, 0x90(1)
+    stfd 31, 0xA8(1)
+    @bl {TEXT + RACE_TIME_DRAW:#x}
+""" + la(12, memmap.MODE) + f"""    lwz 12, 0(12)
+    cmpwi 12, 0
+    beq rts_out
+""" + la(12, memmap.MODES) + f"""    lwz 12, 4(12)
+    cmplwi 12, 0
+    beq rts_out
+""" + la(31, memmap.MODE_HUD) + f"""    lwz 30, {memmap.MODE_HUD_SCORE - memmap.MODE_HUD:#x}(31)
+    cmplwi 30, 0
+    beq rts_out
+""" + la(12, memmap.REL + memmap._facts.HUD_PARTS) + f"""    lwz 12, 0(12)
+    cmplwi 12, 0
+    beq rts_out
+    addi 30, 30, -1
+    lwz 12, {memmap.MODE_HUD_MOVE - memmap.MODE_HUD:#x}(31)
+    cmpwi 12, 0
+    beq rts_label
+    li 3, {PUSH}
+    li 4, {P["SCORE"]}
+    @bl host_hud
+rts_label:
+    @bl {TEXT + TEXT_BEGIN:#x}
+    li 3, {SCORE_FONT}
+    @bl {TEXT + TEXT_FONT:#x}
+    @bl {TEXT + TEXT_UPPER:#x}
+    lis 0, -1
+    ori 0, 0, 0xFFFF
+    stw 0, 0x10(1)
+    addi 3, 1, 0x10
+    @bl {TEXT + TEXT_COLOUR:#x}
+""" + word(0, bits(SCORE_LABEL_SCALE)) + f"""    stw 0, 0x14(1)
+    lfs 1, 0x14(1)
+    fmr 2, 1
+    @bl {TEXT + TEXT_SCALE:#x}
+""" + word(0, bits(SCORE_LABEL_X)) + f"""    stw 0, 0x14(1)
+    lfs 1, 0x14(1)
+""" + word(0, bits(SCORE_LABEL_Y)) + f"""    stw 0, 0x14(1)
+    lfs 2, 0x14(1)
+    @bl {TEXT + TEXT_AT:#x}
+    lwz 3, {memmap.MODE_HUD_SCORE_LABEL - memmap.MODE_HUD:#x}(31)
+    @bl {TEXT + TEXT_PUTS:#x}
+""" + la(11, memmap.REL + SCORE_TEMPLATE) + f"""    addi 12, 1, 0x20
+    li 29, 22
+rts_copy:
+    lwz 0, 0(11)
+    stw 0, 0(12)
+    addi 11, 11, 4
+    addi 12, 12, 4
+    addi 29, 29, -1
+    cmpwi 29, 0
+    bne rts_copy
+""" + word(0, bits(SCORE_Y)) + f"""    stw 0, 0x28(1)
+""" + word(0, bits(SCORE_LAST_X)) + f"""    stw 0, 0x14(1)
+    lfs 31, 0x14(1)
+""" + word(0, bits(SCORE_STEP)) + f"""    stw 0, 0x14(1)
+""" + la(12, memmap.REL + SCORE_SHADOW_DZ) + f"""    lwz 0, 0(12)
+    stw 0, 0x18(1)
+""" + la(28, memmap.REL + SCORE_DIGITS) + f"""rts_digit:
+    li 12, 10
+    divwu 27, 30, 12
+    mullw 0, 27, 12
+    subf 0, 0, 30
+    rlwinm 0, 0, 2, 0, 29
+    lwzx 0, 28, 0
+    stw 0, 0x20(1)
+    stfs 31, 0x24(1)
+    addi 3, 1, 0x20
+    @bl {TEXT + QUEUE_PICTURE:#x}
+    li 0, 0
+    ori 0, 0, {SCORE_SHADOW:#x}
+    stw 0, 0x20(1)
+    lfs 1, 0x2C(1)
+    stfs 1, 0x1C(1)
+    lfs 0, 0x18(1)
+    fadds 1, 1, 0
+    stfs 1, 0x2C(1)
+    addi 3, 1, 0x20
+    @bl {TEXT + QUEUE_PICTURE:#x}
+    lfs 1, 0x1C(1)
+    stfs 1, 0x2C(1)
+    lfs 0, 0x14(1)
+    fsubs 31, 31, 0
+    mr 30, 27
+    cmplwi 30, 0
+    bne rts_digit
+    lwz 12, {memmap.MODE_HUD_MOVE - memmap.MODE_HUD:#x}(31)
+    cmpwi 12, 0
+    beq rts_out
+    li 3, {POP}
+    li 4, {P["SCORE"]}
+    @bl host_hud
+rts_out:
+    lfd 31, 0xA8(1)
+    lmw 27, 0x90(1)
+    lwz 0, 0xB4(1)
+    mtlr 0
+    addi 1, 1, 0xB0
+    blr
 """)
 
     for n, (at, target, part) in enumerate(WRAPS):

@@ -341,8 +341,9 @@ MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HU
 MODE_HUD_SILENT, MODE_HUD_GAP, MODE_HUD_GHOSTS = MODE_HUD + 0xCC, MODE_HUD + 0xD0, MODE_HUD + 0x180
 MODE_HUD_OBJECTS = MODE_HUD + 0x27C  # OBJECTS's of + 1 (0: the course's own) and of - n (mode_hud.h WINDOW_OBJECTS)
 MODE_HUD_START_GAP = MODE_HUD + 0x290  # start_gap's metres, binary32; 0.0 under SPREAD: even (mode_hud.h WINDOW_START_GAP)
+MODE_HUD_SCORE, MODE_HUD_SCORE_LABEL, MODE_HUD_SCORE_TEXT = MODE_HUD + 0x298, MODE_HUD + 0x29C, MODE_HUD + 0x2A0  # SCORE: the number + 1 (0: none), the label's address, the default label (mode_hud.h WINDOW_SCORE)
 MODE_HUD_MOVE = MODE_HUD + 0x300     # not 0: the classic HUD's moves are on, the sites of sites_hudmove.py call the host; bit 2: the faces board hidden (hud_move.cpp)
-assert MODE_HUD_OBJECTS + 8 <= MODE_HUD_START_GAP and MODE_HUD_START_GAP + 4 <= MODE_HUD_MOVE and MODE_HUD_MOVE + 4 <= RACE
+assert MODE_HUD_OBJECTS + 8 <= MODE_HUD_START_GAP and MODE_HUD_START_GAP + 4 <= MODE_HUD_SCORE and MODE_HUD_SCORE_TEXT + 8 <= MODE_HUD_MOVE and MODE_HUD_MOVE + 4 <= RACE
 assert MODE_HUD_GHOSTS + 30 * 8 <= MODE_HUD + 0x270 and MODE_HUD_OBJECTS + 8 <= RACE  # (0x270: the DISTANCE stand-ins)
 assert MODE_HUD_GAP + 0x14 <= MODE_HUD_TAGS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= MODE_HUD_GHOSTS and MODE_HUD_GHOSTS + 30 * 8 <= RACE
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE

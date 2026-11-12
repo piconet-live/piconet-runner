@@ -226,7 +226,7 @@ void TestTheDisplayWordsRun()
   CHECK(g.Read32(Record(OUT_SEAT) + hud::MAP_MARK) == (hud::MARKED | 0xFF0000));
   // `tag`: the text's number on the out seat's byte (after `tag s off`), none on the others', and no other word moved
   CHECK(g.Read8(BLOCK + hud::TAGS_AT + OUT_SEAT) == 1);
-  CHECK(p->tag_texts == std::vector<std::string>{"OUT"});
+  CHECK((p->tag_texts == std::vector<std::string>{"OUT", "KOS"}));  // (KOS: show_score's label, the same table)
   for (u32 seat = 0; seat < 30; ++seat)
     if (seat != OUT_SEAT)
       CHECK(g.Read8(BLOCK + hud::TAGS_AT + seat) == 0);
@@ -490,6 +490,40 @@ void TestTheDisplayWordsRun()
   {
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWNUMBER, 2, static_cast<u32>(value)));
     CHECK(g.Read32(Record(2) + hud::NUMBER) == record);
+  }
+
+  // show_score: the number + 1 in the seat's score record (held to the race time's six digits, a negative number 0), the
+  // label a tag text's number (another: the default); the viewed racer's into the window for the image, with the label's
+  // address (its tag text, or the default SCORE the pass writes); show_score off takes it off
+  {
+    const u32 viewed = net::ViewedRacer(g), window = layout::MODE_HUD;
+    const u32 record = BLOCK + hud::SCORES + viewed * hud::SCORE_RECORD;
+    CHECK(hud::SCORES + 30 * hud::SCORE_RECORD <= hud::STORY && hud::SCORES == hud::MAP_CHARS + 30 * 4);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 1234567, 0));
+    CHECK(g.Read32(record + hud::SCORE_VALUE) == hud::SCORE_MOST + 1 && g.Read32(record + hud::SCORE_LABEL) == 0);
+    hud::Frame f = hud::Read(g, BLOCK, viewed);
+    CHECK(f.score_shown && f.score == hud::SCORE_MOST && f.score_label == 0);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == hud::SCORE_MOST + 1 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_SCORE_TEXT);
+    CHECK(g.Read8(window + hud::WINDOW_SCORE_TEXT) == 'S' && g.Read8(window + hud::WINDOW_SCORE_TEXT + 4) == 'E' && g.Read8(window + hud::WINDOW_SCORE_TEXT + 5) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, static_cast<u32>(-5), 2));
+    CHECK(g.Read32(record + hud::SCORE_VALUE) == 1 && g.Read32(record + hud::SCORE_LABEL) == 2);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == 1 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_TAG_TEXTS + hud::WINDOW_TAG_TEXT);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 42, modes::TAG_TEXTS + 1));  // no such text: the default label
+    CHECK(g.Read32(record + hud::SCORE_LABEL) == 0);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == 43 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_SCORE_TEXT);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, (viewed + 1) % 30, 7, 1));  // another seat's: not this picture's
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == 43);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCOREOFF, viewed, 0));
+    CHECK(g.Read32(record + hud::SCORE_VALUE) == 0 && !hud::Read(g, BLOCK, viewed).score_shown);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCOREOFF, (viewed + 1) % 30, 0));
+    CHECK(hud::IsDisplay(modes::ACTION_SHOWSCORE) && hud::IsDisplay(modes::ACTION_SHOWSCOREOFF));
+    CHECK(hud::PART_BITS[modes::PART_SCORE] == 0);  // no mask bit: its record draws it
   }
 
   // the story's pictures: the vector shows DISTANCE

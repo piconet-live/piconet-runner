@@ -224,5 +224,82 @@ class TheObjectsCounts(Build):
             self.assertEqual(of[0][1], 1)  # the game's argument, as it was
 
 
+class TheScore(Build):
+    """race_time_score (sites_hudmove.py): the race time's call, then SCORE from the window's words."""
+    TEMPLATE = [0, 0, 0, 0x3DCCCCCD, 0x3F800000, 0x3F800000, 0, 0, 0x3F800000, 0x3F800000, 0, 0x3F800000, 5, 0, 0xFFFFFFFF] + [0] * 7
+    LABEL = 0x80D20000
+
+    def draw(self, number_plus_one, mode=1, block=BLOCK, hud_on=1, move=0, label=None):
+        """What the routine queues: the game addresses reached with (image, x, y, z) for a picture and r3 for a call."""
+        import struct
+        import sites_hudmove as hm
+        memory = {}
+        put(memory, memmap.MODE, mode)
+        put(memory, memmap.MODES + 4, block)
+        put(memory, memmap.MODE_HUD_SCORE, number_plus_one)
+        put(memory, memmap.MODE_HUD_SCORE_LABEL, label or self.LABEL)
+        put(memory, memmap.MODE_HUD_MOVE, move)
+        put(memory, memmap.REL + memmap._facts.HUD_PARTS, hud_on)
+        for i, w in enumerate(self.TEMPLATE):
+            put(memory, memmap.REL + hm.SCORE_TEMPLATE + 4 * i, w)
+        for d in range(10):
+            put(memory, memmap.REL + hm.SCORE_DIGITS + 4 * d, 0x9440 + d)
+        put(memory, memmap.REL + hm.SCORE_SHADOW_DZ, struct.unpack(">I", struct.pack(">f", 0.01))[0])
+        reached = []
+
+        def game(address, cpu):
+            at = address - TEXT
+            if at == hm.QUEUE_PICTURE:
+                fl = lambda o: struct.unpack(">f", cpu.read(cpu.r[3] + o, 4).to_bytes(4, "big"))[0]
+                reached.append((at, cpu.read(cpu.r[3], 4), fl(4), fl(8), round(fl(0xC), 3), cpu.read(cpu.r[3] + 0x30, 4)))
+            elif at == hm.TEXT_AT:
+                reached.append((at, cpu.f[1], cpu.f[2]))
+            elif at == hm.TEXT_SCALE:
+                reached.append((at, round(cpu.f[1], 3)))
+            else:
+                reached.append((at, cpu.r[3]))
+        m = HudCpu(self.image, memory, game)
+        m.r[3], m.r[4], m.r[5], m.r[6], m.r[7] = 444, 67, 1, 2, 3
+        m.run(self.symbols["race_time_score"])
+        return reached
+
+    def test_the_number_in_the_race_times_digits_under_the_label(self):
+        import sites_hudmove as hm
+        got = self.draw(1234 + 1)
+        self.assertEqual(got[0], (hm.RACE_TIME_DRAW, 444))                       # the race time first, its arguments kept
+        self.assertEqual([g for g in got if g[0] == hm.TEXT_FONT], [(hm.TEXT_FONT, 5)])
+        self.assertIn((hm.TEXT_AT, 586.0, 67.0), got)
+        self.assertIn((hm.TEXT_SCALE, 0.75), got)
+        self.assertEqual([g for g in got if g[0] == hm.TEXT_PUTS], [(hm.TEXT_PUTS, self.LABEL)])
+        pictures = [g[1:] for g in got if g[0] == hm.QUEUE_PICTURE]
+        # the units from the right: each digit over its shadow, 22 units apart, the template's flags and white kept
+        self.assertEqual(pictures, [(0x9444, 596.0, 81.0, 0.1, 5), (0x9430, 596.0, 81.0, 0.11, 5),
+                                    (0x9443, 574.0, 81.0, 0.1, 5), (0x9430, 574.0, 81.0, 0.11, 5),
+                                    (0x9442, 552.0, 81.0, 0.1, 5), (0x9430, 552.0, 81.0, 0.11, 5),
+                                    (0x9441, 530.0, 81.0, 0.1, 5), (0x9430, 530.0, 81.0, 0.11, 5)])
+        self.assertNotIn(memmap.HOST_HUD - TEXT, [g[0] for g in got])  # no move word: no host call
+
+    def test_zero_is_one_digit_and_the_most_six(self):
+        import sites_hudmove as hm
+        digits = lambda got: [g[1] - 0x9440 for g in got if g[0] == hm.QUEUE_PICTURE and g[1] != hm.SCORE_SHADOW]
+        self.assertEqual(digits(self.draw(0 + 1)), [0])
+        self.assertEqual(digits(self.draw(999999 + 1)), [9] * 6)
+        self.assertEqual(digits(self.draw(1000000 + 1)), [0, 0, 0, 0, 0, 0, 1])  # (the core holds it to 999999 before here)
+        got = self.draw(100 + 1)
+        self.assertEqual([(g[1], g[2]) for g in got if g[0] == hm.QUEUE_PICTURE and g[1] != hm.SCORE_SHADOW], [(0x9440, 596.0), (0x9440, 574.0), (0x9441, 552.0)])
+
+    def test_nothing_but_the_race_time_without_a_score_a_mode_or_the_hud(self):
+        import sites_hudmove as hm
+        for kw in ({"number_plus_one": 0}, {"number_plus_one": 8, "mode": 0}, {"number_plus_one": 8, "block": 0}, {"number_plus_one": 8, "hud_on": 0}):
+            self.assertEqual(self.draw(**kw), [(hm.RACE_TIME_DRAW, 444)])
+
+    def test_the_part_is_pushed_and_popped_for_the_moves(self):
+        import sites_hudmove as hm
+        got = self.draw(5 + 1, move=1)
+        host = [g for g in got if g[0] == memmap.HOST_HUD - TEXT]
+        self.assertEqual([g[1] for g in host], [hm.PUSH, hm.POP])
+        self.assertEqual(self.draw(5 + 1, move=0).count((memmap.HOST_HUD - TEXT, hm.PUSH)), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

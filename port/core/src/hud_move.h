@@ -33,20 +33,21 @@
 namespace fzgx::hud_move
 {
 // The parts, by the number the image's sites pass (sites_hudmove.py PARTS: the same order): NONE, then the protocol's
-// `part` choice in its order (modes::PART_* p is part p + 1; CHECK the last one a mode names), then the two of the HUD
+// `part` choice in its order (modes::PART_* p is part p + 1; SCORE the last one a mode names), then the two of the HUD
 // no mode names: BOOST (the energy meter's lightning, which goes with ENERGY) and STORY_OTHER (the story's other blocks,
 // which no race draws)
-inline constexpr std::array<std::string_view, 27> PARTS = {
+inline constexpr std::array<std::string_view, 28> PARTS = {
     "NONE",      "TIMER",     "DISTANCE", "DIGIT",   "WARNING", "SUCCESS",   "FAILED", "TIME_OVER",  "SPEED_GAUGE",
     "OBJECTS",   "LEADER_GAP", "GHOST_GAP", "RANK",  "LAPS",    "SPEED",     "ENERGY", "LAP_TIMES",  "RACE_TIME",
-    "FACES",     "SPARE",     "SKULLS",   "WRONG_WAY", "BANNERS", "FINISH",  "CHECK",  "BOOST",      "STORY_OTHER"};
-constexpr u32 NONE = 0, LEADER_GAP = 10, RANK = 12, ENERGY = 15, FACES = 18, SPARE = 19, SKULLS = 20, WRONG_WAY = 21,
-              BANNERS = 22, FINISH = 23, CHECK = 24, BOOST = 25, STORY_OTHER = 26;
-static_assert(PARTS[LEADER_GAP] == "LEADER_GAP" && PARTS[RANK] == "RANK" && PARTS[ENERGY] == "ENERGY" && PARTS[FACES] == "FACES" &&
-              PARTS[SPARE] == "SPARE" && PARTS[SKULLS] == "SKULLS" && PARTS[WRONG_WAY] == "WRONG_WAY" && PARTS[BANNERS] == "BANNERS" &&
-              PARTS[FINISH] == "FINISH" && PARTS[CHECK] == "CHECK" && PARTS[BOOST] == "BOOST" && PARTS[STORY_OTHER] == "STORY_OTHER" &&
-              PARTS[modes::PART_COUNT] == "CHECK" && PARTS[modes::PART_SPARE + 1] == "SPARE" && PARTS[modes::PART_CHECK + 1] == "CHECK" &&
-              PARTS.size() == modes::PART_COUNT + 3);
+    "FACES",     "SPARE",     "SKULLS",   "WRONG_WAY", "BANNERS", "FINISH",  "CHECK",  "SCORE",      "BOOST",      "STORY_OTHER"};
+constexpr u32 NONE = 0, LEADER_GAP = 10, RANK = 12, ENERGY = 15, RACE_TIME = 17, FACES = 18, SPARE = 19, SKULLS = 20, WRONG_WAY = 21,
+              BANNERS = 22, FINISH = 23, CHECK = 24, SCORE = 25, BOOST = 26, STORY_OTHER = 27;
+static_assert(PARTS[LEADER_GAP] == "LEADER_GAP" && PARTS[RANK] == "RANK" && PARTS[ENERGY] == "ENERGY" && PARTS[RACE_TIME] == "RACE_TIME" &&
+              PARTS[FACES] == "FACES" && PARTS[SPARE] == "SPARE" && PARTS[SKULLS] == "SKULLS" && PARTS[WRONG_WAY] == "WRONG_WAY" &&
+              PARTS[BANNERS] == "BANNERS" && PARTS[FINISH] == "FINISH" && PARTS[CHECK] == "CHECK" && PARTS[SCORE] == "SCORE" &&
+              PARTS[BOOST] == "BOOST" && PARTS[STORY_OTHER] == "STORY_OTHER" &&
+              PARTS[modes::PART_COUNT] == "SCORE" && PARTS[modes::PART_SPARE + 1] == "SPARE" && PARTS[modes::PART_CHECK + 1] == "CHECK" &&
+              PARTS[modes::PART_SCORE + 1] == "SCORE" && PARTS.size() == modes::PART_COUNT + 3);
 constexpr u32 PUSH = 1, POP = 2, SET = 3, SPRITE = 4, FLUSH = 5;  // the host call's operations (r3)
 
 struct Move
