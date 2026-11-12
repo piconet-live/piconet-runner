@@ -49,6 +49,24 @@ void TakeTheRaceOver(Session& s, const relay::Joined& j)
   TheHost().RequestStop();
 }
 
+// "joined" that says "over" to a game whose racer races, the answer to the Join it sent with no official frame for
+// REJOIN_AFTER: the relay has ended the race (the operator's end from the dashboard, or the relay's time limit: every
+// seat out at once, nothing more sent, the race dropped) or this seat's part in it. The frame count it gives is where
+// the relay stopped, the same for every game of the race; no frame comes after it, so the race ends here where this
+// game's official frames end, at that count or below it (a frame the relay closed as it ended and sent no game, or
+// one lost on the way that cannot come now). Every game ends its race at that step (frame.cpp EndAtTheRelaysEnd).
+// (Answered so, a racer waited 120 s for frames that never came and stood still until it was closed: m211,
+// 2026-11-07, ended from the dashboard.)
+void TakeTheRelaysEnd(Session& s, const relay::Joined& j)
+{
+  if (s.relay_end != NEVER || s.exit_sent || s.phase != Phase::Running || s.playback)
+    return;
+  s.relay_end = std::min(j.closed, Have(s));
+  Notice("fzgx: the relay ended the race at its frame {} ({} official frames here, this game's newest step {}): the "
+         "race ends at step {}",
+         j.closed, Have(s), s.frontier, s.relay_end);
+}
+
 // "joined" while the race runs: the answer to a Join sent again (the network dropped, or the address changed). The
 // cookie is the new address's; a seat the relay had handed to the AI meanwhile catches up from this game's own step,
 // and is the player's again from the step a "seat back" names.
@@ -66,6 +84,8 @@ void TakeJoinedAgain(Session& s, const relay::Joined& j)
   }
   if (s.watcher)
     return;  // (a spectator has no seat to come back to: the frames come again from its acknowledgement)
+  if ((j.flags & relay::JOINED_OVER) != 0)
+    return TakeTheRelaysEnd(s, j);
   if ((j.flags & relay::JOINED_RETURNING) != 0 && !s.returning)
   {
     s.returning = true;

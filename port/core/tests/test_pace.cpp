@@ -86,6 +86,7 @@ struct PacedRelay
   Ns clock_back{0};                                             // and stood this long in all
   u32 closed = 0;       // frames 0 to closed - 1 are official
   u32 game_has = 0;     // the official frames the game said it has, in its latest inputs
+  bool ended = false;   // the relay has ended the race (Pace::relay_ends_at)
 
   // The official row of step t: seat 0's as this relay closed it, seat 1's.
   std::array<u8, 12> Row(u32 t) const
@@ -111,6 +112,8 @@ struct PacedRelay
   // The frames its clock has closed (before the race: those lockstep needs).
   void CloseFrames(u32 step, double clock_ms)
   {
+    if (ended)
+      return;
     // (the countdown; and the end of a race that ends, with the results after it: closed a quarter second early,
     // since the frame that settles the race waits for them in time that stands while a frame runs)
     const bool lockstep = step < FROM || step + 16 >= pace.race_to;
@@ -174,6 +177,33 @@ struct PacedRelay
   // Joined, go, and the frames closed last.
   void Say(std::chrono::steady_clock::time_point now)
   {
+    if (game && ended)
+    {
+      // the race ended: the frames closed before the end (all of them reach the game), then "over" with the relay's
+      // count, which may be past them (Pace::relay_end_extra)
+      for (u32 first = std::min(game_has, closed > 12 ? closed - 12 : 0); first < closed; first += 6)
+      {
+        const u32 count = std::min<u32>(6, closed - first);
+        std::string packet = FromRelay('\x08');
+        Add32(packet, first);
+        packet += static_cast<char>(count);
+        Add32(packet, 3);
+        for (u32 t = first; t < first + count; ++t)
+        {
+          const std::array<u8, 12> r = Row(t);
+          packet.append(r.begin(), r.end());
+        }
+        relay.Send(packet.data(), packet.size(), *game);
+      }
+      std::string over = FromRelay('\x04');   // seat 0 of the player seats 0 and 1, no cookie, "over"
+      Add32(over, 1), over += '\0';
+      Add32(over, 3);
+      over.append(8, '\0');
+      over += '\x02';
+      Add32(over, closed + pace.relay_end_extra);
+      relay.Send(over.data(), over.size(), *game);
+      return;
+    }
     if (game)
     {
       std::string joined = FromRelay('\x04');   // seat 0 of the player seats 0 and 1
@@ -438,6 +468,11 @@ Raced RunAPacedRace(const Pace& pace)
     // the relay, at this moment: what the game sent since the last frame, a pong for a ping, and the frames its
     // clock has closed (before the race: those lockstep needs)
     const double clock_ms = r.Clock(now, racing, race_frames);
+    if (pace.relay_ends_at != 0 && racing && race_frames >= pace.relay_ends_at && !r.ended)
+    {
+      r.ended = true;
+      out.relay_closed = r.closed;
+    }
     r.CloseFrames(step, clock_ms);
     r.Hear(racing, race_frames, clock_ms);
     r.Say(now);
@@ -461,7 +496,9 @@ Raced RunAPacedRace(const Pace& pace)
   r.CompareWithTheOfficialRace(race);
   workers.reset();
   out.next_input_end = net::s_session ? net::s_session->next_input : 0;
+  out.stops = static_cast<u32>(host.stops);
   Shutdown();
+  out.exit_code = ExitCode();
   r.CountTheInputs();
   for (const auto& [frame, record] : r.official)  // (every frame from 0 that the relay closed, in their order)
     out.official_mine.push_back(record);
@@ -626,5 +663,56 @@ void TestASlowHostSendsItsInputsInTime()
       std::printf("  a host at %s: ran %d; inputs late %u of %zu; the least time to spare %.2f frames (asked: %.2f); "
                   "final steps with another checksum %u\n",
                   host.what, r.ran, r.late, r.margin.size(), least, host.least, r.other_checksums);
+  }
+}
+
+// The relay ends the race (the operator's end from the dashboard, or the relay's time limit): it sends nothing more,
+// and answers the game's Join "over" with its count of frames, here one past those it sent (a frame closed as it
+// ended, sent to no game). Every game ends its race at the last frame it was sent, the same step in every game: a
+// racer ahead of the official frames on predictions goes back to it (running again on the official rows a step it
+// predicted wrong), a racer who is out watching behind in lockstep plays up to it. There every step before it is final
+// on its official row, the results are taken, and the game stops as leaving the results does (exit code 0: nothing
+// kept for a rejoin). (The race m211, 2026-11-07, ended from the dashboard: every racer's game waited for frames that
+// never came, stood still and was closed by its player, its replay never closed.)
+void TestARaceTheRelayEndsEndsAtOneStep()
+{
+  struct Case
+  {
+    const char* what;
+    u32 lag, changes_every, out_at;
+    bool predicted_wrong;
+  };
+  for (const Case& c : {Case{"a racer ahead of the official frames", 3, 7, 0, false},
+                        Case{"a racer whose every prediction is wrong", 3, 1, 0, true},
+                        Case{"a racer who is out, watching behind", 0, 7, 300, false}})
+  {
+    const int failed_before = s_failed;
+    Pace pace;
+    pace.race_frames = 900;
+    pace.record = true;
+    pace.relay_back_steps = c.lag;
+    pace.other_changes_every = c.changes_every;
+    pace.out_at = c.out_at;
+    pace.relay_ends_at = 600;
+    const Raced r = RunAPacedRace(pace);
+    const u32 end = r.relay_closed;
+    CHECK(end > FROM + 500);
+    CHECK(r.stops == 1 && r.exit_code == 0);
+    CHECK(r.final_steps == end);
+    CHECK(r.other_checksums == 0 && r.other_rows == 0);
+    CHECK(!r.results.empty());
+    CHECK(r.warnings.empty());
+    CHECK(r.notices.find(std::format("fzgx: the relay ended the race at its frame {} ({} official frames here", end + 1,
+                                     end)) != std::string::npos);
+    CHECK(r.notices.find(std::format("fzgx: the race ended at step {}, where the relay ended it", end)) !=
+          std::string::npos);
+    CHECK(r.notices.find("the race is kept for a rejoin") == std::string::npos);
+    CHECK(r.notices.find("no official inputs") == std::string::npos);
+    if (c.predicted_wrong)
+      CHECK(r.notices.find("ran on a predicted row; from it to the end again on the official rows") != std::string::npos);
+    if (s_failed != failed_before)
+      std::printf("  %s: the relay's end at %u; final steps %u, stops %u, exit code %d, other checksums %u, rows %u\n%s\n%s\n",
+                  c.what, end, r.final_steps, r.stops, r.exit_code, r.other_checksums, r.other_rows, r.warnings.c_str(),
+                  r.notices.substr(r.notices.size() > 3000 ? r.notices.size() - 3000 : 0).c_str());
   }
 }

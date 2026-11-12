@@ -32,6 +32,13 @@ bool WaitFor(Session& s, u32 count)
   std::atomic<bool>& waits = freeze::ThePulse().waits_for_relay;
   while (s.official.size() < count)
   {
+    // frames past the race's end the relay said never come (relay_wire.cpp TakeTheRelaysEnd): the caller ends the
+    // race there (frame.cpp EndAtTheRelaysEnd)
+    if (count > s.relay_end)
+    {
+      waits.store(false, std::memory_order_relaxed);
+      return false;
+    }
     if (!waits.exchange(true, std::memory_order_relaxed))
       board::Waits();  // (the launcher's status board says it is a wait: no game frame begins meanwhile)
     if (Clock::now() > deadline)
