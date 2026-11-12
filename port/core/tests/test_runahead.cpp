@@ -144,6 +144,30 @@ void TestHighRefreshWithNoStepAhead()
   CHECK(report.find("1 passes with no step since the tick, 1 out of the race by then") != std::string::npos);
   CHECK(report.find("0/1/2/3/more 1/2/1/0/0") != std::string::npos);
   CHECK(report.find("against the next tick: 1 compared, machines differed 0, camera differed 0") != std::string::npos);
+  CHECK(report.find("0 machines kept for a jump") != std::string::npos);
+  // the camera follows seat 1 (its record's +2 is a half-word, the game's `lha 2(r29)`): its eye may move 3 x seat 1's
+  // move + 10 a step, whatever seat 0 does (here it stands, like a racer out of the race). Seat 1 moves 4, the eye 20: no
+  // cut. An empty seat (5, past the race's two machines) that jumps is not counted as a machine kept.
+  g.Write16(RECORDS + 2, 1);
+  frame(107, false);  // (the tick after the last: 106)
+  Float(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12, 7.0f);
+  Float(g, MACHINES + 5 * game::MACHINE_SIZE + POSE + 12, 500.0f);
+  Float(g, RECORDS + 0x10, 20.0f);
+  g.Write32(net::STEP, 108);
+  runahead::TimeTheDrawing(1);
+  CHECK(asked.size() == 3);
+  const std::string followed = runahead::Report();
+  CHECK(followed.find(" 0 camera cuts;") != std::string::npos);
+  CHECK(followed.find("0 machines kept for a jump") != std::string::npos);
+  // the same eye move with the camera on seat 0, which stood: a cut
+  g.Write16(RECORDS + 2, 0);
+  frame(108, false);
+  Float(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12, 11.0f);
+  Float(g, RECORDS + 0x10, 40.0f);
+  g.Write32(net::STEP, 109);
+  runahead::TimeTheDrawing(1);
+  CHECK(asked.size() == 3);
+  CHECK(runahead::Report().find(" 1 camera cuts;") != std::string::npos);
   runahead::Stop();
   // AURORA_RUNAHEAD_AFTER=0: the step ahead again (here it finds no step wrapper in the image, and goes off), and none without REDRAW
   setenv("AURORA_RUNAHEAD_AFTER", "0", 1);

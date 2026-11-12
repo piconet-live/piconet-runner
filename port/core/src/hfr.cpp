@@ -63,7 +63,8 @@ struct Machine
 struct Camera
 {
   bool chase = false;
-  u8 mode = 0, follow = 0;
+  u8 mode = 0;
+  u16 follow = 0;  // the camera record's +2 is a half-word: the seat it follows
   u32 state = 0;
   float fov[2]{}, eye[3]{};
   Mtx view_a{}, view_b{};
@@ -186,7 +187,7 @@ void Take(const Guest& g, State& st)
     if (!c.chase)
       continue;
     const u32 r = st.records + v * RECORD;
-    c.follow = g.Read8(r + 2);
+    c.follow = g.Read16(r + 2);
     c.state = g.Read32(r + 0xA8);
     c.fov[0] = F(g, r + 8);
     c.fov[1] = F(g, r + 0xC);

@@ -117,7 +117,8 @@ struct Machine
 };
 struct Camera
 {
-  u8 mode = 0, follow = 0;
+  u8 mode = 0;
+  u16 follow = 0;  // the camera record's +2 is a half-word: the seat it follows
   u32 state = 0;
   float fov[2]{}, eye[3]{};
   Mtx a{}, b{};
@@ -380,7 +381,7 @@ void Take(const Guest& g, State& st)
   const u32 object = g.Read32(CAMERA_OBJECT), r = g.Read32(CAMERA_RECORDS);
   Camera& c = st.camera;
   c.mode = g.Read8(object + 0x48);
-  c.follow = g.Read8(r + 2);
+  c.follow = g.Read16(r + 2);
   c.state = g.Read32(r + 0xA8);
   c.fov[0] = F(g, r + 8);
   c.fov[1] = F(g, r + 0xC);
@@ -409,7 +410,7 @@ bool Judge()
     const double limit = 2.0 * std::fabs(double(b.speed)) / SPEED_PER_STEP_DISTANCE + JUMP_MARGIN;
     s.moves[i] = b.since >= a.since && ((b.flags ^ a.flags) & JUMP_FLAGS) == 0 &&
                  ((b.flags2 ^ a.flags2) & game::MACHINE_FLAGS2_FALLEN) == 0 && Move(a.pose, b.pose) <= limit;
-    s.stats.kept += !s.moves[i];
+    s.stats.kept += i < s.now.count && !s.moves[i];  // the race's machines: the seats after them hold none
   }
   if (c.mode != d.mode || c.follow != d.follow || c.state != d.state || d.mode == 9 || d.mode == 10 || d.mode == 6)
     return false;
@@ -439,7 +440,7 @@ void TracePath(const Guest& g, u32 step, double t)
 {
   if (s.path == nullptr)
     return;
-  const u32 r = g.Read32(CAMERA_RECORDS), follow = g.Read8(r + 2);
+  const u32 r = g.Read32(CAMERA_RECORDS), follow = g.Read16(r + 2);
   if (follow >= SEATS)
     return;
   const Mtx pose = ReadMtx(g, g.Read32(MACHINES) + follow * BLOCK + POSE), a = ReadMtx(g, r + 0xAC), b = ReadMtx(g, r + 0xDC);
