@@ -110,3 +110,22 @@ void TestWhatAPointOfTheWindowIs()
   CHECK(PartAt(big, 900, 1499, 10, 6) == Part::Close && PartAt(big, 900, 1500 - 70, 10, 6) == Part::Maximize);
   CHECK(PartAt(big, 900, 700, 47, 6) == Part::Bar && PartAt(big, 900, 700, 48, 6) == Part::Picture);
 }
+
+void TestThePointerRestsAndHides()
+{
+  Pointer p;
+  // seen first: shown; resting over the picture: hidden once the rest is as long as POINTER_REST_MS, not before
+  CHECK(!p.At(500, 300, true, 1000) && !p.At(500, 300, true, 1000 + POINTER_REST_MS - 1));
+  CHECK(p.At(500, 300, true, 1000 + POINTER_REST_MS) && p.hidden);
+  // a move of one pixel brings it back, and the rest is counted anew from the move
+  CHECK(!p.At(501, 300, true, 4000) && !p.hidden && !p.At(501, 300, true, 4000 + POINTER_REST_MS - 1));
+  CHECK(p.At(501, 300, true, 4000 + POINTER_REST_MS));
+  // off the picture (the strip, another window over it) it is never hidden, however long it rests
+  CHECK(!p.At(501, 10, false, 10000) && !p.At(501, 10, false, 10000 + 10 * POINTER_REST_MS));
+  // back over the picture without a move: the rest is counted from when it was last off it
+  CHECK(!p.At(501, 10, true, 30000 + POINTER_REST_MS - 1) && p.At(501, 10, true, 30000 + POINTER_REST_MS));
+  // the clock wraps: the rest is still its true length, and a hidden pointer stays hidden through a wrap
+  Pointer w;
+  CHECK(!w.At(5, 5, true, 0xFFFFFF00u) && !w.At(5, 5, true, 0xFFFFFF00u + POINTER_REST_MS - 1));
+  CHECK(w.At(5, 5, true, 0xFFFFFF00u + POINTER_REST_MS) && w.At(5, 5, true, 0xFFFFFF00u));
+}

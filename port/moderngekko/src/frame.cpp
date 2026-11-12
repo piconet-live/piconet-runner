@@ -39,6 +39,7 @@ using strip::Part;
 
 constexpr wchar_t PICTURE_CLASS[] = L"FzgxPicture";
 constexpr UINT_PTR FRAME_RATE_TIMER = 0x4652;  // the strip's frame rate is read twice a second
+constexpr UINT_PTR POINTER_TIMER = 0x4654;     // where the pointer is, four times a second (OnPointer)
 constexpr DWORD BORDER_COLOUR_ATTRIBUTE = 34;  // DWMWA_BORDER_COLOR (Windows 11; older systems refuse it, harmlessly)
 
 struct Frame
@@ -50,6 +51,7 @@ struct Frame
   bool show_title = false;       // a test game: its window title, which names the test, is in the strip
   bool show_frame_rate = false;  // the launch file's "showFrameRate"
   bool tracking = false;         // the system tells us when the pointer leaves the strip
+  strip::Pointer pointer;        // hidden while it rests over the picture (OnPointer)
 };
 Frame s_frame;
 
@@ -132,6 +134,28 @@ LRESULT CALLBACK PictureProc(HWND window, UINT message, WPARAM wparam, LPARAM lp
   return DefWindowProcW(window, message, wparam, lparam);
 }
 
+// The pointer over the picture is hidden once it has rested (strip::Pointer) and is back at its next move or
+// press. Asked at every mouse message of the inside and four times a second (POINTER_TIMER): a rest sends no
+// message. While it is hidden the system's question for the pointer's look is answered with none (WM_SETCURSOR).
+void OnPointer(HWND window, bool pressed)
+{
+  POINT at{};
+  if (!GetCursorPos(&at))
+    return;
+  // the picture's own point: not the strip's, and not another program's window over the picture
+  const HWND picture = s_frame.picture.load();
+  const HWND under = WindowFromPoint(at);
+  RECT box{};
+  const bool over = picture && (under == window || under == picture) && GetWindowRect(picture, &box) &&
+                    PtInRect(&box, at);
+  const bool was_hidden = s_frame.pointer.hidden;
+  if (pressed)
+    s_frame.pointer = {};
+  const bool hidden = s_frame.pointer.At(at.x, at.y, over, GetTickCount());
+  if (hidden != was_hidden && over)
+    SetCursor(hidden ? nullptr : LoadCursorW(nullptr, IDC_ARROW));
+}
+
 // On the window's thread only (OnCreate).
 void MakePicture(HWND window)
 {
@@ -198,6 +222,7 @@ void OnCreate(HWND window)
   DwmSetWindowAttribute(window, BORDER_COLOUR_ATTRIBUTE, &border, sizeof(border));
   if (s_frame.show_frame_rate)
     SetTimer(window, FRAME_RATE_TIMER, 500, nullptr);
+  SetTimer(window, POINTER_TIMER, 250, nullptr);
   // the system measures the frame anew, with our answer for certain (OnCalcSize), and the strip is laid then
   SetWindowPos(window, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
   Lay(window);
@@ -377,7 +402,16 @@ bool Message(void* handle, unsigned message, std::uintptr_t wparam, std::intptr_
     ours = ReplayKeyMessage(message, wparam, lparam) || frame::FullscreenKey(window, message, wparam, lparam);
     break;
   case WM_MOUSEMOVE: case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_MOUSELEAVE: case WM_CAPTURECHANGED:
+    OnPointer(window, message == WM_LBUTTONDOWN);
     ours = SpectatorMouse(window, message, lparam); break;  // (the overlays over the picture)
+  case WM_SETCURSOR:
+    if (LOWORD(lparam) == HTCLIENT && s_frame.pointer.hidden)
+    {
+      SetCursor(nullptr);
+      result = TRUE;
+      ours = true;
+    }
+    break;
   case WM_ENTERSIZEMOVE:
   case WM_EXITSIZEMOVE:
     frame::PlaceChanged(window, message);
@@ -389,6 +423,7 @@ bool Message(void* handle, unsigned message, std::uintptr_t wparam, std::intptr_
   case WM_DESTROY:
     frame::KeepPlace(window);
     KillTimer(window, FRAME_RATE_TIMER);
+    KillTimer(window, POINTER_TIMER);
     UndressWindow(window);
     s_frame.picture.store(nullptr);
     break;
@@ -444,7 +479,10 @@ bool Message(void* handle, unsigned message, std::uintptr_t wparam, std::intptr_
   case WM_TIMER:
     if (wparam == FRAME_RATE_TIMER)
       OnFrameRateTimer(window);
-    ours = wparam == FRAME_RATE_TIMER || frame::FadeTick(window, wparam, s_frame.shown.layout.height);
+    if (wparam == POINTER_TIMER)
+      OnPointer(window, false);
+    ours = wparam == FRAME_RATE_TIMER || wparam == POINTER_TIMER ||
+           frame::FadeTick(window, wparam, s_frame.shown.layout.height);
     break;
   default: break;
   }

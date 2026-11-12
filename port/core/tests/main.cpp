@@ -164,6 +164,7 @@ void TestAStoryStageIsNamedInTheGame();
 void TestTheStripsLayout();
 void TestWhatAPointOfTheWindowIs();
 void TestTheFrameRateInATitle();
+void TestThePointerRestsAndHides();
 // test_launch.cpp
 void TestASavesControllerOptions();
 void TestASaveThatIsRefused();
@@ -587,6 +588,7 @@ int main(int argc, char** argv)
   TestTheStripsLayout();
   TestWhatAPointOfTheWindowIs();
   TestTheFrameRateInATitle();
+  TestThePointerRestsAndHides();
   TestTheControllerSetupStart();
   TestTheControllerSetupKey();
   TestTheHitsARollbackReveals();
