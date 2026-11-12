@@ -100,8 +100,11 @@ class TheScroll(Build):
             text = frame_replay.asm()
         finally:
             native.ON = was
+        # the task manager's call is the one after `simgen` (a mode's pause has its own call before, for a step that
+        # stands: no scroll then, as nothing else of the step)
         manager = text[text.index("manager:\n"):]
-        self.assertLess(manager.index("    bl lapscroll\n"), manager.index("    bctrl\n"))
+        self.assertLess(manager.index("    bl lapscroll\n"), manager.index("    bctrl\n", manager.index("    bl simgen\n")))
+        self.assertLess(manager.index("m_live:\n"), manager.index("    bl lapscroll\n"))
 
     def test_the_forks_image_has_neither(self):
         was = native.ON
