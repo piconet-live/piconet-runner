@@ -2000,30 +2000,85 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
   }
 }
 
+// A seat at row n of the standing, in every copy the ranking pass (fn_1_8B9B8) keeps: R+0xE, R+0x2C, P+0x115,
+// CM+0x23C, CM+0x21C.
+void WriteStanding(Mem& g, u32 module, u32 n, u32 seat)
+{
+  const u32 r = module + R_BASE, cm = module + CM_BASE;
+  const u32 progress =
+      g.Read32(g.Read32(module + net::MACHINES) + seat * game::MACHINE_SIZE + game::MACHINE_PROGRESS);
+  g.Write8(r + R_ORDER + n, static_cast<u8>(seat));
+  g.Write32(r + R_ORDER_P + 4 * n, progress);
+  g.Write8(progress + P_STANDING, static_cast<u8>(n));
+  g.Write8(cm + CM_ORDER + n, static_cast<u8>(seat));
+  g.Write8(cm + CM_RANK + seat, static_cast<u8>(n));
+}
+
 // The end clause's order held in the standing (the ranking pass rewrites it every step; the mode point comes after
 // it): R+0xE, R+0x2C, P+0x115, CM+0x23C, CM+0x21C from the block's END_ORDER.
 void HoldOrder(Mem& g, u32 block, u32 module)
 {
-  const u32 machines = g.Read32(module + net::MACHINES);
   const u32 count = std::min<u32>(g.Read8(module + net::MACHINE_COUNT), SEATS);
-  const u32 r = module + R_BASE, cm = module + CM_BASE;
+  const u32 r = module + R_BASE;
   for (u32 n = 0; n < count; ++n)
   {
     const u32 seat = g.Read8(block + END_ORDER + n);
     if (seat >= count)
       continue;
-    const u32 progress = g.Read32(machines + seat * game::MACHINE_SIZE + game::MACHINE_PROGRESS);
-    g.Write8(r + R_ORDER + n, static_cast<u8>(seat));
-    g.Write32(r + R_ORDER_P + 4 * n, progress);
-    g.Write8(progress + P_STANDING, static_cast<u8>(n));
-    g.Write8(cm + CM_ORDER + n, static_cast<u8>(seat));
-    g.Write8(cm + CM_RANK + seat, static_cast<u8>(n));
+    WriteStanding(g, module, n, seat);
     // a seat the mode placed keeps its place in the results, when the game books its out after the end (a seat
     // eliminated in the run that ended the race)
     const u32 place = r + R_RECORDS + R_RECORD * seat + 0xE + g.Read8(r + R_SLOT);
     if (g.Read8(block + PLACES + seat) != 0 && g.Read8(place) == 0xFE)
       g.Write8(place, static_cast<u8>(n));
   }
+}
+
+// live_places: the places the mode has given, in the standing during the race. The seats it placed at their rows (a
+// place is a row, as the end clause's), every other seat in the ranking pass's order of this step; written after the
+// pass, so the HUD's place and the faces show it until the pass's next run. No seat placed: the pass's order stays.
+void ShowPlaces(Machine& m, Mem& g, u32 block, u32 module)
+{
+  const u32 count = m.Count();
+  std::array<u32, SEATS> order{};
+  order.fill(NONE);
+  std::array<bool, SEATS> taken{};
+  bool any = false;
+  for (u32 place = 1; place <= SEATS; ++place)
+    for (u32 seat = 0; seat < count; ++seat)
+      if (g.Read8(block + PLACES + seat) == place)
+      {
+        u32 at = place - 1;
+        while (at < count && order[at] != NONE)
+          ++at;
+        if (at < count)
+        {
+          order[at] = seat;
+          taken[seat] = true;
+          any = true;
+        }
+      }
+  if (!any)
+    return;
+  // the rest by the pass's order; a seat the pass does not name (never in a race), by its number
+  u32 at = 0;
+  const auto next = [&](u32 seat) {
+    while (at < count && order[at] != NONE)
+      ++at;
+    if (at < count)
+      order[at] = seat;
+    taken[seat] = true;
+  };
+  for (u32 rank = 0; rank < count; ++rank)
+    for (u32 seat = 0; seat < count; ++seat)
+      if (!taken[seat] && m.Rank(seat) == rank)
+        next(seat);
+  for (u32 seat = 0; seat < count; ++seat)
+    if (!taken[seat])
+      next(seat);
+  for (u32 n = 0; n < count; ++n)
+    if (order[n] != NONE)
+      WriteStanding(g, module, n, order[n]);
 }
 
 // The end clause (mode-conflicts-answers 4.3): the mode's order (the seats it placed by their places, then every other
@@ -2214,6 +2269,8 @@ void After(Machine& m, Mem& g, const Package& p, u32 block, u32 module, const No
   }
   if (end && m.Faulted() == FAULT_NONE)
     EndClause(m, g, block, module, p.race_waits);
+  else if (p.live_places && m.Faulted() == FAULT_NONE)
+    ShowPlaces(m, g, block, module);
 }
 
 // The setup words that act on the race from its start, in game_start's pass.

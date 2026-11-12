@@ -244,6 +244,7 @@ struct Package
   bool time_gaps = false;              // the compiler's: a rule reads a time gap: the block's gap page is kept (mode_gap.h)
   bool speed_open = false;             // the file's seat_speed_open: seat.speed and rolling_start to MOST_SPEED_OPEN, not 9000
   bool max_speed_open = false;         // the file's max_speed_open: seat.stat.max_speed held to MOST_MAX_SPEED_OPEN
+  bool live_places = false;            // the file's live_places: seat.place in the standing during the race too
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // start_gap: the metres between the grid's slots round the lap (0: every machine on slot 0's spot, every no-contact row

@@ -741,6 +741,67 @@ void TestTheKnockoutEndsWithItsPlaces()
   CHECK(g.Read32(R + 0xD4 + 0xA0 * 3 + 0x24) == (45u << 12));              // the winner: the race's 2700 steps
 }
 
+// live_places (0.6.1): the places the mode gives are the standing during the race, in every copy the ranking pass
+// keeps, written again after each pass; the seats with no place follow in the pass's order. A package without the
+// word keeps seat.place for the end clause only, as before.
+void TestLivePlacesShowInTheStanding()
+{
+  BEGIN_TEST();
+  std::string why;
+  const std::optional<mode::Package> p = mode::Read(Vector("live_places.mode.json"), &why);
+  CHECK(p.has_value());
+  if (!p)
+    return;
+  CHECK(p->live_places);
+  const auto run = [&](const mode::Package& package, Guest& g) {
+    // the ranking pass's order of this step: 3, 2, 1, 0
+    for (u32 n = 0; n < 4; ++n)
+    {
+      g.Write8(R + 0xE + n, static_cast<u8>(3 - n));
+      g.Write32(R + 0x2C + 4 * n, ProgressAt(3 - n));
+      g.Write8(ProgressAt(3 - n) + 0x115, static_cast<u8>(n));
+      g.Write8(CM + 0x23C + n, static_cast<u8>(3 - n));
+      g.Write8(CM + 0x21C + (3 - n), static_cast<u8>(n));
+    }
+    mode::Run(g, package, BLOCK, MODULE);
+  };
+  const auto standing = [&](Guest& g, std::array<u32, 4> order) {
+    for (u32 n = 0; n < 4; ++n)
+    {
+      const u32 seat = order[n];
+      CHECK(g.Read8(R + 0xE + n) == seat && g.Read32(R + 0x2C + 4 * n) == ProgressAt(seat));
+      CHECK(g.Read8(ProgressAt(seat) + 0x115) == n);
+      CHECK(g.Read8(CM + 0x23C + n) == seat && g.Read8(CM + 0x21C + seat) == n);
+    }
+  };
+  {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 4, 600);
+    // seat 2 first and seat 0 second by the mode; seats 3 and 1 by the pass; the same after the pass's next run
+    for (u32 step = 600; step < 603; ++step)
+    {
+      g.Write32(MODULE + game::RACE_CLOCK, step);
+      run(*p, g);
+      CHECK(g.Read8(BLOCK + mode::PLACES + 2) == 1 && g.Read8(BLOCK + mode::PLACES + 0) == 2);
+      standing(g, {2, 0, 3, 1});
+    }
+    CHECK(g.Read32(BLOCK + mode::END) == 0);
+  }
+  {
+    TestHost host;
+    ModData data;
+    Guest g(host, data);
+    FakeModeRace(g, 4, 600);
+    mode::Package before = *p;
+    before.live_places = false;
+    run(before, g);
+    CHECK(g.Read8(BLOCK + mode::PLACES + 2) == 1);
+    standing(g, {3, 2, 1, 0});
+  }
+}
+
 // `race_waits everyone`: a seat that went out on its own, with no place from the mode, is ranked by when it went out and
 // below the racers still in, with that time, not DISQUALIFIED; and a place the mode gave is that row, whatever the rest.
 void TestARaceThatWaitsRanksTheOut()
