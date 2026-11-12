@@ -70,6 +70,8 @@ bool IsDisplay(u8 id)
     case ACTION_HUDMOVEOFF:
     case ACTION_MAPCHAR:
     case ACTION_MAPCHAROFF:
+    case ACTION_SHOWSCORE:
+    case ACTION_SHOWSCOREOFF:
       return true;
     default:
       return false;
@@ -232,6 +234,19 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 thir
     case ACTION_MAPCHAROFF:
       g.Write32(block + MAP_CHARS + 4 * seat, 0);
       return true;
+    case ACTION_SHOWSCORE:
+    {
+      // the number held to the race time's six digits (a negative number reads 0); the label a text the package holds,
+      // anything else the default
+      const u32 sc = block + SCORES + seat * SCORE_RECORD;
+      g.Write32(sc + SCORE_VALUE, (static_cast<s32>(value) < 0 ? 0 : std::min(value, SCORE_MOST)) + 1);
+      g.Write32(sc + SCORE_LABEL, second >= 1 && second <= TAG_TEXTS ? second : 0);
+      return true;
+    }
+    case ACTION_SHOWSCOREOFF:
+      g.Write32(block + SCORES + seat * SCORE_RECORD + SCORE_VALUE, 0);
+      g.Write32(block + SCORES + seat * SCORE_RECORD + SCORE_LABEL, 0);
+      return true;
     default:
       return false;
   }
@@ -376,6 +391,13 @@ Frame Read(const Guest& g, u32 block, u32 viewed)
   f.objects_fed = (fed & STORY_OBJECTS) != 0;
   f.objects_shown = f.objects_fed ? g.Read8(st + STORY_SHOWN) : 0;
   f.objects_of = f.objects_fed ? g.Read8(st + STORY_OF) : 0;
+  if (const u32 sc = g.Read32(block + SCORES + viewed * SCORE_RECORD + SCORE_VALUE); sc != 0)
+  {
+    f.score_shown = true;
+    f.score = std::min(sc - 1, SCORE_MOST);
+    const u32 label = g.Read32(block + SCORES + viewed * SCORE_RECORD + SCORE_LABEL);
+    f.score_label = label >= 1 && label <= TAG_TEXTS ? label : 0;
+  }
   // the danger zone's display (vocabulary 4.4): while its count runs (the race side's, mode.h DANGER: from 60 x
   // seconds + 60 down, the machine exploding at 60) the big digit and the warning, as story chapter 6's, whose digit
   // is the count / 60; the sheet's digits go to 3
@@ -548,6 +570,13 @@ void Hud(Guest& g)
   g.Write32(window + WINDOW_OBJECTS, f.objects_fed ? f.objects_of + 1 : 0);
   g.Write32(window + WINDOW_OBJECTS + 4, f.objects_fed ? f.objects_of - f.objects_shown : 0);
   g.Write32(module + SRC + 0x10, 0);
+  // SCORE: the number + 1 and the label's address (the tag text's in the window, or the default written here), for the
+  // image's race_time_score
+  g.Write32(window + WINDOW_SCORE, f.score_shown ? f.score + 1 : 0);
+  g.Write32(window + WINDOW_SCORE_LABEL, f.score_label != 0 ? window + WINDOW_TAG_TEXTS + (f.score_label - 1) * WINDOW_TAG_TEXT
+                                                            : window + WINDOW_SCORE_TEXT);
+  for (u32 k = 0; k < WINDOW_SCORE_TEXT_SIZE; ++k)
+    g.Write8(window + WINDOW_SCORE_TEXT + k, k < sizeof(DEFAULT_SCORE_LABEL) ? static_cast<u8>(DEFAULT_SCORE_LABEL[k]) : 0);
   // a seat's colour tints its machine drawn normally; a ghost has seat.ghost_tint (0: Time Attack's yellow)
   for (u32 seat = 0; seat < SEATS; ++seat)
   {
