@@ -189,6 +189,7 @@ struct Stats
 {
   u64 passes = 0, none_time = 0, none_state = 0, camera_cut = 0, pictures = 0, kept = 0, ahead_inputs_same = 0;
   u64 rng_moved = 0;
+  u64 none_screen = 0, screen_changes = 0;  // passes with no pictures for the screen's rate (60 Hz: the game's own); rate changes
   // AURORA_TEST_SKIP_COMPARE: each step ahead run whole, then again with the lists left out; what Take read compared
   u64 compared = 0, compared_machines = 0, compared_camera = 0;
   double compared_whole_ms = 0, compared_part_ms = 0;  // the two runs' times, each from its first call to its end
@@ -225,7 +226,11 @@ struct Run
 {
   bool on = false;
   bool no_read_wait = false;  // AURORA_TEST_NO_READ_WAIT: a test's control, the fault back
-  u32 rate = 120, most = 1;  // pictures a second, pictures between a step
+  u32 rate = 120, most = 1;  // pictures a second drawn now, pictures between a step (PicturesASecond of `asked` and the screen)
+  u32 asked = 0;             // AURORA_RUNAHEAD: the setting's "Up to N"
+  std::function<Screen()> screen;  // the screen the window is on, asked at each pass's tick (none: the setting alone)
+  Screen on_screen;          // its last answer, for the one log line a change gets
+  bool screen_seen = false;
   std::function<void(float)> between;
   std::function<void(u32)> ran;
   std::function<void(const RedrawRequest&)> redraw;
@@ -823,14 +828,55 @@ void PlaceTheTick(Tick::time_point now)
   }
   s.pictures_last = false;
 }
+
+// The pass's tick: the rate for the screen the window is on now (PicturesASecond). A change takes here, before the pass's
+// pictures are planned: the pass before was made whole with its own count, this one whole with the new. Each change is
+// logged once, with the screen's name and rate, so a run's log says what each screen was given.
+void FollowTheScreen()
+{
+  if (!s.screen)
+    return;
+  const Screen now = s.screen();
+  if (s.screen_seen && now.hz == s.on_screen.hz && now.name == s.on_screen.name)
+    return;
+  const u32 rate = PicturesASecond(s.asked, now.hz);
+  // (a line for another screen of the same rate too, so the log names each screen the window was on; not for a rate
+  // reading that wobbles within one multiple of 60: 239 and 240 are both 240)
+  const bool changed = !s.screen_seen || rate != s.rate || now.name != s.on_screen.name;
+  s.screen_seen = true;
+  s.on_screen = now;
+  if (!changed)
+    return;
+  s.rate = rate;
+  s.most = rate / 60 - 1;
+  ++s.stats.screen_changes;
+  if (now.hz > 0)
+    Notice("fzgx: high refresh: {} pictures/s on {} at {:g} Hz (up to {} asked)", rate, now.name.empty() ? "the screen" : now.name, now.hz,
+           s.asked);
+  else
+    Notice("fzgx: high refresh: {} pictures/s; the screen's rate is not known (up to {} asked)", rate, s.asked);
+}
 }  // namespace
 
+u32 PicturesASecond(u32 asked, double hz)
+{
+  const u32 setting = std::max<u32>(60, asked / 60 * 60);
+  if (hz <= 0)
+    return setting;
+  // a rate a little under a multiple of 60 (59.94, 239.76; the system's whole 59, 239) is that multiple
+  const u32 screen = static_cast<u32>(std::floor(hz * (1 + SCREEN_TOLERANCE) / 60)) * 60;
+  return std::max<u32>(60, std::min(setting, screen));
+}
+
 void Start(std::function<void(float)> between, std::function<void(u32)> ran, std::function<void(const RedrawRequest&)> redraw,
-           std::function<u64()> written)
+           std::function<u64()> written, std::function<Screen()> screen)
 {
   s.ran = std::move(ran);
   s.redraw = std::move(redraw);
   s.written = std::move(written);
+  s.screen = std::move(screen);
+  s.on_screen = {};
+  s.screen_seen = false;
   const char* redrawing = std::getenv("AURORA_REDRAW");
   s.redrawing = redrawing != nullptr && redrawing[0] == '1' && s.redraw != nullptr;
   s.on = false;
@@ -851,8 +897,9 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
   const char* asked = std::getenv("AURORA_RUNAHEAD");
   if (asked == nullptr || std::atoi(asked) < 120)
     return;
-  s.rate = std::min<u32>(static_cast<u32>(std::atoi(asked)), 480);
-  s.most = static_cast<u32>(std::lround(s.rate / 60.0)) - 1;
+  s.asked = std::min<u32>(static_cast<u32>(std::atoi(asked)), 480);
+  s.rate = PicturesASecond(s.asked, 0);  // (the screen's rate is asked at the first pass's tick: no window yet here)
+  s.most = s.rate / 60 - 1;
   s.on = true;
   s.no_read_wait = std::getenv("AURORA_TEST_NO_READ_WAIT") != nullptr;
   s.skip = SKIP_LISTS;
@@ -882,7 +929,8 @@ void Start(std::function<void(float)> between, std::function<void(u32)> ran, std
       name.replace(at, 3, std::to_string(Us(Tick::now())));
     s.times = std::fopen(name.c_str(), "w");
   }
-  Notice("fzgx: run ahead: {} pictures a second asked for, {} between two steps at most", s.rate, s.most);
+  Notice("fzgx: run ahead: up to {} pictures a second asked for, {} between two steps at most{}", s.asked, s.most,
+         s.screen ? "; the rate follows the screen the window is on" : "");
 }
 
 bool On()
@@ -923,6 +971,13 @@ bool Begin()
   if (!consecutive || !(plain ? InThePlainRace(g) : InTheRace(g, *ss)))
   {
     ++s.stats.none_state;
+    s.after_good = false;
+    return false;
+  }
+  FollowTheScreen();
+  if (s.most == 0)  // the screen shows 60 a second: the game's own pictures, nothing between, no request
+  {
+    ++s.stats.none_screen;
     s.after_good = false;
     return false;
   }
@@ -1388,10 +1443,14 @@ std::string Report()
                                   t.compared, t.compared_machines, t.compared_camera, t.compared_whole_ms / std::max<double>(1, t.compared),
                                   t.compared_part_ms / std::max<double>(1, t.compared))
                     : std::string()) +
-         std::format("fzgx: run ahead: {} pictures a second asked for: {} passes in the race, {} with no room in time, {} out of the race or not next, "
+         (s.screen ? std::format("fzgx: high refresh: the rate followed the screen: {} change{}, {} passes at 60 (the game's own pictures), last {} pictures/s on {} at {:g} Hz\n",
+                                 t.screen_changes, t.screen_changes == 1 ? "" : "s", t.none_screen, s.rate,
+                                 s.on_screen.name.empty() ? "the screen" : s.on_screen.name, s.on_screen.hz)
+                   : std::string()) +
+         std::format("fzgx: run ahead: up to {} pictures a second asked for, {} drawn: {} passes in the race, {} with no room in time, {} out of the race or not next, "
                      "{} camera cuts; {} pictures between; a step ahead {:.2f} ms + its undo {:.2f} ms ({}); a picture {:.2f} ms, of it the draw-done wait {:.2f}, + its undo {:.2f} ms ({}); "
                      "the real step and its drawing {:.2f} ms; {} machines kept for a jump; pictures that moved the executable's generator (undone): {}",
-                     s.rate, t.passes, t.none_time, t.none_state, t.camera_cut, t.pictures, t.step_sum / steps, t.undo_sum / steps,
+                     s.asked, s.rate, t.passes, t.none_time, t.none_state, t.camera_cut, t.pictures, t.step_sum / steps, t.undo_sum / steps,
                      Percentiles(t.step_hist), t.draw_sum / pics, t.wait_sum / pics, t.restore_sum / pics, Percentiles(t.draw_hist),
                      t.tick_real ? t.tick_real_sum / static_cast<double>(t.tick_real) : 0.0, t.kept, t.rng_moved);
 }

@@ -1,4 +1,5 @@
-// High refresh by a step run ahead (the switch AURORA_RUNAHEAD=<rate>, off by default): after the stock frame begin has
+// High refresh by a step run ahead (the switch AURORA_RUNAHEAD=<rate>, the launcher's "Up to N", off by default; the rate
+// drawn is the largest multiple of 60 at or under it and the rate of the screen the window is on: PicturesASecond): after the stock frame begin has
 // copied step N's picture, the frame tick runs step N+1 ahead on the rollback machinery with the inputs it will have,
 // notes the machines and the camera, undoes it, and draws the pictures between N and N+1 with the game's own draw code
 // on blended state, each drawing undone. The real step N+1 then runs as if none of it had been: the undo log puts back
@@ -55,11 +56,32 @@ struct RedrawRequest
   std::array<RedrawPicture, PICTURES_MOST> picture{};
 };
 
+// The screen the game's window is on: its refresh rate (0 when not known: no window yet, no system that tells it) and
+// the system's name for it ("\\.\DISPLAY2", as the presenter's own pace log names it).
+struct Screen
+{
+  double hz = 0;
+  std::string name;
+};
+// The pictures a second drawn for the setting `asked` (the launcher's "Up to N": AURORA_RUNAHEAD) on a screen of
+// `hz`: the largest multiple of 60 at or under both, so that every refresh shows a picture of its own and no picture
+// is cut: 240 on 240 Hz is 240, on 200 Hz 180, on 165 or 144 Hz 120, on 100, 75 or 60 Hz 60 (the game's own, none
+// between). A screen's rate within SCREEN_TOLERANCE under a multiple of 60 counts as that multiple (59.94 Hz is 60,
+// 239.76 is 240, and the system's whole numbers 59, 119, 239 are theirs). `hz` 0: the setting alone, as before the
+// screen was followed. Under 120: 60.
+constexpr double SCREEN_TOLERANCE = 0.02;
+u32 PicturesASecond(u32 asked, double hz);
+
 // Reads the switch. `between`: told the fraction of the next XFB copy the game is about to make, a picture between.
 // `ran`: told that step was run ahead (the per-machine rollback must not take it for the step's last run).
 // `redraw`: told the pictures between, when AURORA_REDRAW is on. `written`: the command stream's written position now.
+// `screen`: the screen the window is on now, asked at each pass's tick (the safe point: a pass's pictures are planned
+// whole from its tick, and a change of the count between two passes is one request with fewer or more pictures,
+// each at its even place in its field; nothing of a pass is changed under it). The rate follows the screen the window
+// is on and the screen's rate as they change (PicturesASecond), each change logged once. None: the setting alone.
 void Start(std::function<void(float fraction)> between, std::function<void(u32 step)> ran,
-           std::function<void(const RedrawRequest&)> redraw, std::function<u64()> written);
+           std::function<void(const RedrawRequest&)> redraw, std::function<u64()> written,
+           std::function<Screen()> screen = nullptr);
 bool On();
 // A plain start (offline play) may have pictures between: on, without a step ahead, with the renderer's redraw. The core
 // then sets the image's PLAIN_DRAW (boot.cpp PlainField), and the frame tick and DRAW_ASK come as in a race.
