@@ -31,6 +31,7 @@ the checksums; the cost is that what they did in a mispredicted moment is not ta
 - The start countdown's movie request (MOVIE below): the ARQ request record the countdown task posts once a step
   (sites_countdown.py). The ARQ library's queue is the executable's, below the undo log: put back by a rollback, the
   record's link disagreed with the queue and the queue ended in itself.
+- The lap-time list's highlight (LAP below): written only by the HUD drawing.
 - The rumble (RUMBLE below): put back by a rollback, a rumble the race asked for in a step later run again (where
   mute.py drops the request) was taken back, and the hits a rollback revealed had none (hits.cpp asks for it)."""
 import memmap
@@ -77,6 +78,13 @@ RUMBLE = [(0x7F028, 0x7F04C)]
 # priority, source, destination, length, callback), in the stream record at .bss 0x85280 (+0x594); written by
 # ARQPostRequest from Starter (fn_1_1049E0) and by the ARQ library's service of the queue, read by nothing else.
 MOVIE = [(0x85814, 0x85834)]   # the native form only (sites_countdown.py); the fork's image is as before
+# The lap-time list's highlight of each port's entry (main.rel .bss 0x7ACA0, 12 bytes a port): +9 the row of the
+# newest best lap, +0xA the row it was on before, +0xB that row's fade (60 frames). Written by fn_1_CB028 (the earlier
+# laps' rows, the HUD's drawing) and read by it alone; the race's set-up (fn_1_D0728) clears +9. Put back by a rollback,
+# the drawing took the new best row anew on every frame that had one and the fade never ran. +0 and +4 (the lap times
+# drawn, written in the step) and +8 (the scroll's count, counted in the step: sites_lapscroll.py) stay tracked. The
+# native form only, with the count's site; the fork's image is as before.
+LAP = [(0x7ACA0 + port * 12 + 9, 0x7ACA0 + port * 12 + 12) for port in range(4)]
 MAX = 32
 C = memmap.hi(memmap.CONTROL)
 
@@ -89,7 +97,8 @@ def asm():
     """`untracked_write`: r31 = the control block, r30 = main.rel .bss; uses r0, r3-r12 and cr0."""
     assert 0 <= -(0x1BA040 - 0x16D600) + 0x3D924 + 0x10000 < 0x8000   # .data 0x3D924 from .bss
     movie = MOVIE if native.ON else []
-    n = 4 + 2 + len(MANAGER) + len(HUD) + len(SPRITES) + len(RUMBLE) + len(movie)
+    lap = LAP if native.ON else []
+    n = 4 + 2 + len(MANAGER) + len(HUD) + len(SPRITES) + len(RUMBLE) + len(movie) + len(lap)
     assert n <= MAX
     out = "untracked_write:\n    addi 12, 31, %d\n" % LIST
     put = lambda k, reg_lo, reg_hi: f"    stw {reg_lo}, {4 + 8 * k}(12)\n    stw {reg_hi}, {8 + 8 * k}(12)\n"
@@ -181,8 +190,8 @@ uw_desc:
     addi 10, 9, 12
 uw_desc_put:
 """ + put(k + 3, 9, 10)
-    # the HUD's presentation words, the sprite pool, the rumble and the movie's request
-    for j, (lo, hi) in enumerate(HUD + SPRITES + RUMBLE + movie):
+    # the HUD's presentation words, the sprite pool, the rumble, the movie's request and the lap list's highlight
+    for j, (lo, hi) in enumerate(HUD + SPRITES + RUMBLE + movie + lap):
         base = (lo + 0x8000) >> 16
         out += "    addis 9, 30, %d\n    addi 9, 9, %d\n    addi 10, 9, %d\n" % (base, lo - (base << 16), hi - lo)
         out += put(k + 4 + j, 9, 10)

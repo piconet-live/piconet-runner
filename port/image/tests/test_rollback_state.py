@@ -39,7 +39,8 @@ class TheImagesList(unittest.TestCase):
         face = [(0x7ACD8, 0x7ACD8 + 0x70), (0x384D0, 0x384D0 + 8)]
         self.assertIn("addis 9, 30, 8\n    addi 9, 9, %d\n    addi 10, 9, 0x70\n" % (0x7ACD8 - 0x80000), text)
         self.assertIn("addis 9, 30, 4\n    addi 9, 9, %d\n    addi 10, 9, 8\n" % (0x384D0 - 0x40000), text)
-        self.assertEqual(fixed, sorted(untracked.MANAGER + untracked.HUD + untracked.SPRITES + untracked.RUMBLE + untracked.MOVIE + face))
+        self.assertEqual(fixed, sorted(untracked.MANAGER + untracked.HUD + untracked.SPRITES + untracked.RUMBLE + untracked.MOVIE +
+                                      untracked.LAP + face))
         # the four it finds while the game runs: the two heaps and their descriptors
         found = sorted(r["id"] for r in kept if r["space"] == "found")
         self.assertEqual(found, ["face-board-heap", "face-board-heap-descriptor", "sound-heap", "sound-heap-descriptor"])
