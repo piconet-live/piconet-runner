@@ -147,10 +147,11 @@ constexpr float MOST_BASE_SPEED = MOST_SPEED_OPEN / 216.0f;
 // package without it holds the stat to the stat pack's range (0 to 4)
 constexpr float MOST_MAX_SPEED_OPEN = 10000.0f;
 constexpr float MOST_START_GAP = 10000.0f;  // start_gap's metres at most (modes.toml)
-// tag_range's metres (modes.toml): the drawing's bounds. Below 1 m the fade's divisor (the difference of the squares of the
-// range and three quarters of it) nears 0; above 10 km the tagged seats' order key, d^2 less twice the range squared in
-// binary32, loses its last metres (mode_hud.h TagRangeWords)
-constexpr float LEAST_TAG_RANGE = 1.0f, MOST_TAG_RANGE = 10000.0f;
+// a `tag` word's settings (modes.toml tag_looks; the compiler's ModeTagLooks holds the same): the range in metres, below 1 m the
+// fade's divisor (the difference of the squares of the range and three quarters of it) nears 0, above 10 km the tagged seats'
+// order key (d^2 less TAG_FIRST in binary32) loses its last metres; the size, a player's name tag at its largest being 1, at 5
+// letters 90 pixel rows tall (mode_hud.h TagLookWords)
+constexpr float LEAST_TAG_RANGE = 1.0f, MOST_TAG_RANGE = 10000.0f, LEAST_TAG_SIZE = 0.1f, MOST_TAG_SIZE = 5.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
               WAIT_RECORDS + modes::WAITS * WAIT <= 4 * PAGE && 4 * modes::TEAM_WORDS == 0x80 &&
@@ -218,6 +219,14 @@ struct Prepared
 };
 
 // The package as it runs: the setup words' values with the parameters put in.
+// A `tag` text's settings (tag s, "TEXT", size MIN MAX, range D m; the package's tag_looks, three a text): how far it is seen
+// (full alpha to three quarters of it, none at it) and its size's least and largest. Drawing only (mode_hud.h TagLookWords).
+struct TagLook
+{
+  float range = 200.0f, size_min = 0.5f, size_max = 1.2f;  // the defaults: 200 m as the tags were; 1.2 their largest then
+  bool operator==(const TagLook&) const = default;
+};
+
 struct Package
 {
   std::vector<u8> bytes;
@@ -265,6 +274,7 @@ struct Package
   bool max_speed_open = false;         // the file's max_speed_open: seat.stat.max_speed held to MOST_MAX_SPEED_OPEN
   bool live_places = false;            // the file's live_places: seat.place in the standing during the race too
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
+  std::vector<TagLook> tag_looks;      // each text's settings (the compiler's tag_looks; none: the defaults for every text)
   std::vector<std::string> say_texts;  // the texts `say` names by their place from 1 (the compiler's say_texts), UTF-8
   bool pauses = false;                 // the compiler's `pauses`: a rule writes pause (files_match.cpp: one player only)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
@@ -273,9 +283,6 @@ struct Package
   // Neither: the game's own grid.
   std::optional<float> start_gap;
   bool start_gap_even = false;
-  // tag_range: how far a mode's `tag` texts are seen, metres (full to three quarters of it, gone at it); none: 200 m, as
-  // before the word (mode_hud.h DEFAULT_TAG_RANGE). Drawing only (the window's words at the boot, boot.cpp)
-  std::optional<float> tag_range;
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
   bool cpus_allowed = false;        // `cpus on`: a player gone is driven by the AI; left out, their seat retires
   bool solo = false, pause = false, save_state = false;

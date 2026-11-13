@@ -41,13 +41,17 @@ A game mode's `tag` (mode_hud.h; the window's byte a seat, memmap.MODE_HUD_TAGS,
 it numbers from 1) draws through this one routine, with the text in place of the name:
 - on any seat but the followed one: the player-seat, name and AI-driven tests are not asked (finished and out still
   fade it, as off screen does);
-- within the mode's range (the setup word tag_range; left out TAG_FAR, 200 m, full alpha to TAG_NEAR, 150 m, three
-  quarters of it), and size TAG_SIZE + TAG_SIZE_SLOPE x the distance fade: read at 200 m. The range comes from the window
-  (memmap.MODE_HUD_TAG_RANGE: the range squared, 1 / (the range squared less the near edge squared), and twice the
-  range squared, written by the core at the boot, mode_hud.h TagRangeWords), loaded into the constants 92, 96 and 100
-  in place of immediates; a window of zeros (no core wrote it) puts every tagged seat past the range: no mode tag;
+- with its text's own settings (the word's `size MIN MAX` and `range D m`; left out 0.5, 1.2 and 200 m), five words a
+  text in the window (memmap.MODE_HUD_TAG_LOOKS, 20 bytes a text from text 1, written by the core at the boot, mode_hud.h
+  TagLookWords), read by the seat's text: +0 the range squared and +4 1 / (the range squared less its near edge
+  squared, the near edge three quarters of the range), the alpha's fade as a name's (full to the near edge, none at
+  the range); +8 MAX x 40, +12 MIN, +16 MAX, the size: +8 over the view depth (the projected point's z, metres from the
+  camera: the largest to 40 m from it, a rival about 30 m ahead with the camera riding behind, and a thing of the
+  world's shrinking beyond), held between MIN and MAX. Not the name's size rule (0.6 + 0.4 x the fade). A window of
+  zeros (no core wrote it) puts every tagged seat past a range of 0: no mode tag;
 - in the SHOWN limit and the overlap rule's order, every tagged seat comes before every other: its score and its
-  order key are less TAG_FIRST, more than any of them can be (a tagged seat's own hold and margin stay);
+  order key are less TAG_FIRST, more than any of them can be at the longest range (a tagged seat's own hold and margin
+  stay; the key, binary32, resolves 16 m^2: 8 cm between two tags at 100 m, 0.8 m at 10 m, nothing a player sees);
 - in TAG_COLOUR, with the same shadow;
 - through walls: the text's sort depth is the one a point 1 unit before the camera has (the nearest a tag can be: a
   point nearer is no candidate), with the same draw set-up, so the scene's depth never hides it;
@@ -66,25 +70,26 @@ from tagsfade import FADE_IN, FADE_OUT, FADE_LEAVE
 
 NEAR, FAR, TAG_HEIGHT = 15.0, 40.0, 2.5   # game units (1 unit = 1 m: a machine at 216 km/h moves 1 a step)
 SHOWN, HOLD, MARGIN = 3, 30, 0.2           # tags, drawn frames, share of the distance
-TAG_NEAR, TAG_FAR = 150.0, 200.0           # a mode's `tag` without tag_range: 1.0 alpha to 150 m, none past 200 m (ordinary:
-                                           # 15, 40); the window's words (the core's, from the mode) stand in the routine
-TAG_SIZE, TAG_SIZE_SLOPE = 0.9, 0.3        # its text's size: 1.2 to TAG_NEAR, 0.9 at TAG_FAR (ordinary: 1.0, 0.6)
+TAG_RANGE_MOST = 10000.0                   # a mode's `tag` range at most (mode.h MOST_TAG_RANGE); the texts' own settings
+TAG_LOOK = 20                              # (range, size) stand in the window, 5 words a text (mode_hud.h WINDOW_TAG_LOOK)
 TAG_COLOUR = 0xFFD800                      # saturated yellow: reads over the road, the sky and a red machine alike
-TAG_FIRST = 2.0 * TAG_FAR * TAG_FAR        # more than any tagged seat's score (at worst d^2 / (1 - MARGIN)^2): the window's third word
-assert TAG_FAR * TAG_FAR / (1.0 - MARGIN) ** 2 < TAG_FIRST
+TAG_FIRST = 2.0 * TAG_RANGE_MOST ** 2      # more than any tagged seat's score (at worst range^2 / (1 - MARGIN)^2)
+assert TAG_RANGE_MOST ** 2 / (1.0 - MARGIN) ** 2 < TAG_FIRST
 PLAYERS = memmap.IMAGE + 0x10 + 40        # the slot 'FZSI' +40: the player seats
 TEXT = 0xDC
 # constants at r23 (written to the stack on every call): 0 one, 4 255, 8 x min, 12 x max, 16 y max, 20 zero,
 # 24/28 the ghost names' sort-depth constants, 32/36 size slope and base, 40/44 the overlap box (pixels), 48 NEAR^2,
 # 52 FAR^2, 56 1 / (FAR^2 - NEAR^2), 60 a challenger's factor, 64 the fade's step, 68 TAG_HEIGHT, 72 the box's growth
 # for a tag left out, 76 larger than any score, 80 the fade-out step, 84 the leaving fade-out step, 88 two,
-# 92 the range^2, 96 1 / (range^2 - near^2), 100 TAG_FIRST (the three the window gives, memmap.MODE_HUD_TAG_RANGE, in this
-# order: None here), 104 and 108 a tag's size slope and base
+# 92 TAG_FIRST. A tag's range and size come from the window by its text (look), not from here
 CONSTS = (1.0, 255.0, -100.0, 740.0, 520.0, 0.0, 90000.1, 9000.0, 0.4, 0.6, 70.0, 16.0, NEAR * NEAR, FAR * FAR,
           1.0 / (FAR * FAR - NEAR * NEAR), 1.0 / (1.0 - MARGIN) ** 2, 1.0 / FADE_IN, TAG_HEIGHT, 1.25, 1.0e30,
-          1.0 / FADE_OUT, 1.0 / FADE_LEAVE, 2.0, None, None, None, TAG_SIZE_SLOPE, TAG_SIZE)
-RANGE_AT = 4 * CONSTS.index(None)           # 92: where the window's three words go
-assert CONSTS[23:26] == (None, None, None) and RANGE_AT == 92
+          1.0 / FADE_OUT, 1.0 / FADE_LEAVE, 2.0, TAG_FIRST)
+assert CONSTS[23] == TAG_FIRST
+# the window's settings of text t (from 1) are at MODE_HUD_TAG_LOOKS + (t - 1) * TAG_LOOK: with the text times TAG_LOOK in a
+# register, one addis puts their base less TAG_LOOK in its high half and the loads take the low half, signed, as offset
+LOOK_HI, LOOK_LO = memmap.split(memmap.MODE_HUD_TAG_LOOKS - TAG_LOOK)
+assert -0x8000 <= LOOK_LO and LOOK_LO + TAG_LOOK <= 0x7FFF
 # stack: 0x10 world point, 0x20 projected x, y, view z, 0x30 scratch, 0x38 colour, 0x40 candidates (32 bytes: x, y,
 # view z, distance fade, seat (| 0x100 once chosen), score, d^2, order key, then drawn alpha), 0x400 placed tags
 # (8 bytes: x, y), 0x420 the constants, 0x4A0 r19-r31, 0x4D8 f26-f31
@@ -111,17 +116,14 @@ def addr(fn):            # r3 = address of main.rel text function fn
     return f"    addis 3, 29, {hi}\n    addi 3, 3, {lo}\n"
 
 
-def const(i, v):
-    if v is None:            # the window's (RANGE_AT on): loaded below, in one go
-        return ""
+def const(i, v):         # (a float whose low half is 0, as 1.0 or 1600.0: the lis alone, its low half being zeros)
     w = struct.unpack(">I", struct.pack(">f", v))[0]
-    return f"    lis 0, {w >> 16}\n    ori 0, 0, {w & 0xFFFF}\n    stw 0, {4 * i}(23)\n"
+    ori = f"    ori 0, 0, {w & 0xFFFF}\n" if w & 0xFFFF else ""
+    return f"    lis 0, {w >> 16}\n{ori}    stw 0, {4 * i}(23)\n"
 
 
-def window_consts():     # the mode's tag range: the window's three words into the constants at RANGE_AT (5 instructions
-    a = memmap.MODE_HUD_TAG_RANGE                              # where 3 immediates took 9: 8 bytes of the image spared)
-    return f"    lis 9, {memmap.hi(a)}\n" + "".join(f"    lwz 0, {memmap.lo(a) + 4 * i}(9)\n    stw 0, {RANGE_AT + 4 * i}(23)\n"
-                                                      for i in range(3))
+def look(reg, text):     # reg = the window's settings of mode tag text `text` (a register, from 1), less LOOK_LO: the words
+    return f"    mulli {reg}, {text}, {TAG_LOOK}\n    addis {reg}, {reg}, {LOOK_HI}\n"   # are at LOOK_LO + 0 .. 16 (reg)
 
 
 def cand(reg, index):    # reg = the candidate `index`'s record on the stack
@@ -154,7 +156,7 @@ def asm():
     or. 0, 0, 9
     beq out
     addi 23, 1, {K:#x}
-""" + "".join(const(i, v) for i, v in enumerate(CONSTS)) + window_consts() + """
+""" + "".join(const(i, v) for i, v in enumerate(CONSTS)) + """
     lis 12, 0x8000
     lwz 29, 0x30C8(12)
     addis 30, 29, 0x1C
@@ -259,7 +261,7 @@ c_tag:
     lfs 1, 0x{memmap.MACHINE_DRAWN_Z:X}(24)
     fsubs 1, 1, 30
     fmadds 4, 1, 1, 4
-""" + tagged(9, 19, "c_far") + f"""    lfs 0, 92(23)
+""" + tagged(9, 19, "c_far") + look(9, 9) + f"""    lfs 0, {LOOK_LO}(9)
     b c_far_on
 c_far:
     lfs 0, 52(23)
@@ -309,9 +311,9 @@ c_off:
     li 20, 1
 c_on:
     lfs 5, 0x30(1)
-""" + tagged(9, 19, "c_fade_plain") + f"""    lfs 0, 92(23)
+""" + tagged(9, 19, "c_fade_plain") + look(9, 9) + f"""    lfs 0, {LOOK_LO}(9)
     fsubs 2, 0, 5
-    lfs 0, 96(23)
+    lfs 0, {LOOK_LO + 4}(9)
     b c_fade_on
 c_fade_plain:
     lfs 0, 52(23)
@@ -347,7 +349,7 @@ c_key:
     lwz 10, 12(19)
     cmpwi 10, 0
     beq c_key_on
-    lfs 0, 100(23)
+    lfs 0, 92(23)
     fsubs 6, 6, 0
 c_key_on:
     stfs 6, 28(9)
@@ -368,7 +370,7 @@ c_score:
     lwz 10, 12(19)
     cmpwi 10, 0
     beq c_score_on
-    lfs 0, 100(23)
+    lfs 0, 92(23)
     fsubs 6, 6, 0
 c_score_on:
     stfs 6, 20(9)
@@ -569,16 +571,23 @@ d_depth:
     fdivs 1, 1, 2
     lfs 0, 24(23)
     fsubs 1, 0, 1
-""" + rel(0x4954C) + addr(0x12A080) + rel(0x49738) + """
-    lfs 0, 12(24)
-""" + marked(10, 24, "d_size") + """    lfs 1, 104(23)
-    lfs 2, 108(23)
+""" + rel(0x4954C) + addr(0x12A080) + rel(0x49738) + marked(10, 24, "d_size") + f"""    lwz 9, 12(19)
+""" + look(9, 9) + f"""    lfs 1, 8(24)
+    lfs 0, {LOOK_LO + 8}(9)
+    fdivs 1, 0, 1
+    lfs 0, {LOOK_LO + 12}(9)
+    fsubs 2, 1, 0
+    fsel 1, 2, 1, 0
+    lfs 0, {LOOK_LO + 16}(9)
+    fsubs 2, 0, 1
+    fsel 1, 2, 1, 0
     b d_size_on
 d_size:
+    lfs 0, 12(24)
     lfs 1, 32(23)
     lfs 2, 36(23)
-d_size_on:
     fmadds 1, 0, 1, 2
+d_size_on:
     fmr 2, 1
 """ + rel(0x4955C) + """
     lfs 1, 0(24)
