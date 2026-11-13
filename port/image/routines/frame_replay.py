@@ -2,21 +2,90 @@
 `replay` and `replay_filter` set the task filter for every step of a frame but its last, `filters` puts back the
 values the frame began with, `net_step` counts the session's step, and `manager` is the step wrapper around the
 game's simulation manager: it sets the words mute.py reads (+488, +492) and, in a session, calls `rt_cam`
-(frame_tasks.py) and `specstep` (frame_spectate.py) first, then `simgen`, which seeds the simulation's own
-generator for the step (sites_generator.py). `endtest` says whether the race-over test (standin_race.py,
+(frame_tasks.py) and `specstep` (frame_spectate.py) first, then (native form) `lapscroll`, which counts the lap-time
+list's scroll down (sites_lapscroll.py), then `simgen`, which seeds the simulation's own generator for the step
+(sites_generator.py). `endtest` says whether the race-over test (standin_race.py,
 `over`) would find the race over on the machines as they are: r3 = 1 in a running session's race phase when the
 test's own guards are clear and the race is over as raceend.py's text says, the text the race-over test itself
 assembles: every machine has finished or is out, or, with the host's rule, its end is reached and the results' wait
 is done. The frame routine asks before and after every step and runs no further step in a frame once a step has
 made it so (frame_entry.py, `extra_cut`): with the rule too, every game stands before the same step when the
 race-over test speaks. `endtest_extra` is the same question before an extra step, where the race clock has not yet
-counted the step just run (raceend.py)."""
-import memmap, raceend
+counted the step just run (raceend.py).
+
+A mode's pause (protocol modes.toml `pause`; port/core/src/mode.h PAUSED): `manager` reads the mode's block's pause word
+before every step's simulation. Not 0, the step stands: no simulation manager (no machine, CPU or presentation task, no
+camera, no generator seed), the mode point's host call (memmap.HOST_MODE: the mode's run, which reads the step's rows and
+may resume) made in its place, and memmap.STOOD set to 1; otherwise STOOD is 0 and the step runs as ever. The step itself
+goes on as any other: its number (+124), its row, its checksum (of the machines as they stand) and its sounds' word. So
+that the race clock stands too, the frame routine counts it only after a step that ran (frame_entry.py `extra_on`; for
+the frame's last step, `done_ret` takes back the count the game's frame function makes after it, 0x37BAC). The word is
+the block's, so a rollback, a step run again and a playback stand where the first run stood."""
+import memmap, native, raceend
 
 
 def asm():
     return _TEXT.replace("CLAUSE", raceend.clause(30, "et_", "et_yes", "et_no", behind=11)).replace(
-        "SIMGEN_TEXT", _simgen())
+        "SIMGEN_TEXT", _simgen() + (_lapscroll() if native.ON else "")).replace(
+        "LAPSCROLL\n", "    bl lapscroll\n" if native.ON else "").replace("STAND_TEXT", _stand())
+
+
+# The lap-time list's scroll (../sites_lapscroll.py), native form only (the fork's image has neither this nor the
+# drawing's site): before every step, each of the four ports' counts (main.rel .bss 0x7ACA0 + 12 x port, +8), when
+# not 0, goes down by one: the count the stock game's drawing (fn_1_CB028) takes down once a displayed frame, which in
+# a race of ours the drawing leaves alone. Before the task manager, so the step whose lap event sets 15 draws 15, as
+# the stock game's first frame does. r30 is main.rel's .bss. Writes r9, r10, r11, cr0.
+LAP_ENTRIES, LAP_ENTRY, LAP_COUNT, LAP_PORTS = 0x7ACA0, 12, 8, 4   # .bss: the entries, their size, +8, the ports
+
+
+def _lapscroll():
+    first = LAP_ENTRIES + LAP_COUNT - 0x80000
+    assert -0x8000 <= first < 0 and LAP_ENTRIES + LAP_PORTS * LAP_ENTRY <= 0x80000
+    return f"""lapscroll:
+    addis 9, 30, 8
+    addi 9, 9, {first}
+    li 10, {LAP_PORTS}
+lsc_port:
+    lbz 11, 0(9)
+    cmpwi 11, 0
+    beq lsc_next
+    addi 11, 11, -1
+    stb 11, 0(9)
+lsc_next:
+    addi 9, 9, {LAP_ENTRY}
+    addi 10, 10, -1
+    cmpwi 10, 0
+    bne lsc_port
+    blr
+"""
+
+
+# The pause's test in `manager`, after the mute words: r0, r9, r12, ctr and cr0 (the simulation manager's call, which
+# it takes the place of, writes every volatile register). The block's address and its pause word, then either the
+# mode's run and the routine's return, or STOOD 0 and on to the simulation.
+def _stand():
+    modes, stood, host = memmap.MODES, memmap.STOOD - memmap.CONTROL, memmap.HOST_MODE
+    assert memmap.lo(modes) + 4 < 0x8000 and memmap.MODE_PAUSED < 0x8000 and 0 < stood < 0x8000
+    return f"""    lis 9, {memmap.hi(modes)}
+    lwz 9, {memmap.lo(modes) + 4}(9)
+    cmplwi 9, 0
+    beq m_live
+    lwz 0, {memmap.MODE_PAUSED}(9)
+    cmpwi 0, 0
+    beq m_live
+    li 0, 1
+    stw 0, {stood}(31)
+    lis 12, {memmap.hi(host)}
+    ori 12, 12, {memmap.lo(host)}
+    mtctr 12
+    bctrl
+    lwz 0, 16(1)
+    mtlr 0
+    blr
+m_live:
+    li 0, 0
+    stw 0, {stood}(31)
+"""
 
 
 # The simulation's own generator (sites_generator.py): before every step of a running race whose race block says so
@@ -129,12 +198,13 @@ m_running:
     stw 11, 492(31)
 m_flag:
     stw 10, 488(31)
-    lwz 9, 116(31)
+STAND_TEXT    lwz 9, 116(31)
     cmpwi 9, 0
     beq m_call
     bl rt_cam
     bl specstep
 m_call:
+LAPSCROLL
     bl simgen
     lis 12, 0x8000
     lwz 12, 0x30C8(12)

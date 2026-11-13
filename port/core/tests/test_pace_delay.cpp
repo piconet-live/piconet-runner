@@ -69,7 +69,10 @@ void TestTheScheduleAtALowerDelay()
                                  {"one frame of 30 ms in four", {30, 0, 0, 0}}};
   near[1].work[13] = 49;
   near[1].work[14] = 36;
-  const std::vector<PacedHost> far = {{"55 frames a second", {1000.0 / 55}, 1.7}, {"50 frames a second", {1000.0 / 50}, 1.5}};
+  // (in fields, as the schedule's steps are: 12 steps in 11 frames and 6 in 5, the frames falling on the steps the same
+  // way all race long. A host a little off that, 20 ms a frame or 0.001 % shorter, drifts through every way: about
+  // one frame in six then has a rollback one step deeper than the rule allows, four steps late.)
+  const std::vector<PacedHost> far = {{"55 frames a second", {FIELD_MS * 60 / 55}, 1.7}, {"50 frames a second", {FIELD_MS * 60 / 50}, 1.5}};
   for (const u32 delay : {0u, 1u, 2u})
   {
     for (const PacedHost& host : near)

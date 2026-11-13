@@ -20,6 +20,17 @@ def target(word, at):
     return (at + disp - (0x04000000 if disp & 0x02000000 else 0)) & 0xFFFFFFFF
 
 
+class HudMoveParts(unittest.TestCase):
+    def test_the_parts_are_the_hosts(self):
+        """The part numbers the sites pass are hud_move.cpp's: the two PARTS lists are one."""
+        import re
+        with open(os.path.join(here, "..", "..", "core", "src", "hud_move.h"), encoding="utf-8") as f:
+            text = f.read()
+        body = re.search(r"PARTS = \{(.*?)\};", text, re.S).group(1)
+        self.assertEqual(re.findall(r'"([A-Z_]+)"', body), sites_hudmove.PARTS)
+        self.assertEqual(sites_hudmove.PARTS[-2:], ["BOOST", "STORY_OTHER"])  # the two no mode names, after the protocol's
+
+
 class Liveness(unittest.TestCase):
     def prove(self, words, resource, start=0x1000):
         code = {start + 4 * i: w for i, w in enumerate(words)}
@@ -130,7 +141,7 @@ class Bundle(unittest.TestCase):
         self.assertFalse(any((a, b) == old for a, b in zip(words, words[1:])))
 
     def test_every_patch_enters_the_image(self):
-        self.assertEqual(len(self.patches), 406)   # 405 + start_gap's move (sites_grid.py grid_spread); 402 + the draw marks' three (sites_marks.py); 352 + the OBJECTS part's two counts (mode_objects_of, mode_objects_gone); 350 + the points page's one word (mode_points_free) and the results heading; 349 + the energy meter's getter; 346 + the ghost's pilot and the HUD's two lap draws; 343 + the ghost task's making, voice and shadow; 319: game_start's mode_begin; 318: start_together's placing; 317: the portraits' mark, the leader's gap popup in the step, and the mode words' ten since 305; 305: mode_monitors; 286: the simulation's own generator (2), the mode's sites from the board, display and race words; 250: the game mode's displays' three (sites_modehud.py); 247: the game mode's pair gate and timer; 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
+        self.assertEqual(len(self.patches), 415)   # 414 + the CHECK sign's wrap (sites_hudmove.py hm_129948); 412 + the wreck's slide before a restore (sites_wreck.py: 2); 411 + the lap list's scroll (sites_lapscroll.py lap_scroll); 408 + VS RESULTS passed over under `results_times off` (its A, its sound, the points page's B); 407 + DISTANCE's sixth digit under `distance_label off` (mode_distance_digits); 406 + DISTANCE's label under `distance_label off` (mode_distance_label); 405 + start_gap's move (sites_grid.py grid_spread); 402 + the draw marks' three (sites_marks.py); 352 + the OBJECTS part's two counts (mode_objects_of, mode_objects_gone); 350 + the points page's one word (mode_points_free) and the results heading; 349 + the energy meter's getter; 346 + the ghost's pilot and the HUD's two lap draws; 343 + the ghost task's making, voice and shadow; 319: game_start's mode_begin; 318: start_together's placing; 317: the portraits' mark, the leader's gap popup in the step, and the mode words' ten since 305; 305: mode_monitors; 286: the simulation's own generator (2), the mode's sites from the board, display and race words; 250: the game mode's displays' three (sites_modehud.py); 247: the game mode's pair gate and timer; 245: the game mode's three (sites_mode.py); 242: the machine setting's curve (54 and its 2 calls), the boost length
         executable = [a for a in self.patches if a < memmap.REL]
         # the last: frame begin's copy to the display buffer (sites_present.py)
         self.assertEqual(sorted(executable), [0x80005940, 0x800059A8, 0x80067898, 0x8006FDA4])

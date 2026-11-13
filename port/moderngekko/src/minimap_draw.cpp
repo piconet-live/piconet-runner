@@ -3,12 +3,14 @@
 
 #include "minimap_draw.h"
 
+#include "adapter_internal.h"
 #include "fzgx/minimap.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <format>
 
 #include <imgui_internal.h>  // (ImGui::RegisterUserTexture, as panel.cpp)
 
@@ -24,6 +26,67 @@ constexpr int SAMPLES_TURNING = 2;  // ... while the view turns (made again ever
 ImU32 Rgb(fzgx::u32 rgb, float opacity)
 {
   return ov::Colour(rgb, opacity);
+}
+
+// A game mode's map_char over a dot (MinimapDot::symbol): the crown as a filled polygon, else the character in the
+// overlay's display font (Saira, with Segoe UI, Segoe UI Symbol and Yu Gothic merged on Windows), `size` high about
+// `p`, in `fill` with the dots' rim `edge` wide. False (nothing drawn: the caller draws the plain dot) for a character
+// the fonts lack, or one past U+FFFF (ImGui's characters here are 16 bits), said once in the log.
+bool DrawSymbol(ImDrawList* list, fzgx::u32 symbol, ImVec2 p, float size, ImU32 fill, ImU32 rim, float edge)
+{
+  if (symbol == fzgx::MinimapDot::SYMBOL_CROWN)
+  {
+    // a base band and three points, the middle one highest: x -1 to 1, y -0.75 (the top) to 0.55 (the base), in size / 2.
+    // An even number of corners: the fill's indices are (n - 2) * 3, plus 6n with anti-aliasing, so an odd n makes the
+    // frame's index count odd, and Aurora's overlay upload (16-bit indices, sizes in multiples of 4 bytes) then stops
+    // Aurora for the run ("Size (...) is not a multiple of 4", seen 2026-11-08 with 7 corners). Hence the base's middle.
+    static constexpr ImVec2 CROWN[] = {{-1.0f, 0.55f}, {-1.0f, -0.55f}, {-0.5f, 0.0f}, {0.0f, -0.75f},
+                                       {0.5f, 0.0f},   {1.0f, -0.55f},  {1.0f, 0.55f}, {0.0f, 0.55f}};
+    static_assert(std::size(CROWN) % 2 == 0, "an odd corner count gives the frame an odd index count (see above)");
+    ImVec2 at[std::size(CROWN)];
+    for (std::size_t i = 0; i < std::size(CROWN); ++i)
+      at[i] = ImVec2(p.x + CROWN[i].x * size / 2, p.y + CROWN[i].y * size / 2);
+    list->AddPolyline(at, static_cast<int>(std::size(at)), rim, ImDrawFlags_Closed, 2 * edge);
+    list->AddConcavePolyFilled(at, static_cast<int>(std::size(at)), fill);
+    return true;
+  }
+  ImFont* font = ov::TheFonts().display;
+  static bool said = false;
+  if (font == nullptr || symbol == 0 || symbol > 0xFFFF || !font->IsGlyphInFont(static_cast<ImWchar>(symbol)))
+  {
+    if (!said && symbol != 0)
+    {
+      said = true;
+      s_core_host.Log(fzgx::LogLevel::Notice, std::format("fzgx: course map: no font here draws U+{:04X} (map_char): "
+                                                          "the plain dot", symbol));
+    }
+    return false;
+  }
+  char text[5] = {};
+  ImTextCharToUtf8(text, static_cast<unsigned int>(symbol));
+  // the character's own ink, not its line box, at the crown's size: as tall as the crown (0.65 of `size`) and no wider
+  // than it (`size`), centred on `p` (a glyph's corners are offsets from the pen at the line's top, in pixels of the
+  // size it was baked at)
+  float height = size;
+  ImVec2 middle(0, 0);
+  if (const ImFontGlyph* glyph = font->GetFontBaked(size)->FindGlyphNoFallback(static_cast<ImWchar>(symbol));
+      glyph != nullptr && glyph->X1 > glyph->X0 && glyph->Y1 > glyph->Y0)
+  {
+    const float k = std::min(0.65f * size / (glyph->Y1 - glyph->Y0), size / (glyph->X1 - glyph->X0));
+    height = size * k;
+    middle = ImVec2((glyph->X0 + glyph->X1) / 2 * k, (glyph->Y0 + glyph->Y1) / 2 * k);
+  }
+  else
+  {
+    const ImVec2 wide = font->CalcTextSizeA(size, 1e9f, 0, text);
+    middle = ImVec2(wide.x / 2, wide.y / 2);
+  }
+  const ImVec2 at(p.x - middle.x, p.y - middle.y);
+  for (const ImVec2 d : {ImVec2(-1, 0), ImVec2(1, 0), ImVec2(0, -1), ImVec2(0, 1), ImVec2(-0.7f, -0.7f),
+                         ImVec2(0.7f, -0.7f), ImVec2(-0.7f, 0.7f), ImVec2(0.7f, 0.7f)})
+    list->AddText(font, height, ImVec2(at.x + d.x * edge, at.y + d.y * edge), rim, text);
+  list->AddText(font, height, at, fill, text);
+  return true;
 }
 
 // Sets every sample whose middle lies in triangle a-b-c (in samples) to `value`: row by row from the top corner, the
@@ -244,9 +307,14 @@ void Draw(ImDrawList* list, RoadPicture& road, const std::shared_ptr<const fzgx:
   const float half = (b.x1 - b.x0) / 2 * road.scale, cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
   const float across = b.x1 - b.x0;
   const ImU32 rim = Rgb(ov::GROUND, 0.85f * alpha);
+  // A dot with a mode's map_char is that character in place of the dot, as big as the big dots' circles and a little
+  // more, drawn after every plain dot so it stays on top (in the core's order among themselves)
+  for (int pass = 0; pass < 2; ++pass)
   for (fzgx::u32 i = 0; i < show.count && i < show.dots.size(); ++i)
   {
     const fzgx::MinimapDot& d = show.dots[i];
+    if ((d.symbol != 0) != (pass == 1))
+      continue;
     const bool big = d.role != fzgx::MinimapDot::Racer;
     const float r = (big ? 0.0175f : 0.011f) * across, edge = std::max(1.0f, 0.005f * across);
     float x = d.x, y = d.y;
@@ -258,6 +326,12 @@ void Draw(ImDrawList* list, RoadPicture& road, const std::shared_ptr<const fzgx:
       x = q.x, y = q.y;
     }
     const ImVec2 p(cx + x * half, cy - y * half);
+    if (pass == 1 && DrawSymbol(list, d.symbol, p, 2.6f * 0.0175f * across, Rgb(d.colour, alpha), rim, edge))
+    {
+      if (d.role == fzgx::MinimapDot::You)
+        list->AddCircle(p, 1.5f * 0.0175f * across, Rgb(ov::TEXT, alpha), 24, 1.2f * edge);
+      continue;
+    }
     list->AddCircleFilled(p, r + edge, rim, 20);
     list->AddCircleFilled(p, r, Rgb(d.colour, alpha), 20);
     if (d.role == fzgx::MinimapDot::You)

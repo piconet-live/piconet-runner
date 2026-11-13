@@ -478,6 +478,7 @@ MinimapShow Pick(const Racers& racers, u32 count, u32 you, const Camera& camera)
     d.wy = racers[i].at.y;
     d.wz = racers[i].at.z;
     d.colour = racers[i].colour & 0xFFFFFF;
+    d.symbol = racers[i].symbol;
   };
   for (u32 k = 0; k < n; ++k)
     add(others[k], MinimapDot::Racer);

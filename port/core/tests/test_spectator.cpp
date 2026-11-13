@@ -20,6 +20,7 @@ Racers Field(u32 n)
   for (u32 i = 0; i < n; ++i)
   {
     r[i].present = true;
+    r[i].drawn = true;
     r[i].rank = n - 1 - i;
     r[i].distance = 1000.0f + 100.0f * static_cast<float>(i);
   }
@@ -88,7 +89,7 @@ void TestAKnockedOutRacerNeverScrubs()
   const Racers r = Field(6);
   const Frame f = c.Next(Press(all), r);
   CHECK(f.scrub == 0 && !f.live && !f.pause);
-  CHECK(c.Click(1));
+  CHECK(c.Click(1, r));
   CHECK(c.Next(Pad{}, r).follow == 1);
   CHECK(Controls(Role::Replay, 8, 0).MayJump() && Controls(Role::Spectator, 8, 0).MayJump());
 }
@@ -104,7 +105,12 @@ void TestTheLeaderAndTheClosestBattle()
   CHECK(Leader(r) == 2);
   for (u32 i = 0; i < 5; ++i)
     r[i].out = true;
-  CHECK(Leader(r) == 4);  // nobody races: the leader of all
+  CHECK(Leader(r) == 4);  // nobody races: the leader of those that may be picked (every wreck still drawn)
+  r[4].drawn = false;     // the leader's wreck exploded: the best-placed wreck still drawn (3 finished, but out too)
+  CHECK(Leader(r) == 3);
+  for (u32 i = 0; i < 5; ++i)
+    r[i].drawn = false;
+  CHECK(Leader(r) == NOBODY);  // every body gone: nobody to pick
   CHECK(Leader(Racers{}) == NOBODY);
 
   r = Field(5);
@@ -129,12 +135,66 @@ void TestTheRacerBeforeAndAfter()
   CHECK(ByRank(r, 0, 1) == 3);   // round
   CHECK(ByRank(r, 3, -1) == 0);
   CHECK(ByRank(r, 1, -1) == 2);
-  r[2].out = true;               // a wreck stays in the order
+  r[2].out = true;               // a wreck still drawn (broken down or retired at rest) may be picked
   CHECK(ByRank(r, 3, 1) == 2);
-  r[2].present = false;          // gone: skipped
+  CHECK(ByRank(r, 1, -1) == 2);
+  r[2].drawn = false;            // its body gone (exploded, fallen): passed over both ways
+  CHECK(ByRank(r, 3, 1) == 1);
+  CHECK(ByRank(r, 1, -1) == 3);
+  CHECK(ByRank(r, 2, 1) == 1);   // the racer watched just went: on from its place
+  CHECK(ByRank(r, 2, -1) == 3);
+  r[1].finished = true;          // a finished racer may be picked
+  CHECK(ByRank(r, 3, 1) == 1);
+  r[3].out = true;               // the leader out, its wreck still drawn: first in order still
+  CHECK(ByRank(r, 25, 1) == 3);  // not in the race: the first that may be picked
+  r[3].drawn = false;
+  CHECK(ByRank(r, 25, 1) == 1);
+  CHECK(ByRank(r, 0, 1) == 1 && ByRank(r, 1, 1) == 0);  // round, past the two bodies gone
+  r[0].out = true, r[0].drawn = false, r[1].out = true, r[1].drawn = false;
+  CHECK(ByRank(r, 2, 1) == NOBODY);  // nobody may be picked: the controls keep the racer they have
+  CHECK(ByRank(r, 25, 1) == NOBODY);
+  r[1].drawn = true;
+  CHECK(ByRank(r, 1, 1) == 1);   // the only one: itself
+  r = Field(4);
+  r[2].present = false;          // not in the race: skipped
   CHECK(ByRank(r, 3, 1) == 1);
   CHECK(ByRank(r, 25, 1) == 3);  // not in the race: the leader
   CHECK(ByRank(Racers{}, 0, 1) == NOBODY);
+}
+
+void TestAWatcherPicksNoRacerWhoseBodyIsGone()
+{
+  BEGIN_TEST();
+  // the D-pad and a click land only on a racer racing, finished, or out with its wreck still drawn
+  Racers r = Field(5);  // order: 4, 3, 2, 1, 0
+  r[3].out = true;                     // exploded: gone
+  r[2].out = true, r[2].drawn = true;  // broken down at rest: its wreck lies on the track
+  r[1].finished = true;
+  Controls c(Role::Replay, 8, 4);
+  CHECK(c.Next(Pad{}, r).follow == 4);
+  r[3].drawn = false;
+  CHECK(Tap(c, r, PAD_RIGHT).follow == 2);  // past 3, onto the wreck still drawn
+  CHECK(Tap(c, r, PAD_RIGHT).follow == 1);  // finished
+  CHECK(Tap(c, r, PAD_LEFT).follow == 2);
+  CHECK(Tap(c, r, PAD_LEFT).follow == 4);
+  CHECK(!c.Click(3, r));                    // refused (counted by the frame as refused)
+  CHECK(c.Next(Pad{}, r).follow == 4);
+  CHECK(c.Click(2, r) && c.Next(Pad{}, r).follow == 2);
+  CHECK(c.Click(1, r) && c.Next(Pad{}, r).follow == 1);
+  // the wreck watched is hit and goes: the controls stay on it (the pictures' own rules move on: playback.cpp
+  // SpectateReplay, the image's ss_watched), and the D-pad goes on from its place
+  CHECK(c.Click(2, r) && c.Next(Pad{}, r).follow == 2);
+  r[2].drawn = false;
+  CHECK(c.Next(Pad{}, r).follow == 2);
+  CHECK(Tap(c, r, PAD_RIGHT).follow == 1);
+  CHECK(!c.Click(2, r));
+  // X with nobody racing: the best-placed racer that may be picked
+  Racers all = Field(3);
+  for (auto& x : all)
+    x.out = x.present;
+  all[2].drawn = false;
+  Controls k(Role::KnockedOut, 8, 0);
+  CHECK(Tap(k, all, PAD_X).follow == 1);
 }
 
 void TestTheFollowModes()
@@ -155,12 +215,12 @@ void TestTheFollowModes()
   CHECK(f.follow == 4 && f.follow_changed);
   CHECK(!c.Next(Pad{}, r).follow_changed);
   // a click is a chosen racer
-  CHECK(c.Click(2));
+  CHECK(c.Click(2, r));
   f = c.Next(Pad{}, r);
   CHECK(f.follow == 2 && c.how() == Follow::Chosen);
   r[4].rank = 1; r[5].rank = 0;
   CHECK(c.Next(Pad{}, r).follow == 2);
-  CHECK(!c.Click(30));
+  CHECK(!c.Click(30, r));
   // Y: the closest battle, held BATTLE_HOLD frames
   r = Field(6);
   r[1].distance = 1195;  // racer 1 is 5 behind racer 2
@@ -256,7 +316,7 @@ void TestTheOverlaysFollowButtons()
   f = c.Next(Pad{}, close);
   CHECK(f.follow == 1 && c.how() == Follow::Battle);
   // a click of a row ends either
-  CHECK(c.Click(3));
+  CHECK(c.Click(3, close));
   f = c.Next(Pad{}, close);
   CHECK(f.follow == 3 && c.how() == Follow::Chosen);
   // course 41: the leader is not followed there
@@ -276,7 +336,7 @@ void TestACoursesRule()
   CHECK(!rule.follow_others && rule.kinds == 0);
   const Racers r = Field(4);
   Controls c(Role::Replay, 41, 2);
-  CHECK(!c.Click(1) && c.Click(2) && !c.ClickKind(Kind::Course));
+  CHECK(!c.Click(1, r) && c.Click(2, r) && !c.ClickKind(Kind::Course));
   Frame f = Tap(c, r, PAD_RIGHT);
   CHECK(f.follow == 2 && !f.follow_changed);
   f = Tap(c, r, PAD_X);

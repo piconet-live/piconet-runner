@@ -25,17 +25,20 @@
 //   +24 GAP's time, packed as the game's lap words (the seat's last lap line, P+0x1E0)
 //   +28 the race clock when +11 was asked: the HUD pass shows the gap popup's part and starts the wrong-way sign from it
 // At +TAGS_AT (after the records), a byte a seat: `tag`'s text, its number in the package's tag_texts from 1 (0: none).
-// The story parts' values (show_distance, show_objects) are in page 7's tail (STORY, below): the record is full.
+// The story parts' values (show_distance, show_objects) are in page 7's tail (STORY, below): the record is full. So are
+// hud_move's places, map_char's characters, show_score's and show_text's records, in page 7's head (MOVES, MAP_CHARS, SCORES, TEXTS).
 // The danger zone's display reads the race side's state (mode.h DANGER: its count, as story chapter 6's).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
 
 #include <array>
+#include <bit>
 #include <vector>
 
 #include "fzgx/guest.h"
 #include "mode.h"
+#include "hud_move.h"
 #include "mode_words.g.h"
 
 namespace fzgx::mode::hud
@@ -54,13 +57,55 @@ static_assert(TAGS_AT + 30 <= GHOST_SOUNDS && GHOST_SOUNDS + 4 <= STATS && STATS
 
 // The story parts' values, STORY_RECORD bytes a seat in the tail of the block's page 7 (the modern HUD's slots were its
 // head until that HUD was retired, 2026-11-04; the head is unused and the page keeps its size, so STORY stays where it
-// was; it is the block's like the rest, so the undo log and the checksum have it): +0 show_distance's metres (binary32, 0 to 99999), +4 the
+// was; it is the block's like the rest, so the undo log and the checksum have it): +0 show_distance's metres (binary32, 0 to 99999; under `distance_label off` to 999999), +4 the
 // flags (STORY_DISTANCE, STORY_OBJECTS: the mode gave that value), +6 show_objects's n, +7 its of (0 to 99 each).
 // A page of zeros: the game's own values.
 constexpr u32 STORY = 7 * PAGE + 0xF10, STORY_RECORD = 8;
+// hud_move's places, in the page 7's head (unused since the modern HUD's slots left it) after the page's step stamp (its
+// first word, which mode.cpp's Stamp writes at every run: read as seat 0's TIMER move it slid the clock down a unit a
+// step, off the screen within seconds): a record of MOVE_RECORD bytes a seat at MOVES: +0 the placed parts, a bit a
+// modes::PART_* p (u32), then at MOVE_PLACES + 4 p the part's place in a word: x + MOVE_BIAS in its low MOVE_BITS, y +
+// MOVE_BIAS in the next MOVE_BITS, the angle above them (x, y the centre's place on the 640 x 480 screen, whole units
+// held to -MOVE_MOST .. MOVE_MOST; the angle whole degrees clockwise, 0 to 359). A part whose bit is off is not placed,
+// whatever its word (hud_move off clears it). Then MAP_CHARS: map_char's code a seat, u32 (0: none; a Unicode code
+// point, or MAP_SHAPES + n for a named shape, the compiler's MapSymbols). The block's like the rest: undo log and
+// checksum. (A word a part, not three s16: thirty seats' records of every part fit the head before STORY.)
+// Then SCORES: show_score's record a seat, SCORE_RECORD bytes: +0 the number + 1 (u32; 0: SCORE is not shown; the number
+// held to 0 .. SCORE_MOST, the race time's six digits), +4 a word: the label's number in the package's tag_texts from 1 in
+// its low byte (0: the default label, SCORE), the label's font (a modes::FONT_*) in the next. Then TEXTS: show_text's word a
+// seat: the text's number in tag_texts from 1 in its low byte (0: TEXT is not shown), its font in the next. The block's like
+// the rest. FONT_IDS: the game's font table number (bitmap.c lbl_1_data_1AEA8) of each modes::FONT_*, all of the common
+// sheet (image group 0, bmp_com.tpl, loaded all game): the image draws the text in it.
+constexpr u32 MOVES = 7 * PAGE + 0x10, MOVE_PLACES = 4, MOVE_RECORD = MOVE_PLACES + 4 * modes::PART_COUNT,
+              MAP_CHARS = MOVES + 30 * MOVE_RECORD, SCORES = MAP_CHARS + 30 * 4, SCORE_RECORD = 8, SCORE_VALUE = 0, SCORE_LABEL = 4,
+              TEXTS = SCORES + 30 * SCORE_RECORD, TEXT_RECORD = 4;
+constexpr u32 SCORE_MOST = 999999;
+constexpr u32 FONT_SHIFT = 8;  // (the font's byte of a label or text word)
+constexpr std::array<u32, modes::FONT_COUNT> FONT_IDS = {5, 4, 3, 2, 7, 8};  // BLOCK, CAPS, PLAIN, NARROW, SERIF, BIG_SERIF
+static_assert(modes::FONT_COUNT < 256 && modes::TAG_TEXTS < 256);
+// A label or text word, and its parts back (pure, for the tests): the text's number (0: none) and the font, held to the choice.
+constexpr u32 PackText(u32 text, u32 font) { return text | font << FONT_SHIFT; }
+constexpr u32 TextOf(u32 word) { return word & 0xFF; }
+constexpr u32 FontOf(u32 word) { return (word >> FONT_SHIFT & 0xFF) < modes::FONT_COUNT ? word >> FONT_SHIFT & 0xFF : 0; }
+constexpr s32 MOVE_MOST = 1000;
+constexpr u32 MOVE_BITS = 11, MOVE_BIAS = 1 << (MOVE_BITS - 1), MOVE_MASK = (1 << MOVE_BITS) - 1, MOVE_ANGLE_BITS = 9;
+static_assert(MOVE_MOST + MOVE_BIAS <= MOVE_MASK && 359 < (1 << MOVE_ANGLE_BITS) && 2 * MOVE_BITS + MOVE_ANGLE_BITS <= 32 &&
+              modes::PART_COUNT <= 32);  // (the places fit a word; the placed parts a mask)
+// A part's place from its word, and back (pure, for the tests).
+constexpr u32 PackPlace(s32 x, s32 y, u32 angle)
+{
+  return static_cast<u32>(x + MOVE_BIAS) | static_cast<u32>(y + MOVE_BIAS) << MOVE_BITS | angle << (2 * MOVE_BITS);
+}
+constexpr s32 PlaceX(u32 word) { return static_cast<s32>(word & MOVE_MASK) - MOVE_BIAS; }
+constexpr s32 PlaceY(u32 word) { return static_cast<s32>(word >> MOVE_BITS & MOVE_MASK) - MOVE_BIAS; }
+constexpr u32 PlaceAngle(u32 word) { return word >> (2 * MOVE_BITS); }
+constexpr u32 MAP_SHAPES = 0x110000, MAP_CROWN = MAP_SHAPES;
+static_assert(MOVES % PAGE >= 4 && MAP_CHARS + 30 * 4 <= SCORES && SCORES + 30 * SCORE_RECORD <= TEXTS &&
+              TEXTS + 30 * TEXT_RECORD <= STORY);  // (clear of the stamp; below STORY)
 constexpr u32 STORY_METRES = 0, STORY_FLAGS = 4, STORY_SHOWN = 6, STORY_OF = 7;
 constexpr u8 STORY_DISTANCE = 1, STORY_OBJECTS = 2;
 constexpr float DISTANCE_MOST = 99999.0f;  // the drawer's five digits (fn_1_CDC8C 0xCEACC)
+constexpr float DISTANCE_MOST_NO_LABEL = 999999.0f;  // under `distance_label off` six: the sixth stands where REST was
 constexpr u32 OBJECTS_MOST = 99;           // two digits each side of the slash
 static_assert(STORY + 30 * STORY_RECORD <= 8 * PAGE);
 
@@ -86,6 +131,17 @@ constexpr u32 HUD_CLEAN = 256;
 // SPREAD: start_gap above 0 or even: after the game places each slot, the story's own mid-course placement moves it round
 // the lap by the gap word (WINDOW_START_GAP) (sites_grid.py grid_spread).
 constexpr u32 SPREAD = 512;
+// NO_DISTANCE_LABEL: `distance_label off`: the DISTANCE part's label (REST) is not queued (sites_modehud.py
+// mode_distance_label); its number and m stay, and the number has a sixth digit in the label's room (mode_distance_digits;
+// show_distance holds the metres to DISTANCE_MOST_NO_LABEL by this same word).
+constexpr u32 NO_DISTANCE_LABEL = 1024;
+// NO_RESULTS_TIMES: `results_times off`: VS RESULTS, the results' page of race times, is passed over (sites_modehud.py
+// mode_results_skip): the results open on the points page.
+constexpr u32 NO_RESULTS_TIMES = 2048;
+// HUD_AX: `hud_layout ax`: the one-viewport HUD's rank by the AX layout's drawer at the bottom left, the faces board on
+// that layout's rows, the timed clock at the game's place (sites_hudmove.py ax_rank, ax_faces; sites_modehud.py
+// mode_clock_at).
+constexpr u32 HUD_AX = 4096;
 constexpr u32 FAULT_SHOWN = 16;  // (the core's own: ShowFault has written MODE ERROR; no site reads it)
 // +0xB0: the results title, 24 bytes, NUL-terminated; empty: the game's own (the site at main.rel 0x146304).
 constexpr u32 WINDOW_TITLE = 0xB0, WINDOW_TITLE_SIZE = 24;
@@ -115,11 +171,43 @@ constexpr u32 WINDOW_DISTANCE = 0x270, WINDOW_OBJECTS = 0x27C;
 // +0x290: under SPREAD, the gap between slots, binary32 metres; 0.0: even (the lap length over the machines). Written at
 // the boot, read at the race's set-up (sites_grid.py grid_spread).
 constexpr u32 WINDOW_START_GAP = 0x290;
+// +0x298: SCORE for the racer the picture follows: the number + 1 (0: not drawn); +0x29C the label's address, a
+// NUL-terminated text (one of WINDOW_TAG_TEXTS, or WINDOW_SCORE_TEXT, +0x2A0, where the pass writes the default label POINTS:
+// the image draws a label in the letters of the game's own HUD labels, those of ENERGY, LAP, NAME, POS., TIME and the rest,
+// and a label with any other character in the game's text drawer); +0x2A8 the label's font for the drawer, the game's font
+// table number (FONT_IDS). +0x2AC TEXT for that racer: the
+// text's address (one of WINDOW_TAG_TEXTS; 0: not drawn), +0x2B0 its font. Read by the image's race_time_score
+// (sites_hudmove.py) in the race time's call.
+constexpr u32 WINDOW_SCORE = 0x298, WINDOW_SCORE_LABEL = 0x29C, WINDOW_SCORE_TEXT = 0x2A0, WINDOW_SCORE_TEXT_SIZE = 8,
+              WINDOW_SCORE_FONT = 0x2A8, WINDOW_TEXT = 0x2AC, WINDOW_TEXT_FONT = 0x2B0;
+inline constexpr char DEFAULT_SCORE_LABEL[] = "POINTS";
+static_assert(sizeof(DEFAULT_SCORE_LABEL) <= WINDOW_SCORE_TEXT_SIZE);
+// +0x340: each `tag` text's settings (tag s, "TEXT", size MIN MAX, range D m: the package's tag_looks; a text without them
+// has DEFAULT_TAG_LOOK, what the tags drew before the word: 200 m, their largest 1.2), as the five binary32 words a text,
+// WINDOW_TAG_LOOK bytes each, text 1 first, which the name tags read by the seat's text (nametags.py): the range squared,
+// 1 over (the range squared less its near edge squared, the near edge TAG_NEAR_SHARE of the range: full alpha to there,
+// none at the range), the largest size times TAG_REFERENCE_DEPTH (the size is that over the view depth, so the largest to
+// the reference depth and a thing of the world's shrinking beyond), the least size and the largest, the two the size is
+// held between. Written once at the boot (boot.cpp) for every race, a mode's or not; a window of zeros (a core that wrote
+// none) puts every tagged seat past a range of 0: no mode tag. The tags-first key the tags take from a tagged seat's
+// score is a constant of theirs (TAG_FIRST, twice MOST_TAG_RANGE squared), not the window's.
+constexpr u32 WINDOW_TAG_LOOKS = 0x340, WINDOW_TAG_LOOK = 20;
+constexpr float TAG_NEAR_SHARE = 0.75f, TAG_REFERENCE_DEPTH = 40.0f;
+inline constexpr TagLook DEFAULT_TAG_LOOK{};
+// The five words of a text's settings (pure, for the tests).
+inline std::array<u32, 5> TagLookWords(const TagLook& look)
+{
+  const float far2 = look.range * look.range, near2 = (look.range * TAG_NEAR_SHARE) * (look.range * TAG_NEAR_SHARE);
+  return {std::bit_cast<u32>(far2), std::bit_cast<u32>(1.0f / (far2 - near2)), std::bit_cast<u32>(look.size_max * TAG_REFERENCE_DEPTH),
+          std::bit_cast<u32>(look.size_min), std::bit_cast<u32>(look.size_max)};
+}
 constexpr u32 STANDIN_P = WINDOW_DISTANCE - 0xF8, STANDIN_R = WINDOW_DISTANCE + 8 - 4;
 static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WINDOW_TAG_TEXTS &&
               WINDOW_TAG_TEXTS + modes::TAG_TEXTS * WINDOW_TAG_TEXT <= WINDOW_GHOSTS &&
               WINDOW_GHOSTS + 30 * 8 <= WINDOW_DISTANCE && WINDOW_DISTANCE + 12 <= WINDOW_OBJECTS &&
-              WINDOW_OBJECTS + 8 <= WINDOW_START_GAP && WINDOW_START_GAP + 4 <= 0x300 &&
+              WINDOW_OBJECTS + 8 <= WINDOW_START_GAP && WINDOW_START_GAP + 4 <= WINDOW_SCORE &&
+              WINDOW_SCORE_TEXT + WINDOW_SCORE_TEXT_SIZE <= WINDOW_SCORE_FONT && WINDOW_TEXT_FONT + 4 <= 0x300 &&
+              0x300 + 4 <= WINDOW_TAG_LOOKS && WINDOW_TAG_LOOKS + modes::TAG_TEXTS * WINDOW_TAG_LOOK <= 0x700 &&
               WINDOW_OBJECTS + 8 <= 0x700);  // (0x300: hud_move.cpp's word)  // (0x700: RACE, the next in the window)
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by
@@ -128,10 +216,14 @@ static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WIND
 // 0xBA0B DANGER, 0xBA09 MISSION CLEAR!, 0xBA0C MISSION FAILED, 0xBA15 Time is up..., 0xBA0D the object icon).
 // From PART_RANK on the standard parts, read from the drawers' tests of the same mask (rank, laps and speed in their drawers; energy
 // fn_1_C8F34, race time 0xCBC24, lap times 0xCB424 and 0xCB028); FACES the whole board's bit (fn_1_C6F8C 0xC70C8: rings, numbers, highlight), with the heads' task off too (WINDOW_FACES).
-// GHOST_GAP has no bit: the ghost task draws it (WINDOW_GAP).
+// GHOST_GAP has no bit: the ghost task draws it (WINDOW_GAP). SPARE (a part since 0.6.5, for hud_move) has none either: the
+// compiler refuses show and hide on it, and show_number's record draws and hides it. Nor have SKULLS, WRONG_WAY, BANNERS,
+// FINISH and CHECK (0.6.5, for hud_move alone: the compiler refuses show and hide on them; the game draws each as it does).
+// SCORE and TEXT (0.6.5) have none: show_score's and show_text's records draw and hide them (the image's race_time_score,
+// from WINDOW_SCORE and WINDOW_TEXT).
 constexpr std::array<u32, modes::PART_COUNT> PART_BITS = {0x20000, 0x1000, 0x8, 0x400, 0x200, 0x100, 0x80, 0x2000,
                                                           0x4000, 0x400000, 0, 0x20000000, 0x04000000, 0x08000000, 0x40000000,
-                                                          0x01000000, 0x02000000, 0x80000000};
+                                                          0x01000000, 0x02000000, 0x80000000, 0, 0, 0, 0, 0, 0, 0, 0};  // (SPARE on: no bit)
 // Every bit of the story's parts (the two drawers' tests and TIMER's), which the game's default mask 0xFF9FFFFF has
 // on: once group 0xBA is loaded they would draw, DIGIT a "0" from a source of none, so the pass clears every one
 // the mode does not show.
@@ -150,7 +242,8 @@ bool IsDisplay(u8 id);
 u32 SeatParts(const Guest& g, u32 seat);
 // A display word into the seat's record: true when `id` is one.
 // `second`: a two-number word's second (show_objects's of).
-bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second = 0);
+// `third`, `fourth`: hud_move's y and angle; `third` show_score's font, `second` show_text's.
+bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second = 0, u32 third = 0, u32 fourth = 0);
 // The start of every run: the banners asked at the last one are gone.
 void BeginRun(Guest& g, u32 block);
 // The window's flags for a race of package `p` (the core writes them with the block's request, boot.cpp; nothing
@@ -215,6 +308,13 @@ struct Frame
   float metres = 0;                  // ...these
   bool objects_fed = false;          // the viewed racer's OBJECTS shows the mode's n/of...
   u32 objects_shown = 0, objects_of = 0;  // ...these
+  bool score_shown = false;          // the viewed racer sees SCORE...
+  u32 score = 0;                     // ...this number (0 to SCORE_MOST)
+  u32 score_label = 0;               // ...under the tag text of this number from 1 (0: the default label)...
+  u32 score_font = 0;                // ...in this font (a modes::FONT_*)
+  bool text_shown = false;           // the viewed racer sees TEXT...
+  u32 text = 0;                      // ...the tag text of this number from 1...
+  u32 text_font = 0;                 // ...in this font (a modes::FONT_*)
 };
 Frame Read(const Guest& g, u32 block, u32 viewed);
 
@@ -228,5 +328,10 @@ void Board(const Guest& g);
 // The course map's dots (minimap_frame.cpp): `you` the racer the map is drawn for, `racing` whether that is this
 // game's own seat in the race (a spectator's map and a replay's show every dot). Hides the dots map_hide hides from
 // it and colours the dots map_mark marks; `present` and `colour` as the map reads them.
-void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour);
+// `symbol`: each seat's map_char (0: none; mode_hud.h MAP_CHARS).
+void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour,
+               std::array<u32, 30>& symbol);
+// The viewed racer's hud_move places (by modes::PART_*; none with no mode or before the intro), for the classic HUD's
+// moves (hud_move.h SetMode). Once a frame at the drawing.
+hud_move::ModePlaces ViewedMoves(Guest& g);
 }  // namespace fzgx::mode::hud

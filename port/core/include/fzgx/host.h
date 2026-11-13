@@ -21,6 +21,11 @@ using u64 = std::uint64_t;
 using s16 = std::int16_t;
 using s32 = std::int32_t;
 
+// The console's field, 59.94 a second (16.683 ms): the length of a displayed frame, and of a step of the race on the
+// schedule (schedule.cpp; the relay's frames come at the same rate, Online.Server ServerOptions.FrameRateNumerator).
+// Not what turns a rule's time into steps: that is race_rules::STEPS_A_SECOND, 60, held in every race and recording.
+constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
+
 enum class LogLevel
 {
   Notice,
@@ -99,6 +104,7 @@ struct SpectatorRow
 {
   u8 seat = 0, rank = 0, laps = 0;
   bool out = false, finished = false;
+  bool pickable = true;  // a watcher may follow it (spectator::Pickable): not a racer out whose body is gone
   float energy = 0;  // 0 to 1
   // the observer HUD's (fzgx/observer.h): the seat's colour (0xRRGGBB) and name from the race's set-up, else its
   // machine's name; its gap to the leader (observer::Gap: kind, milliseconds, laps)
@@ -174,6 +180,8 @@ struct MinimapDot
   float x = 0, y = 0;
   u32 colour = 0;    // 0xRRGGBB, the machine's
   float wx = 0, wy = 0, wz = 0;  // its place in the course (the view turned)
+  u32 symbol = 0;    // a game mode's map_char drawn over the dot: 0 none, a Unicode code point, or SYMBOL_SHAPES + n
+  static constexpr u32 SYMBOL_SHAPES = 0x110000, SYMBOL_CROWN = SYMBOL_SHAPES;  // (mode_hud.h MAP_SHAPES)
 };
 struct MinimapShow
 {

@@ -221,6 +221,10 @@ bool StartReplay(const std::string& path)
   // executable's word (before it)
   const u8* sim = m->race.data() + RACE_SIM_GENERATOR;
   header[replay::header::SIM_GENERATOR] = picojson::value((sim[0] | sim[1] | sim[2] | sim[3]) != 0);
+  // wrecks slide before a restore (RACE_WRECK_SLIDE): a header without the key is a race whose restores started at
+  // the breakdown's step (before it)
+  const u8* slide = m->race.data() + RACE_WRECK_SLIDE;
+  header[replay::header::WRECK_SLIDE] = picojson::value((slide[0] | slide[1] | slide[2] | slide[3]) != 0);
   header[replay::header::MOD_SHA1] = picojson::value(m->image_sha1);
   header[replay::header::MOD_COMMIT] = picojson::value(m->bundle_commit);
   // the game, and what ran it: a replay is played back only by this game, and its row in the table of images that

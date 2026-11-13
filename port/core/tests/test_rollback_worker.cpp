@@ -809,6 +809,14 @@ void TestTheWorkersPace()
   BEGIN_TEST();
   namespace pace = fzgx::rollback_worker::pace;
   using pace::Verdict;
+  // the rule "fit": 3 ms of the frame's own and 6 steps of 1 ms fit the field, 13 do not; a chain's next correction
+  // fits as any other with "chained": "fit" (S7), goes to the worker with "worker", and runs sync with "sync"
+  using pace::Chain;
+  CHECK(pace::SyncFits(6, 3.0, 1.0, false, Chain::FIT) && pace::SyncFits(6, 3.0, 1.0, true, Chain::FIT));
+  CHECK(pace::SyncFits(6, 3.0, 1.0, false, Chain::WORKER) && !pace::SyncFits(6, 3.0, 1.0, true, Chain::WORKER));
+  CHECK(!pace::SyncFits(13, 3.0, 1.0, false, Chain::FIT) && !pace::SyncFits(13, 3.0, 1.0, true, Chain::FIT));
+  CHECK(pace::SyncFits(12, 3.0, 1.0, true, Chain::FIT));  // (3 + 12 + 1.5 = 16.5 ms, within 16.68)
+  CHECK(pace::SyncFits(13, 3.0, 1.0, true, Chain::SYNC) && !pace::SyncFits(13, 3.0, 1.0, false, Chain::SYNC));
   std::vector<float> window;
   pace::Now now;
   now.limit_us = 6000;
@@ -939,7 +947,7 @@ void TestTheSecondWorkersEstimate()
     r1 = pace::Smoothed(r1, 3);
   CHECK(allowed(r1));
   r1 = pace::Smoothed(r1, 113);
-  CHECK(r1 > pace::FIELD_MS - 0.5 && pace::Foreseen(DEPTH, r1) == pace::FORESEEN_NEVER && !allowed(r1));
+  CHECK(r1 > FIELD_MS - 0.5 && pace::Foreseen(DEPTH, r1) == pace::FORESEEN_NEVER && !allowed(r1));
   now.second_steps = 21;  // (its steps, taken into the window that ends below)
   // W runs 4 steps of 3 ms a frame, slot 1 none (its starts barred): the first window still holds slot 1's steps
   double t = 0;

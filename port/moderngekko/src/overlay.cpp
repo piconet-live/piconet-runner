@@ -130,23 +130,27 @@ const Fonts& TheFonts()
     fonts.body = Load(fzgx::strip::TEXT_FONT);
     fonts.semi = Load(fzgx::strip::FIGURE_FONT);
     fonts.display = Load(fzgx::strip::DISPLAY_FONT);
-    // for a mode's texts: what Saira lacks comes from the system's Segoe UI, if there (Greek, Cyrillic, more of Latin), and from its
-    // Yu Gothic (kana, kanji): glyphs of a merged font load when first drawn
-    if (fonts.display != nullptr)
-      if (const char* windows = std::getenv("WINDIR"))
-        for (const char* file : {"segoeui.ttf", "YuGothM.ttc"})
-        {
-          const std::filesystem::path path = std::filesystem::path(windows) / "Fonts" / file;
-          std::error_code e;
-          if (!std::filesystem::is_regular_file(path, e))
-            continue;
-          ImFontConfig config;
-          config.MergeMode = true;
-          config.DstFont = fonts.display;
-          std::snprintf(config.Name, sizeof(config.Name), "%s", file);
-          const std::u8string name = path.u8string();
-          ImGui::GetIO().Fonts->AddFontFromFileTTF(reinterpret_cast<const char*>(name.c_str()), 16.0f, &config);
-        }
+    // for a mode's texts: what Saira lacks comes from the system's Segoe UI, if there (Greek, Cyrillic, more of Latin),
+    // its Segoe UI Symbol (symbols and arrows for map_char: the chess queen, stars, the skull, lightning, in one colour)
+    // and its Yu Gothic (kana, kanji): glyphs of a merged font load when first drawn. With no WINDIR (Linux) Saira's
+    // alone: map_char's shapes still draw
+    // (the reading face too, for a mode's messages: `say`, mode_say.cpp)
+    for (ImFont* merged : {fonts.display, fonts.body})
+      if (merged != nullptr)
+        if (const char* windows = std::getenv("WINDIR"))
+          for (const char* file : {"segoeui.ttf", "seguisym.ttf", "YuGothM.ttc"})
+          {
+            const std::filesystem::path path = std::filesystem::path(windows) / "Fonts" / file;
+            std::error_code e;
+            if (!std::filesystem::is_regular_file(path, e))
+              continue;
+            ImFontConfig config;
+            config.MergeMode = true;
+            config.DstFont = merged;
+            std::snprintf(config.Name, sizeof(config.Name), "%s", file);
+            const std::u8string name = path.u8string();
+            ImGui::GetIO().Fonts->AddFontFromFileTTF(reinterpret_cast<const char*>(name.c_str()), 16.0f, &config);
+          }
   }
   return fonts;
 }

@@ -16,8 +16,8 @@ namespace fzgx::rollback_worker::pace
 // with CATCH_UPS catch-ups in their span switch the race to sync, and the worker is tried again RETRY_S later
 constexpr u32 WINDOW = 240, STRIKES = 3, CATCH_UPS = 2;
 constexpr double WINDOW_S = 1.0, RETRY_S = 10.0;
-constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
 constexpr double START_MS = 0.5;  // c of the study's section 4: a job's start and the thread's wake
+constexpr double MARGIN_MS = 1.5;  // run-ahead's MARGIN_MS: room kept before the field (the rule "fit")
 constexpr u32 FORESEEN_NEVER = 99;  // (an estimate at a frame or more: the job would never catch the game)
 
 // A worker's step estimate after one more measured step (its first sets it)
@@ -29,6 +29,18 @@ inline double Smoothed(double r_ms, double ran_ms)
 // j: the frames a job `d` steps deep is foreseen to take to its adoption at `r_ms` a step (study section 4), a step a
 // frame
 u32 Foreseen(u32 d, double r_ms);
+
+// The rule "fit" (S2): a rollback `d` steps deep runs sync on the game's thread when the frame fits it (the frame's own
+// cost lately `c_ms`, `d` steps at `r_ms`, MARGIN_MS before the field). A chain's next correction (`chained`: after an
+// adoption on rows that changed since) by the test key "chained" (S7): FIT as any other (the default), WORKER always on
+// the worker (0.6.0's way), SYNC always sync (tests: the path a fitting one takes, on a PC whose frames never fit it)
+enum class Chain
+{
+  FIT,
+  WORKER,
+  SYNC,
+};
+bool SyncFits(u32 d, double c_ms, double r_ms, bool chained, Chain chain);
 
 // What a Watch asks of the worker
 enum class Verdict

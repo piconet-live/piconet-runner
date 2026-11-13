@@ -40,7 +40,8 @@ void AskForTheSeatAgain(Session& s)
 {
   // (a practice has no relay and no official frames from one: its socket is never opened, so a Join went nowhere,
   // but the log said "no official frame from the relay" at its start)
-  if (s.phase != Phase::Running || s.playback || s.practice || s.exit_sent)
+  // (nor once the relay has said the race is over: its end is known, and nothing more comes: TakeTheRelaysEnd)
+  if (s.phase != Phase::Running || s.playback || s.practice || s.exit_sent || s.relay_end != NEVER)
     return;
   const auto now = Clock::now();
   if (now - s.last_official < REJOIN_AFTER || now - s.last_rejoin < 200ms)

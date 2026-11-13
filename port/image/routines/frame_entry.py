@@ -25,11 +25,23 @@ main loop calls once a pass, after the step. An effect's buffer freed "a frame l
 25's destroy; a list of 32 at .bss 0xDCC) is released between two steps as in a straight run, where a pass is a
 step. Without it a rollback's re-simulation, the scrubber's front steps or a catch-up held every such free of the
 frame's steps at once and the game stopped ("Not enought [free delay elem]", crash-202550). A frame of one step
-never comes here: straight runs are unchanged."""
+never comes here: straight runs are unchanged.
+
+A step that stood (a mode's pause: frame_replay.py `manager`, memmap.STOOD 1) does not count the race clock: `extra_on`
+leaves it, and `done_ret`, after a frame whose last step stood, takes one off it in the race phase below the clock's top,
+so that the game's frame function, which counts it once after the routine returns (main.rel 0x37BAC: in the race
+phase, up to CLOCK_CAP), puts it back where it stood. Nothing reads the clock between the two."""
+import memmap
 
 
 def asm():
-    return """
+    return (_TEXT.replace("STOOD_AT", str(memmap.STOOD - memmap.CONTROL))
+            .replace("CLOCK_CAP_HI", str(CLOCK_CAP >> 16)).replace("CLOCK_CAP_LO", str(CLOCK_CAP & 0xFFFF)))
+
+
+# The race clock's top: the game's frame function counts it up to this (100 minutes) and no further (race-map.md 2.1).
+CLOCK_CAP = 0x57E40
+_TEXT = """
     stwu 1, -48(1)
     mflr 0
     stw 0, 52(1)
@@ -157,6 +169,9 @@ extra_on:
     lha 9, 0x3C2A(30)
     cmpwi 9, 0x29
     blt extra_clock
+    lwz 0, STOOD_AT(31)
+    cmpwi 0, 0
+    bne extra_clock
     lwz 9, 0x50A4(30)
     addi 9, 9, 1
     stw 9, 0x50A4(30)
@@ -201,6 +216,20 @@ done:
     stw 0, 460(31)
     bl spechud
 done_ret:
+    lwz 0, STOOD_AT(31)
+    cmpwi 0, 0
+    beq dr_clock
+    lha 9, 0x3C2A(30)
+    cmpwi 9, 0x29
+    blt dr_clock
+    lwz 9, 0x50A4(30)
+    lis 0, CLOCK_CAP_HI
+    ori 0, 0, CLOCK_CAP_LO
+    cmplw 9, 0
+    bge dr_clock
+    addi 9, 9, -1
+    stw 9, 0x50A4(30)
+dr_clock:
     lwz 30, 40(1)
     lwz 31, 44(1)
     lwz 0, 52(1)

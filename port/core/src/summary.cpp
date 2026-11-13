@@ -57,7 +57,8 @@ const char* EndOf(const Session& s)
     return "over";    // started again into a race the relay said was over: nothing to rejoin
   if (s.phase == Phase::Failed)
     return "lost";    // no official inputs for 15 s: the relay was gone
-  return s.settled ? "finished" : "closed";  // the race ran to its end here; or the game was closed before it
+  // the race ran to its end here (the relay's end too: frame.cpp EndAtTheRelaysEnd); or the game was closed before it
+  return s.settled || s.relay_ended ? "finished" : "closed";
 }
 }  // namespace
 
@@ -105,7 +106,7 @@ void RaceSummary::Frame(Phase now_in, Time now, double behind, u32 step, u32 inp
     const double ms = std::chrono::duration<double, std::milli>(now - last_frame).count();
     tally.seconds += ms / 1000;
     tally.frame.Add(ms);
-    if (ms > FRAME_MS + SLOW_MS)
+    if (ms > FIELD_MS + SLOW_MS)
       ++tally.slow;
     const double second_ms = std::chrono::duration<double, std::milli>(now - second_began).count();
     if (second_ms >= 1000)
@@ -134,7 +135,7 @@ void RaceSummary::Shown(double ms)
   if (!begun)
     return;
   phases[phase].shown.Add(ms);
-  if (std::abs(ms - FRAME_MS) > UNEVEN_MS)
+  if (std::abs(ms - FIELD_MS) > UNEVEN_MS)
     ++phases[phase].uneven;
 }
 

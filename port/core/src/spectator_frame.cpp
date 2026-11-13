@@ -65,9 +65,12 @@ u32 ImageMode(sp::Kind kind)
   return 2 + sp::FixedType(kind);
 }
 
+// The racers as the game holds them now. Drawn: the game's own test of car_disp (fn_1_84860), its car object's flags
+// (the car object of the machine's index, its +5, as fn_1_868C0 picks it) without CAR_FLAG_HIDDEN.
 sp::Racers ReadRacers(Guest& g, u32 module, u32 machines, u32 count)
 {
   sp::Racers racers{};
+  const u32 cars = g.Read32(module + CARS);
   for (u32 i = 0; i < count; ++i)
   {
     const u32 base = machines + i * game::MACHINE_SIZE;
@@ -77,6 +80,8 @@ sp::Racers ReadRacers(Guest& g, u32 module, u32 machines, u32 count)
     sp::Racer& r = racers[i];
     r.present = true;
     r.out = out_test::Out(g, module, base);
+    r.drawn = cars != 0 &&
+              (g.Read32(cars + g.Read8(base + 5) * game::CAR_SIZE + game::CAR_FLAGS) & game::CAR_FLAG_HIDDEN) == 0;
     r.finished = (g.Read32(base) & game::MACHINE_FLAG_FINISHED) != 0;
     r.rank = g.Read8(progress + game::PROGRESS_RANK);
     r.distance = std::bit_cast<float>(g.Read32(progress + game::PROGRESS_DISTANCE));
@@ -109,6 +114,7 @@ void Show(Guest& g, Session& s, const sp::Frame& f, const sp::Racers& racers, u3
     row.rank = static_cast<u8>(r.rank);
     row.laps = static_cast<u8>(std::min<u32>(g.Read32(progress + game::PROGRESS_LAPS), 255));
     row.out = r.out;
+    row.pickable = sp::Pickable(r);
     row.finished = r.finished;
     const float most = static_cast<float>(g.Read16(base + game::MACHINE_MAX_ENERGY));
     const float energy = std::bit_cast<float>(g.Read32(base + game::MACHINE_ENERGY));
@@ -196,13 +202,13 @@ void HoldTheFinishedView(Guest& g, u32 module, const sp::Controls& c, const sp::
 }
 
 // The overlay's clicks and a test script's entries, to the controls (a live watcher's jumps are not taken: no bar).
-void TakeClicks(SpectatorState& st, sp::Controls& c, ScrubState& a, bool live)
+void TakeClicks(SpectatorState& st, sp::Controls& c, ScrubState& a, bool live, const sp::Racers& racers)
 {
   const SpectatorClick click = TheHost().SpectatorClicks();
   const u32 follow_clicked = click.follow != NONE_STEP ? click.follow : std::exchange(a.script_follow, NONE_STEP);
   const int kind_clicked = click.kind >= 0 ? click.kind : std::exchange(a.script_kind, -1);
   if (follow_clicked != NONE_STEP)
-    st.refused += c.Click(follow_clicked) ? (++st.clicks, 0) : 1;
+    st.refused += c.Click(follow_clicked, racers) ? (++st.clicks, 0) : 1;
   if (kind_clicked >= 0 && kind_clicked < static_cast<int>(sp::KINDS))
     st.refused += c.ClickKind(static_cast<sp::Kind>(kind_clicked)) ? (++st.clicks, 0) : 1;
   if (click.overlay)
@@ -241,12 +247,12 @@ void SpectatorFrame(Guest& g, Session& s, u32 step, u32 module)
   sp::Controls& c = *st.controls;
   if (!live)
     c.Seen(seat);
-  TakeClicks(st, c, s.scrub, live.has_value());
+  const sp::Racers racers = ReadRacers(g, module, machines, count);
+  TakeClicks(st, c, s.scrub, live.has_value(), racers);
   ScrubState& a = s.scrub;
   sp::Pad pad;
   pad.buttons = static_cast<u16>(g.Read16(module + PAD_STATUS) | std::exchange(a.script_pad, 0));
   pad.cstick_y = static_cast<std::int8_t>(g.Read8(module + PAD_STATUS + 5));
-  const sp::Racers racers = ReadRacers(g, module, machines, count);
   const sp::Frame f = c.Next(pad, racers);
   // (a racer who is out: L, R, A and Start do nothing, the controls' restriction; counted for the log, a press each)
   constexpr u16 SCRUB_KEYS = sp::PAD_L | sp::PAD_R | sp::PAD_A | sp::PAD_START;
@@ -257,11 +263,26 @@ void SpectatorFrame(Guest& g, Session& s, u32 step, u32 module)
   st.live = f.live;
   st.pause = f.pause;
 
+  // the step the picture shows (with the scrubber: the play position's)
+  const u32 shown = ScrubOn(s) ? s.scrub.play_step : step;
+  // for the log: a racer out whose body went (or came back: a seek back, the Restore rule), once a change
+  u32 gone = 0;
+  for (u32 i = 0; i < count; ++i)
+    gone |= racers[i].present && !sp::Pickable(racers[i]) ? 1u << i : 0u;
+  for (u32 changed = gone ^ std::exchange(st.gone, gone); changed != 0; changed &= changed - 1)
+  {
+    const u32 i = static_cast<u32>(std::countr_zero(changed));
+    Notice("fzgx: spectator: racer {} at step {}: {}", i, shown,
+           (gone >> i & 1) != 0 ? "out, its body gone: no longer picked" : "may be picked again");
+  }
   if (f.follow_changed && f.follow < count)
   {
     if (!live)
       g.Write32(SEAT_SLOT + 4, f.follow);  // (live: the image's cameras' racer, LiveCameras)
     ++st.follows;
+    const sp::Racer& r = racers[f.follow];
+    Notice("fzgx: spectator: follows racer {} at step {} ({})", f.follow, shown,
+           !r.out ? (r.finished ? "finished" : "racing") : r.drawn ? "out, its wreck still drawn" : "out, its body gone");
   }
   if (f.kind_changed)
   {
@@ -269,7 +290,6 @@ void SpectatorFrame(Guest& g, Session& s, u32 step, u32 module)
     st.kinds_used |= 1u << static_cast<u32>(f.kind);
   }
   // the picture moved otherwise than on by a step (with the scrubber: the step the frame before showed; held: the same)
-  const u32 shown = ScrubOn(s) ? s.scrub.play_step : step;
   const bool moved = shown != st.last_step + 1 && shown != st.last_step;
   st.last_step = shown;
   if (live)
@@ -336,7 +356,7 @@ void ResultsCamera(Guest& g, const Session& s, u32 module)
     flags = g.Read32(base);
     flags2 = g.Read32(base + game::MACHINE_FLAGS2);
     if (cars != 0)
-      drawn = g.Read32(cars + g.Read8(base + 5) * 0x440 + 0x390);
+      drawn = g.Read32(cars + g.Read8(base + 5) * game::CAR_SIZE + game::CAR_FLAGS);
   }
   Notice("fzgx: results camera: racer {}, {} (the local seat {}: flags {:08x}, +0x58C {:x}, car +0x390 {:08x})",
          pick.racer, sp::ResultsWhyText(pick.why), seat, flags, flags2, drawn);
@@ -348,7 +368,7 @@ void SpectatorSummary(const Session& s)
   if (!st.controls)
     return;
   Notice("fzgx: spectator: {} changes of the racer followed, {} of the camera kind (kinds used: {:#x}), {} clicks, "
-         "{} refused by the course's rule; followed at the end: racer {}; {} presses of scrub, pause or live refused (a "
+         "{} refused (the course's rule, or a racer out whose body is gone); followed at the end: racer {}; {} presses of scrub, pause or live refused (a "
          "racer out)", st.follows, st.kind_changes, st.kinds_used, st.clicks, st.refused, st.controls->follow(),
          st.held_back);
   ObserverSummary(s);

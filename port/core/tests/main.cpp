@@ -22,6 +22,8 @@ void TestTheGuessesForward();
 // test_runahead.cpp
 void TestHighRefreshWithNoStepAhead();
 void TestHighRefreshInAPlainStart();
+void TestThePicturesASecondForAScreen();
+void TestTheRateFollowsTheScreenInTheRace();
 // test_guest.cpp
 void TestGuestMemory();
 void TestHelpers();
@@ -48,6 +50,9 @@ void TestTheWorkersGuards();
 void TestTheWorkersPace();
 void TestTheSecondWorkersEstimate();
 void TestTheWorkersPair();
+void TestTheWorkersFinalRows();
+void TestAStepThatRanOnAnotherRowStaysOpen();
+void TestAGameGoingIntoLockstepWaitsForTheWorker();
 void TestARollbackLeavesTheWindow();
 // test_rollback_state.cpp
 void TestRollbacksStateList();
@@ -70,6 +75,7 @@ void TestRumble();
 void TestTheStatusBoardOfAPlainStart();
 void TestABoardThatIsNotThisVersionsIsLeft();
 void TestTheRaceOnTheBoard();
+void TestTheModesPlacesAndScoresOnTheSnapshot();
 void TestTheCameraViewOnTheBoard();
 void TestTheLocalPadOnTheBoard();
 void TestTheSessionsPhasesOnTheBoard();
@@ -85,8 +91,10 @@ void TestTheRaceEndsOnceOnOfficialInputs();
 void TestTheFinishLimitInTheRaceBlock();
 // test_pace.cpp
 void TestTheGameKeepsToItsSchedule();
+void TestTheScheduleRunsAtTheConsolesFieldRate();
 void TestAGameAheadOfItsScheduleFallsBack();
 void TestASlowHostSendsItsInputsInTime();
+void TestARaceTheRelayEndsEndsAtOneStep();
 void TestTheScheduleAtALowerDelay();
 void TestARaceLeavesItsSummaryLine();
 void TestTheSummaryCountsBursts();
@@ -143,6 +151,7 @@ void TestTheCourseMapsViewTilts();
 void TestTheCourseMapStaysInItsSquare();
 void TestAKnockedOutRacerNeverScrubs();
 void TestTheLeaderAndTheClosestBattle();
+void TestAWatcherPicksNoRacerWhoseBodyIsGone();
 void TestTheRacerBeforeAndAfter();
 void TestTheFollowModes();
 void TestTheCameraKinds();
@@ -160,6 +169,7 @@ void TestAStoryStageIsNamedInTheGame();
 void TestTheStripsLayout();
 void TestWhatAPointOfTheWindowIs();
 void TestTheFrameRateInATitle();
+void TestThePointerRestsAndHides();
 // test_launch.cpp
 void TestASavesControllerOptions();
 void TestASaveThatIsRefused();
@@ -213,12 +223,18 @@ void TestTheHeldWords();
 void TestThePedalLatch();
 void TestTheStatsPage();
 void TestTheEnergyWords();
+void TestAModeStandsTheRace();
+void TestAPressWhileStandingReachesTheMode();
+void TestTwoSeatsVoteWhileStanding();
 void TestTheCombatWords();
 void TestTheOnOffWordsByParameter();
 void TestASquareRootsCostInBothLoops();
 void TestSoloModesAndTheRelay();
 void TestDestroyedAndOutTellAnEndApart();
 void TestOverdriveRunsInTheBlock();
+void TestSeatSpeedOpen();
+void TestLivePlacesShowInTheStanding();
+void TestSeatBaseSpeed();
 void TestEveryWordRuns();
 void TestTheGamesSquareRootIsTheCompilers();
 void TestTheGeneratorIsTheReferences();
@@ -384,6 +400,7 @@ void TestARaceAgainstARelay()
   TestTheStatusBoardOfAPlainStart();
   TestABoardThatIsNotThisVersionsIsLeft();
   TestTheRaceOnTheBoard();
+  TestTheModesPlacesAndScoresOnTheSnapshot();
   TestTheCameraViewOnTheBoard();
   TestTheLocalPadOnTheBoard();
   TestTheSessionsPhasesOnTheBoard();
@@ -430,6 +447,7 @@ void TestTheSpectatorControls()
   TestAKnockedOutRacerNeverScrubs();
   TestTheLeaderAndTheClosestBattle();
   TestTheRacerBeforeAndAfter();
+  TestAWatcherPicksNoRacerWhoseBodyIsGone();
   TestTheFollowModes();
   TestTheCameraKinds();
   TestTheOverlaysFollowButtons();
@@ -465,6 +483,8 @@ void TestTheHighRefreshRate()
   TestTheGuessesForward();
   TestHighRefreshWithNoStepAhead();
   TestHighRefreshInAPlainStart();
+  TestThePicturesASecondForAScreen();
+  TestTheRateFollowsTheScreenInTheRace();
 }
 
 // When a picture is shown (test_place.cpp's, test_screen.cpp's) and the pictures between two steps (test_hfr.cpp's)
@@ -510,6 +530,9 @@ int main(int argc, char** argv)
   TestTheWorkersPace();
   TestTheSecondWorkersEstimate();
   TestTheWorkersPair();
+  TestTheWorkersFinalRows();
+  TestAStepThatRanOnAnotherRowStaysOpen();
+  TestAGameGoingIntoLockstepWaitsForTheWorker();
   TestRaceFromAMatchFile();
   TestAReplaysLineup();
   TestAReplayThatIsNotPlayed();
@@ -521,8 +544,10 @@ int main(int argc, char** argv)
   TestARaceAgainstARelay();
   TestTheRaceEndsOnceOnOfficialInputs();
   TestTheGameKeepsToItsSchedule();
+  TestTheScheduleRunsAtTheConsolesFieldRate();
   TestAGameAheadOfItsScheduleFallsBack();
   TestASlowHostSendsItsInputsInTime();
+  TestARaceTheRelayEndsEndsAtOneStep();
   TestTheScheduleAtALowerDelay();
   TestARaceLeavesItsSummaryLine();
   TestTheSummaryCountsBursts();
@@ -579,6 +604,7 @@ int main(int argc, char** argv)
   TestTheStripsLayout();
   TestWhatAPointOfTheWindowIs();
   TestTheFrameRateInATitle();
+  TestThePointerRestsAndHides();
   TestTheControllerSetupStart();
   TestTheControllerSetupKey();
   TestTheHitsARollbackReveals();
@@ -601,12 +627,18 @@ int main(int argc, char** argv)
   TestThePedalLatch();
   TestTheStatsPage();
   TestTheEnergyWords();
+  TestAModeStandsTheRace();
+  TestAPressWhileStandingReachesTheMode();
+  TestTwoSeatsVoteWhileStanding();
   TestTheCombatWords();
   TestTheOnOffWordsByParameter();
   TestASquareRootsCostInBothLoops();
   TestSoloModesAndTheRelay();
   TestDestroyedAndOutTellAnEndApart();
   TestOverdriveRunsInTheBlock();
+  TestSeatSpeedOpen();
+  TestLivePlacesShowInTheStanding();
+  TestSeatBaseSpeed();
   TestEveryWordRuns();
   TestTheGamesSquareRootIsTheCompilers();
   TestTheGeneratorIsTheReferences();

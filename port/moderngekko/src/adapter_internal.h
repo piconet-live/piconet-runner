@@ -127,6 +127,9 @@ void GiveEmulatorSettings();
 // "showFrameRate", the frame rate), given to the emulator's window before it is made (Common/WindowFrame.h); not
 // with "debug.windowControls", whose window is the system's own with its menu bar
 void GiveWindowFrame();
+// The child window the game's picture is drawn on (an HWND), once the window's thread has made it; nullptr before, and
+// on other systems. Read from any thread (the screen it is on: run_ahead.cpp).
+void* PictureWindow();
 // taskbar.cpp: with the launch file's "taskbar" the process takes the launcher's application id, before the window
 // is made; the window, once it exists, gets the app's icon and says what a pinned button starts (the launcher),
 // and has that taken off again when it goes (both from the frame's hook: not with "debug.windowControls")
@@ -154,6 +157,8 @@ void StopWatchingPictures();
 // And every field of a race or replay start, on the game's thread: the load's progress read (fzgx::LoadField), and
 // while LOADING is up a present asked for, at most once in 8 ms, so that the meter moves.
 void DrawPanel();
+// A mode's message over the picture (mode_say.cpp; fzgx/mode_say.h), before every present on the thread that presents.
+void DrawModeSay();
 void PresentPanel();
 void PanelField();
 fzgx::u32 TakePictureIntervals(fzgx::u32* out, fzgx::u32 most);

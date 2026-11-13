@@ -76,6 +76,17 @@ constexpr u32 DANGER = ENGINE + 0xC60;    // a seat's danger zone: +0 below, +4 
 constexpr u32 ROLL_SAVE = ENGINE + 0xE40, ROLL_SAVE_SIZE = 8;  // a seat's steering (+0) before the rule hook while the rolling start holds it
 constexpr u32 DANGER_ON = 1, DANGER_ARMED = 2, DANGER_DONE = 4;
 constexpr u32 STATS_ON = ENGINE + 0xF30;  // not 0: this block has the stats page (written once at game_start; checksum.cpp)
+// A mode's pause (protocol modes.toml `pause`, 0.6.5). The image's frame routine reads PAUSED before every step's
+// simulation (port/image/routines/frame_replay.py `manager`, memmap.MODE_PAUSED): not 0, the step stands, its simulation
+// is not run and the mode's run is made in its place. A paused step is a step like any other (its number, its rows, the
+// relay, the replay), so every game stands at the same steps; the words are the block's, so a rollback puts them back.
+constexpr u32 PAUSED = ENGINE + 0xF34;         // not 0: the race stands from the next step on
+constexpr u32 PAUSE_RUN = ENGINE + 0xF38;      // the run whose actions paused (race.paused_steps counts from it)
+constexpr u32 RESUME_AT = ENGINE + 0xF3C;      // `resume after`: the run at whose end the race goes on (0: none)
+constexpr u32 RESUME_LENGTH = ENGINE + 0xF40;  // `resume after`'s steps, for its countdown's figure
+constexpr u32 SAY = ENGINE + 0xF44;            // `say`'s text, from 1 (0: none); drawing only (mode_say.cpp)
+constexpr u32 MOST_RESUME = 18000;             // `resume after`'s steps at most (five minutes)
+static_assert(STATS_ON + 4 <= PAUSED && SAY + 4 <= 6 * PAGE);
 // A seat's stat record (seat.stat.*, damage), in the display page's free room (mode_hud.h: the only page with room, and
 // no page more is stamped and summed at every step; the stand-in's rule hook wrapper and the mode point read it):
 // +0 the stats the mode changed, bit i for STAT_WORDS[i]; +4 their values; +STAT_BASE what each was before the first
@@ -110,10 +121,10 @@ static_assert(NO_CAP + 4 <= 7 * PAGE && 7 * PAGE <= BLOCK);
 // image's seat_energy (sites_seats.py, fn_1_26F34 0x27420) loads the value from the stats page in its place.
 constexpr std::array<u32, 18> STAT_FIELDS = {0x8,  0x220, 0x22C, 0xC,  0x14, 0x1C, 0x23C, 0x230, 0x234,
                                              0x30, 0x24,  0x28,  0x10, 0x20, 0x18, 0x2C,  0x238, 0x477};
-constexpr u32 STATS_FIRST = 10, STAT_GRIP_WINDOW = 17, STAT_BOOST_ENERGY = 18, STAT_COUNT = 19;
+constexpr u32 STAT_MAX_SPEED = 2, STATS_FIRST = 10, STAT_GRIP_WINDOW = 17, STAT_BOOST_ENERGY = 18, STAT_COUNT = 19;
 constexpr u32 STATS_TWO = BLOCK + 0x10, STAT_TWO = 0x80, STAT_TWO_BASE = 0x40;
 static_assert(STATS_TWO + 30 * STAT_TWO <= BLOCK_WITH_STATS && (STAT_COUNT - STATS_FIRST) * 4 <= STAT_TWO_BASE &&
-              STAT_COUNT <= 32 && STAT_FIELDS[STAT_GRIP_WINDOW] == 0x477 && STAT_BOOST_ENERGY == STAT_FIELDS.size());
+              STAT_COUNT <= 32 && STAT_FIELDS[STAT_GRIP_WINDOW] == 0x477 && STAT_FIELDS[STAT_MAX_SPEED] == 0x22C && STAT_BOOST_ENERGY == STAT_FIELDS.size());
 constexpr u32 StatValueAt(u32 seat, u32 i)
 {
   return i < STATS_FIRST ? STATS + seat * STAT + STAT_VALUES + 4 * i : STATS_TWO + seat * STAT_TWO + 4 * (i - STATS_FIRST);
@@ -123,8 +134,24 @@ constexpr u32 StatBaseAt(u32 seat, u32 i)
   return i < STATS_FIRST ? STATS + seat * STAT + STAT_BASE + 4 * i
                          : STATS_TWO + seat * STAT_TWO + STAT_TWO_BASE + 4 * (i - STATS_FIRST);
 }
-constexpr float MOST_SPEED = 9000.0f;
+// seat.speed's and rolling_start's top: 9000 (under the stock pack's SpeedCap, 9990), as before 0.6.5; with the file's
+// setup word seat_speed_open (0.6.5), 1e17: the largest at which the held momentum v / 216 x W (W at most the packs' 25,000) and its square, which the next
+// step's drag sums, stay finite binary32 (216 x sqrt(FLT_MAX) / 25000 = 1.59e17)
+constexpr float MOST_SPEED = 9000.0f, MOST_SPEED_OPEN = 1.0e17f;
+static_assert(MOST_SPEED_OPEN / 216.0f * 25000.0f < 1.8e19f);
+// seat.base_speed's top (M+0x224, the game's units, a metre a step): the base speed a held seat.speed of MOST_SPEED_OPEN
+// writes at site L (v / 216), so the word puts nothing there that a hold could not
+constexpr float MOST_BASE_SPEED = MOST_SPEED_OPEN / 216.0f;
+// seat.stat.max_speed's top with the file's setup word max_speed_open (0.6.5): Twilight's
+// survival mod's 10,000, at which the thrust's loss base / (36 + 40 x max speed + 2 x boost value) is about nothing; a
+// package without it holds the stat to the stat pack's range (0 to 4)
+constexpr float MOST_MAX_SPEED_OPEN = 10000.0f;
 constexpr float MOST_START_GAP = 10000.0f;  // start_gap's metres at most (modes.toml)
+// a `tag` word's settings (modes.toml tag_looks; the compiler's ModeTagLooks holds the same): the range in metres, below 1 m the
+// fade's divisor (the difference of the squares of the range and three quarters of it) nears 0, above 10 km the tagged seats'
+// order key (d^2 less TAG_FIRST in binary32) loses its last metres; the size, a player's name tag at its largest being 1, at 5
+// letters 90 pixel rows tall (mode_hud.h TagLookWords)
+constexpr float LEAST_TAG_RANGE = 1.0f, MOST_TAG_RANGE = 10000.0f, LEAST_TAG_SIZE = 0.1f, MOST_TAG_SIZE = 5.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
               WAIT_RECORDS + modes::WAITS * WAIT <= 4 * PAGE && 4 * modes::TEAM_WORDS == 0x80 &&
@@ -192,6 +219,14 @@ struct Prepared
 };
 
 // The package as it runs: the setup words' values with the parameters put in.
+// A `tag` text's settings (tag s, "TEXT", size MIN MAX, range D m; the package's tag_looks, three a text): how far it is seen
+// (full alpha to three quarters of it, none at it) and its size's least and largest. Drawing only (mode_hud.h TagLookWords).
+struct TagLook
+{
+  float range = 200.0f, size_min = 0.5f, size_max = 1.2f;  // the defaults: 200 m as the tags were; 1.2 their largest then
+  bool operator==(const TagLook&) const = default;
+};
+
 struct Package
 {
   std::vector<u8> bytes;
@@ -220,6 +255,9 @@ struct Package
   u32 clock_limit = 0;              // steps, 0 none
   bool race_waits = false;          // `race_waits everyone`: the race-over test counts every seat (raceend.py)
   bool hud_clean = false;           // `hud clean`: no CHECK sign and no name tags (clean_picture.h)
+  bool results_times_off = false;   // `results_times off`: the results without the page of race times (mode_hud.h NO_RESULTS_TIMES)
+  bool distance_label_off = false;  // `distance_label off`: DISTANCE without the game's REST label (mode_hud.h NO_DISTANCE_LABEL)
+  bool hud_ax = false;              // `hud_layout ax`: the race HUD in F-Zero AX's layout (mode_hud.h HUD_AX)
   bool results_points = false;      // `results points`: the first results page passes by itself
   std::string results_heading;      // `results_heading "TEXT"`: the string for the game's PRACTICE page; empty, RESULTS
   std::string results_title;        // `results_title "TEXT"`: the string for VS TOTAL RANKING; empty, the game's
@@ -228,10 +266,17 @@ struct Package
   std::array<std::optional<u32>, 4> combat{};  // damage, knockback, wall_damage, wall_bounce: binary32 bits
   bool spin_off = false, side_off = false, spin_immune = false;
   bool no_cap = false;              // damage_cap off: a player's hit is not held to fn_1_24F10's 20
+  bool instant_restore = false;     // wreck_slide off: a restore starts at the breakdown's step (files.h RACE_WRECK_SLIDE 0)
   std::optional<u16> max_energy;    // max_energy: every seat's M+0x5DA and M+0x184 at game_start; none, the game's
   bool stats_page = false;          // the compiler's stats_page: the block has the stats page, its last (a rule writes one of its stats)
   bool time_gaps = false;              // the compiler's: a rule reads a time gap: the block's gap page is kept (mode_gap.h)
+  bool speed_open = false;             // the file's seat_speed_open: seat.speed and rolling_start to MOST_SPEED_OPEN, not 9000
+  bool max_speed_open = false;         // the file's max_speed_open: seat.stat.max_speed held to MOST_MAX_SPEED_OPEN
+  bool live_places = false;            // the file's live_places: seat.place in the standing during the race too
   std::vector<std::string> tag_texts;  // the texts `tag` names by their place from 1 (the compiler's tag_texts)
+  std::vector<TagLook> tag_looks;      // each text's settings (the compiler's tag_looks; none: the defaults for every text)
+  std::vector<std::string> say_texts;  // the texts `say` names by their place from 1 (the compiler's say_texts), UTF-8
+  bool pauses = false;                 // the compiler's `pauses`: a rule writes pause (files_match.cpp: one player only)
   std::optional<u32> rolling;       // rolling_start's speed, binary32 bits
   // start_gap: the metres between the grid's slots round the lap (0: every machine on slot 0's spot, every no-contact row
   // on from before step 0); start_gap_even: the lap shared out among the machines (the image divides at the grid).
@@ -298,4 +343,10 @@ u32 RollSave(const Guest& g, u32 seat);
 // Seat `seat`'s stat record (STATS: read by the wrapper in the machine's task); 0 without a mode.
 u32 Stat(const Guest& g, u32 seat);
 // The run with no package past its end: the end clause's order held in the standing (a race the mode ended).
+
+namespace say
+{
+// A mode's message and its resume countdown for the overlay (fzgx/mode_say.h), once a drawn frame (mode_say.cpp).
+void Frame(Guest& g);
+}  // namespace say
 }  // namespace fzgx::mode

@@ -290,6 +290,14 @@ void Prepare(ModData& data)
     // start_gap's metres for the grid (sites_grid.py grid_spread); 0.0 with even or no gap
     data.Write(layout::MODE_HUD + mode::hud::WINDOW_START_GAP,
                m->game_mode && m->game_mode->start_gap ? std::bit_cast<u32>(*m->game_mode->start_gap) : 0, 4);
+    // each `tag` text's settings (nametags.py reads the five words a text): the package's, or the defaults, 200 m and 0.5 to 1.2
+    for (size_t text = 0; text < static_cast<size_t>(modes::TAG_TEXTS); ++text)
+    {
+      const std::array<u32, 5> words = mode::hud::TagLookWords(
+          m->game_mode && text < m->game_mode->tag_looks.size() ? m->game_mode->tag_looks[text] : mode::hud::DEFAULT_TAG_LOOK);
+      for (size_t i = 0; i < words.size(); ++i)
+        data.Write(layout::MODE_HUD + mode::hud::WINDOW_TAG_LOOKS + text * mode::hud::WINDOW_TAG_LOOK + 4 * i, words[i], 4);
+    }
     {
       std::array<u8, mode::hud::WINDOW_TITLE_SIZE> title{};
       if (m->game_mode)

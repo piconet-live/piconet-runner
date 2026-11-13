@@ -26,7 +26,7 @@ def single(x):
 
 class TagCpu(Cpu):
     """The instructions the tags add to the camera routines' reader: the saving of registers in one go, a division,
-    a negation and the conversion to an integer."""
+    a select, a negation and the conversion to an integer."""
 
     def other(self, pc, w):
         r, op, d, a = self.r, w >> 26, (w >> 21) & 31, (w >> 16) & 31
@@ -40,6 +40,7 @@ class TagCpu(Cpu):
             for i in range(d, 32):
                 r[i] = self.read(at + 4 * (i - d), 4)
         elif op == 59 and xo & 31 == 18: f[d] = single(f[a] / f[b])                       # fdivs
+        elif op == 63 and xo & 31 == 23: f[d] = f[(w >> 6) & 31] if f[a] >= 0.0 else f[b]  # fsel
         elif op == 63 and xo == 40: f[d] = -f[b]                                          # fneg
         elif op == 63 and xo == 15:                                                       # fctiwz
             f[d] = struct.unpack(">d", struct.pack(">q", int(f[b])))[0]
@@ -52,13 +53,17 @@ class Race:
     """Seat 0 (the followed racer) at the origin, looking along +z; `machines` is {seat: (x, z)} on the road
     (y = 0), every one a player seat named after its seat unless `cpu` says otherwise."""
 
-    def __init__(self, t, machines, cpu=(), ai=(), finished=(), session=1):
+    def __init__(self, t, machines, cpu=(), ai=(), finished=(), session=1, looks=None):
         self.t, self.mem, self.draws = t, {}, []
         self.colours, self.depths, self.sizes = {}, {}, {}
         m = self.mem
         racers = max(machines) + 1
         put(m, 0x800030C8, MODULE); put(m, POINTER, MACHINES); m[COUNT] = racers
         put(m, SESSION, session); put(m, RUNNING, 1); put(m, STEP, 501)
+        for text in range(1, 9):
+            self.look(text)                  # every text the defaults, as the core writes them for a race without settings
+        for text, (far, size_min, size_max) in (looks or {}).items():
+            self.look(text, far, size_min, size_max)
         mask = 0
         for seat in range(racers):
             if seat not in cpu:
@@ -73,6 +78,14 @@ class Race:
         self.place({FOLLOWED: (0.0, 0.0), **machines})
         for seat in finished:
             put(m, MACHINES + seat * 0x620, 0x10000)
+
+    def look(self, text, far=200.0, size_min=0.5, size_max=1.2):
+        """The window's five words for mode tag text `text` (from 1), as the core writes them at the boot (mode_hud.h
+        TagLookWords: far^2, 1 / (far^2 - near^2) with near 0.75 far, size_max x 40, size_min, size_max); far None: zeros."""
+        words = (0.0,) * 5 if far is None else (far * far, 1.0 / (far * far - (0.75 * far) ** 2), size_max * 40.0, size_min, size_max)
+        at = memmap.MODE_HUD_TAG_LOOKS + (text - 1) * nametags.TAG_LOOK
+        for i, w in enumerate(words):
+            self.mem.update({at + 4 * i + j: b for j, b in enumerate(struct.pack(">f", w))})
 
     def place(self, machines):
         for seat, (x, z) in machines.items():
@@ -311,17 +324,90 @@ class TheNameTags(Build):
         self.assertEqual(set(race.frames(3)), {"P1"})
 
     def test_a_tag_reads_from_further_than_a_name(self):
-        z = nametags.TAG_NEAR - 10.0
-        race = Race(self, {1: (0.0, z), 2: (1.0, z)})
+        # the default range, 200 m: full to 150, nothing past 200 (a name: 15 to 40)
+        race = Race(self, {1: (0.0, 140.0), 2: (1.0, 140.0)})
         self.tagged(race, {1: 1})
         shown = race.frames(nametags.FADE_IN + 1)
         self.assertEqual(set(shown), {"BOMB"})                              # the name is past FAR
-        self.assertAlmostEqual(shown["BOMB"], 1.0, delta=1 / 255)           # full to TAG_NEAR
-        race.place({1: (0.0, nametags.TAG_FAR - 10.0)})
-        d2, near2, far2 = (nametags.TAG_FAR - 10.0) ** 2, nametags.TAG_NEAR ** 2, nametags.TAG_FAR ** 2
-        self.assertAlmostEqual(race.frame()["BOMB"], (far2 - d2) / (far2 - near2), delta=2 / 255)
-        race.place({1: (0.0, nametags.TAG_FAR + 1.0)})
-        self.assertEqual(race.frame(), {})                                  # past TAG_FAR
+        self.assertAlmostEqual(shown["BOMB"], 1.0, delta=1 / 255)           # full to 150 m
+        race.place({1: (0.0, 190.0)})
+        self.assertAlmostEqual(race.frame()["BOMB"], (200.0 ** 2 - 190.0 ** 2) / (200.0 ** 2 - 150.0 ** 2), delta=2 / 255)
+        race.place({1: (0.0, 201.0)})
+        self.assertEqual(race.frame(), {})                                  # past 200 m
+
+    # a tag's own settings (tag s, "TEXT", size MIN MAX, range D m): the window's five words a text set how far it reads
+    # and its size's bounds; the name tags keep their 15 to 40 m and their size by the fade
+    def test_a_tag_reads_from_as_far_as_its_text_says(self):
+        # (the least range, 1 m, is safe and shows nothing: a tag point under 1 unit before the camera is no candidate)
+        for far in (3.0, 20.0, 2000.0, 10000.0):
+            race = Race(self, {1: (0.0, 0.7 * far), 2: (1.0, 0.7 * far)}, looks={1: (far, 0.5, 1.2)})
+            self.tagged(race, {1: 1})
+            shown = race.frames(nametags.FADE_IN + 1)
+            self.assertEqual(set(shown), {"BOMB"} | ({"P2"} if 0.7 * far < nametags.FAR else set()), far)
+            self.assertAlmostEqual(shown["BOMB"], 1.0, delta=1 / 255)       # full to three quarters of the range
+            race.place({1: (0.0, 0.9 * far)})
+            d2, near2, far2 = (0.9 * far) ** 2, (0.75 * far) ** 2, far ** 2
+            self.assertAlmostEqual(race.frame()["BOMB"], (far2 - d2) / (far2 - near2), delta=2 / 255)
+            self.assertAlmostEqual(race.depths["BOMB"], 90000.1 - 9000.0, delta=0.01)   # through walls, as near
+            race.place({1: (0.0, 1.01 * far)})
+            self.assertEqual(set(race.frame()) - {"P2"}, set(), far)      # past the range
+            if 1.01 * far > 2.0:
+                self.assertEqual(set(race.frames(nametags.FADE_LEAVE + 2)) - {"P2"}, set(), far)
+
+    def test_a_tag_shrinks_with_its_depth_between_its_sizes(self):
+        # the default sizes: 1.2 (a name tag's largest being 1) to 40 m from the camera, 48 / depth beyond, never under
+        # 0.5: 1.2 at 10 and 30 m, 0.96 at 50, 0.5 from 96 m on (100, 300, 1000 m, with the range to see them)
+        race = Race(self, {1: (0.0, 10.0)}, looks={1: (10000.0, 0.5, 1.2)})
+        self.tagged(race, {1: 1})
+        race.frames(nametags.FADE_IN + 1)
+        for z, size in ((10.0, 1.2), (30.0, 1.2), (40.0, 1.2), (50.0, 0.96), (96.0, 0.5), (100.0, 0.5), (300.0, 0.5), (1000.0, 0.5)):
+            race.place({1: (0.0, z)})
+            race.frame()
+            self.assertAlmostEqual(race.sizes["BOMB"], size, delta=0.001, msg=z)
+        # the word's own sizes: MAX to 40 m, MAX x 40 / depth beyond, MIN at the least; a text's own, another text's untouched
+        race = Race(self, {1: (0.0, 20.0), 2: (3.0, 20.0)}, looks={1: (10000.0, 0.25, 2.0), 2: (10000.0, 1.0, 1.0)})
+        self.tagged(race, {1: 1, 2: 2}, ("BOMB", "KING"))
+        race.frames(nametags.FADE_IN + 1)
+        self.assertAlmostEqual(race.sizes["BOMB"], 2.0, delta=0.001)
+        self.assertAlmostEqual(race.sizes["KING"], 1.0, delta=0.001)
+        race.place({1: (0.0, 80.0), 2: (3.0, 80.0)})
+        race.frame()
+        self.assertAlmostEqual(race.sizes["BOMB"], 1.0, delta=0.001)           # 2 x 40 / 80
+        self.assertAlmostEqual(race.sizes["KING"], 1.0, delta=0.001)           # held to its one size
+        race.place({1: (0.0, 500.0), 2: (3.0, 500.0)})
+        race.frame()
+        self.assertAlmostEqual(race.sizes["BOMB"], 0.25, delta=0.001)          # its least
+        self.assertAlmostEqual(race.sizes["KING"], 1.0, delta=0.001)
+
+    def test_a_name_keeps_its_size_by_its_fade(self):
+        race = Race(self, {1: (0.0, 10.0), 2: (2.0, 10.0)}, looks={1: (10000.0, 0.1, 5.0)})
+        self.tagged(race, {1: 1})
+        race.frames(nametags.FADE_IN + 1)
+        self.assertAlmostEqual(race.sizes["P2"], 1.0, delta=0.001)             # within NEAR: 1.0
+        race.place({2: (2.0, 30.0)})
+        race.frame()
+        alpha = (nametags.FAR ** 2 - 30.0 ** 2) / (nametags.FAR ** 2 - nametags.NEAR ** 2)
+        self.assertAlmostEqual(race.sizes["P2"], 0.6 + 0.4 * alpha, delta=0.01)
+
+    def test_a_tag_range_keeps_the_nearest_tags_first_and_the_names_after(self):
+        # 10 km: four tagged seats far out and a name close by; the three nearest tags show, in distance order, the
+        # name waits behind them (the order key's precision at this range: d^2 less 2 x 10^8, a few metres)
+        far = 10000.0
+        race = Race(self, {1: (0.0, 10.0), 5: (0.0, 6000.0), 6: (1.0, 5000.0), 7: (2.0, 7000.0), 8: (3.0, 5500.0)},
+                    looks={t: (far, 0.5, 1.2) for t in (1, 2, 3, 4)})   # (x: the stand-in projection's 100 pixels a unit, clear of the 70-pixel overlap box)
+        self.tagged(race, {5: 1, 6: 2, 7: 3, 8: 4}, ("A", "B", "C", "D"))
+        shown = race.frames(nametags.FADE_IN + 1)
+        self.assertEqual(set(shown), {"B", "D", "A"})                      # 5000, 5500, 6000 m; C at 7000 and P1 wait
+        for text in ("B", "D", "A"):
+            self.assertAlmostEqual(shown[text], 1.0, delta=1 / 255)         # all within three quarters of 10 km: full
+            self.assertAlmostEqual(race.sizes[text], 0.5, delta=0.001)      # and at their least size
+
+    def test_a_window_of_zeros_shows_no_mode_tag(self):
+        # a core that wrote no settings (none since the word): a tagged seat is past a range of 0, and the names draw as ever
+        race = Race(self, {1: (0.0, 10.0), 2: (2.0, 10.0)})
+        race.look(1, None)
+        self.tagged(race, {1: 1})
+        self.assertEqual(set(race.frames(nametags.FADE_IN + 1)), {"P2"})
 
     def test_tags_come_first_in_the_limit(self):
         # the three names are closer and held; the tag, further, still takes a place at once
@@ -354,6 +440,7 @@ class TheNameTags(Build):
         self.assertAlmostEqual(race.depths["P2"], 90000.1 - 9000.0 / 10.0, delta=0.01)
 
     def test_a_tag_is_larger_than_a_name(self):
+        # (near: the tag at its largest, 1.2 by default; the name 1.0)
         race = Race(self, {1: (0.0, 10.0), 2: (2.0, 10.0)})
         self.tagged(race, {1: 1})
         race.frames(nametags.FADE_IN + 1)

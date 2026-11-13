@@ -68,6 +68,7 @@ TRUE_ASPECT	memmap.py	py	TRUE_ASPECT
 SIM_GENERATOR	memmap.py	py	SIM_GENERATOR	
 SIM_GENERATOR_SHIFT	memmap.py	py	SIM_GENERATOR_SHIFT	
 PLAIN_DRAW	memmap.py	py	PLAIN_DRAW	
+STOOD	memmap.py	py	STOOD	
 SPEC_MODE	memmap.py	py	SPEC_MODE	
 SPEC_HEIGHT	memmap.py	py	SPEC_HEIGHT	
 SPEC_CHANGE	memmap.py	py	SPEC_CHANGE	
@@ -177,6 +178,8 @@ RACE_RUBBER_BAND_ON	memmap.py	py	RACE_RUBBER_BAND_ON
 RACE_RUBBER_BAND_ON	port/core/src/files.h	cxx	RACE_RUBBER_BAND_ON	
 RACE_SIM_GENERATOR	memmap.py	py	RACE_SIM_GENERATOR	
 RACE_SIM_GENERATOR	port/core/src/files.h	cxx	RACE_SIM_GENERATOR	
+RACE_WRECK_SLIDE	memmap.py	py	RACE_WRECK_SLIDE	
+RACE_WRECK_SLIDE	port/core/src/files.h	cxx	RACE_WRECK_SLIDE	
 RACE_SETTINGS	memmap.py	py	RACE_SETTINGS	
 RACE_SETTINGS	port/core/src/files.h	cxx	RACE_SETTINGS	
 RACE_CUSTOM	memmap.py	py	RACE_CUSTOM	
@@ -258,6 +261,10 @@ PROGRESS_BEST_LAP	port/core/src/replay.cpp	use	game::PROGRESS_BEST_LAP	1
 PROGRESS_LAP_SUM	port/core/src/replay.cpp	use	game::PROGRESS_LAP_SUM	1
 CARS	port/core/src/paint.cpp	cxx	CARS	
 CAR_SIZE	port/core/src/paint.cpp	cxx	CAR_SIZE	
+CAR_SIZE	port/core/src/spectator_frame.cpp	use	game::CAR_SIZE	2
+CAR_FLAGS	port/core/src/spectator_frame.cpp	use	game::CAR_FLAGS	2
+CAR_FLAG_HIDDEN	port/core/src/spectator_frame.cpp	use	game::CAR_FLAG_HIDDEN	1
+CAR_FLAG_HIDDEN	follow.py	py	HIDDEN	
 DOL_PIN	port/image/build.py	py	DOL_PIN[0]	
 DOL_PIN_STOCK	port/image/build.py	py	DOL_PIN[1]	
 DOL_PIN_NEW	port/image/build.py	py	DOL_PIN[2]	

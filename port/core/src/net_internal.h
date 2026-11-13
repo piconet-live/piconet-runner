@@ -111,7 +111,6 @@ constexpr u32 PAD_RECORD = BSS + 0xA88;  // port 0's 6-byte control record (the 
 constexpr int RECORD = 6;
 constexpr u32 MAX_FRAMES = 20;
 constexpr u32 MAX_AHEAD = 24;  // steps simulated beyond the last official frame before waiting
-constexpr double FRAME_MS = 1000.0 / 60;
 constexpr int LEAD = 1;         // steps of margin for the local inputs to reach the relay before it closes their frames
 constexpr u32 MAX_CATCH_UP = 1;  // new steps a displayed frame may add to catch up
 constexpr u32 CATCH_UP_DEPTH = 6;  // ... and only in a frame whose rollback is no deeper than this, at the input delay
@@ -131,7 +130,7 @@ constexpr u32 PACE_CALM_FRAMES = 4;
 // than D - HOLD_SPARE_STEPS ahead (the lead of 1, the relay's close window of 2, less the half step of a frame's
 // rounding). The worst D of late is kept, and fades by a step a second.
 constexpr double HOLD_SPARE_STEPS = 2.5;
-constexpr double PACE_WORST_FADE_MS = FRAME_MS / 60;
+constexpr double PACE_WORST_FADE_MS = FIELD_MS / 60;
 constexpr u32 LOCKSTEP_SLACK = 2;        // official frames past the next step that lockstep leaves waiting
 // A relay that closes a frame once every seat's input is there (Online.Server ServerOptions.EarlyClose) can send a
 // game in lockstep official frames up to its own input delay past its next step: a delay above LOCKSTEP_SLACK would
@@ -265,6 +264,12 @@ struct Session
   u32 hand_back = 0;      // the step the seat is the player's again from (SeatBack); 0: none announced
   Clock::time_point last_official{}, last_rejoin{}, last_ack{}, last_over{};
   u32 overs_sent = 0;     // Over packets sent (a few, the race's end said once on official steps)
+  // The relay ended the race (the operator's end from the dashboard, or its time limit: every seat out, nothing more
+  // sent) and said so in its answer to this game's Join: the race ends at this step here as in every game of it
+  // (relay_wire.cpp TakeTheRelaysEnd, frame.cpp EndAtTheRelaysEnd); NEVER: not said. relay_ended: this game has ended
+  // its race there (results taken, the replay's steps up to it, the game stopping).
+  u32 relay_end = NEVER;
+  bool relay_ended = false;
   Clock::time_point blackout_until{};  // tests (Debug::blackout_step): nothing goes to or comes from the relay until then
 
   // replay (protocol/formats.md section 1): the launcher starts the file (Core.FzgxReplay) with its
@@ -337,6 +342,11 @@ struct Session
   u32 rollbacks = 0;
   u32 max_depth = 0;
   u32 resim_steps = 0;
+  // Steps about to become final whose inputs, as the step ran them (the input ring: what the recording keeps), were
+  // not the official row although the session's own account (`used`) said they were: kept open and run again
+  // instead (frame.cpp HeldOpenSteps). Each is a bookkeeping fault found before it could become a desync.
+  u32 unchecked_into_lockstep = 0;  // steps found run on other rows as lockstep made them final (frame.cpp LockstepFrame)
+  u32 held_open = 0;
   u32 normal_steps = 0;
   RaceSummary summary;  // what the race's one line in the player's file is made of (summary.h)
 

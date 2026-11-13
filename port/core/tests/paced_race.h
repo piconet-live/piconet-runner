@@ -9,7 +9,6 @@
 
 #include <map>
 
-constexpr double FRAME_MS = 1000.0 / 60;
 constexpr u32 FROM = 10;      // the race phase begins at this step
 constexpr u32 SETTLED = 120;  // displayed frames of the race after which its start is over
 
@@ -48,6 +47,19 @@ struct Pace
   u32 knock_out_by_input_at = 0;  // the race's frame stall_at takes this long (a hitch of the host)
   bool follow_speed = false;   // the host keeps the emulation speed the game sets (Host::SetPace) in the race
   double relay_rate = 1.0;     // the relay's clock runs this fast against the host's
+  // The deep-rollback worker (rollback_worker.h) on threads of a fake adapter (test_pace.cpp's FakeWorkers): its test
+  // key's mode ("": none, the core tests' own default), and its depth with the rule "always" and its workers
+  std::string worker;
+  u32 worker_depth = 1, workers = 2;
+  // A fault of the rollback's bookkeeping, as a desynced game's recording showed one (2026-11-07, race m285): the
+  // first time step fault_at is about to run on its official row, its row in the input ring is another one, so the
+  // step runs on that row while the session counts it as run on the official one (0: none)
+  u32 fault_at = 0;
+  // The relay ends the race at this displayed frame of the race (0: never), as the operator's end from the dashboard
+  // and the relay's time limit do: it closes no frame from then on, the frames it closed before reach the game, and
+  // it answers "over" with a frame count relay_end_extra past them (a frame the relay closed as it ended and sent to
+  // no game), as the real relay answers the Join a game sends when no frame came for a second
+  u32 relay_ends_at = 0, relay_end_extra = 1;
 };
 
 // What came of it.
@@ -58,7 +70,14 @@ struct Raced
   std::vector<double> depth, catch_up;   // (the same: the frame's rollback in steps, the steps it added to catch up)
   std::vector<double> watch, speed, buffer;  // (the same: how the game watched, its speed, official frames in hand)
   u32 other_checksums = 0;               // final steps whose checksum is not the official race's
+  u32 other_rows = 0;
+  u32 first_other_checksum = 0, first_other_row = 0;  // the first of each
+  u32 faults = 0;                        // hooks at which Pace::fault_at's fault was made                    // final steps whose inputs (the ones they ran with) are not the official row
   u32 final_steps = 0;
+  u32 relay_waits = 0, first_relay_wait = 0;  // reads of the time while the session waited for official frames (test_pace.cpp
+                                            // RunAPacedRace: the relay goes on meanwhile), and the step of the first
+  u32 step_end = 0;                      // the game's step word as the race stopped (its predictions ran to here)
+  u32 compared = 0;                      // final steps compared with the official race's (CompareWithTheOfficialRace)
   // the local seat's inputs as the relay saw them, for the frames first sent after the race's start was over:
   std::vector<double> margin;            // frames left until the relay closed the frame, when its input came
   u32 late = 0;                          // inputs that came for a frame already closed
@@ -71,6 +90,9 @@ struct Raced
   std::vector<std::array<u8, 6>> official_mine;  // the local seat's record in each official frame, by frame
   std::map<u32, std::array<u8, 6>> pads;  // the pad of the displayed race frame that began at each step
   u32 next_input_end = 0;                 // the session's Session::next_input as the race stopped
+  u32 relay_closed = 0;                   // the frames the relay had closed when it ended the race (Pace::relay_ends_at)
+  u32 stops = 0;                          // the stops the game asked of its host
+  int exit_code = 0;                      // what the process ends with (ExitCode, after Shutdown)
 };
 
 // The image's count of frames the local seat has been out (Pace::out_at), at a frame of the race from out_at on: 0

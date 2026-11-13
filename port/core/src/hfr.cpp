@@ -30,7 +30,6 @@ constexpr u32 BLOCK = game::MACHINE_SIZE, POSE = 0x14C, RECORD = 0x1FC;
 // machine-state map, port/facts/machine-state.csv)
 constexpr u32 FLAGS_AT = game::MACHINE_FLAGS, SPEED_AT = game::MACHINE_SPEED, SINCE_AT = game::MACHINE_SINCE,
               FLAGS2_AT = game::MACHINE_FLAGS2;
-constexpr double FIELD_MS = 1000.0 * 1001.0 / 60000.0;
 
 // The guards' numbers (Judge).
 // A machine's speed is 216 x |momentum| / weight km/h (+0x17C, written at its step's start), so speed / 216 is the
@@ -63,7 +62,8 @@ struct Machine
 struct Camera
 {
   bool chase = false;
-  u8 mode = 0, follow = 0;
+  u8 mode = 0;
+  u16 follow = 0;  // the camera record's +2 is a half-word: the seat it follows
   u32 state = 0;
   float fov[2]{}, eye[3]{};
   Mtx view_a{}, view_b{};
@@ -186,7 +186,7 @@ void Take(const Guest& g, State& st)
     if (!c.chase)
       continue;
     const u32 r = st.records + v * RECORD;
-    c.follow = g.Read8(r + 2);
+    c.follow = g.Read16(r + 2);
     c.state = g.Read32(r + 0xA8);
     c.fov[0] = F(g, r + 8);
     c.fov[1] = F(g, r + 0xC);

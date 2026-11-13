@@ -4,6 +4,7 @@
 #include "hud_move.h"
 
 #include "internal.h"
+#include "mode_hud.h"
 #include "util.h"
 
 #include <algorithm>
@@ -25,7 +26,7 @@ namespace
 // The game's packet (font.h FontDrawPacket) and its queue (font.c fn_1_4F734, fn_1_4FD64)
 constexpr u32 PACKET = 0x58;
 constexpr u32 IMAGE = 0, X = 4, Y = 8, SCALE_X = 0x10, SCALE_Y = 0x14, U0 = 0x18, V0 = 0x1C, U1 = 0x20, V1 = 0x24,
-              ROT_Z = 0x28, FLAGS = 0x30, PIXELS_W = 0x44, PIXELS_H = 0x46;
+              ROT_Z = 0x28, FLAGS = 0x30, ANCHOR = 0x34, PIXELS_W = 0x44, PIXELS_H = 0x46;
 constexpr u32 NOT_DRAWN = 0x02000000;  // +0x30: fn_1_4FD64 skips the packet
 constexpr u32 SQUEEZED = 0x08000000, GLYPH = 0x400000, PIXELS = 0x800000;  // +0x30: Wide Screen's anchor; the two other paths
 constexpr u32 QUEUE = game::REL_DATA_AT + 0x1C504, QUEUED = game::REL_BSS_AT + 0x646D2;
@@ -59,11 +60,18 @@ constexpr std::array<Pivot, PARTS.size()> PIVOTS = [] {
   p[16] = {556.8f, 126.6f};  // LAP_TIMES 495,110-618,143 (the first row and its labels)
   p[17] = {532, 86};      // RACE_TIME 444,67-620,105
   p[18] = {51, 214};      // FACES 0,0-102,428 (the rings)
-  p[19] = {56, 444};      // SPARE 24,432-88,456
-  p[20] = {608, 120};     // SKULLS: the first skull, 616 - its width, at y 108
-  p[23] = {320, 150};     // BANNERS: the game's (320, 150)
-  p[24] = {320, 240};     // FINISH 120,202-520,278
-  p[22] = {320, 240};     // WRONG_WAY: the game's (320, 240)
+  p[SPARE] = {56, 444};      // SPARE 24,432-88,456
+  p[SKULLS] = {608, 120};    // SKULLS: the first skull, 616 - its width, at y 108
+  p[BANNERS] = {320, 150};   // BANNERS: the game's (320, 150)
+  p[FINISH] = {320, 240};    // FINISH 120,202-520,278
+  p[WRONG_WAY] = {320, 240}; // WRONG_WAY: the game's (320, 240)
+  p[CHECK] = {320, 445};     // CHECK: the screen's middle at the sign's row (y 445; its x follows the rival it points at,
+                             // so a place moves its row and the sign still slides sideways after that rival)
+  p[SCORE] = {552, 86};      // SCORE 486,67-618,105: the label on TIME's row, its right edge at 615 (lined up with ENERGY), and six digits at the
+                             // race time's (sites_hudmove.py race_time_score), a fixed box whatever the number's digits or the
+                             // label's width, as RANK's full width
+  p[TEXT] = {320, 116};      // TEXT: show_text's home, the text centred on it by the game's drawer (sites_hudmove.py
+                             // race_time_score): the top of the screen under RANK's box (275,24-366,100), whatever the text's width
   return p;
 }();
 
@@ -213,6 +221,13 @@ struct State
   bool said = false;
 };
 State s_state;
+ModePlaces s_mode{};
+bool s_mode_any = false;
+
+bool AnyMove()
+{
+  return TheLayout().any || s_mode_any;
+}
 
 u32 Top()
 {
@@ -269,13 +284,14 @@ void Flush(Guest& g)
     if (now[p].Empty())
       continue;
     const std::size_t from = p == BOOST && !l.parts[BOOST].given ? ENERGY : p;  // the lightning goes with the meter
-    const Move& m = l.parts[from];
+    const Move m = Effective(l, s_mode, from);
     if (!m.given)
       continue;
     float px = m.px, py = m.py;
     if (!m.has_pivot)
     {
-      const Pivot& at = PIVOTS[from];
+      // (RANK drawn by the AX layout's drawer is elsewhere than its measured place: its box)
+      const Pivot at = from == RANK && (g.Read32(layout::MODE_HUD) & mode::hud::HUD_AX) ? Pivot{N, N} : PIVOTS[from];
       const Box& b = s_state.seen[from].Empty() ? s_state.seen[p] : s_state.seen[from];
       px = std::isnan(at.x) ? (b.x0 + b.x1) / 2 : at.x;
       py = std::isnan(at.y) ? (b.y0 + b.y1) / 2 : at.y;
@@ -286,8 +302,10 @@ void Flush(Guest& g)
         continue;
       const u32 a = queue + i * PACKET;
       Packet k{F(g, a + X), F(g, a + Y), static_cast<s16>(g.Read16(a + ROT_Z)), g.Read32(a + FLAGS),
-               F(g, a + U0),  F(g, a + V0),  F(g, a + U1), F(g, a + V1)};
+               F(g, a + U0),  F(g, a + V0),  F(g, a + U1), F(g, a + V1), F(g, a + ANCHOR)};
       k = Apply(m, px, py, widescreen && (k.flags & SQUEEZED), k);
+      if (m.to_point && (k.flags & SQUEEZED))
+        g.Write32(a + ANCHOR, std::bit_cast<u32>(k.anchor));
       g.Write32(a + X, std::bit_cast<u32>(k.x));
       g.Write32(a + Y, std::bit_cast<u32>(k.y));
       g.Write16(a + ROT_Z, static_cast<u16>(k.rot));
@@ -390,6 +408,10 @@ const Layout& TheLayout()
 Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p)
 {
   Packet k = p;
+  // a place: the centre (px, py) to (tx, ty), and the squeeze about tx (the anchor), so no division by it
+  const float dx = m.to_point ? m.tx - px : squeezed ? m.dx / SQUEEZE : m.dx, dy = m.to_point ? m.ty - py : m.dy;
+  if (m.to_point && (p.flags & SQUEEZED))
+    k.anchor = m.tx;
   float rx = p.x - px, ry = p.y - py;
   if (m.flip_x)
     rx = -rx;
@@ -397,8 +419,8 @@ Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p)
     ry = -ry;
   const double t = static_cast<double>(m.angle) * (std::numbers::pi / 180.0);
   const double c = std::cos(t), s = std::sin(t);
-  k.x = static_cast<float>(px + rx * c - ry * s + (squeezed ? m.dx / SQUEEZE : m.dx));
-  k.y = static_cast<float>(py + rx * s + ry * c + m.dy);
+  k.x = static_cast<float>(px + rx * c - ry * s + dx);
+  k.y = static_cast<float>(py + rx * s + ry * c + dy);
   // the quad: the game turns it by -rot (fn_1_4EDAC's mathutil_mtxA_rotate_z(-rot)); a mirror before it turns the
   // other way, so the packet's own turn changes sign, and the box's side and its texture corners swap
   const s32 units = static_cast<s32>(std::lround(static_cast<double>(m.angle) * (65536.0 / 360.0)));
@@ -417,13 +439,44 @@ Packet Apply(const Move& m, float px, float py, bool squeezed, const Packet& p)
   return k;
 }
 
+float ScreenX(const Packet& p, bool widescreen)
+{
+  return widescreen && (p.flags & SQUEEZED) ? p.anchor + (p.x - p.anchor) * SQUEEZE : p.x;
+}
+
 namespace
 {
 u32 Word(const Layout& l)
 {
-  return l.any ? 1 | (l.faces_hidden ? FACES_HIDDEN : 0) : 0;
+  return l.any || s_mode_any ? 1 | (l.faces_hidden ? FACES_HIDDEN : 0) : 0;
 }
 }  // namespace
+
+Move Effective(const Layout& layout, const ModePlaces& places, std::size_t part)
+{
+  // the mode's part whose packets are this part's: the part itself, else LEADER_GAP's place for the banners (the gap
+  // popup is drawn with them)
+  const auto place = [&](std::size_t p) {
+    Move m;
+    m.given = true;
+    m.to_point = true;
+    m.tx = places[p].x;
+    m.ty = places[p].y;
+    m.angle = places[p].angle;
+    return m;
+  };
+  if (part >= 1 && part <= places.size() && part != LEADER_GAP && places[part - 1].given)
+    return place(part - 1);  // (LEADER_GAP tags no packet of its own: its place is the banners')
+  if (part == BANNERS && places[LEADER_GAP - 1].given)
+    return place(LEADER_GAP - 1);
+  return part < layout.parts.size() ? layout.parts[part] : Move{};
+}
+
+void SetMode(const ModePlaces& places)
+{
+  s_mode = places;
+  s_mode_any = std::any_of(places.begin(), places.end(), [](const Place& p) { return p.given; });
+}
 
 void Prepare(ModData& data)
 {
@@ -437,7 +490,7 @@ void Frame(Guest& g)
 
 void Call(Guest& g, u32 op, u32 arg)
 {
-  if (!TheLayout().any)
+  if (!AnyMove())
     return;
   switch (op)
   {

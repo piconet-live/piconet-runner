@@ -7,6 +7,7 @@
 #include "net_internal.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -108,6 +109,7 @@ void TestHighRefreshWithNoStepAhead()
     CHECK(std::fabs(r.picture[0].machine[1][3] - 0.5f) < 1e-5f);
     CHECK(std::fabs(r.picture[2].machine[1][3] - 1.5f) < 1e-5f);
     CHECK(std::fabs(r.at[1][0] - 1.0f) < 1e-5f);  // its place in the true picture's view: where the tick saw it
+    CHECK(r.view[0] == 1.0f && r.view[5] == 1.0f && r.view[10] == 1.0f && r.view[3] == 0.0f);  // and that view itself
   }
   CHECK(FloatAt(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12) == 3.0f);  // nothing of the game's written
   runahead::TimeTheDrawing(1);  // (one request a tick)
@@ -144,6 +146,30 @@ void TestHighRefreshWithNoStepAhead()
   CHECK(report.find("1 passes with no step since the tick, 1 out of the race by then") != std::string::npos);
   CHECK(report.find("0/1/2/3/more 1/2/1/0/0") != std::string::npos);
   CHECK(report.find("against the next tick: 1 compared, machines differed 0, camera differed 0") != std::string::npos);
+  CHECK(report.find("0 machines kept for a jump") != std::string::npos);
+  // the camera follows seat 1 (its record's +2 is a half-word, the game's `lha 2(r29)`): its eye may move 3 x seat 1's
+  // move + 10 a step, whatever seat 0 does (here it stands, like a racer out of the race). Seat 1 moves 4, the eye 20: no
+  // cut. An empty seat (5, past the race's two machines) that jumps is not counted as a machine kept.
+  g.Write16(RECORDS + 2, 1);
+  frame(107, false);  // (the tick after the last: 106)
+  Float(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12, 7.0f);
+  Float(g, MACHINES + 5 * game::MACHINE_SIZE + POSE + 12, 500.0f);
+  Float(g, RECORDS + 0x10, 20.0f);
+  g.Write32(net::STEP, 108);
+  runahead::TimeTheDrawing(1);
+  CHECK(asked.size() == 3);
+  const std::string followed = runahead::Report();
+  CHECK(followed.find(" 0 camera cuts;") != std::string::npos);
+  CHECK(followed.find("0 machines kept for a jump") != std::string::npos);
+  // the same eye move with the camera on seat 0, which stood: a cut
+  g.Write16(RECORDS + 2, 0);
+  frame(108, false);
+  Float(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12, 11.0f);
+  Float(g, RECORDS + 0x10, 40.0f);
+  g.Write32(net::STEP, 109);
+  runahead::TimeTheDrawing(1);
+  CHECK(asked.size() == 3);
+  CHECK(runahead::Report().find(" 1 camera cuts;") != std::string::npos);
   runahead::Stop();
   // AURORA_RUNAHEAD_AFTER=0: the step ahead again (here it finds no step wrapper in the image, and goes off), and none without REDRAW
   setenv("AURORA_RUNAHEAD_AFTER", "0", 1);
@@ -319,4 +345,143 @@ void TestHighRefreshInAPlainStart()
     CHECK(g.Read32(layout::TRUE_ASPECT) == 0);
   }
   runahead::Stop();
+}
+
+// The rate for a setting on a screen (runahead::PicturesASecond): the largest multiple of 60 at or under both the
+// setting's "Up to N" and the screen's rate, so that every refresh shows a picture of its own and none is cut. A rate a
+// little under a multiple of 60 (59.94, 239.76; the system's whole 59, 239) is that multiple; a screen not known is the
+// setting alone; under 120 Hz the game's own 60.
+void TestThePicturesASecondForAScreen()
+{
+  BEGIN_TEST();
+  struct Case
+  {
+    u32 asked;
+    double hz;
+    u32 rate;
+  };
+  const Case cases[] = {
+      // Up to 240 on the screens there are
+      {240, 240, 240},   {240, 239.76, 240}, {240, 239, 240}, {240, 200, 180},   {240, 180, 180}, {240, 165, 120},
+      {240, 144, 120},   {240, 120, 120},    {240, 119.88, 120}, {240, 119, 120}, {240, 100, 60},  {240, 75, 60},
+      {240, 60, 60},     {240, 59.94, 60},   {240, 59, 60},   {240, 360, 240},   {240, 300, 240},
+      // Up to 120
+      {120, 240, 120},   {120, 200, 120},    {120, 165, 120}, {120, 144, 120},   {120, 120, 120}, {120, 100, 60},
+      {120, 60, 60},
+      // a launch file's own number: up to 480 on 360 and 480; up to 144 is up to 120
+      {480, 360, 360},   {480, 480, 480},    {144, 240, 120},
+      // the screen not known: the setting alone
+      {240, 0, 240},     {120, 0, 120},      {480, 0, 480},
+      // the tolerance's edge: 2% under a multiple of 60 is it, more is not (235.3 is 240; 235 is 180)
+      {240, 235.3, 240}, {240, 235, 180},    {240, 177, 180}, {240, 176, 120},
+  };
+  for (const Case& c : cases)
+  {
+    const u32 rate = runahead::PicturesASecond(c.asked, c.hz);
+    CHECK(rate == c.rate);
+    if (rate != c.rate)
+      std::fprintf(stderr, "  up to %u on %g Hz: %u, not %u\n", c.asked, c.hz, rate, c.rate);
+  }
+}
+
+// In the race the rate follows the screen the window is on: asked at each pass's tick (the safe point: the pass before
+// was made whole with its count, this one whole with the new), a change logged once with the screen's name and rate; on
+// a 60 Hz screen no request at all; a screen not known is the setting's rate.
+void TestTheRateFollowsTheScreenInTheRace()
+{
+  BEGIN_TEST();
+  TestHost host;
+  Init(host, Options{});
+  net::s_session = std::make_unique<net::Session>();
+  Guest g(host, Data());
+  ARace(g);
+  setenv("AURORA_RUNAHEAD", "240", 1);
+  setenv("AURORA_REDRAW", "1", 1);
+  runahead::Screen screen{240, "\\\\.\\DISPLAY1"};
+  std::vector<runahead::RedrawRequest> asked;
+  runahead::Start([](float) {}, [](u32) {}, [&](const runahead::RedrawRequest& r) { asked.push_back(r); }, [] { return u64{500}; },
+                  [&] { return screen; });
+  CHECK(runahead::On());
+  CHECK(host.notices.find("up to 240 pictures a second asked for, 3 between two steps at most; the rate follows the screen") != std::string::npos);
+  const auto lines = [&](const char* text) {
+    std::size_t n = 0;
+    for (std::size_t at = host.notices.find(text); at != std::string::npos; at = host.notices.find(text, at + 1))
+      ++n;
+    return n;
+  };
+  // a frame: the tick, the true step, the drawing's start (where the request is made)
+  const auto frame = [&](u32 step) {
+    g.Write32(net::STEP, step);
+    CHECK(!runahead::Begin());
+    g.Write32(net::STEP, step + 1);
+    runahead::TimeTheDrawing(1);
+    runahead::TimeTheDrawing(2);
+  };
+  frame(100);  // (the first tick has none before it: not a race pass; no pictures, the screen not read)
+  CHECK(asked.empty());
+  CHECK(lines("fzgx: high refresh: ") == 0);
+  frame(101);  // the first pass: the screen read at its tick, said once
+  CHECK(asked.size() == 1 && asked.back().pictures == 3);
+  CHECK(lines("fzgx: high refresh: 240 pictures/s on \\\\.\\DISPLAY1 at 240 Hz (up to 240 asked)") == 1);
+  // the window moved to the 200 Hz screen after this pass's tick: this pass is made whole as planned, the next at 180
+  g.Write32(net::STEP, 102);
+  CHECK(!runahead::Begin());
+  screen = {200, "\\\\.\\DISPLAY2"};
+  g.Write32(net::STEP, 103);
+  runahead::TimeTheDrawing(1);
+  runahead::TimeTheDrawing(2);
+  CHECK(asked.size() == 2 && asked.back().pictures == 3);
+  CHECK(lines("fzgx: high refresh: ") == 1);
+  frame(103);
+  CHECK(asked.size() == 3 && asked.back().pictures == 2);
+  if (asked.size() == 3 && asked.back().pictures == 2)
+    CHECK(std::fabs(asked.back().picture[0].fraction - 1.0f / 3) < 1e-6f && std::fabs(asked.back().picture[1].fraction - 2.0f / 3) < 1e-6f);
+  CHECK(lines("fzgx: high refresh: 180 pictures/s on \\\\.\\DISPLAY2 at 200 Hz (up to 240 asked)") == 1);
+  // the same answer again: nothing said again
+  frame(104);
+  CHECK(asked.size() == 4 && asked.back().pictures == 2);
+  CHECK(lines("fzgx: high refresh: ") == 2);
+  // the screen's rate set to 144: 120, one picture between, halfway
+  screen = {144, "\\\\.\\DISPLAY2"};
+  frame(105);
+  CHECK(asked.size() == 5 && asked.back().pictures == 1);
+  if (asked.size() == 5 && asked.back().pictures == 1)
+    CHECK(asked.back().picture[0].fraction == 0.5f);
+  CHECK(lines("fzgx: high refresh: 120 pictures/s on \\\\.\\DISPLAY2 at 144 Hz (up to 240 asked)") == 1);
+  // a 100 Hz screen: the game's own pictures, no request
+  screen = {100, "\\\\.\\DISPLAY3"};
+  frame(106);
+  frame(107);
+  CHECK(asked.size() == 5);
+  CHECK(lines("fzgx: high refresh: 60 pictures/s on \\\\.\\DISPLAY3 at 100 Hz (up to 240 asked)") == 1);
+  // the screen not known (no window): the setting alone
+  screen = {};
+  frame(108);
+  CHECK(asked.size() == 6 && asked.back().pictures == 3);
+  CHECK(lines("fzgx: high refresh: 240 pictures/s; the screen's rate is not known (up to 240 asked)") == 1);
+  // back on the 240 Hz screen, which the system calls 239: still 240, said once more for the screen's name
+  screen = {239, "\\\\.\\DISPLAY1"};
+  frame(109);
+  CHECK(asked.size() == 7 && asked.back().pictures == 3);
+  CHECK(lines("fzgx: high refresh: 240 pictures/s on \\\\.\\DISPLAY1 at 239 Hz (up to 240 asked)") == 1);
+  CHECK(lines("fzgx: high refresh: ") == 6);
+  CHECK(FloatAt(g, MACHINES + 1 * game::MACHINE_SIZE + POSE + 12) == 1.0f);  // nothing of the game's written
+  const std::string report = runahead::Report();
+  CHECK(report.find("the rate followed the screen: 6 changes, 2 passes at 60 (the game's own pictures), last 240 pictures/s on \\\\.\\DISPLAY1 at 239 Hz") !=
+        std::string::npos);
+  CHECK(report.find("up to 240 pictures a second asked for, 240 drawn:") != std::string::npos);
+  runahead::Stop();
+  // without a screen to ask: the setting alone, nothing of the screen in the log
+  host.notices.clear();
+  runahead::Start([](float) {}, [](u32) {}, [&](const runahead::RedrawRequest& r) { asked.push_back(r); }, [] { return u64{500}; });
+  CHECK(host.notices.find("up to 240 pictures a second asked for, 3 between two steps at most\n") != std::string::npos);
+  frame(200);
+  frame(201);
+  CHECK(asked.size() == 8 && asked.back().pictures == 3);
+  CHECK(lines("fzgx: high refresh: ") == 0);
+  CHECK(runahead::Report().find("the rate followed the screen") == std::string::npos);
+  runahead::Stop();
+  unsetenv("AURORA_RUNAHEAD");
+  unsetenv("AURORA_REDRAW");
+  net::s_session.reset();
 }

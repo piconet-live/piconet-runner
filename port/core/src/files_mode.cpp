@@ -172,10 +172,14 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
           p.brake = static_cast<u32>(arg(1));
         }
         else if (id == modes::SETUP_BOOST || id == modes::SETUP_RESTORE || id == modes::SETUP_CONTACT ||
-                 id == modes::SETUP_CPUS || id == modes::SETUP_SOLO || id == modes::SETUP_PAUSE || id == modes::SETUP_SAVESTATE)
+                 id == modes::SETUP_CPUS || id == modes::SETUP_SOLO || id == modes::SETUP_PAUSE || id == modes::SETUP_SAVESTATE ||
+                 id == modes::SETUP_DISTANCELABEL || id == modes::SETUP_RESULTSTIMES || id == modes::SETUP_WRECKSLIDE)
         {
-          // on, off or a switch parameter's value (a package from before these took a value has none: refused)
-          if (setup_args.size() != 1 || (arg(0) != 0 && arg(0) != 1))
+          // on, off or a switch parameter's value (a package from before these took a value has none: refused);
+          // cpus has a third, always (2: modes.toml's `always`), from the rule set it arrived in (a package of an
+          // earlier one that holds it is refused): the lobby's matter (no CPU vote), which the game reads as on
+          const s32 most = id == modes::SETUP_CPUS && p.api >= modes::SETUP_CPUS_ALWAYS_SINCE ? modes::SETUP_CPUS_ALWAYS : 1;
+          if (setup_args.size() != 1 || arg(0) < 0 || arg(0) > most)
             return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
           const bool on = arg(0) != 0;
           if (id == modes::SETUP_BOOST)
@@ -190,6 +194,12 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             p.solo = on;
           else if (id == modes::SETUP_PAUSE)
             p.pause = on;
+          else if (id == modes::SETUP_DISTANCELABEL)
+            p.distance_label_off = !on;
+          else if (id == modes::SETUP_RESULTSTIMES)
+            p.results_times_off = !on;
+          else if (id == modes::SETUP_WRECKSLIDE)
+            p.instant_restore = !on;
           else
             p.save_state = on;
         }
@@ -274,6 +284,23 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             return Fail(why, "has two start gaps");
           p.start_gap_even = true;
         }
+        else if (id == modes::SETUP_TAGLOOKS)
+        {
+          // three binary32 values a text of tag_texts, as the compiler's ModeTagLooks writes them: the range in metres, the
+          // least size, the largest (the count against the texts below, after both words are read)
+          if (setup_args.empty() || setup_args.size() % 3 != 0 || setup_args.size() > 3 * modes::TAG_TEXTS)
+            return Fail(why, "has tag settings that are not three values a text");
+          for (size_t i = 0; i < setup_args.size(); i += 3)
+          {
+            const TagLook look{std::bit_cast<float>(setup_args[i]), std::bit_cast<float>(setup_args[i + 1]),
+                               std::bit_cast<float>(setup_args[i + 2])};
+            if (!(look.range >= LEAST_TAG_RANGE && look.range <= MOST_TAG_RANGE))
+              return Fail(why, "has a tag range outside 1 to 10000 m");
+            if (!(look.size_min >= LEAST_TAG_SIZE && look.size_min <= look.size_max && look.size_max <= MOST_TAG_SIZE))
+              return Fail(why, "has a tag size outside 0.1 to 5, or a least size above the largest");
+            p.tag_looks.push_back(look);
+          }
+        }
         else if (id == modes::SETUP_TIMEGAPS)
         {
           p.time_gaps = true;
@@ -281,6 +308,10 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         else if (id == modes::SETUP_HUDCLEAN)
         {
           p.hud_clean = true;
+        }
+        else if (id == modes::SETUP_HUDLAYOUTAX)
+        {
+          p.hud_ax = true;
         }
         else if (id == modes::SETUP_RESULTSPOINTS)
         {
@@ -318,6 +349,24 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
         {
           p.stats_page = true;
         }
+        else if (id == modes::SETUP_SEATSPEEDOPEN)
+        {
+          if (!setup_args.empty())
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          p.speed_open = true;
+        }
+        else if (id == modes::SETUP_MAXSPEEDOPEN)
+        {
+          if (!setup_args.empty())
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          p.max_speed_open = true;
+        }
+        else if (id == modes::SETUP_LIVEPLACES)
+        {
+          if (!setup_args.empty())
+            return Fail(why, std::format("has a setup word ({}) whose value is not its own", id));
+          p.live_places = true;
+        }
         else if (id == modes::SETUP_TAGTEXTS)
         {
           // a value a byte and a 0 between texts, as the compiler's ModeTagTexts holds them: font 5's characters
@@ -337,11 +386,34 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             if (text.empty() || text.size() > modes::TAG_TEXT || text.front() == ' ' || text.back() == ' ')
               return Fail(why, "has a tag text the game cannot draw");
         }
+        else if (id == modes::SETUP_SAYTEXTS)
+        {
+          // one word a text, in order, a UTF-8 byte a value, as the compiler's ModeSayTexts writes them; the overlay
+          // draws them
+          std::string text;
+          for (const s32 c : setup_args)
+          {
+            if (c < 0 || c > 255)
+              return Fail(why, "has a say text that is not UTF-8");
+            if (c < 0x20 || c == 0x7F)
+              return Fail(why, "has a say text with a control character");
+            text.push_back(static_cast<char>(c));
+          }
+          if (text.empty() || text.size() > modes::SAY_TEXT || text.front() == ' ' || text.back() == ' ')
+            return Fail(why, "has a say text the overlay cannot show");
+          if (p.say_texts.size() == modes::SAY_TEXTS || std::ranges::find(p.say_texts, text) != p.say_texts.end())
+            return Fail(why, "has more say texts than the api's, or one twice");
+          p.say_texts.push_back(std::move(text));
+        }
+        else if (id == modes::SETUP_PAUSES)
+        {
+          p.pauses = true;
+        }
         else if (id == modes::SETUP_ROLLINGSTART)
         {
           const float v = std::bit_cast<float>(arg(0));
-          if (setup_args.size() != 1 || !(v >= 0.0f && v <= MOST_SPEED))
-            return Fail(why, "starts rolling at a speed outside 0 to 9000 km/h");
+          if (setup_args.size() != 1 || !(v >= 0.0f && v <= MOST_SPEED_OPEN))  // (NaN and infinity outside too)
+            return Fail(why, "starts rolling at a speed outside 0 to 1e17 km/h");
           p.rolling = static_cast<u32>(arg(0));
         }
         else if (id == modes::SETUP_REWIND || id == modes::SETUP_RESUMECOUNTDOWN)
@@ -442,6 +514,17 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
       if (at != NONE && at >= p.code.size())
         return Fail(why, std::format("has a rule whose code is not there (\"{}\")", rule.label));
   }
+  // past 9000 km/h only with the file's seat_speed_open (0.6.5), as the compiler holds it
+  if (p.rolling && !p.speed_open && !(std::bit_cast<float>(*p.rolling) <= MOST_SPEED))
+    return Fail(why, "starts rolling above 9000 km/h without seat_speed_open");
+  // tag settings are a text's each, and a text with its settings is in the table once (the texts alone may repeat)
+  if (!p.tag_looks.empty() && p.tag_looks.size() != p.tag_texts.size())
+    return Fail(why, "has tag settings that are not one a tag text");
+  for (size_t i = 0; i < p.tag_texts.size(); ++i)
+    for (size_t j = 0; j < i; ++j)
+      if (p.tag_texts[i] == p.tag_texts[j] &&
+          (p.tag_looks.empty() ? true : p.tag_looks[i] == p.tag_looks[j]))
+        return Fail(why, "has a tag text with its settings twice");
   return true;
 }
 }  // namespace
@@ -469,7 +552,8 @@ std::optional<Package> Read(const picojson::value& mode, std::string* why)
   const double number = api->second.get<double>();
   if (!(number >= 1 && number <= modes::API) || number != static_cast<double>(static_cast<u32>(number)))
   {
-    *why = std::format("is of api {}, and this build runs api {} and older", number, modes::API);
+    *why = std::format("is of rule set {}, and this build runs rule set {} (api {}) and older", number, modes::API,
+                       modes::API_VERSION);
     return std::nullopt;
   }
   p.api = static_cast<u32>(number);

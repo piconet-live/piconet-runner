@@ -3,8 +3,10 @@
 // and the course map's dots.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
 #include <fstream>
 #include <optional>
 #include <sstream>
@@ -225,7 +227,23 @@ void TestTheDisplayWordsRun()
   CHECK(g.Read32(Record(OUT_SEAT) + hud::MAP_MARK) == (hud::MARKED | 0xFF0000));
   // `tag`: the text's number on the out seat's byte (after `tag s off`), none on the others', and no other word moved
   CHECK(g.Read8(BLOCK + hud::TAGS_AT + OUT_SEAT) == 1);
-  CHECK(p->tag_texts == std::vector<std::string>{"OUT"});
+  CHECK((p->tag_texts == std::vector<std::string>{"OUT", "KOS", "GO", "WAVE 2"}));  // (KOS: show_score's label; GO, WAVE 2: show_text's texts: the same table)
+  // the tag's settings (0.6.5, on the word: `tag s, "OUT", size 0.4 1, range 300 m`): the vector's tag_looks, one a text,
+  // OUT's own and the defaults for the three the other words use; and the window's five words the boot writes for the
+  // name tags: full to 225 m, none at 300; the size 1 to 40 m from the camera, 40 / depth beyond, never under 0.4
+  CHECK((p->tag_looks == std::vector<mode::TagLook>{{300.0f, 0.4f, 1.0f}, {}, {}, {}}));
+  {
+    const std::array<u32, 5> words = hud::TagLookWords(p->tag_looks[0]), old = hud::TagLookWords(hud::DEFAULT_TAG_LOOK);
+    CHECK(std::bit_cast<float>(words[0]) == 90000.0f && std::bit_cast<float>(words[1]) == 1.0f / (90000.0f - 225.0f * 225.0f));
+    CHECK(std::bit_cast<float>(words[2]) == 40.0f && std::bit_cast<float>(words[3]) == 0.4f && std::bit_cast<float>(words[4]) == 1.0f);
+    // the defaults: what the tags drew before the word, 200 m (150 m full) and 1.2 at the largest; 0.5 at the least
+    CHECK(std::bit_cast<float>(old[0]) == 40000.0f && std::bit_cast<float>(old[1]) == 1.0f / (40000.0f - 22500.0f));
+    CHECK(std::bit_cast<float>(old[2]) == 48.0f && std::bit_cast<float>(old[3]) == 0.5f && std::bit_cast<float>(old[4]) == 1.2f);
+    // the bounds: finite words above 0 at both ends (1 m: a divisor of 0.4375; 10 km: within binary32's reach; sizes 0.1 to 5)
+    for (const float far : {mode::LEAST_TAG_RANGE, mode::MOST_TAG_RANGE})
+      for (const u32 w : hud::TagLookWords({far, mode::LEAST_TAG_SIZE, mode::MOST_TAG_SIZE}))
+        CHECK(std::isfinite(std::bit_cast<float>(w)) && std::bit_cast<float>(w) > 0.0f);
+  }
   for (u32 seat = 0; seat < 30; ++seat)
     if (seat != OUT_SEAT)
       CHECK(g.Read8(BLOCK + hud::TAGS_AT + seat) == 0);
@@ -331,6 +349,16 @@ void TestTheDisplayWordsRun()
     // held to the five digits, and nothing below 0
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(250000.0f)));
     CHECK(hud::Read(g, BLOCK, 1).metres == hud::DISTANCE_MOST);
+    // under `distance_label off` to six (the sixth digit has the label's room), and five again without it
+    const u32 window = g.Read32(layout::MODE_HUD + hud::WINDOW_FLAGS);
+    g.Write32(layout::MODE_HUD + hud::WINDOW_FLAGS, window | hud::NO_DISTANCE_LABEL);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(250000.0f)));
+    CHECK(hud::Read(g, BLOCK, 1).metres == 250000.0f);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(2500000.0f)));
+    CHECK(hud::Read(g, BLOCK, 1).metres == hud::DISTANCE_MOST_NO_LABEL);
+    g.Write32(layout::MODE_HUD + hud::WINDOW_FLAGS, window);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(250000.0f)));
+    CHECK(hud::Read(g, BLOCK, 1).metres == hud::DISTANCE_MOST);
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, std::bit_cast<u32>(-5.0f)));
     CHECK(hud::Read(g, BLOCK, 1).distance_fed && hud::Read(g, BLOCK, 1).metres == 0.0f);
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWDISTANCE, 1, 0x7FC00000));
@@ -404,22 +432,164 @@ void TestTheDisplayWordsRun()
 
   // the course map: seat 1 and the out seat are hidden from every other racer's map, never from a spectator's
   std::array<bool, 30> present{};
-  std::array<u32, 30> colour{};
+  std::array<u32, 30> colour{}, symbol{};
   present.fill(true);
-  hud::MapRacers(g, 0, true, present, colour);
+  hud::MapRacers(g, 0, true, present, colour, symbol);
   CHECK(!present[1] && !present[OUT_SEAT] && present[0] && present[2] && colour[OUT_SEAT] == 0xFF0000);
   present.fill(true);
-  hud::MapRacers(g, 1, true, present, colour);
+  hud::MapRacers(g, 1, true, present, colour, symbol);
   CHECK(present[1] && !present[OUT_SEAT] && !present[7]);
   present.fill(true);
-  hud::MapRacers(g, 1, false, present, colour);
+  hud::MapRacers(g, 1, false, present, colour, symbol);
   CHECK(present[1] && present[OUT_SEAT] && present[7]);
+
+  // map_char: a code point or the crown through to the map's racers; a control character or past Unicode: none
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 2, 'K'));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 3, 0x265B));  // the black chess queen
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 4, hud::MAP_CROWN));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 5, 0x7));
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAR, 6, hud::MAP_CROWN + 1));
+  hud::MapRacers(g, 1, false, present, colour, symbol);
+  CHECK(symbol[2] == 'K' && symbol[3] == 0x265B && symbol[4] == hud::MAP_CROWN && symbol[5] == 0 && symbol[6] == 0 &&
+        symbol[0] == 0);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 2, 0));
+  hud::MapRacers(g, 1, false, present, colour, symbol);
+  CHECK(symbol[2] == 0 && symbol[3] == 0x265B);
+  CHECK(hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 3, 0) && hud::Apply(g, BLOCK, modes::ACTION_MAPCHAROFF, 4, 0));
+
+  // hud_move: the place in whole units held to MOVE_MOST (1000) either way, the angle whole degrees 0 to 359, the part's
+  // bit, in the seat's record (a word a part); the viewed racer's places for the HUD; hud_move off clears the part's
+  {
+    const u32 viewed = net::ViewedRacer(g);
+    CHECK(viewed < 30);
+    const auto real = [](float f) { return std::bit_cast<u32>(f); };
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_DISTANCE, real(10.6f), real(-60), real(-90)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_RANK, real(5000), real(-5000), real(725.4f)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_SPARE, real(320), real(444), real(0)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_CHECK, real(-1000), real(1000), real(359)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_SKULLS, real(-0.4f), real(0.4f), real(-0.4f)));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_COUNT, real(1), real(1), real(1)));  // no such part
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, (viewed + 1) % 30, modes::PART_LAPS, real(7), real(7), real(7)));
+    auto places = hud::ViewedMoves(g);
+    CHECK(places[modes::PART_DISTANCE].given && places[modes::PART_DISTANCE].x == 11 && places[modes::PART_DISTANCE].y == -60 && places[modes::PART_DISTANCE].angle == 270);
+    CHECK(places[modes::PART_RANK].given && places[modes::PART_RANK].x == 1000 && places[modes::PART_RANK].y == -1000 && places[modes::PART_RANK].angle == 5);
+    CHECK(places[modes::PART_SPARE].given && places[modes::PART_SPARE].x == 320 && places[modes::PART_SPARE].y == 444 && places[modes::PART_SPARE].angle == 0);
+    CHECK(places[modes::PART_CHECK].given && places[modes::PART_CHECK].x == -1000 && places[modes::PART_CHECK].y == 1000 && places[modes::PART_CHECK].angle == 359);
+    CHECK(places[modes::PART_SKULLS].given && places[modes::PART_SKULLS].x == 0 && places[modes::PART_SKULLS].y == 0 && places[modes::PART_SKULLS].angle == 0);
+    CHECK(!places[modes::PART_WRONG_WAY].given && !places[modes::PART_BANNERS].given && !places[modes::PART_FINISH].given);
+    // the records of every seat and part, then map_char's, lie before the story values
+    CHECK(hud::MAP_CHARS + 30 * 4 <= hud::STORY && hud::MOVE_RECORD == 4 + 4 * modes::PART_COUNT);
+    CHECK(hud::PlaceX(hud::PackPlace(-1000, 1000, 359)) == -1000 && hud::PlaceY(hud::PackPlace(-1000, 1000, 359)) == 1000 &&
+          hud::PlaceAngle(hud::PackPlace(-1000, 1000, 359)) == 359 && hud::PlaceX(hud::PackPlace(7, -7, 0)) == 7 && hud::PlaceY(hud::PackPlace(7, -7, 0)) == -7);
+    CHECK(!places[modes::PART_LAPS].given && places[modes::PART_LAPS].x == 0);  // another seat's
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_DISTANCE));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_RANK));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_SPARE));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_CHECK));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_SKULLS));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, (viewed + 1) % 30, modes::PART_LAPS));
+    places = hud::ViewedMoves(g);
+    CHECK(std::all_of(places.begin(), places.end(), [](const hud_move::Place& p) { return !p.given && p.x == 0 && p.y == 0 && p.angle == 0; }));
+    // a part placed at (0, 0, 0) is placed (its bit), unlike one never placed
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, viewed, modes::PART_LAPS, real(0), real(0), real(0)));
+    CHECK(hud::ViewedMoves(g)[modes::PART_LAPS].given);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, viewed, modes::PART_LAPS));
+    // seat 0's TIMER record is not the page's step stamp (mode.cpp's Stamp, at every run: read as that move it slid
+    // the clock off the screen)
+    const u32 stamp = g.Read32(BLOCK + 7 * mode::PAGE);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVE, 0, modes::PART_TIMER, real(5), real(7), real(0)));
+    CHECK(g.Read32(BLOCK + 7 * mode::PAGE) == stamp);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_HUDMOVEOFF, 0, modes::PART_TIMER));
+  }
 
   // show_number's range: 0 to 99 as it is, above 99 clamped to 99, a negative hidden (the record holds number + 1)
   for (const auto& [value, record] : std::array<std::pair<s32, u32>, 6>{{{0, 1}, {99, 100}, {100, 100}, {12345, 100}, {-1, 0}, {-50, 0}}})
   {
     CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWNUMBER, 2, static_cast<u32>(value)));
     CHECK(g.Read32(Record(2) + hud::NUMBER) == record);
+  }
+
+  // show_score: the number + 1 in the seat's score record (held to the race time's six digits, a negative number 0), the
+  // label a tag text's number (another: the default); the viewed racer's into the window for the image, with the label's
+  // address (its tag text, or the default POINTS the pass writes); show_score off takes it off
+  {
+    const u32 viewed = net::ViewedRacer(g), window = layout::MODE_HUD;
+    const u32 record = BLOCK + hud::SCORES + viewed * hud::SCORE_RECORD;
+    CHECK(hud::SCORES + 30 * hud::SCORE_RECORD <= hud::STORY && hud::SCORES == hud::MAP_CHARS + 30 * 4);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 1234567, 0));
+    CHECK(g.Read32(record + hud::SCORE_VALUE) == hud::SCORE_MOST + 1 && g.Read32(record + hud::SCORE_LABEL) == 0);
+    hud::Frame f = hud::Read(g, BLOCK, viewed);
+    CHECK(f.score_shown && f.score == hud::SCORE_MOST && f.score_label == 0);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == hud::SCORE_MOST + 1 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_SCORE_TEXT);
+    CHECK(g.Read8(window + hud::WINDOW_SCORE_TEXT) == 'P' && g.Read8(window + hud::WINDOW_SCORE_TEXT + 5) == 'S' && g.Read8(window + hud::WINDOW_SCORE_TEXT + 6) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, static_cast<u32>(-5), 2));
+    CHECK(g.Read32(record + hud::SCORE_VALUE) == 1 && g.Read32(record + hud::SCORE_LABEL) == 2);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == 1 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_TAG_TEXTS + hud::WINDOW_TAG_TEXT);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE_FONT) == 5);  // (no font given: BLOCK, the game's font 5)
+    // the label's font: one of the choice, carried in the label word's next byte; the window gets the game's font number
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 9, 2, modes::FONT_BIG_SERIF));
+    CHECK(g.Read32(record + hud::SCORE_LABEL) == hud::PackText(2, modes::FONT_BIG_SERIF) && hud::TextOf(g.Read32(record + hud::SCORE_LABEL)) == 2);
+    f = hud::Read(g, BLOCK, viewed);
+    CHECK(f.score == 9 && f.score_label == 2 && f.score_font == modes::FONT_BIG_SERIF);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE_FONT) == 8 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_TAG_TEXTS + hud::WINDOW_TAG_TEXT);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 9, 2, modes::FONT_COUNT + 3));  // no such font: BLOCK
+    CHECK(hud::Read(g, BLOCK, viewed).score_font == 0);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE_FONT) == 5);
+    CHECK(hud::FONT_IDS[modes::FONT_BLOCK] == 5 && hud::FONT_IDS[modes::FONT_CAPS] == 4 && hud::FONT_IDS[modes::FONT_PLAIN] == 3 &&
+          hud::FONT_IDS[modes::FONT_NARROW] == 2 && hud::FONT_IDS[modes::FONT_SERIF] == 7 && hud::FONT_IDS[modes::FONT_BIG_SERIF] == 8);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, viewed, 42, modes::TAG_TEXTS + 1));  // no such text: the default label
+    CHECK(g.Read32(record + hud::SCORE_LABEL) == 0);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == 43 && g.Read32(window + hud::WINDOW_SCORE_LABEL) == window + hud::WINDOW_SCORE_TEXT);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCORE, (viewed + 1) % 30, 7, 1));  // another seat's: not this picture's
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == 43);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCOREOFF, viewed, 0));
+    CHECK(g.Read32(record + hud::SCORE_VALUE) == 0 && !hud::Read(g, BLOCK, viewed).score_shown);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_SCORE) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWSCOREOFF, (viewed + 1) % 30, 0));
+    CHECK(hud::IsDisplay(modes::ACTION_SHOWSCORE) && hud::IsDisplay(modes::ACTION_SHOWSCOREOFF));
+    CHECK(hud::PART_BITS[modes::PART_SCORE] == 0);  // no mask bit: its record draws it
+  }
+
+  // show_text: the text's number and its font in the seat's text word (a text the package has not: none shown; a font not
+  // of the choice: the first); the viewed racer's text's address and the game's font number into the window for the image;
+  // show_text off takes it off
+  {
+    const u32 viewed = net::ViewedRacer(g), window = layout::MODE_HUD;
+    const u32 record = BLOCK + hud::TEXTS + viewed * hud::TEXT_RECORD;
+    CHECK(hud::TEXTS == hud::SCORES + 30 * hud::SCORE_RECORD && hud::TEXTS + 30 * hud::TEXT_RECORD <= hud::STORY);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, 3, modes::FONT_SERIF));
+    CHECK(g.Read32(record) == hud::PackText(3, modes::FONT_SERIF));
+    hud::Frame f = hud::Read(g, BLOCK, viewed);
+    CHECK(f.text_shown && f.text == 3 && f.text_font == modes::FONT_SERIF);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == window + hud::WINDOW_TAG_TEXTS + 2 * hud::WINDOW_TAG_TEXT && g.Read32(window + hud::WINDOW_TEXT_FONT) == 7);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, 4, 0));
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == window + hud::WINDOW_TAG_TEXTS + 3 * hud::WINDOW_TAG_TEXT && g.Read32(window + hud::WINDOW_TEXT_FONT) == 5);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, 4, modes::FONT_COUNT));  // no such font: BLOCK
+    CHECK(hud::Read(g, BLOCK, viewed).text_font == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, modes::TAG_TEXTS + 1, 0));  // no such text: none
+    CHECK(g.Read32(record) == 0 && !hud::Read(g, BLOCK, viewed).text_shown);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, viewed, 1, modes::FONT_CAPS));
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXT, (viewed + 1) % 30, 2, 0));  // another seat's: not this picture's
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == window + hud::WINDOW_TAG_TEXTS && g.Read32(window + hud::WINDOW_TEXT_FONT) == 4);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXTOFF, viewed, 0));
+    CHECK(g.Read32(record) == 0 && !hud::Read(g, BLOCK, viewed).text_shown);
+    hud::Hud(g);
+    CHECK(g.Read32(window + hud::WINDOW_TEXT) == 0);
+    CHECK(hud::Apply(g, BLOCK, modes::ACTION_SHOWTEXTOFF, (viewed + 1) % 30, 0));
+    CHECK(hud::IsDisplay(modes::ACTION_SHOWTEXT) && hud::IsDisplay(modes::ACTION_SHOWTEXTOFF));
+    CHECK(hud::PART_BITS[modes::PART_TEXT] == 0);  // no mask bit: its record draws it
   }
 
   // the story's pictures: the vector shows DISTANCE

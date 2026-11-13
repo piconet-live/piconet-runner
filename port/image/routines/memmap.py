@@ -60,6 +60,9 @@ MODE_END = MODE_SEATS + 30 * MODE_SEAT   # the block's word: not 0, the mode end
 MODE_RUNS = MODE_END + 12                # the interpreter's runs so far; 0: game_start has not run (mode_begin)
 # the engine page's words the image reads and writes (port/core/src/mode.h: the same offsets)
 MODE_ENGINE = 0x5000
+# a mode's pause (mode.h PAUSED): not 0, the race stands, and the frame routine runs no simulation in the next step
+# (frame_replay.py `manager`): it makes the mode point's host call in the simulation's place
+MODE_PAUSED = MODE_ENGINE + 0xF34
 MODE_WAITS = MODE_ENGINE                 # race_waits: not 0, the race-over test counts every seat (raceend.py)
 MODE_NC_ANY = MODE_ENGINE + 0xC          # the OR of the no-contact rows: 0, the pair gate takes the stock path
 MODE_NC = MODE_ENGINE + 0x10             # a seat's no-contact row (bit 0x80000000 >> j)
@@ -100,7 +103,7 @@ assert MODE_ROLL_SAVE + 30 * MODE_ROLL <= MODE_BLOCK and MODE_MOVES + 30 * MODE_
 # (racers - 1), +16 laps, +20 race type (6 laps, 3 free run), +24 the DOL generator's value up to the race (SHUFFLE),
 # +28 the per-race CPU seed; +32 the 30 seats' machines (bytes, seat 0 first); +64 the start grid's word (1: the race
 # names its grid, sites_grid.py; 0: the game's own sort, every recording made before it), +68 the grid (30 bytes, the
-# seat of each slot, pole first); +98 and +99 unused, +100 the rubber band (RACE_RUBBER_BAND_ON, below), +104 the simulation's own generator (RACE_SIM_GENERATOR, below), +108 to +256 unused; the race's rules: +256 the CPU level (0-3), +260 boost from the start (the fork
+# seat of each slot, pole first); +98 and +99 unused, +100 the rubber band (RACE_RUBBER_BAND_ON, below), +104 the simulation's own generator (RACE_SIM_GENERATOR, below), +108 wrecks slide before a restore (RACE_WRECK_SLIDE, below), +112 to +256 unused; the race's rules: +256 the CPU level (0-3), +260 boost from the start (the fork
 # sets rule flag 0x10 through control block +520), +264 restore (words), +268 every seat's machine setting (30 bytes,
 # 0 acceleration to 100 top speed; standin.py), +300 the steps after the first finish at which the race ends for
 # everyone (a word; 0: no such end; raceend.py); +304 the race's flow (a word: 1, a machine is out by the game's own
@@ -126,6 +129,12 @@ RACE_RUBBER_BAND_ON = _facts.RACE_RUBBER_BAND_ON
 # core reads a replay's from its header's "simGenerator"; sites_generator.py)
 RACE_SIM_GENERATOR = _facts.RACE_SIM_GENERATOR
 assert RACE_RUBBER_BAND_ON + 4 <= RACE_SIM_GENERATOR and RACE_SIM_GENERATOR + 4 <= RACE_CPULEVEL
+# +108 wrecks slide before a restore (a word: 1, a seat that gets restores and breaks down slides as the game's wreck
+# without restore does and is restored at the step that game would have taken it out, every race and practice from
+# this build but a mode's `wreck_slide off`; 0, its restore starts at the breakdown's step, every recording made
+# before; the core reads a replay's from its header's "wreckSlide"; sites_wreck.py)
+RACE_WRECK_SLIDE = _facts.RACE_WRECK_SLIDE
+assert RACE_SIM_GENERATOR + 4 <= RACE_WRECK_SLIDE and RACE_WRECK_SLIDE + 4 <= RACE_CPULEVEL
 # The seats' custom machines (garage-built: three parts and a pilot; sites_custom.py): 30 entries of 32 bytes, seat
 # order. +0 a word, not 0 when the seat races its own parts (0xC0000000: a garage record's "used, parts" bits); +4,
 # +12, +20 the body's, cockpit's and booster's part id (bytes: 0-24, 25-49, 50-74) and +8, +16, +24 each part's
@@ -242,6 +251,7 @@ TRUE_ASPECT = _facts.TRUE_ASPECT  # the host's, for the picture only (sites_view
 PLAIN_DRAW = _facts.PLAIN_DRAW    # the host's, in a plain start only (offline play), for the picture only: not 0, the
                                  # frame tick (sites.py mode_machine) and the two DRAW_ASK stores (sites_present.py) are
                                  # made as in a race, for high refresh's pictures between; nothing else of a race is on
+STOOD = _facts.STOOD              # the image's (frame_replay.py `manager`): 1, the step just run stood (a mode's pause)
 # The spectator's choices (frame_spectate.py) and the racing view's scratch (raceview.py). The image's own, for the
 # picture only: no rollback puts them back, the checksum does not cover them, and the race's tasks read none.
 # `speccontrols` writes the choices once a displayed frame, on entry, from this game's pad; `specstep` writes them
@@ -302,9 +312,15 @@ assert FINISH_COUNT + 4 == RESULTS_KEEP and RESULTS_CAMERA + 4 == DRAW_ASK and D
 SIM_GENERATOR = _facts.SIM_GENERATOR              # the word the race's draws step (seeded before every step)
 SIM_GENERATOR_SHIFT = _facts.SIM_GENERATOR_SHIFT  # 0 (the draws take 0x801A63C0) or SIM_GENERATOR - 0x801A63C0
 assert TRUE_ASPECT + 4 <= SIM_GENERATOR and SIM_GENERATOR + 4 == SIM_GENERATOR_SHIFT and SIM_GENERATOR_SHIFT + 4 == PLAIN_DRAW
-assert PLAIN_DRAW + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
+assert PLAIN_DRAW + 4 == STOOD and STOOD + 4 <= CHECKSUMS and HOSTCALLS >= SEAT_BLOCK + SEAT_BLOCK_SIZE
 hi = lambda a: (a >> 16) & 0xFFFF
 lo = lambda a: a & 0xFFFF
+
+
+def split(a):            # (hi, lo) with lo signed, for `addis r, r, hi` then `lwz x, lo(r)`: lo in -0x8000..0x7FFF
+    lo = a & 0xFFFF
+    lo = lo - 0x10000 if lo >= 0x8000 else lo
+    return ((a - lo) >> 16) & 0xFFFF, lo
 # A story stage's name (the core writes it, port/core/src/boot.cpp; the protocol's courses.toml): the course intro's
 # title card and every screen that names the course read it through the game's own course name table, whose English
 # entry for the stage the core points here (the game's own says "---"). NUL-terminated, NAME_SIZE bytes. Not read by
@@ -317,6 +333,8 @@ MODE_HUD = _facts.MODE_HUD
 MODE_HUD_FLAGS, MODE_HUD_DIGIT, MODE_HUD_LOOKS, MODE_HUD_TINTS = MODE_HUD, MODE_HUD + 4, MODE_HUD + 0x10, MODE_HUD + 0x30
 MODE_POINTS_PAGE, MODE_STORY_PICTURES, MODE_POINTS_ONLY, MODE_ROLLING, MODE_SAME_SPOT, MODE_GHOST_TASK = 1, 2, 4, 8, 32, 64
 MODE_SPREAD = 512                        # start_gap above 0 or even (mode_hud.h SPREAD; sites_grid.py grid_spread)
+MODE_NO_DISTANCE_LABEL = 1024            # `distance_label off` (mode_hud.h NO_DISTANCE_LABEL; sites_modehud.py)
+MODE_NO_RESULTS_TIMES = 2048             # `results_times off` (mode_hud.h NO_RESULTS_TIMES; sites_modehud.py)
 MODE_HUD_RANK = MODE_HUD + 8             # not 0: the viewed racer's RANK is hidden, the rank icons with it (mode_hud.h)
 MODE_HUD_FACES = MODE_HUD + 0xC8         # not 0: the faces board is not drawn (mode_hud.h)
 MODE_HUD_TITLE = MODE_HUD + 0xB0         # the results title (mode_hud.h)
@@ -329,8 +347,13 @@ MODE_HUD_TAGS, MODE_HUD_TAG_TEXTS, MODE_HUD_TAG_TEXT = MODE_HUD + 0x100, MODE_HU
 MODE_HUD_SILENT, MODE_HUD_GAP, MODE_HUD_GHOSTS = MODE_HUD + 0xCC, MODE_HUD + 0xD0, MODE_HUD + 0x180
 MODE_HUD_OBJECTS = MODE_HUD + 0x27C  # OBJECTS's of + 1 (0: the course's own) and of - n (mode_hud.h WINDOW_OBJECTS)
 MODE_HUD_START_GAP = MODE_HUD + 0x290  # start_gap's metres, binary32; 0.0 under SPREAD: even (mode_hud.h WINDOW_START_GAP)
+MODE_HUD_SCORE, MODE_HUD_SCORE_LABEL, MODE_HUD_SCORE_TEXT = MODE_HUD + 0x298, MODE_HUD + 0x29C, MODE_HUD + 0x2A0  # SCORE: the number + 1 (0: none), the label's address, the default label (mode_hud.h WINDOW_SCORE)
+MODE_HUD_SCORE_FONT = MODE_HUD + 0x2A8  # the label's font, the game's font number (mode_hud.h WINDOW_SCORE_FONT)
+MODE_HUD_TEXT, MODE_HUD_TEXT_FONT = MODE_HUD + 0x2AC, MODE_HUD + 0x2B0  # TEXT: the text's address (0: none) and its font, the game's font number (mode_hud.h WINDOW_TEXT)
 MODE_HUD_MOVE = MODE_HUD + 0x300     # not 0: the classic HUD's moves are on, the sites of sites_hudmove.py call the host; bit 2: the faces board hidden (hud_move.cpp)
-assert MODE_HUD_OBJECTS + 8 <= MODE_HUD_START_GAP and MODE_HUD_START_GAP + 4 <= MODE_HUD_MOVE and MODE_HUD_MOVE + 4 <= RACE
+MODE_HUD_TAG_LOOKS = MODE_HUD + 0x340  # each `tag` text's settings (nametags.py), 20 bytes a text from text 1: five floats, the range squared, 1 / (range^2 - near^2), MAX size x 40, MIN size, MAX size (mode_hud.h WINDOW_TAG_LOOKS)
+assert MODE_HUD_OBJECTS + 8 <= MODE_HUD_START_GAP and MODE_HUD_START_GAP + 4 <= MODE_HUD_SCORE and MODE_HUD_SCORE_TEXT + 8 <= MODE_HUD_SCORE_FONT
+assert MODE_HUD_TEXT_FONT + 4 <= MODE_HUD_MOVE and MODE_HUD_MOVE + 4 <= MODE_HUD_TAG_LOOKS and MODE_HUD_TAG_LOOKS + 8 * 20 <= RACE
 assert MODE_HUD_GHOSTS + 30 * 8 <= MODE_HUD + 0x270 and MODE_HUD_OBJECTS + 8 <= RACE  # (0x270: the DISTANCE stand-ins)
 assert MODE_HUD_GAP + 0x14 <= MODE_HUD_TAGS and MODE_HUD_TAG_TEXTS + 8 * MODE_HUD_TAG_TEXT <= MODE_HUD_GHOSTS and MODE_HUD_GHOSTS + 30 * 8 <= RACE
 assert COURSE_NAME + NAME_SIZE <= MODE_HUD and MODE_HUD_LOOKS + 32 <= MODE_HUD_TINTS and MODE_HUD_TINTS + 30 * 4 <= MODE_HUD + 0x100 <= RACE

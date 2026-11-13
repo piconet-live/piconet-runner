@@ -96,6 +96,8 @@ def single(x):
 HEADER_AT, TABLE_AT, SEGS_AT, LAP_AT, WORK_AT, CAR = 0x80D00000, 0x80D10000, 0x80D20000, 0x80D30000, 0x80F00000, 0x80E00000
 CHECKPOINTS, LAP, CP0, T0, LO, HI = 100, 3000.0, 99, 0.62, 2950.0, 3000.0
 PROGRESS_AT, FLAGS, MOVED_FLAGS = 0x80E10000, 0x04000600, 0x84000502    # the machine's progress record; its flags
+ROAD, PIPE, AIR, STRAY = 0x00400001, 0x02000010, 0, 0x00000013   # a frame's kind word: a flat road's, a pipe's, none written (a jump: fn_1_17920's 0), bits of no kind
+STEP = 20.0                                            # the step toward the line of a spot without road
 
 
 def spread_race(flags=memmap.MODE_SPREAD, gap=None, mode=1, laps=True, header=True, n=30):
@@ -122,9 +124,12 @@ def spread_race(flags=memmap.MODE_SPREAD, gap=None, mode=1, laps=True, header=Tr
 class TheSpreadStart(Build):
     """grid_spread: the game's placing, then the story's own mid-course placement of slot k at d0 - k x gap."""
 
-    def spread(self, memory, k, speed=3.5):
+    def spread(self, memory, k, speed=3.5, road=None, limit=2000):
+        """`road`: the frame's kind word each course frame leaves (fn_1_17920's; the last one for every frame after);
+        None: a flat road's, every time. `limit`: the reader's instructions (a long walk takes more)."""
         calls = []
         F = lambda offset: TEXT + offset
+        road = list(road or [ROAD])
 
         def game(address, cpu):
             f = cpu.f
@@ -138,6 +143,7 @@ class TheSpreadStart(Build):
                 cpu.r[3] = 41
             elif address == F(sites_grid.COURSE_FRAME):
                 calls.append(("course_frame", cpu.r[3], cpu.r[4], f[1]))
+                put(cpu.mem, WORK_AT + 0x400 + sites_grid.FRAME_KIND, road.pop(0) if len(road) > 1 else road[0])
             elif address == F(sites_grid.WORK):
                 calls.append(("work",))
                 cpu.r[3] = WORK_AT
@@ -169,10 +175,12 @@ class TheSpreadStart(Build):
         m = Cpu(self.image, memory, game)
         m.f = [0.0] * 32
         m.r[3], m.f[1], m.r[28], m.r[1] = CAR, speed, k, STACK
-        m.run(self.symbols["grid_spread"])
+        m.run(self.symbols["grid_spread"], limit)
         self.assertEqual(m.r[1], STACK)
         if any(c[0] == "put_racer" for c in calls):   # story action 13's: the flags before the move, its 0x400 now
             self.assertEqual(get(m.mem, CAR), FLAGS | MOVED_FLAGS & 0x400)
+        elif any(c[0] == "place_car" for c in calls):  # not moved: as the game's placing left it
+            self.assertEqual(get(m.mem, CAR), FLAGS)
         return calls
 
     def test_the_spot_is_seeded_from_its_own_checkpoint_not_a_whole_course_search(self):
@@ -222,6 +230,47 @@ class TheSpreadStart(Build):
     def test_even_shares_the_lap_out_among_the_machines(self):
         self.assertEqual(self.spread(spread_race(), 7), self.expected(7, single(LAP / 30)))
         self.assertEqual(self.spread(spread_race(n=12), 11), self.expected(11, single(LAP / 12)))
+
+    def test_a_frame_of_any_road_kind_is_the_spot_unchanged(self):
+        for kind in (ROAD, PIPE, 0x01000000, 0x00800000, 0x00200000, 0x02000000, 0xFFFFFFFF):
+            self.assertEqual(self.spread(spread_race(), 7, road=[kind]), self.expected(7, single(LAP / 30)))
+
+    def stepped(self, k, gap, steps, d_last=None):
+        """The calls of a slot whose first `steps` spots have no road: each spot 20 m nearer the line, the last one
+        placed. The spot's checkpoint comes from the stand-in fn_1_214C4 (41) from the second search on."""
+        d0 = single(LO + single(single(T0) * single(HI - LO)))
+        d = single(d0 - single(float(k) * gap))
+        calls = self.expected(k, gap)[:2]
+        for i in range(steps + 1):
+            calls += [("at_distance", d, CP0 if i == 0 else 41), ("course_frame", 41, 0, 0.25), ("work",)]
+            d = single(d + STEP)
+        return calls + self.expected(k, gap)[5:]
+
+    def test_a_spot_without_road_steps_20_m_toward_the_line_until_one_has(self):
+        gap = single(LAP / 30)
+        self.assertEqual(self.spread(spread_race(), 7, road=[AIR, ROAD]), self.stepped(7, gap, 1))
+        self.assertEqual(self.spread(spread_race(), 29, road=[AIR, STRAY, AIR, PIPE]), self.stepped(29, gap, 3))
+        # a gap in metres the same; four steps past the stretch
+        self.assertEqual(self.spread(spread_race(gap=99.5), 2, road=[AIR] * 4 + [ROAD]), self.stepped(2, 99.5, 4))
+
+    def test_the_walk_ends_at_slot_0s_distance_and_the_machine_keeps_the_games_grid(self):
+        # slot 1, 50 m back: 20 m steps reach d0 - 30, d0 - 10; the next would pass d0, so the game's placing stands
+        calls = self.spread(spread_race(gap=50.0), 1, road=[AIR])
+        self.assertEqual(calls, self.stepped(1, 50.0, 2)[:11] + [("left", TEXT + sites_grid.SPREAD + 4)])
+        self.assertEqual(sum(c[0] == "at_distance" for c in calls), 3)
+        self.assertNotIn("on_road", [c[0] for c in calls])
+        # a spot exactly at d0 is still placed (behind the line: slot 0's own distance)
+        calls = self.spread(spread_race(gap=20.0), 1, road=[AIR, ROAD])
+        self.assertEqual(calls, self.stepped(1, 20.0, 1))
+
+    def test_the_walk_ends_after_64_steps(self):
+        # slot 29 of a 100 m gap: 2881 m behind the line (wrapped by fn_1_214C4 to the lap's end): 64 searches at most
+        calls = self.spread(spread_race(gap=100.0), 29, road=[AIR], limit=8000)
+        self.assertEqual(sum(c[0] == "at_distance" for c in calls), sites_grid.STEPS)
+        self.assertEqual(calls[-1], ("left", TEXT + sites_grid.SPREAD + 4))
+        self.assertNotIn("on_road", [c[0] for c in calls])
+        self.assertEqual(calls[2][1], single(single(LO + single(single(T0) * single(HI - LO))) - 2900.0))
+        self.assertEqual(calls[-2], ("work",))
 
 
 if __name__ == "__main__":

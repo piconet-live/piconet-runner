@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <string_view>
 
 #include "internal.h"
@@ -65,6 +66,14 @@ bool IsDisplay(u8 id)
     case ACTION_SHOWDISTANCEOFF:
     case ACTION_SHOWOBJECTS:
     case ACTION_SHOWOBJECTSOFF:
+    case ACTION_HUDMOVE:
+    case ACTION_HUDMOVEOFF:
+    case ACTION_MAPCHAR:
+    case ACTION_MAPCHAROFF:
+    case ACTION_SHOWSCORE:
+    case ACTION_SHOWSCOREOFF:
+    case ACTION_SHOWTEXT:
+    case ACTION_SHOWTEXTOFF:
       return true;
     default:
       return false;
@@ -97,7 +106,7 @@ void NoteGaps(Guest& g, u32 block, u32 module, u32 run)
   }
 }
 
-bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second)
+bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second, u32 third, u32 fourth)
 {
   const u32 r = Seat(block, seat);
   switch (id)
@@ -165,10 +174,12 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second)
       return true;
     case ACTION_SHOWDISTANCE:
     {
-      // whole metres the drawer's five digits can show: below 0 (and NaN) 0, above 99999 99999
+      // whole metres the drawer's digits can show: below 0 (and NaN) 0, above 99999 99999; under `distance_label off`
+      // (the window's word, which the drawer's sixth digit goes by too; the mode's from boot) 999999
       const float metres = std::bit_cast<float>(value);
       const u32 st = Story(block, seat);
-      g.Write32(st + STORY_METRES, std::bit_cast<u32>(metres > 0 ? std::min(metres, DISTANCE_MOST) : 0.0f));
+      const float most = (g.Read32(layout::MODE_HUD + WINDOW_FLAGS) & NO_DISTANCE_LABEL) != 0 ? DISTANCE_MOST_NO_LABEL : DISTANCE_MOST;
+      g.Write32(st + STORY_METRES, std::bit_cast<u32>(metres > 0 ? std::min(metres, most) : 0.0f));
       g.Write8(st + STORY_FLAGS, g.Read8(st + STORY_FLAGS) | STORY_DISTANCE);
       return true;
     }
@@ -196,9 +207,78 @@ bool Apply(Guest& g, u32 block, u8 id, u32 seat, u32 value, u32 second)
       g.Write8(st + STORY_FLAGS, g.Read8(st + STORY_FLAGS) & ~STORY_OBJECTS);
       return true;
     }
+    case ACTION_HUDMOVE:
+    case ACTION_HUDMOVEOFF:
+    {
+      // the place: whole units held to MOVE_MOST either way (beyond the screen); the angle whole degrees, 0 to 359 (NaN: 0)
+      const auto unit = [](u32 v) {
+        const float f = std::bit_cast<float>(v);
+        return static_cast<s32>(f == f ? std::clamp(std::lround(f), -long{MOVE_MOST}, long{MOVE_MOST}) : 0);
+      };
+      const auto degrees = [](u32 v) {
+        const float f = std::bit_cast<float>(v);
+        return static_cast<u32>(f == f ? ((std::lround(std::fmod(f, 360.0f)) % 360) + 360) % 360 : 0);
+      };
+      if (value < PART_COUNT)
+      {
+        const u32 record = block + MOVES + seat * MOVE_RECORD, at = record + MOVE_PLACES + 4 * value;
+        const bool on = id == ACTION_HUDMOVE;
+        g.Write32(record, on ? g.Read32(record) | 1u << value : g.Read32(record) & ~(1u << value));
+        g.Write32(at, on ? PackPlace(unit(second), unit(third), degrees(fourth)) : 0);
+      }
+      return true;
+    }
+    case ACTION_MAPCHAR:
+      // a code point (no control, no surrogate) or a shape the course map knows; anything else: none
+      g.Write32(block + MAP_CHARS + 4 * seat,
+                (value >= 0x20 && value < 0xD800) || (value > 0xDFFF && value < 0x110000) || value == MAP_CROWN ? value : 0);
+      return true;
+    case ACTION_MAPCHAROFF:
+      g.Write32(block + MAP_CHARS + 4 * seat, 0);
+      return true;
+    case ACTION_SHOWSCORE:
+    {
+      // the number held to the race time's six digits (a negative number reads 0); the label a text the package holds,
+      // anything else the default; the font one of the choice, anything else the first
+      const u32 sc = block + SCORES + seat * SCORE_RECORD;
+      g.Write32(sc + SCORE_VALUE, (static_cast<s32>(value) < 0 ? 0 : std::min(value, SCORE_MOST)) + 1);
+      g.Write32(sc + SCORE_LABEL, PackText(second >= 1 && second <= TAG_TEXTS ? second : 0, third < FONT_COUNT ? third : 0));
+      return true;
+    }
+    case ACTION_SHOWSCOREOFF:
+      g.Write32(block + SCORES + seat * SCORE_RECORD + SCORE_VALUE, 0);
+      g.Write32(block + SCORES + seat * SCORE_RECORD + SCORE_LABEL, 0);
+      return true;
+    case ACTION_SHOWTEXT:
+      // a text the package holds, anything else none shown; the font one of the choice, anything else the first
+      g.Write32(block + TEXTS + seat * TEXT_RECORD, PackText(value >= 1 && value <= TAG_TEXTS ? value : 0, second < FONT_COUNT ? second : 0));
+      return true;
+    case ACTION_SHOWTEXTOFF:
+      g.Write32(block + TEXTS + seat * TEXT_RECORD, 0);
+      return true;
     default:
       return false;
   }
+}
+
+hud_move::ModePlaces ViewedMoves(Guest& g)
+{
+  hud_move::ModePlaces moves{};
+  const u32 block = g.Read32(layout::MODES + 4);
+  if (block == 0 || !g.Ram(net::MODULE_POINTER, 4) || g.Read32(net::MODULE_POINTER) != layout::MAIN_REL ||
+      g.Read16(layout::MAIN_REL + game::PHASE) < PHASE_INTRO)
+    return moves;
+  const u32 viewed = net::ViewedRacer(g);
+  if (viewed >= SEATS)
+    return moves;
+  const u32 record = block + MOVES + viewed * MOVE_RECORD, placed = g.Read32(record);
+  for (u32 p = 0; p < PART_COUNT; ++p)
+  {
+    // (a part whose bit is off is not placed, whatever its word)
+    if (const u32 word = g.Read32(record + MOVE_PLACES + 4 * p); placed >> p & 1)
+      moves[p] = {true, static_cast<s16>(PlaceX(word)), static_cast<s16>(PlaceY(word)), static_cast<s16>(PlaceAngle(word))};
+  }
+  return moves;
 }
 
 void BeginRun(Guest& g, u32 block)
@@ -273,7 +353,8 @@ u32 WindowFlags(const Package& p)
   return (NeedsStoryPictures(p.code) ? STORY_PICTURES : 0) | (points_page ? POINTS_PAGE : 0) |
          (p.results_points ? POINTS_ONLY : 0) | (p.rolling ? ROLLING : 0) | (p.start_gap && *p.start_gap == 0.0f ? SAME_SPOT : 0) |
          ((p.start_gap && *p.start_gap > 0.0f) || p.start_gap_even ? SPREAD : 0) |
-         (NeedsGhostTask(p.code) ? GHOST_TASK : 0) | (p.hud_clean ? HUD_CLEAN : 0);
+         (NeedsGhostTask(p.code) ? GHOST_TASK : 0) | (p.hud_clean ? HUD_CLEAN : 0) | (p.hud_ax ? HUD_AX : 0) |
+         (p.distance_label_off ? NO_DISTANCE_LABEL : 0) | (p.results_times_off ? NO_RESULTS_TIMES : 0);
 }
 
 void ShowFault(Guest& g, const Package& p, bool broken)
@@ -319,6 +400,20 @@ Frame Read(const Guest& g, u32 block, u32 viewed)
   f.objects_fed = (fed & STORY_OBJECTS) != 0;
   f.objects_shown = f.objects_fed ? g.Read8(st + STORY_SHOWN) : 0;
   f.objects_of = f.objects_fed ? g.Read8(st + STORY_OF) : 0;
+  if (const u32 sc = g.Read32(block + SCORES + viewed * SCORE_RECORD + SCORE_VALUE); sc != 0)
+  {
+    f.score_shown = true;
+    f.score = std::min(sc - 1, SCORE_MOST);
+    const u32 label = g.Read32(block + SCORES + viewed * SCORE_RECORD + SCORE_LABEL);
+    f.score_label = TextOf(label) >= 1 && TextOf(label) <= TAG_TEXTS ? TextOf(label) : 0;
+    f.score_font = FontOf(label);
+  }
+  if (const u32 text = g.Read32(block + TEXTS + viewed * TEXT_RECORD); TextOf(text) >= 1 && TextOf(text) <= TAG_TEXTS)
+  {
+    f.text_shown = true;
+    f.text = TextOf(text);
+    f.text_font = FontOf(text);
+  }
   // the danger zone's display (vocabulary 4.4): while its count runs (the race side's, mode.h DANGER: from 60 x
   // seconds + 60 down, the machine exploding at 60) the big digit and the warning, as story chapter 6's, whose digit
   // is the count / 60; the sheet's digits go to 3
@@ -491,6 +586,17 @@ void Hud(Guest& g)
   g.Write32(window + WINDOW_OBJECTS, f.objects_fed ? f.objects_of + 1 : 0);
   g.Write32(window + WINDOW_OBJECTS + 4, f.objects_fed ? f.objects_of - f.objects_shown : 0);
   g.Write32(module + SRC + 0x10, 0);
+  // SCORE: the number + 1 and the label's address (the tag text's in the window, or the default written here), for the
+  // image's race_time_score
+  g.Write32(window + WINDOW_SCORE, f.score_shown ? f.score + 1 : 0);
+  g.Write32(window + WINDOW_SCORE_LABEL, f.score_label != 0 ? window + WINDOW_TAG_TEXTS + (f.score_label - 1) * WINDOW_TAG_TEXT
+                                                            : window + WINDOW_SCORE_TEXT);
+  for (u32 k = 0; k < WINDOW_SCORE_TEXT_SIZE; ++k)
+    g.Write8(window + WINDOW_SCORE_TEXT + k, k < sizeof(DEFAULT_SCORE_LABEL) ? static_cast<u8>(DEFAULT_SCORE_LABEL[k]) : 0);
+  g.Write32(window + WINDOW_SCORE_FONT, FONT_IDS[f.score_font]);
+  // TEXT: the text's address (0: none) and its font, the game's font number, for the same routine
+  g.Write32(window + WINDOW_TEXT, f.text_shown ? window + WINDOW_TAG_TEXTS + (f.text - 1) * WINDOW_TAG_TEXT : 0);
+  g.Write32(window + WINDOW_TEXT_FONT, FONT_IDS[f.text_font]);
   // a seat's colour tints its machine drawn normally; a ghost has seat.ghost_tint (0: Time Attack's yellow)
   for (u32 seat = 0; seat < SEATS; ++seat)
   {
@@ -504,7 +610,8 @@ void Hud(Guest& g)
     DrawGap(g, module, f, viewed);
 }
 
-void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour)
+void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& present, std::array<u32, 30>& colour,
+               std::array<u32, 30>& symbol)
 {
   const u32 block = g.Read32(layout::MODES + 4);
   if (block == 0)
@@ -516,6 +623,7 @@ void MapRacers(const Guest& g, u32 you, bool racing, std::array<bool, 30>& prese
       present[seat] = false;
     if (const u32 mark = g.Read32(r + MAP_MARK); mark & MARKED)
       colour[seat] = mark & 0xFFFFFF;
+    symbol[seat] = g.Read32(block + MAP_CHARS + 4 * seat);
   }
 }
 }  // namespace fzgx::mode::hud

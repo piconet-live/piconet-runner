@@ -132,6 +132,7 @@ struct Racer
   u32 rank = 0;          // its place, 0 first
   Vec at;                // the drawn body's place (the machine's drawn matrix: rollback smoothing included)
   u32 colour = 0;        // 0xRRGGBB
+  u32 symbol = 0;        // a game mode's map_char (MinimapDot::symbol)
 };
 using Racers = std::array<Racer, 30>;
 constexpr u32 NOBODY = 0xFFFFFFFF;

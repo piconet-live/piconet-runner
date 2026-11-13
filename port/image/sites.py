@@ -6,7 +6,7 @@ were calls (frame routine, name tags, chase camera, main.rel linked), the result
 monitors' pictures (sites_monitors.py),
 the cameras' own words (sites_camera.py), the drawn transform's readers (sites_drawn.py), the shadows' place (sites_shadow.py), the effects' draws
 (sites_effects.py), the draw marks for Aurora (sites_marks.py), the seats' custom machines (sites_custom.py) and their pilots (sites_pilot.py), the portraits' mark (sites_faces.py), mines that come back
-(sites_mines.py), the leader's gap popup started in the step (sites_leadergap.py), the game mode's block, mode point, speed hold and a seat's own Restore (sites_mode.py), computer drivers at their own pace (sites_cpu.py), the simulation's own generator (sites_generator.py), the dash plate's and the energy boost's length as data (sites_dash.py), the energy meter under a mode's max energy (sites_energy.py), the machine setting's curve as data
+(sites_mines.py), the leader's gap popup started in the step (sites_leadergap.py), the lap list's scroll counted in the step (sites_lapscroll.py), the game mode's block, mode point, speed hold and a seat's own Restore (sites_mode.py), computer drivers at their own pace (sites_cpu.py), the simulation's own generator (sites_generator.py), the dash plate's and the energy boost's length as data (sites_dash.py), the energy meter under a mode's max energy (sites_energy.py), the machine setting's curve as data
 (sites_curve.py), a
 stat pack a seat (sites_seats.py), the start grid (sites_grid.py), true widescreen's view (sites_view.py), the frames
 drawn between two steps (sites_hfr.py), the countdown movie's request (sites_countdown.py), and the entry table.
@@ -26,6 +26,7 @@ import sites_drawn
 import sites_effects
 import sites_faces
 import sites_grid
+import sites_lapscroll
 import sites_leadergap
 import sites_hfr
 import sites_mines
@@ -41,6 +42,7 @@ import sites_present
 import sites_seats
 import sites_shadow
 import sites_view
+import sites_wreck
 
 
 def add(k, r, patch, stock, complete, codes, hooks, mute):
@@ -481,6 +483,7 @@ rl_disc:
     sites_grid.add(k, r, patch, stock, test, middle, complete)
     sites_mines.add(k, r, patch, stock, test, la, D, middle)
     sites_mode.add(k, r, patch, stock, test, la, D, middle)
+    sites_wreck.add(k, r, patch, stock, test, la, middle)
     middle.extend(sites_combat.add(k, r, patch, stock, test, la))
     sites_modehud.add(k, r, patch, stock, test, la, middle)
     sites_hudmove.add(k, r, patch, stock, la, middle)
@@ -489,6 +492,7 @@ rl_disc:
     sites_cpu.add(k, r, patch, stock, test, middle, complete)
     sites_generator.add(k, r, patch, stock, test, middle)
     sites_leadergap.add(k, r, patch, stock, test, middle)
+    sites_lapscroll.add(k, r, patch, stock, test, middle)
     sites_dash.add(k, r, patch, stock, test, la, middle)
     sites_energy.add(k, r, patch, stock, test, middle)
     sites_curve.add(k, r, patch, stock, test, middle)

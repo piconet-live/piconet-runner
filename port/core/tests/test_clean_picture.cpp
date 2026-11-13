@@ -56,6 +56,20 @@ void TestTheCleanPicture()
   CHECK(clean.has_value() && clean->hud_clean && (hud::WindowFlags(*clean) & hud::HUD_CLEAN) != 0);
   const std::optional<mode::Package> same = Vector("gap_same.mode.json");
   CHECK(same.has_value() && !same->hud_clean && (hud::WindowFlags(*same) & hud::HUD_CLEAN) == 0);
+  // distance_label off: its package says it and the window has NO_DISTANCE_LABEL (the image's label site); none without
+  const std::optional<mode::Package> unlabelled = Vector("distance_label.mode.json");
+  CHECK(unlabelled.has_value() && unlabelled->distance_label_off && (hud::WindowFlags(*unlabelled) & hud::NO_DISTANCE_LABEL) != 0);
+  CHECK(same.has_value() && !same->distance_label_off && (hud::WindowFlags(*same) & hud::NO_DISTANCE_LABEL) == 0);
+  // results_times off: its package says it and the window has NO_RESULTS_TIMES (the image's results sites); none without
+  const std::optional<mode::Package> untimed = Vector("results_times.mode.json");
+  CHECK(untimed.has_value() && untimed->results_times_off && (hud::WindowFlags(*untimed) & hud::NO_RESULTS_TIMES) != 0);
+  CHECK(same.has_value() && !same->results_times_off && (hud::WindowFlags(*same) & hud::NO_RESULTS_TIMES) == 0);
+  // the same vector says wreck_slide off: the restore at once, as before 0.6.5; left out, the wreck slides
+  CHECK(untimed.has_value() && untimed->instant_restore && same.has_value() && !same->instant_restore);
+  // hud_layout ax likewise: the ax_hud vector's package, its window flag HUD_AX (the image's ax_rank and ax_faces read it)
+  const std::optional<mode::Package> ax = Vector("ax_hud.mode.json");
+  CHECK(ax.has_value() && ax->hud_ax && !ax->hud_clean && (hud::WindowFlags(*ax) & hud::HUD_AX) != 0);
+  CHECK(!same->hud_ax && (hud::WindowFlags(*same) & hud::HUD_AX) == 0 && (hud::WindowFlags(*clean) & hud::HUD_AX) == 0);
 
   TestHost host;
   ModData data;

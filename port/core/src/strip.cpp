@@ -92,4 +92,15 @@ int LeastHeight(int dpi)
 {
   return Scaled(HEIGHT, dpi) + Scaled(PICTURE_LEAST_HEIGHT, dpi);
 }
+
+bool Pointer::At(int x_now, int y_now, bool over_picture, std::uint32_t now_ms)
+{
+  if (x_now != x || y_now != y || !over_picture)
+  {
+    x = x_now, y = y_now, moved_ms = now_ms;
+    return hidden = false;
+  }
+  // (once hidden it stays so until it moves: the clock's wrap does not bring it back)
+  return hidden = hidden || now_ms - moved_ms >= POINTER_REST_MS;
+}
 }  // namespace fzgx::strip
