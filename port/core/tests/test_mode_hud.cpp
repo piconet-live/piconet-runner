@@ -228,18 +228,20 @@ void TestTheDisplayWordsRun()
   // `tag`: the text's number on the out seat's byte (after `tag s off`), none on the others', and no other word moved
   CHECK(g.Read8(BLOCK + hud::TAGS_AT + OUT_SEAT) == 1);
   CHECK((p->tag_texts == std::vector<std::string>{"OUT", "KOS", "GO", "WAVE 2"}));  // (KOS: show_score's label; GO, WAVE 2: show_text's texts: the same table)
-  // tag_range 300 m (0.6.1): the vector's word, and the window's three words the boot writes for the name tags (full to
-  // 225 m, none at 300); left out, 200 m: the words the tags had as constants (150 m full)
-  CHECK(p->tag_range.has_value() && *p->tag_range == 300.0f);
+  // the tag's settings (0.6.1, on the word: `tag s, "OUT", size 0.4 1, range 300 m`): the vector's tag_looks, one a text,
+  // OUT's own and the defaults for the three the other words use; and the window's five words the boot writes for the
+  // name tags: full to 225 m, none at 300; the size 1 to 40 m from the camera, 40 / depth beyond, never under 0.4
+  CHECK((p->tag_looks == std::vector<mode::TagLook>{{300.0f, 0.4f, 1.0f}, {}, {}, {}}));
   {
-    const std::array<u32, 3> words = hud::TagRangeWords(*p->tag_range), old = hud::TagRangeWords(hud::DEFAULT_TAG_RANGE);
-    CHECK(std::bit_cast<float>(words[0]) == 90000.0f && std::bit_cast<float>(words[2]) == 180000.0f);
-    CHECK(std::bit_cast<float>(words[1]) == 1.0f / (90000.0f - 225.0f * 225.0f));
-    CHECK(std::bit_cast<float>(old[0]) == 40000.0f && std::bit_cast<float>(old[1]) == 1.0f / (40000.0f - 22500.0f) &&
-          std::bit_cast<float>(old[2]) == 80000.0f);
-    // the bounds: finite, above 0 words at both ends (1 m: a divisor of 0.4375; 10 km: 2 x 10^8 within binary32's reach)
+    const std::array<u32, 5> words = hud::TagLookWords(p->tag_looks[0]), old = hud::TagLookWords(hud::DEFAULT_TAG_LOOK);
+    CHECK(std::bit_cast<float>(words[0]) == 90000.0f && std::bit_cast<float>(words[1]) == 1.0f / (90000.0f - 225.0f * 225.0f));
+    CHECK(std::bit_cast<float>(words[2]) == 40.0f && std::bit_cast<float>(words[3]) == 0.4f && std::bit_cast<float>(words[4]) == 1.0f);
+    // the defaults: what the tags drew before the word, 200 m (150 m full) and 1.2 at the largest; 0.5 at the least
+    CHECK(std::bit_cast<float>(old[0]) == 40000.0f && std::bit_cast<float>(old[1]) == 1.0f / (40000.0f - 22500.0f));
+    CHECK(std::bit_cast<float>(old[2]) == 48.0f && std::bit_cast<float>(old[3]) == 0.5f && std::bit_cast<float>(old[4]) == 1.2f);
+    // the bounds: finite words above 0 at both ends (1 m: a divisor of 0.4375; 10 km: within binary32's reach; sizes 0.1 to 5)
     for (const float far : {mode::LEAST_TAG_RANGE, mode::MOST_TAG_RANGE})
-      for (const u32 w : hud::TagRangeWords(far))
+      for (const u32 w : hud::TagLookWords({far, mode::LEAST_TAG_SIZE, mode::MOST_TAG_SIZE}))
         CHECK(std::isfinite(std::bit_cast<float>(w)) && std::bit_cast<float>(w) > 0.0f);
   }
   for (u32 seat = 0; seat < 30; ++seat)

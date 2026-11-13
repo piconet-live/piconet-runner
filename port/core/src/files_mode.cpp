@@ -284,12 +284,22 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
             return Fail(why, "has two start gaps");
           p.start_gap_even = true;
         }
-        else if (id == modes::SETUP_TAGRANGE)
+        else if (id == modes::SETUP_TAGLOOKS)
         {
-          const float v = std::bit_cast<float>(arg(0));
-          if (setup_args.size() != 1 || !(v >= LEAST_TAG_RANGE && v <= MOST_TAG_RANGE))
-            return Fail(why, "has a tag range outside 1 to 10000 m");
-          p.tag_range = v;
+          // three binary32 values a text of tag_texts, as the compiler's ModeTagLooks writes them: the range in metres, the
+          // least size, the largest (the count against the texts below, after both words are read)
+          if (setup_args.empty() || setup_args.size() % 3 != 0 || setup_args.size() > 3 * modes::TAG_TEXTS)
+            return Fail(why, "has tag settings that are not three values a text");
+          for (size_t i = 0; i < setup_args.size(); i += 3)
+          {
+            const TagLook look{std::bit_cast<float>(setup_args[i]), std::bit_cast<float>(setup_args[i + 1]),
+                               std::bit_cast<float>(setup_args[i + 2])};
+            if (!(look.range >= LEAST_TAG_RANGE && look.range <= MOST_TAG_RANGE))
+              return Fail(why, "has a tag range outside 1 to 10000 m");
+            if (!(look.size_min >= LEAST_TAG_SIZE && look.size_min <= look.size_max && look.size_max <= MOST_TAG_SIZE))
+              return Fail(why, "has a tag size outside 0.1 to 5, or a least size above the largest");
+            p.tag_looks.push_back(look);
+          }
         }
         else if (id == modes::SETUP_TIMEGAPS)
         {
@@ -507,6 +517,14 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
   // past 9000 km/h only with the file's seat_speed_open (0.6.1), as the compiler holds it
   if (p.rolling && !p.speed_open && !(std::bit_cast<float>(*p.rolling) <= MOST_SPEED))
     return Fail(why, "starts rolling above 9000 km/h without seat_speed_open");
+  // tag settings are a text's each, and a text with its settings is in the table once (the texts alone may repeat)
+  if (!p.tag_looks.empty() && p.tag_looks.size() != p.tag_texts.size())
+    return Fail(why, "has tag settings that are not one a tag text");
+  for (size_t i = 0; i < p.tag_texts.size(); ++i)
+    for (size_t j = 0; j < i; ++j)
+      if (p.tag_texts[i] == p.tag_texts[j] &&
+          (p.tag_looks.empty() ? true : p.tag_looks[i] == p.tag_looks[j]))
+        return Fail(why, "has a tag text with its settings twice");
   return true;
 }
 }  // namespace
