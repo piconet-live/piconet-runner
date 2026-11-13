@@ -820,6 +820,41 @@
    "recorded": "54203c734e805be731fe36804afa88b888fa92c9",
    "plays_on": "8969870b87e9399307bfcf5f99231c66e252bed8",
    "evidence": "build t061g (0.6.5 try, runner e00c86f), 2026-11-12 (bundle t061g 8969870b, module t061g 11fcfb2d, runner t061g 07065f6b, headless, as the race): 0.5.2-0.5.4's r4-c43.fzrp (30 seats) 0 of 664 (f-o052); m102.fzrp (5 seats) was not played back on this image on the owner's word (12 Nov: the checks so far are fine), nor was 0.6.0's 20261107-155924-m27.fzrp: no 0.6.0 row"
+  },
+  {
+   "recorded": "aa956d743f73087ec871dde09ef928020bfc8cb5",
+   "plays_on": "dc192d874d86c32054b919c2fd0ab446fca8ea97",
+   "evidence": "build v065 (0.6.5 release, runner 949fe07), 2026-11-13 (bundle v065 dc192d87, module v065 a96e85ad, runner v065 46c90d42, headless, as the race): 0.1.0's f2-v010-ctlw2.fzrp (race.fzrp of run ctlw2, the 2026-10-17 archive) 0 of 2,932 (r-o010)"
+  },
+  {
+   "recorded": "ba2913176e299a2f0f003fc180a2ec09c30516b7",
+   "plays_on": "dc192d874d86c32054b919c2fd0ab446fca8ea97",
+   "evidence": "build v065 (0.6.5 release, runner 949fe07), 2026-11-13 (bundle v065 dc192d87, module v065 a96e85ad, runner v065 46c90d42, headless, as the race): 0.2.0's owner race 20261011-194824-m35.fzrp 0 of 9,013 (r-o020)"
+  },
+  {
+   "recorded": "d596453bf3ac1abc93f7b6466259443e6e2b0326",
+   "plays_on": "dc192d874d86c32054b919c2fd0ab446fca8ea97",
+   "evidence": "build v065 (0.6.5 release, runner 949fe07), 2026-11-13 (bundle v065 dc192d87, module v065 a96e85ad, runner v065 46c90d42, headless, as the race): 0.2.2's owner race 20261018-124638-m24.fzrp 0 of 5,440 (r-o022)"
+  },
+  {
+   "recorded": "24a014851b422830d8fd719858dc3e8af8ca73e1",
+   "plays_on": "dc192d874d86c32054b919c2fd0ab446fca8ea97",
+   "evidence": "build v065 (0.6.5 release, runner 949fe07), 2026-11-13 (bundle v065 dc192d87, module v065 a96e85ad, runner v065 46c90d42, headless, as the race): 0.3.0's practice-24a01485.fzrp (the owner's 20261020-190008 practice) 0 of 2,192 (r-o030p); the owner race 20261020-220417-m16.fzrp (11,297 steps) is past the 178 s limit and was left out, as for t061e"
+  },
+  {
+   "recorded": "86b8e4e64c62a5af896e1ca7bb2b888841031eef",
+   "plays_on": "dc192d874d86c32054b919c2fd0ab446fca8ea97",
+   "evidence": "build v065 (0.6.5 release, runner 949fe07), 2026-11-13 (bundle v065 dc192d87, module v065 a96e85ad, runner v065 46c90d42, headless, as the race): 0.5.0's owner race m283.fzrp 0 of 3,878 (r-o050)"
+  },
+  {
+   "recorded": "54203c734e805be731fe36804afa88b888fa92c9",
+   "plays_on": "dc192d874d86c32054b919c2fd0ab446fca8ea97",
+   "evidence": "build v065 (0.6.5 release, runner 949fe07), 2026-11-13 (bundle v065 dc192d87, module v065 a96e85ad, runner v065 46c90d42, headless, as the race): 0.5.2-0.5.4's r4-c43.fzrp (30 seats) 0 of 664 (r-o052) and m102.fzrp (5 seats) 0 of 5,139 (r-o052b)"
+  },
+  {
+   "recorded": "68fd27e174fab112c9c93564e3ae488adab205a1",
+   "plays_on": "dc192d874d86c32054b919c2fd0ab446fca8ea97",
+   "evidence": "build v065 (0.6.5 release, runner 949fe07), 2026-11-13 (bundle v065 dc192d87, module v065 a96e85ad, runner v065 46c90d42, headless, as the race): 0.6.0's owner race 20261107-155924-m27.fzrp (30 seats, a mode) 0 of 5,396 (r-o060)"
   }
  ]
 }
