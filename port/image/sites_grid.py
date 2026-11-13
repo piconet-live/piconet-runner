@@ -17,7 +17,7 @@ seat 0 started last and seats 1 to 29 ahead of it in seat order (every recording
 |---|---|---|---|
 | `grid_sort` | fn_1_85934 0x85B1C | `bl 0x8008279C`: qsort(sp + 8, n, 2, fn_1_858A8) | the list is the race block's grid, slot by slot (list[k] = RACE_GRID[k]); no sort |
 | `grid_place` | fn_1_85934 0x85BF4 | `mr r3, r28`: slot k for fn_1_85C58 | under `start_gap 0` (the mode window's flag SAME_SPOT, written at the boot): slot 0 for every k, so every machine takes slot 0's place. fn_1_85C58 only computes a matrix from its slot (a course's row and column), and fn_1_23500 places the machine from it |
-| `grid_spread` | fn_1_85934 0x85C0C | `bl fn_1_85F70`: the machine placed on slot k's matrix (fn_1_23500) | under `start_gap` above 0 or `even` (the window's flag SPREAD, the gap word at MODE_HUD + 0x290): the game's placing, then the story's own mid-course placement (story action 13, story_mode.c) at lap distance d0 - k x gap (gap at most the lap over the machines) and lane k mod 3, below |
+| `grid_spread` | fn_1_85934 0x85C0C | `bl fn_1_85F70`: the machine placed on slot k's matrix (fn_1_23500) | under `start_gap` above 0 or `even` (the window's flag SPREAD, the gap word at MODE_HUD + 0x290): the game's placing, then the story's own mid-course placement (story action 13, story_mode.c) at lap distance d0 - k x gap (gap at most the lap over the machines) and lane k mod 3, below; a spot with no road steps 20 m toward the line until one has |
 
 `grid_place` is the whole of `start_gap 0`'s placing: the list and the tables 0x6D820 +0x21C, +0x23C are written from
 k as ever. They do not last, in any race: fn_1_8B880 at 0x85C2C writes both tables 0..n-1 and ranks by course distance,
@@ -51,6 +51,21 @@ r3 and f1 (the loop's r27 and f30), k is the loop's r28 (kept across the calls b
 values in a frame of its own and uses r0, r3, r4, r11, r12, f0 to f4 and cr0 beyond the calls, all dead after a call
 (r3 and r4 as after the replaced call: undefined, and fn_1_8B880, the next call, takes no argument), f5.
 
+A spot with no road: fn_1_17920 writes the course frame (work + 0x400) from the checkpoint's pieces, but skips every
+piece of the kinds fn_1_1902C leaves out (leaf flags & 0x001e0002: a jump's air, for one), and a checkpoint of those
+alone writes no frame: its kind word (+0x7C, cleared by fn_1_17920 first) stays 0. fn_1_207DC takes a frame of the
+kinds 0x1C00000 or 0x2200000 (stcoli.c 7838) and halts the game on any other ("m_search", OSPanic coli.c 5712): on
+Meteor Stream and Fire Field: Undulation an `even` slot fell on such a checkpoint (game 2026-11-12, dr-chk.log). So
+after fn_1_17920 the routine reads the kind word and, finding none of those bits, moves the spot 20 m toward the
+line (the restore's own step, fn_1_892FC car.c 13979: it steps 20 m, 5 m or to the next checkpoint by node flags
+and per-course tables, and never calls fn_1_207DC) and finds its checkpoint and frame again, until a frame has
+road. The walk is bounded twice: never past d0 (slot 0's distance: the machine stays behind the line) and at most
+STEPS steps (1280 m); exhausted, the machine stays where the game's grid put it (spread_end: nothing after the game's
+placing has run). Every input is the course's data, k, n and the gap, so every client walks the same spots. The
+restore's own tests need not be repeated: fn_1_85F90 runs the restore (fn_1_892FC, with its per-course tables and
+the ray to the floor) on the spot this routine chose. Machines of one no-road stretch each step from their own
+distance, so two end within 20 m of each other past it, their order kept to within that step.
+
 The site is a call: r3 the list, r4 the count n (the machines, 0x6D820 +0x2A). The routine uses r0, r3 (walked
 along the list), r11 and r12, which the code after the call writes before it reads (liveness.py proves it). A race
 block without a grid (its word 0: a practice, a match file, every recording made before the grid), a count above 30,
@@ -71,8 +86,19 @@ MACHINES = memmap.REL_BSS + 0x6D820 + 0x2A         # the race's machines (a byte
 SLOT_0_Z = 0x41980000                              # 19.0: fn_1_85C58's base, slot 0's point (0, 0, 19)
 LANES = (0xBE800000, 0, 0x3E800000)                # -0.25, 0, +0.25 of the road's width, by k mod 3
 TWO_23 = 0x4B000000                                # 2^23: a whole number as a float, by its bits
+FRAME_KIND = 0x7C                                  # the course frame's kind word (fn_1_17920 clears it; a road piece sets it)
+ROAD_KINDS = 0x1C00000 | 0x2200000                 # the kinds fn_1_207DC takes (flat, cylinder, pipe; a bare point): any other panics
+STEP, STEPS = 0x41A00000, 64                       # 20.0 m, the restore's step; at most this many steps toward the line
 SEATS = 30
 assert memmap.RACE_GRID == memmap.RACE_GRID_ON + 4
+
+
+def ld(op, reg, address, base=None):
+    """`lis base, hi` then `op reg, lo(base)`: the word (or byte) at an absolute address in two instructions, the
+    low half as the load's displacement (memmap.split: signed). `base` is `reg` unless given."""
+    hi, lo = memmap.split(address)
+    base = reg if base is None else base
+    return f"    lis {base}, {hi - (0x10000 if hi & 0x8000 else 0)}\n    {op} {reg}, {lo}({base})\n"
 
 
 def add(k, r, patch, stock, test, middle, complete):
@@ -83,15 +109,15 @@ def add(k, r, patch, stock, test, middle, complete):
     if complete:
         assert k.branch_target(word, at) == QSORT, f"{at:08X}"
     grid_on = memmap.RACE + memmap.RACE_GRID_ON
+    hi, lo = memmap.split(grid_on)
     r.add("grid_sort", test + f"""    beq grid_stock
     cmplwi 4, {SEATS}
     bgt grid_stock
-    lis 12, {memmap.hi(grid_on) - 0x10000}
-    ori 12, 12, {memmap.lo(grid_on)}
-    lwz 11, 0(12)
+    lis 12, {hi - 0x10000}
+    lwz 11, {lo}(12)
     cmpwi 11, 0
     beq grid_stock
-    addi 12, 12, 4
+    addi 12, 12, {lo + 4}
     li 11, 0
 grid_check:
     cmpw 11, 4
@@ -122,12 +148,8 @@ grid_stock:
 
     at = k.TEXT + PLACE
     word = stock(at, PLACE_KNOWN)
-    flags = memmap.MODE_HUD_FLAGS
     r.add("grid_place", test + f"""    beq place_stock
-    lis 12, {memmap.hi(flags) - 0x10000}
-    ori 12, 12, {memmap.lo(flags)}
-    lwz 12, 0(12)
-    andi. 12, 12, {memmap.MODE_SAME_SPOT}
+""" + ld("lwz", 12, memmap.MODE_HUD_FLAGS) + f"""    andi. 12, 12, {memmap.MODE_SAME_SPOT}
     beq place_stock
     li 3, 0
     @b {at + 4:#x}
@@ -143,15 +165,12 @@ place_stock:
     if complete:
         assert k.branch_target(word, at) == k.TEXT + PLACE_CAR, f"{at:08X}"
     FN = lambda offset: f"{k.TEXT + offset:#x}"
-    la = lambda reg, address: (f"    lis {reg}, {memmap.hi(address) - (0x10000 if address & 0x80000000 else 0)}\n"
-                               f"    ori {reg}, {reg}, {memmap.lo(address)}\n")
-    lanes = "".join(f"    cmpwi 11, {i}\n    bne spread_lane{i}\n    lis 0, {(v >> 16) - (0x10000 if v & 0x80000000 else 0)}\nspread_lane{i}:\n" for i, v in enumerate(LANES))
+    lanes = "".join(f"    cmpwi 11, {i}\n    bne spread_lane{i}\n    lis 0, {(v >> 16) - (0x10000 if v & 0x80000000 else 0)}\nspread_lane{i}:\n" for i, v in enumerate(LANES) if v)
+    gap_hi, gap_lo = memmap.split(memmap.MODE_HUD_START_GAP)
     r.add("grid_spread", test + f"""    beq spread_stock
-""" + la(12, memmap.MODE_HUD_FLAGS) + f"""    lwz 12, 0(12)
-    andi. 12, 12, {memmap.MODE_SPREAD}
+""" + ld("lwz", 12, memmap.MODE_HUD_FLAGS) + f"""    andi. 12, 12, {memmap.MODE_SPREAD}
     beq spread_stock
-""" + la(12, HEADER) + f"""    lwz 12, 0(12)
-    cmplwi 12, 0
+""" + ld("lwz", 12, HEADER) + f"""    cmplwi 12, 0
     beq spread_stock
     lbz 0, 0x7D(12)
     cmpwi 0, 0
@@ -159,7 +178,8 @@ place_stock:
     lwz 0, 8(12)
     cmpwi 0, 0
     ble spread_stock
-    stwu 1, -0x40(1)
+    stwu 1, -0x50(1)
+    stw 12, 0x4C(1)
     stw 3, 0x20(1)
     stfs 1, 0x24(1)
     @bl {FN(PLACE_CAR)}
@@ -175,7 +195,7 @@ place_stock:
     addi 4, 1, 0x1C
     @bl {FN(SLOT_POINT)}
     stw 3, 0x28(1)
-""" + la(12, HEADER) + f"""    lwz 12, 0(12)
+    lwz 12, 0x4C(1)
     lwz 11, 0xC(12)
     mulli 0, 3, 12
     add 11, 11, 0
@@ -186,19 +206,20 @@ place_stock:
     lfs 1, 0x1C(1)
     fmuls 0, 1, 0
     fadds 1, 2, 0
+    stfs 1, 0x40(1)
     lis 0, {TWO_23 >> 16:#x}
     stw 0, 0x30(1)
     lwz 11, 0x90(12)
     lfs 5, 0(11)
-""" + la(11, MACHINES) + f"""    lbz 0, 0(11)
-    oris 0, 0, {TWO_23 >> 16:#x}
+""" + ld("lbz", 0, MACHINES, 11) + f"""    oris 0, 0, {TWO_23 >> 16:#x}
     stw 0, 0x34(1)
     lfs 4, 0x34(1)
     lfs 0, 0x30(1)
     fsubs 4, 4, 0
     fdivs 5, 5, 4
-""" + la(11, memmap.MODE_HUD_START_GAP) + f"""    lfs 3, 0(11)
-    lwz 0, 0(11)
+    lis 11, {gap_hi - 0x10000}
+    lfs 3, {gap_lo}(11)
+    lwz 0, {gap_lo}(11)
     cmpwi 0, 0
     beq spread_even
     fcmpu 0, 3, 5
@@ -213,6 +234,10 @@ spread_gap:
     fsubs 4, 4, 0
     fmuls 4, 4, 3
     fsubs 1, 1, 4
+    li 0, {STEPS}
+    stw 0, 0x44(1)
+spread_retry:
+    stfs 1, 0x48(1)
     addi 3, 1, 0x1C
     lwz 4, 0x28(1)
     @bl {FN(AT_DISTANCE)}
@@ -222,6 +247,24 @@ spread_gap:
     @bl {FN(COURSE_FRAME)}
     @bl {FN(WORK)}
     addi 3, 3, 0x400
+    lwz 0, {FRAME_KIND:#x}(3)
+    andis. 0, 0, {ROAD_KINDS >> 16:#x}
+    bne spread_road
+    lwz 11, 0x44(1)
+    addi 11, 11, -1
+    stw 11, 0x44(1)
+    cmpwi 11, 0
+    beq spread_end
+    lis 0, {STEP >> 16:#x}
+    stw 0, 0x34(1)
+    lfs 0, 0x34(1)
+    lfs 1, 0x48(1)
+    fadds 1, 1, 0
+    lfs 0, 0x40(1)
+    fcmpu 0, 1, 0
+    ble spread_retry
+    b spread_end
+spread_road:
     mr 11, 28
 spread_mod:
     cmpwi 11, 3
@@ -267,7 +310,8 @@ spread_flags:
     lwz 11, 0x38(1)
     or 0, 0, 11
     stw 0, 0(12)
-    addi 1, 1, 0x40
+spread_end:
+    addi 1, 1, 0x50
     @b {at + 4:#x}
 spread_stock:
     @bl {FN(PLACE_CAR)}
