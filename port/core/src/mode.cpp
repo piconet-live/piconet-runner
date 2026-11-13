@@ -2032,7 +2032,7 @@ void Apply(Machine& m, Mem& g, const Package& p, u32 block, u32 module, bool* en
         if (i >= STATS_FIRST && !p.stats_page)
           return m.Fail(FAULT_CODE);
         const u32 stat = block + STATS + seat * STAT, changed = g.Read32(stat);
-        // max speed to MOST_MAX_SPEED_OPEN with the file's setup word max_speed_open (0.6.1)
+        // max speed to MOST_MAX_SPEED_OPEN with the file's setup word max_speed_open (0.6.5)
         const float high = i == STAT_MAX_SPEED && p.max_speed_open ? MOST_MAX_SPEED_OPEN : STAT_RANGES[i].high;
         const float v = std::clamp(Real(a.value[0]), STAT_RANGES[i].low, high) + 0.0f;  // (-0 as 0)
         const u32 field = StatField(g, machine, seat, i);

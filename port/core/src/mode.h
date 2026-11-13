@@ -76,7 +76,7 @@ constexpr u32 DANGER = ENGINE + 0xC60;    // a seat's danger zone: +0 below, +4 
 constexpr u32 ROLL_SAVE = ENGINE + 0xE40, ROLL_SAVE_SIZE = 8;  // a seat's steering (+0) before the rule hook while the rolling start holds it
 constexpr u32 DANGER_ON = 1, DANGER_ARMED = 2, DANGER_DONE = 4;
 constexpr u32 STATS_ON = ENGINE + 0xF30;  // not 0: this block has the stats page (written once at game_start; checksum.cpp)
-// A mode's pause (protocol modes.toml `pause`, 0.6.1). The image's frame routine reads PAUSED before every step's
+// A mode's pause (protocol modes.toml `pause`, 0.6.5). The image's frame routine reads PAUSED before every step's
 // simulation (port/image/routines/frame_replay.py `manager`, memmap.MODE_PAUSED): not 0, the step stands, its simulation
 // is not run and the mode's run is made in its place. A paused step is a step like any other (its number, its rows, the
 // relay, the replay), so every game stands at the same steps; the words are the block's, so a rollback puts them back.
@@ -134,15 +134,15 @@ constexpr u32 StatBaseAt(u32 seat, u32 i)
   return i < STATS_FIRST ? STATS + seat * STAT + STAT_BASE + 4 * i
                          : STATS_TWO + seat * STAT_TWO + STAT_TWO_BASE + 4 * (i - STATS_FIRST);
 }
-// seat.speed's and rolling_start's top: 9000 (under the stock pack's SpeedCap, 9990), as before 0.6.1; with the file's
-// setup word seat_speed_open (0.6.1), 1e17: the largest at which the held momentum v / 216 x W (W at most the packs' 25,000) and its square, which the next
+// seat.speed's and rolling_start's top: 9000 (under the stock pack's SpeedCap, 9990), as before 0.6.5; with the file's
+// setup word seat_speed_open (0.6.5), 1e17: the largest at which the held momentum v / 216 x W (W at most the packs' 25,000) and its square, which the next
 // step's drag sums, stay finite binary32 (216 x sqrt(FLT_MAX) / 25000 = 1.59e17)
 constexpr float MOST_SPEED = 9000.0f, MOST_SPEED_OPEN = 1.0e17f;
 static_assert(MOST_SPEED_OPEN / 216.0f * 25000.0f < 1.8e19f);
 // seat.base_speed's top (M+0x224, the game's units, a metre a step): the base speed a held seat.speed of MOST_SPEED_OPEN
 // writes at site L (v / 216), so the word puts nothing there that a hold could not
 constexpr float MOST_BASE_SPEED = MOST_SPEED_OPEN / 216.0f;
-// seat.stat.max_speed's top with the file's setup word max_speed_open (0.6.1): Twilight's
+// seat.stat.max_speed's top with the file's setup word max_speed_open (0.6.5): Twilight's
 // survival mod's 10,000, at which the thrust's loss base / (36 + 40 x max speed + 2 x boost value) is about nothing; a
 // package without it holds the stat to the stat pack's range (0 to 4)
 constexpr float MOST_MAX_SPEED_OPEN = 10000.0f;

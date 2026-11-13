@@ -92,7 +92,7 @@ void TestTheModeVectorsRead()
   CHECK(!ReadWith("overdrive.mode.json", "params", picojson::value(picojson::array{})));
   CHECK(!ReadWith("overdrive.mode.json", "api", picojson::value(2.0)));  // (not its package's)
   CHECK(!ReadWith("overdrive.mode.json", "api", picojson::value(modes::API + 1.0)));
-  // rule set 2 (api 0.6.1): cpus always, read as CPUs allowed; never under rule set 1's number
+  // rule set 2 (api 0.6.5): cpus always, read as CPUs allowed; never under rule set 1's number
   const std::optional<mode::Package> fill = mode::Read(Vector("cpu_fill.mode.json"), &why);
   CHECK(fill && fill->api == 2 && fill->cpus_allowed);
   CHECK(!ReadWith("cpu_fill.mode.json", "api", picojson::value(1.0)));
@@ -148,7 +148,7 @@ void TestOverdriveRunsInTheBlock()
   CHECK(g.Read32(BLOCK + mode::RUNS) == 4);
 }
 
-// seat.speed without the 9000 top of before 0.6.1 (the file's seat_speed_open): 12000 held as written, 1e30 held
+// seat.speed without the 9000 top of before 0.6.5 (the file's seat_speed_open): 12000 held as written, 1e30 held
 // to 1e17, -5 to 0; a package of before (no seat_speed_open) holds 12000 to 9000 as it did. rolling_start reads 12000.
 void TestSeatSpeedOpen()
 {
@@ -176,7 +176,7 @@ void TestSeatSpeedOpen()
   CHECK(held(before, 0) == 9000.0f && held(before, 1) == 9000.0f && held(before, 2) == 0.0f);
 }
 
-// The engine's own speed (0.6.1): seat.base_speed writes M+0x224 at the mode point, held to 0 .. MOST_BASE_SPEED and
+// The engine's own speed (0.6.5): seat.base_speed writes M+0x224 at the mode point, held to 0 .. MOST_BASE_SPEED and
 // never on a seat the game would not hold (frozen, broken down, out, finished, retired, destroyed, restoring);
 // seat.boost_value reads M+0x228; seat.stat.max_speed reaches 10000 with the file's max_speed_open and stays at the
 // stat pack's 4 in a package of before.
@@ -746,7 +746,7 @@ void TestTheKnockoutEndsWithItsPlaces()
   CHECK(g.Read32(R + 0xD4 + 0xA0 * 3 + 0x24) == (45u << 12));              // the winner: the race's 2700 steps
 }
 
-// live_places (0.6.1): the places the mode gives are the standing during the race, in every copy the ranking pass
+// live_places (0.6.5): the places the mode gives are the standing during the race, in every copy the ranking pass
 // keeps, written again after each pass; the seats with no place follow in the pass's order. A package without the
 // word keeps seat.place for the end clause only, as before.
 void TestLivePlacesShowInTheStanding()

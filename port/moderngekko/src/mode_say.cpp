@@ -1,4 +1,4 @@
-// A mode's message over the game's picture (fzgx/mode_say.h; protocol modes.toml `say`, 0.6.1): white text on a dark
+// A mode's message over the game's picture (fzgx/mode_say.h; protocol modes.toml `say`, 0.6.5): white text on a dark
 // rounded panel in the launcher's look (overlay.h: the reading face, Saira Semi Condensed, with Segoe UI and Yu Gothic
 // for what it lacks; pure white on true black; soft corners; a shadow under what floats). While the race stands the
 // panel is in the middle of the picture, its text large and broken into lines that fit; while it runs the same message

@@ -76,7 +76,7 @@ void TestTheClassicHudMoves()
     e = Effective(layout, places, BANNERS);
     CHECK(e.given && e.to_point && Near(e.tx, 320) && Near(e.ty, 130));
     CHECK(!Effective(layout, places, LEADER_GAP).given && !Effective(layout, places, ENERGY).given);
-    // a BANNERS place of its own wins over LEADER_GAP's; the game's own signs are placed by their own names (0.6.1)
+    // a BANNERS place of its own wins over LEADER_GAP's; the game's own signs are placed by their own names (0.6.5)
     places[modes::PART_BANNERS] = {true, 320, 400, 180};
     e = Effective(layout, places, BANNERS);
     CHECK(e.given && e.to_point && Near(e.tx, 320) && Near(e.ty, 400) && Near(e.angle, 180));

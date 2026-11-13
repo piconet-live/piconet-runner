@@ -64,7 +64,7 @@ void TestTheCleanPicture()
   const std::optional<mode::Package> untimed = Vector("results_times.mode.json");
   CHECK(untimed.has_value() && untimed->results_times_off && (hud::WindowFlags(*untimed) & hud::NO_RESULTS_TIMES) != 0);
   CHECK(same.has_value() && !same->results_times_off && (hud::WindowFlags(*same) & hud::NO_RESULTS_TIMES) == 0);
-  // the same vector says wreck_slide off: the restore at once, as before 0.6.1; left out, the wreck slides
+  // the same vector says wreck_slide off: the restore at once, as before 0.6.5; left out, the wreck slides
   CHECK(untimed.has_value() && untimed->instant_restore && same.has_value() && !same->instant_restore);
   // hud_layout ax likewise: the ax_hud vector's package, its window flag HUD_AX (the image's ax_rank and ax_faces read it)
   const std::optional<mode::Package> ax = Vector("ax_hud.mode.json");

@@ -216,10 +216,10 @@ static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WIND
 // 0xBA0B DANGER, 0xBA09 MISSION CLEAR!, 0xBA0C MISSION FAILED, 0xBA15 Time is up..., 0xBA0D the object icon).
 // From PART_RANK on the standard parts, read from the drawers' tests of the same mask (rank, laps and speed in their drawers; energy
 // fn_1_C8F34, race time 0xCBC24, lap times 0xCB424 and 0xCB028); FACES the whole board's bit (fn_1_C6F8C 0xC70C8: rings, numbers, highlight), with the heads' task off too (WINDOW_FACES).
-// GHOST_GAP has no bit: the ghost task draws it (WINDOW_GAP). SPARE (a part since 0.6.1, for hud_move) has none either: the
+// GHOST_GAP has no bit: the ghost task draws it (WINDOW_GAP). SPARE (a part since 0.6.5, for hud_move) has none either: the
 // compiler refuses show and hide on it, and show_number's record draws and hides it. Nor have SKULLS, WRONG_WAY, BANNERS,
-// FINISH and CHECK (0.6.1, for hud_move alone: the compiler refuses show and hide on them; the game draws each as it does).
-// SCORE and TEXT (0.6.1) have none: show_score's and show_text's records draw and hide them (the image's race_time_score,
+// FINISH and CHECK (0.6.5, for hud_move alone: the compiler refuses show and hide on them; the game draws each as it does).
+// SCORE and TEXT (0.6.5) have none: show_score's and show_text's records draw and hide them (the image's race_time_score,
 // from WINDOW_SCORE and WINDOW_TEXT).
 constexpr std::array<u32, modes::PART_COUNT> PART_BITS = {0x20000, 0x1000, 0x8, 0x400, 0x200, 0x100, 0x80, 0x2000,
                                                           0x4000, 0x400000, 0, 0x20000000, 0x04000000, 0x08000000, 0x40000000,

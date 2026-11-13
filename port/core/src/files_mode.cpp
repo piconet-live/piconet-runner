@@ -514,7 +514,7 @@ bool ReadPackage(Package& p, const std::vector<s32>& given, std::string* why)
       if (at != NONE && at >= p.code.size())
         return Fail(why, std::format("has a rule whose code is not there (\"{}\")", rule.label));
   }
-  // past 9000 km/h only with the file's seat_speed_open (0.6.1), as the compiler holds it
+  // past 9000 km/h only with the file's seat_speed_open (0.6.5), as the compiler holds it
   if (p.rolling && !p.speed_open && !(std::bit_cast<float>(*p.rolling) <= MOST_SPEED))
     return Fail(why, "starts rolling above 9000 km/h without seat_speed_open");
   // tag settings are a text's each, and a text with its settings is in the table once (the texts alone may repeat)

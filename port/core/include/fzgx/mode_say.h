@@ -1,4 +1,4 @@
-// A mode's message (`say "TEXT";`, protocol modes.toml; 0.6.1): what the runner's overlay shows over the game's picture.
+// A mode's message (`say "TEXT";`, protocol modes.toml; 0.6.5): what the runner's overlay shows over the game's picture.
 // The game's thread publishes it once a drawn frame from the mode's block (port/core/src/mode_say.cpp: the block's say
 // word and pause word, the package's texts); the thread that presents reads it and draws the panel
 // (port/moderngekko/src/mode_say.cpp): in the middle of the picture while the race stands, as a line at its foot while

@@ -228,7 +228,7 @@ void TestTheDisplayWordsRun()
   // `tag`: the text's number on the out seat's byte (after `tag s off`), none on the others', and no other word moved
   CHECK(g.Read8(BLOCK + hud::TAGS_AT + OUT_SEAT) == 1);
   CHECK((p->tag_texts == std::vector<std::string>{"OUT", "KOS", "GO", "WAVE 2"}));  // (KOS: show_score's label; GO, WAVE 2: show_text's texts: the same table)
-  // the tag's settings (0.6.1, on the word: `tag s, "OUT", size 0.4 1, range 300 m`): the vector's tag_looks, one a text,
+  // the tag's settings (0.6.5, on the word: `tag s, "OUT", size 0.4 1, range 300 m`): the vector's tag_looks, one a text,
   // OUT's own and the defaults for the three the other words use; and the window's five words the boot writes for the
   // name tags: full to 225 m, none at 300; the size 1 to 40 m from the camera, 40 / depth beyond, never under 0.4
   CHECK((p->tag_looks == std::vector<mode::TagLook>{{300.0f, 0.4f, 1.0f}, {}, {}, {}}));
