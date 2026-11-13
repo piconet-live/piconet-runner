@@ -26,8 +26,10 @@ void TestTheWorkersFinalRows()
     pace.together_from = 0;
     pace.together_to = together != 0 ? 1000000 : 0;
     const Raced r = RunAPacedRace(pace);
-    std::printf("worker race (rows %u together): final %u, other rows %u, other checksums %u\n", together,
-                r.final_steps, r.other_rows, r.other_checksums);
+    std::printf("worker race (rows %u together): final %u, the game at %u, %u compared, other rows %u (from %u), other "
+                "checksums %u (from %u), relay waits %u (from step %u)\n", together, r.final_steps, r.step_end, r.compared,
+                r.other_rows, r.first_other_row, r.other_checksums, r.first_other_checksum, r.relay_waits,
+                r.first_relay_wait);
     CHECK(r.ran);
     CHECK(r.final_steps > 1000);
     CHECK(r.other_rows == 0);
@@ -52,8 +54,8 @@ void TestAStepThatRanOnAnotherRowStaysOpen()
     pace.fault_at = 600;
     const Raced r = RunAPacedRace(pace);
     std::printf("a step run on another row (worker \"%s\"): final %u, other rows %u, other checksums %u (from %u), "
-                "faults %u\n",
-                worker, r.final_steps, r.other_rows, r.other_checksums, r.first_other_checksum, r.faults);
+                "faults %u, relay waits %u\n",
+                worker, r.final_steps, r.other_rows, r.other_checksums, r.first_other_checksum, r.faults, r.relay_waits);
     CHECK(r.ran);
     CHECK(r.final_steps > 700);
     CHECK(r.faults != 0);
@@ -87,8 +89,9 @@ void TestAGameGoingIntoLockstepWaitsForTheWorker()
     pace.together_to = 1000000;
     const Raced r = RunAPacedRace(pace);
     std::printf("into lockstep with the worker (depth %u): final %u, other rows %u (from %u), other checksums %u "
-                "(from %u)\n",
-                depth, r.final_steps, r.other_rows, r.first_other_row, r.other_checksums, r.first_other_checksum);
+                "(from %u), relay waits %u (from step %u)\n",
+                depth, r.final_steps, r.other_rows, r.first_other_row, r.other_checksums, r.first_other_checksum,
+                r.relay_waits, r.first_relay_wait);
     CHECK(r.ran);
     CHECK(r.final_steps > 1000);
     CHECK(r.notices.find("watching in lockstep on official frames") != std::string::npos);

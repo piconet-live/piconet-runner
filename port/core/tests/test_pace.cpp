@@ -5,6 +5,7 @@
 
 #include "harness.h"
 #include "paced_race.h"
+#include "fzgx/freeze.h"
 #include "fzgx/rollback_worker.h"
 
 #include <condition_variable>
@@ -101,9 +102,9 @@ struct PacedRelay
   }
 
   // Its clock at this moment, in ms since go; at one frame of the race it stands (Pace::stands_at).
-  double Clock(std::chrono::steady_clock::time_point now, bool racing, u32 race_frames)
+  double Clock(std::chrono::steady_clock::time_point now, bool racing, u32 race_frames, bool stands = true)
   {
-    if (racing && pace.stands_steps != 0 && race_frames == pace.stands_at)
+    if (stands && racing && pace.stands_steps != 0 && race_frames == pace.stands_at)
       clock_back += FRAME * pace.stands_steps;
     const double clock_ms =
         go_at ? std::chrono::duration<double, std::milli>(now - *go_at - clock_back).count() * pace.relay_rate : 0;
@@ -248,19 +249,29 @@ struct PacedRelay
     FakeRace plain(plain_host, FROM, 1000000, false);
     plain.finish_goal = pace.finish_goal;
     plain.knock_out_at = pace.knock_out_by_input_at;
+    // The rings hold 1024 steps, and the game's own steps past its final ones (its predictions, the steps a rollback
+    // worker's open job still runs) have written their slots: step t's entries stand while t + 1024 > the game's step.
+    // The last 1000 final steps are compared, less those whose slots a step 1024 later has taken: with the worker
+    // slow (a PC of few cores), the game ran more than 24 steps past its final ones, and the slots of the first steps
+    // of the 1000 held the checksums of the game's newest steps, not theirs (seen on GitHub's 4-core runner, 2026-11-13).
+    const u32 from = std::max<int64_t>(0, std::max<int64_t>(static_cast<int64_t>(out.final_steps) - 1000,
+                                                             static_cast<int64_t>(out.step_end) - 1024));
     for (u32 t = 0; t < out.final_steps; ++t)
     {
       const std::array<u8, 12> inputs = Row(t);
       net::Rollback::UseInputs(plain.g, t, {0, 1}, inputs.data());
       plain.Step(t);
-      if (t + 1000 >= out.final_steps && net::Rollback::KeptChecksum(race.g, t) != net::StateChecksum(plain.g, MODULE))
+      if (t < from)
+        continue;
+      ++out.compared;
+      if (net::Rollback::KeptChecksum(race.g, t) != net::StateChecksum(plain.g, MODULE))
       {
         if (out.other_checksums++ == 0)
           out.first_other_checksum = t;
       }
       std::array<u8, 12> ran{};
       net::Rollback::UsedInputs(race.g, t, {0, 1}, ran.data());
-      if (t + 1000 >= out.final_steps && ran != inputs && out.other_rows++ == 0)
+      if (ran != inputs && out.other_rows++ == 0)
         out.first_other_row = t;
     }
   }
@@ -448,6 +459,43 @@ Raced RunAPacedRace(const Pace& pace)
   auto due = now;       // the host's pacing: when the next displayed frame is due
   bool undone = false;  // (Pace::undo_at_behind)
   u32 race_frames = 0, frames = 0;
+  bool racing = false;
+  // The session waiting for official frames (session.cpp WaitFor: the game MAX_AHEAD steps past the frames it holds, a
+  // lockstep frame whose official frame is not here): it sleeps 500 us, reads the time and drains the relay's packets,
+  // over and again, until the frame is here or the time is up. This relay is on the game's thread and the time is this
+  // test's: nothing would come and the time would stand, for ever (seen on GitHub's 4-core runner, 2026-11-13, and on
+  // four cores here, about one run in twelve: with the worker's thread short of time the game's steps fall otherwise,
+  // and a lockstep frame of the watching game found its official frame not yet told, the relay's frames coming four
+  // steps back and in bursts of three; one more closed frame ends such a wait). Here, at each read of the time while
+  // the core says it waits (the freeze pulse), the time moves on by
+  // the wait's sleep, and when the relay's clock reaches another frame the relay does what the real one does: closes it
+  // and sends what it holds (then only: Drain reads the time at each packet it takes, and a relay that sent at every
+  // read would never let it empty the socket). The wait ends as it does in a game; how often the game read the time
+  // waiting, and at which step first, is in what came of the race (Raced::relay_waits).
+  const std::thread::id game_thread = std::this_thread::get_id();
+  host.on_now = [&] {
+    if (std::this_thread::get_id() != game_thread || !freeze::ThePulse().waits_for_relay.load(std::memory_order_relaxed))
+      return;
+    const u32 step = race.g.Read32(net::STEP);
+    if (out.relay_waits++ == 0)
+    {
+      out.first_relay_wait = step;
+      const net::Session* s = net::s_session.get();
+      std::printf("  (the game waited for the relay at step %u, frame %u of the race: %zu official frames, the relay had "
+                  "closed %u, watch %d)\n", step, race_frames, s ? s->official.size() : 0, r.closed,
+                  s ? static_cast<int>(s->watch) : -1);
+    }
+    now += std::chrono::microseconds(500);
+    host.time = now;
+    const double clock_ms = r.Clock(now, racing, race_frames, false);
+    const u32 closed = r.closed;
+    r.CloseFrames(step, clock_ms);
+    if (r.closed != closed)
+    {
+      r.Hear(racing, race_frames, clock_ms);
+      r.Say(now);
+    }
+  };
   while (race_frames < pace.race_frames && host.stops == 0)
   {
     // the host: the frame begins when due; later, when the one before ran over, and what it ran over is made up by
@@ -459,7 +507,7 @@ Raced RunAPacedRace(const Pace& pace)
     due += pace.follow_speed ? Ns(static_cast<long long>(static_cast<double>(FRAME.count()) / host.speed)) : FRAME;
     host.time = now;
     const u32 step = race.g.Read32(net::STEP);
-    const bool racing = step >= FROM && race.g.Read32(layout::CONTROL + 120) != 0;
+    racing = step >= FROM && race.g.Read32(layout::CONTROL + 120) != 0;
     // the pad: another record in every displayed frame
     ++frames;
     const Record pad = {0, static_cast<u8>(frames % 100), static_cast<u8>(frames / 100), 0, 0, 0};
@@ -493,7 +541,9 @@ Raced RunAPacedRace(const Pace& pace)
   }
   out.ran = host.stops == 0 && host.log.empty() && race_frames == pace.race_frames;
 
+  host.on_now = nullptr;
   out.final_steps = race.g.Read32(layout::CONTROL + 232);
+  out.step_end = race.g.Read32(net::STEP);
   r.CompareWithTheOfficialRace(race);
   workers.reset();
   out.next_input_end = net::s_session ? net::s_session->next_input : 0;

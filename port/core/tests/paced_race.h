@@ -74,6 +74,10 @@ struct Raced
   u32 first_other_checksum = 0, first_other_row = 0;  // the first of each
   u32 faults = 0;                        // hooks at which Pace::fault_at's fault was made                    // final steps whose inputs (the ones they ran with) are not the official row
   u32 final_steps = 0;
+  u32 relay_waits = 0, first_relay_wait = 0;  // reads of the time while the session waited for official frames (test_pace.cpp
+                                            // RunAPacedRace: the relay goes on meanwhile), and the step of the first
+  u32 step_end = 0;                      // the game's step word as the race stopped (its predictions ran to here)
+  u32 compared = 0;                      // final steps compared with the official race's (CompareWithTheOfficialRace)
   // the local seat's inputs as the relay saw them, for the frames first sent after the race's start was over:
   std::vector<double> margin;            // frames left until the relay closed the frame, when its input came
   u32 late = 0;                          // inputs that came for a frame already closed

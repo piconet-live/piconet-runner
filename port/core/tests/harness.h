@@ -82,8 +82,13 @@ public:
   std::chrono::steady_clock::time_point Now() override
   {
     ++*clock_reads;
+    if (on_now)
+      on_now();  // (a test's own: it may move `time`)
     return time ? *time : std::chrono::steady_clock::now();
   }
+  // Called at every read of the time, when set (from any thread the core reads it on). A test whose relay runs on
+  // its own thread of the game's frames moves time and serves the relay here while the session waits (WaitFor).
+  std::function<void()> on_now;
   std::string CardFolder() override { return card_folder; }
   // The pictures this host handed to the screen since it was last asked: the times between them, in microseconds
   // (a test puts them into `pictures`; a host that shows none answers 0, as the core's own).
