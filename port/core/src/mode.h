@@ -147,6 +147,10 @@ constexpr float MOST_BASE_SPEED = MOST_SPEED_OPEN / 216.0f;
 // package without it holds the stat to the stat pack's range (0 to 4)
 constexpr float MOST_MAX_SPEED_OPEN = 10000.0f;
 constexpr float MOST_START_GAP = 10000.0f;  // start_gap's metres at most (modes.toml)
+// tag_range's metres (modes.toml): the drawing's bounds. Below 1 m the fade's divisor (the difference of the squares of the
+// range and three quarters of it) nears 0; above 10 km the tagged seats' order key, d^2 less twice the range squared in
+// binary32, loses its last metres (mode_hud.h TagRangeWords)
+constexpr float LEAST_TAG_RANGE = 1.0f, MOST_TAG_RANGE = 10000.0f;
 static_assert(WAITING + 4 * modes::RULES <= PAGE && SEAT_WORDS + SEAT_PAGE_SEATS * 0x100 <= PAGE &&
               4 * modes::SEAT_WORDS == 0x100 && 28 + 4 * modes::WAIT_LOCALS <= WAIT &&
               WAIT_RECORDS + modes::WAITS * WAIT <= 4 * PAGE && 4 * modes::TEAM_WORDS == 0x80 &&
@@ -269,6 +273,9 @@ struct Package
   // Neither: the game's own grid.
   std::optional<float> start_gap;
   bool start_gap_even = false;
+  // tag_range: how far a mode's `tag` texts are seen, metres (full to three quarters of it, gone at it); none: 200 m, as
+  // before the word (mode_hud.h DEFAULT_TAG_RANGE). Drawing only (the window's words at the boot, boot.cpp)
+  std::optional<float> tag_range;
   // a race raced alone (a practice's session, practice_session.cpp, reads them as practice::Words)
   bool cpus_allowed = false;        // `cpus on`: a player gone is driven by the AI; left out, their seat retires
   bool solo = false, pause = false, save_state = false;

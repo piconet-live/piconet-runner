@@ -33,6 +33,7 @@
 #pragma once
 
 #include <array>
+#include <bit>
 #include <vector>
 
 #include "fzgx/guest.h"
@@ -181,12 +182,27 @@ constexpr u32 WINDOW_SCORE = 0x298, WINDOW_SCORE_LABEL = 0x29C, WINDOW_SCORE_TEX
               WINDOW_SCORE_FONT = 0x2A8, WINDOW_TEXT = 0x2AC, WINDOW_TEXT_FONT = 0x2B0;
 inline constexpr char DEFAULT_SCORE_LABEL[] = "POINTS";
 static_assert(sizeof(DEFAULT_SCORE_LABEL) <= WINDOW_SCORE_TEXT_SIZE);
+// +0x2B4: how far a mode's `tag` is seen (the setup word tag_range; left out, DEFAULT_TAG_RANGE: what the name tags drew
+// before the word), as the three binary32 words the name tags read in place of their constants (nametags.py, its
+// constants 92, 96 and 100): the range squared, 1 over (the range squared less its near edge squared, the near edge
+// TAG_NEAR_SHARE of the range: full alpha to there, none at the range), and twice the range squared (TAG_FIRST: taken
+// from a tagged seat's score and order key, so every tagged seat comes before every name; more than any tagged score,
+// at worst the range squared over (1 - 0.2)^2). Written once at the boot (boot.cpp) for every race, a mode's or not.
+constexpr u32 WINDOW_TAG_RANGE = 0x2B4;
+constexpr float DEFAULT_TAG_RANGE = 200.0f, TAG_NEAR_SHARE = 0.75f;
+// The three words of range `far` (pure, for the tests).
+inline std::array<u32, 3> TagRangeWords(float far)
+{
+  const float far2 = far * far, near2 = (far * TAG_NEAR_SHARE) * (far * TAG_NEAR_SHARE);
+  return {std::bit_cast<u32>(far2), std::bit_cast<u32>(1.0f / (far2 - near2)), std::bit_cast<u32>(2.0f * far2)};
+}
 constexpr u32 STANDIN_P = WINDOW_DISTANCE - 0xF8, STANDIN_R = WINDOW_DISTANCE + 8 - 4;
 static_assert(modes::TAG_TEXT + 1 <= WINDOW_TAG_TEXT && WINDOW_TAGS + 30 <= WINDOW_TAG_TEXTS &&
               WINDOW_TAG_TEXTS + modes::TAG_TEXTS * WINDOW_TAG_TEXT <= WINDOW_GHOSTS &&
               WINDOW_GHOSTS + 30 * 8 <= WINDOW_DISTANCE && WINDOW_DISTANCE + 12 <= WINDOW_OBJECTS &&
               WINDOW_OBJECTS + 8 <= WINDOW_START_GAP && WINDOW_START_GAP + 4 <= WINDOW_SCORE &&
-              WINDOW_SCORE_TEXT + WINDOW_SCORE_TEXT_SIZE <= WINDOW_SCORE_FONT && WINDOW_TEXT_FONT + 4 <= 0x300 &&
+              WINDOW_SCORE_TEXT + WINDOW_SCORE_TEXT_SIZE <= WINDOW_SCORE_FONT && WINDOW_TEXT_FONT + 4 <= WINDOW_TAG_RANGE &&
+              WINDOW_TAG_RANGE + 12 <= 0x300 &&
               WINDOW_OBJECTS + 8 <= 0x700);  // (0x300: hud_move.cpp's word)  // (0x700: RACE, the next in the window)
 
 // The race HUD's part bits (the part mask .data 0x3D544, a word a viewport) of the parts a mode can show, by

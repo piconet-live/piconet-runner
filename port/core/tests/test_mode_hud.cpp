@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
 #include <fstream>
 #include <optional>
 #include <sstream>
@@ -227,6 +228,20 @@ void TestTheDisplayWordsRun()
   // `tag`: the text's number on the out seat's byte (after `tag s off`), none on the others', and no other word moved
   CHECK(g.Read8(BLOCK + hud::TAGS_AT + OUT_SEAT) == 1);
   CHECK((p->tag_texts == std::vector<std::string>{"OUT", "KOS", "GO", "WAVE 2"}));  // (KOS: show_score's label; GO, WAVE 2: show_text's texts: the same table)
+  // tag_range 300 m (0.6.1): the vector's word, and the window's three words the boot writes for the name tags (full to
+  // 225 m, none at 300); left out, 200 m: the words the tags had as constants (150 m full)
+  CHECK(p->tag_range.has_value() && *p->tag_range == 300.0f);
+  {
+    const std::array<u32, 3> words = hud::TagRangeWords(*p->tag_range), old = hud::TagRangeWords(hud::DEFAULT_TAG_RANGE);
+    CHECK(std::bit_cast<float>(words[0]) == 90000.0f && std::bit_cast<float>(words[2]) == 180000.0f);
+    CHECK(std::bit_cast<float>(words[1]) == 1.0f / (90000.0f - 225.0f * 225.0f));
+    CHECK(std::bit_cast<float>(old[0]) == 40000.0f && std::bit_cast<float>(old[1]) == 1.0f / (40000.0f - 22500.0f) &&
+          std::bit_cast<float>(old[2]) == 80000.0f);
+    // the bounds: finite, above 0 words at both ends (1 m: a divisor of 0.4375; 10 km: 2 x 10^8 within binary32's reach)
+    for (const float far : {mode::LEAST_TAG_RANGE, mode::MOST_TAG_RANGE})
+      for (const u32 w : hud::TagRangeWords(far))
+        CHECK(std::isfinite(std::bit_cast<float>(w)) && std::bit_cast<float>(w) > 0.0f);
+  }
   for (u32 seat = 0; seat < 30; ++seat)
     if (seat != OUT_SEAT)
       CHECK(g.Read8(BLOCK + hud::TAGS_AT + seat) == 0);
